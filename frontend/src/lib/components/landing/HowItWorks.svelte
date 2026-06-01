@@ -1,22 +1,25 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
-  import { ArrowRight, Sparkles } from 'lucide-svelte';
+  import { ArrowRight, Sparkles, FileText, Rocket, TrendingUp } from 'lucide-svelte';
 
   const steps = [
     {
       number: '01',
       title: 'Application',
-      body: 'Start by submitting your startup application to LaunchUp for evaluation and confirmation.'
+      body: 'Start by submitting your startup application to LaunchUp for evaluation and confirmation.',
+      icon: FileText,
     },
     {
       number: '02',
       title: 'Incubation and Acceleration',
-      body: 'Accepted startups enter the program, gaining mentorship and resources to nurture their concepts towards success.'
+      body: 'Accepted startups enter the program, gaining mentorship and resources to nurture their concepts towards success.',
+      icon: Rocket,
     },
     {
       number: '03',
       title: 'Investment-Ready',
-      body: 'Incubation and acceleration make your startup investment-ready, benefiting your business and the startup ecosystem.'
+      body: 'Incubation and acceleration make your startup investment-ready, benefiting your business and the startup ecosystem.',
+      icon: TrendingUp,
     }
   ];
 </script>
@@ -51,7 +54,14 @@
           <p class="text-5xl font-black tracking-tight text-slate-200 transition-colors duration-300 group-hover:text-[#6366f1]/25 dark:text-slate-800">
             {step.number}
           </p>
-          <div class="h-10 w-10 rounded-full border border-slate-200 bg-slate-50/80 opacity-90 transition-transform duration-300 group-hover:rotate-12 group-hover:border-[#6366f1]/30 group-hover:bg-[#6366f1]/10 dark:border-white/10 dark:bg-white/5"></div>
+          <!-- Icon circle -->
+          <div class="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-50/80 opacity-90 transition-all duration-300 group-hover:rotate-12 group-hover:border-[#6366f1]/40 group-hover:bg-[#6366f1]/10 dark:border-white/10 dark:bg-white/5 group-hover:dark:bg-[#6366f1]/20">
+            <svelte:component
+              this={step.icon}
+              class="h-4 w-4 text-slate-400 transition-colors duration-300 group-hover:text-[#6366f1] dark:text-slate-500 dark:group-hover:text-[#818cf8]"
+              strokeWidth={1.75}
+            />
+          </div>
         </div>
         <p class="mt-7 text-2xl font-bold tracking-tight text-slate-950 dark:text-white">
           {step.title}

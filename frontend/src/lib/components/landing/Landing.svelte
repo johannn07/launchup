@@ -7,7 +7,7 @@
 </script>
 
 <svelte:head>
-  <title>LaunchUp</title>
+  <title>LaunchUp Enhanced</title>
 </svelte:head>
 
 <div class="relative z-10 mx-auto flex flex-col overflow-x-clip overflow-y-visible">
