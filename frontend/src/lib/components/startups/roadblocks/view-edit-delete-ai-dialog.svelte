@@ -12,7 +12,8 @@
   import { tick } from 'svelte';
   import { RnsStatus } from '$lib/components/shared/rns.enum';
   import { Input } from '$lib/components/ui/input';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   type ChatMessage = {
     id?: number;

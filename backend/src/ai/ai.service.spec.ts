@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { AiService } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
+import { BaselineService } from './baseline.service'; 
 
 describe('AiService', () => {
   let service: AiService;
@@ -13,17 +14,21 @@ describe('AiService', () => {
       recordFailure: jest.fn().mockResolvedValue(undefined),
     };
 
+    const baselineServiceMock = {
+      getBaseline: jest.fn(),
+    } as unknown as BaselineService;
+
     service = new AiService(
-      {
-        get: jest.fn(),
-      } as unknown as ConfigService,
+      { get: jest.fn() } as unknown as ConfigService,
       metrics as unknown as AiMetricsService,
+      {
+        normalizeScore: jest.fn().mockResolvedValue({ scaled: 5, z: 0 }),
+      } as any,
+      {} as any,
     );
 
     (service as unknown as { ai: { models: { generateContent: jest.Mock } } }).ai = {
-      models: {
-        generateContent,
-      },
+      models: { generateContent },
     } as any;
   });
 
@@ -63,6 +68,7 @@ describe('AiService', () => {
       {
         target_level: 3,
         description: 'Validate the product hypothesis',
+        target_level_normalized: 3,   // ← added to match the normalized output
       },
     ]);
 

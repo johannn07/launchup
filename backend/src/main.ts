@@ -279,10 +279,9 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5173',
+      'http://127.0.0.1:5173',
       'https://launchup.onrender.com',
       'https://launchup.vercel.app',
-      // 'http://localhost:5173',
-      // 'http://127.0.0.1:5173',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -294,7 +293,7 @@ async function bootstrap() {
   await seedLocalDemoData(orm);
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`Application is running on port ${port}`);
 }
 

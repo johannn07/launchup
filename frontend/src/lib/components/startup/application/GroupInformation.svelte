@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   export let stepName: string;
   export let currentStep: string;
   import { Input } from '$lib/components/ui/input/index.js';

@@ -6,7 +6,8 @@
   import { Label } from '$lib/components/ui/label';
   import * as Select from '$lib/components/ui/select';
   import { Plus, Edit2, Trash2, Rocket, Loader2, User } from 'lucide-svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   let { data } = $props<{ data: { startups: Array<any>; users: Array<any>; access: string } }>();
   let startups = $state(data.startups);
@@ -163,79 +164,107 @@
   }
 </script>
 
-<div class="space-y-6">
-  <div class="flex items-center justify-between">
+<div class="space-y-8 max-w-7xl mx-auto pb-12">
+  <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight">Startups</h1>
-      <p class="text-muted-foreground mt-1 text-sm">Manage startup applications and data</p>
+      <h1 class="text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
+        <Rocket class="h-8 w-8 text-primary opacity-80" />
+        Manage Startups
+      </h1>
+      <p class="mt-2 text-muted-foreground">
+        Oversee startup applications, data, and assigned owners.
+      </p>
     </div>
-    <Button onclick={openCreateModal} class="gap-2">
+    <Button onclick={openCreateModal} class="gap-2 shadow-sm transition-all hover:-translate-y-0.5">
       <Plus class="h-4 w-4" />
       Create Startup
     </Button>
   </div>
 
-  <div class="bg-card rounded-lg border shadow-sm">
-    <div class="bg-muted/50 flex items-center justify-between border-b px-6 py-4">
-      <h2 class="font-semibold">All Startups</h2>
+  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+    <div class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4">
+      <h2 class="font-semibold text-foreground flex items-center gap-2">
+        <Rocket class="h-4 w-4 text-muted-foreground" />
+        All Startups
+      </h2>
       {#if startups && startups.length}
-        <span class="text-muted-foreground text-xs">{startups.length} {startups.length === 1 ? 'startup' : 'startups'}</span>
+        <span class="text-xs font-medium text-muted-foreground bg-background/50 px-2.5 py-1 rounded-full border border-border/30">
+          {startups.length} {startups.length === 1 ? 'startup' : 'startups'}
+        </span>
       {/if}
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b bg-muted/30">
-            <th class="px-6 py-3 text-left font-medium">ID</th>
-            <th class="px-6 py-3 text-left font-medium">Name</th>
-            <th class="px-6 py-3 text-left font-medium">Owner</th>
-            <th class="px-6 py-3 text-right font-medium">Actions</th>
+          <tr class="bg-muted/40 border-b border-border/50">
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">ID</th>
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Name</th>
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Owner</th>
+            <th class="px-6 py-4 text-right font-semibold text-muted-foreground">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {#each startups as s}
-            <tr class="group border-b transition-colors hover:bg-muted/50">
-              <td class="px-6 py-4 font-mono text-xs text-muted-foreground">{s.id}</td>
-              <td class="px-6 py-4">
-                <div class="flex items-center gap-2">
-                  <div class="rounded-full bg-flutter-blue/10 p-1.5">
-                    <Rocket class="h-3.5 w-3.5 text-flutter-blue" />
+          {#if startups.length === 0}
+            <tr>
+              <td colspan="4" class="px-6 py-16 text-center text-muted-foreground">
+                <div class="flex flex-col items-center justify-center space-y-4">
+                  <div class="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+                    <Rocket class="h-8 w-8 text-muted-foreground/40" />
                   </div>
-                  <span class="font-medium">{s.name}</span>
-                </div>
-              </td>
-              <td class="px-6 py-4">
-                {#if s.user?.email}
-                  <div class="flex items-center gap-2">
-                    <div class="rounded-full bg-muted p-1">
-                      <User class="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <span class="text-muted-foreground">{s.user.email}</span>
-                  </div>
-                {:else}
-                  <span class="italic text-muted-foreground text-xs">No owner</span>
-                {/if}
-              </td>
-              <td class="px-6 py-4 text-right">
-                <div class="flex items-center justify-end gap-2">
-                  <button
-                    onclick={() => openEditModal(s)}
-                    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-flutter-blue transition-colors hover:bg-flutter-blue/10"
-                  >
-                    <Edit2 class="h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  <button 
-                    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                    onclick={() => { toDelete = s; deleteOpen = true; }}
-                  >
-                    <Trash2 class="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+                  <p class="text-lg font-medium">No startups found</p>
+                  <p class="text-sm opacity-80">Create a startup to get started.</p>
                 </div>
               </td>
             </tr>
-          {/each}
+          {:else}
+            {#each startups as s}
+              <tr class="hover:bg-muted/30 group border-b border-border/50 transition-colors last:border-0">
+                <td class="px-6 py-5 font-mono text-xs text-muted-foreground/70">#{s.id}</td>
+                <td class="px-6 py-5">
+                  <div class="flex items-center gap-3">
+                    <div class="rounded-lg bg-primary/10 p-2 border border-primary/20">
+                      <Rocket class="h-4 w-4 text-primary" />
+                    </div>
+                    <span class="font-semibold text-foreground text-base">{s.name}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-5">
+                  {#if s.user?.email}
+                    <div class="flex items-center gap-2">
+                      <div class="rounded-full bg-muted/50 border border-border/50 p-1.5">
+                        <User class="h-3 w-3 text-muted-foreground" />
+                      </div>
+                      <span class="text-muted-foreground font-medium">{s.user.email}</span>
+                    </div>
+                  {:else}
+                    <span class="italic text-muted-foreground/60 text-xs">No owner</span>
+                  {/if}
+                </td>
+                <td class="px-6 py-5 text-right">
+                  <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onclick={() => openEditModal(s)}
+                      class="h-8 bg-secondary/60 hover:bg-secondary text-xs"
+                    >
+                      <Edit2 class="h-3.5 w-3.5 mr-1.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      class="h-8 bg-destructive/10 text-destructive hover:bg-destructive hover:text-destructive-foreground text-xs shadow-none border border-destructive/20"
+                      onclick={() => { toDelete = s; deleteOpen = true; }}
+                    >
+                      <Trash2 class="h-3.5 w-3.5 mr-1.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          {/if}
         </tbody>
       </table>
     </div>

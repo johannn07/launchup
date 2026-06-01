@@ -1,4 +1,5 @@
-import { PUBLIC_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
+const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 import { z } from 'zod';
 import type { PageServerLoad } from './$types';
 import { message, setError, superValidate } from 'sveltekit-superforms';

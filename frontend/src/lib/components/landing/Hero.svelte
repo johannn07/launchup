@@ -92,6 +92,12 @@
           </Button>
         </a>
         <a href="#howitwork" class="inline-flex h-11 items-center rounded-full border border-slate-200 bg-white/75 px-5 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur transition-all duration-200 hover:border-[#6366f1]/30 hover:text-[#4f46e5] dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-200">
+        <a data-sveltekit-reload href="/objectives">
+          <Button variant="outline" class="h-12 rounded-full border-slate-200 bg-white/80 px-6 text-slate-800 shadow-sm backdrop-blur transition-all duration-200 hover:border-slate-400 hover:bg-white dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-200">
+            View objectives
+          </Button>
+        </a>
+        <a href="#howitwork" class="inline-flex h-12 items-center rounded-full border border-slate-200 bg-white/75 px-5 text-sm font-semibold text-slate-700 shadow-sm backdrop-blur transition-all duration-200 hover:border-[#6366f1]/30 hover:text-[#4f46e5] dark:border-white/10 dark:bg-slate-950/45 dark:text-slate-200">
           See the flow
         </a>
       </div>

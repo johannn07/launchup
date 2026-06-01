@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
-  import { Column } from '.';
+  import Column from './column.svelte';
   let {
     handleDndConsider,
     handleDndFinalize,

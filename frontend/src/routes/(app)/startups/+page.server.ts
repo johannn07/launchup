@@ -1,6 +1,7 @@
 import { redirect, type Actions, fail } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
+const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
 export const load: PageServerLoad = async ({ cookies, locals }) => {
   // Removed redirect so Managers can view the startups tiering dashboard

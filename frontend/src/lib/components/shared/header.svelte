@@ -20,9 +20,8 @@
     goto(path);
   }
 
-  const userRole = user.role;
-  const modules =
-    access.roles[`${userRole as 'Startup' | 'Mentor' | 'Manager'}`].modules;
+  const userRole = user?.role ?? 'Startup';
+  const modules = access.roles[userRole]?.modules ?? [];
 
   const currentModule = $derived(
     page.url.pathname.slice(1).split('/')[
@@ -90,7 +89,7 @@
       <!-- <img src="/logo.png" alt="citeams_logo" class="h-7 w-7" /> -->
       <a
         data-sveltekit-preload-data="tap"
-        href={`/${modules[0].link}`}
+        href={`/${modules[0]?.link ?? ''}`}
         class="cursor-pointer text-xl font-black normal-case"
         style="color: var(--primary);">LaunchUp</a
       >
@@ -98,9 +97,9 @@
     </div>
     <div class="flex h-1/3 items-center justify-center gap-5">
       <ul class="flex flex-1 cursor-pointer items-center gap-7 text-sm">
-        {#if module !== subModule && module !== 'account' && subModule !== 'pending'}
-          <!-- submodule -->
-          {#each modules.filter((item) => item.link === module)[0].subModule as item}
+          {#if module !== subModule && module !== 'account' && subModule !== 'pending'}
+            <!-- submodule -->
+            {#each (modules.filter((item) => item.link === module)[0]?.subModule ?? []) as item}
             {@const isActive =
               currentModule === item.link || currentModulev2 === item.link}
             <a

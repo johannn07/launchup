@@ -14,7 +14,8 @@
   import { Label } from '$lib/components/ui/label/index.js';
   import * as Dialog from '$lib/components/ui/dialog';
   import * as RadioGroup from '$lib/components/ui/radio-group';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   const access =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzI1NjI0NjA0LCJpYXQiOjE3MjUzNjQ0MzIsImp0aSI6IjM3MWQ4NWNkMjlhZTQ3NWFiY2Y3YzBkMzQ4MmFjNjk0IiwidXNlcl9pZCI6MSwidXNlcl90eXBlIjoiTSJ9.hlZnRNMwzxM2TJZJ2twMcZhu64toUUte4iX7sMWAKMw';

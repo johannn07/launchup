@@ -214,17 +214,51 @@ export class RoadblockService {
 
     const roadblocks: Roadblock[] = [];
     for (const data of resultData) {
+      const reviewedRisk = await this.aiService.reviewBiasScore({
+        dimensionKey: 'roadblock',
+        rawScore: Number(data.riskNumber),
+        maxScore: 5,
+        context: [
+          `Startup: ${startup.name}`,
+          `Task count: ${tasks.length}`,
+          `Initiative count: ${initiatives.length}`,
+          `Description: ${data.description}`,
+          `Fix: ${data.fix}`,
+        ].join('\n'),
+      });
+
       const roadblock = new Roadblock();
       roadblock.startup = startup;
       roadblock.assignee = startup.user;
       roadblock.isAiGenerated = false;
       roadblock.status = 1;
-      roadblock.riskNumber = Number(data.riskNumber);
+      roadblock.riskNumber = reviewedRisk.correctedScore;
       roadblock.description = data.description;
       roadblock.fix = data.fix;
       roadblock.requestedStatus = 1;
 
       await this.em.persistAndFlush(roadblock);
+
+      await this.aiService.recordAiRecommendation({
+        startupId: startup.id,
+        dimensionKey: 'roadblock',
+        recommendationKind: 'Roadblock',
+        content: `${data.description}\n\nFix: ${data.fix}`,
+        validationStatus: 'validated',
+        confidenceStatus: 'high-confidence',
+      });
+
+      await this.aiService.recordBiasAudit({
+        startupId: startup.id,
+        dimensionKey: 'roadblock',
+        rawScore: Number(data.riskNumber),
+        correctedScore: reviewedRisk.correctedScore,
+        deviation: Math.abs(reviewedRisk.correctedScore - Number(data.riskNumber)),
+        threshold: 1,
+        biasFlagged: reviewedRisk.biasFlagged,
+        biasStatus: reviewedRisk.biasFlagged ? 'flagged' : 'normalized',
+        justification: reviewedRisk.justification,
+      });
     }
 
     return roadblocks;

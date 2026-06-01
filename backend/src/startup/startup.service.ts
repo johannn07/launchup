@@ -29,12 +29,15 @@ import {
 } from './dto';
 import { AiService } from '../ai/ai.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
+import { OcrService } from 'src/ocr/ocr.service';
+import { OcrDocument } from 'src/entities/ocr-document.entity';
 
 @Injectable()
 export class StartupService {
   constructor(
     private em: EntityManager,
     private readonly aiService: AiService,
+    private readonly ocrService: OcrService,
   ) {}
 
   async getStartups(userId: number) {
@@ -57,6 +60,7 @@ export class StartupService {
               'capsuleProposal',
               'mentors',
               'readinessLevels.readinessLevel',
+              'readinessEvaluations',
               'uratQuestionAnswers.uratQuestion',
               'calculatorQuestionAnswers.question',
               'waitlistMessages',
@@ -67,19 +71,19 @@ export class StartupService {
         return await this.em.find(
           Startup,
           { mentors: { id: userId } },
-          { populate: ['mentors', 'capsuleProposal', 'readinessLevels.readinessLevel'] },
+          { populate: ['mentors', 'capsuleProposal', 'readinessLevels.readinessLevel', 'readinessEvaluations'] },
         );
       case Role.Admin:
       case Role.Manager:
         return await this.em.findAll(Startup, {
-          populate: ['user', 'mentors', 'members', 'capsuleProposal', 'readinessLevels.readinessLevel'],
+          populate: ['user', 'mentors', 'members', 'capsuleProposal', 'readinessLevels.readinessLevel', 'readinessEvaluations'],
         });
     }
   }
 
   async findAll(): Promise<Startup[]> {
     return this.em.findAll(Startup, {
-      populate: ['user', 'mentors', 'members', 'capsuleProposal'],
+      populate: ['user', 'mentors', 'members', 'capsuleProposal', 'readinessEvaluations'],
     });
   }
 
@@ -95,6 +99,7 @@ export class StartupService {
           'waitlistMessages',
           'waitlistMessages.manager',
           'mentors',
+          'readinessEvaluations',
         ],
       },
     );
@@ -142,8 +147,272 @@ export class StartupService {
 
       await this.createStartupProposal(startup, dto);
 
+      if (startup.capsuleProposal) {
+        await this.aiService.recordRagContext({
+          startupId: startup.id,
+          sourceType: 'capsule_proposal',
+          title: startup.capsuleProposal.title,
+          content: [
+            startup.capsuleProposal.description,
+            startup.capsuleProposal.problemStatement,
+            startup.capsuleProposal.targetMarket,
+            startup.capsuleProposal.solutionDescription,
+            startup.capsuleProposal.scope,
+            startup.capsuleProposal.methodology,
+          ]
+            .filter(Boolean)
+            .join(' '),
+          metadata: {
+            project: startup.name,
+            objectives: startup.capsuleProposal.objectives,
+          },
+          confidence: 1,
+        });
+      }
+
       return startup;
     });
+  }
+
+  async parseCapsuleProposal(file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    const legibility = file.mimetype.startsWith('image/')
+      ? await this.ocrService.checkLegibility(file.buffer, file.originalname)
+      : {
+          isLegible: true,
+          reason: null,
+          width: null,
+          height: null,
+        };
+
+    if (file.mimetype.startsWith('image/') && !legibility.isLegible) {
+      const failedReview = {
+        title: '',
+        startup_description: '',
+        problem_statement: '',
+        target_market: '',
+        solution_description: '',
+        objectives: '',
+        scope: '',
+        methodology: '',
+      };
+
+      const failedConfidence = Object.fromEntries(
+        Object.keys(failedReview).map((key) => [key, 'failed']),
+      ) as Record<string, 'verified' | 'low' | 'failed'>;
+
+      await this.em.persistAndFlush(
+        this.em.create(OcrDocument, {
+          originalFilename: file.originalname,
+          extractedText: '',
+          processingStatus: 'processed',
+          legibilityStatus: 'failed',
+          fieldConfidence: Object.fromEntries(
+            Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+          ),
+          sourcePath: undefined,
+          createdAt: new Date(),
+        }),
+      );
+
+      return {
+        ...failedReview,
+        fieldConfidence: failedConfidence,
+        legibilityStatus: 'failed',
+        legibilityReason: legibility.reason,
+        imageWidth: legibility.width,
+        imageHeight: legibility.height,
+      };
+    }
+
+    let parsedText = '';
+    let tesseractAvgConfidence: number | undefined;
+    let aiPayload: string | null | undefined = null;
+
+    if (file.mimetype.startsWith('image/')) {
+      // PRIMARY PATH: Send image directly to Gemini Vision for OCR + extraction
+      // This gives far superior results for handwritten documents compared to Tesseract
+      try {
+        aiPayload = await this.aiService.getCapsuleProposalInfoFromImage(
+          file.buffer,
+          file.mimetype,
+        );
+        console.log('[OCR] Gemini Vision direct extraction result:', aiPayload?.substring(0, 200));
+      } catch (err) {
+        console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
+      }
+
+      // Also run Tesseract in parallel for raw text logging and sketch detection
+      try {
+        const result = await this.ocrService.parseBuffer(file.buffer) as any;
+        parsedText = result.text || '';
+        tesseractAvgConfidence = result.avgConfidence as number | undefined;
+      } catch {
+        // Tesseract failure is non-critical since we have Gemini Vision
+      }
+
+      // If Gemini Vision failed, fall back to Tesseract text + AI text extraction
+      if (!aiPayload && parsedText) {
+        aiPayload = await this.aiService.getCapsuleProposalInfo(parsedText);
+      }
+    } else {
+      try {
+        const pdfParseModule = await import('pdf-parse');
+        const pdfParseCandidate: any = pdfParseModule && (pdfParseModule.default ?? pdfParseModule);
+        let result: { text: string };
+        if (typeof pdfParseCandidate === 'function') {
+          result = await pdfParseCandidate(file.buffer);
+        } else if (pdfParseCandidate && typeof pdfParseCandidate.parseBuffer === 'function') {
+          result = await pdfParseCandidate.parseBuffer(file.buffer);
+        } else {
+          const alt = (pdfParseModule as any).default ?? pdfParseModule;
+          if (typeof alt === 'function') {
+            result = await alt(file.buffer);
+          } else {
+            throw new Error('Unsupported pdf-parse module shape');
+          }
+        }
+        parsedText = result.text || '';
+      } catch (err) {
+        console.error('pdf-parse failed:', err);
+
+        const failedReview = {
+          title: '',
+          startup_description: '',
+          problem_statement: '',
+          target_market: '',
+          solution_description: '',
+          objectives: '',
+          scope: '',
+          methodology: '',
+        };
+
+        const failedConfidence = Object.fromEntries(
+          Object.keys(failedReview).map((key) => [key, 'failed']),
+        ) as Record<string, 'verified' | 'low' | 'failed'>;
+
+        await this.em.persistAndFlush(
+          this.em.create(OcrDocument, {
+            originalFilename: file.originalname,
+            extractedText: '',
+            processingStatus: 'failed',
+            legibilityStatus: 'failed',
+            fieldConfidence: Object.fromEntries(
+              Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+            ),
+            sourcePath: undefined,
+            createdAt: new Date(),
+          }),
+        );
+
+        return {
+          ...failedReview,
+          fieldConfidence: failedConfidence,
+          legibilityStatus: 'failed',
+          legibilityReason: err instanceof Error ? err.message : String(err),
+          imageWidth: null,
+          imageHeight: null,
+        };
+      }
+
+      // For PDFs, use the text-based AI extraction
+      aiPayload = await this.aiService.getCapsuleProposalInfo(parsedText);
+    }
+
+    const cleanPayload = aiPayload
+      ? aiPayload.replace(/^```json\s*/, '').replace(/\s*```$/, '')
+      : '';
+    
+    // Sketch detection for image uploads
+    let visionLabels: any[] = [];
+    const sketchInfo = file.mimetype.startsWith('image/')
+      ? (() => {
+          return this.ocrService.detectSketch(parsedText, file.buffer, tesseractAvgConfidence);
+        })()
+      : { sketchDetected: false, sketchConfidence: 0 };
+
+    if (file.mimetype.startsWith('image/')) {
+      try {
+        const v = await this.ocrService.detectWithVision(file.buffer);
+        visionLabels = v.labels || [];
+        // if vision strongly indicates drawing/diagram, boost sketch confidence
+        const drawing = visionLabels.find((l: any) => /drawing|diagram|illustration|sketch/i.test(l.description));
+        if (drawing && drawing.score >= 0.6) {
+          sketchInfo.sketchConfidence = Math.max(sketchInfo.sketchConfidence, Number((drawing.score * 0.9).toFixed(2)));
+          sketchInfo.sketchDetected = true;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    let parsedPayload: any = {};
+    if (cleanPayload) {
+      try {
+        parsedPayload = JSON.parse(cleanPayload);
+      } catch (err) {
+        console.error('Failed to parse AI payload for capsule proposal', err);
+        parsedPayload = {};
+      }
+    }
+
+    // Use raw_transcription from Gemini Vision if available (better than Tesseract)
+    if (parsedPayload.raw_transcription && !parsedText) {
+      parsedText = parsedPayload.raw_transcription;
+    }
+
+    const reviewFields = {
+      title: parsedPayload.title ?? '',
+      startup_description: parsedPayload.startup_description ?? '',
+      problem_statement: parsedPayload.problem_statement ?? '',
+      target_market: parsedPayload.target_market ?? '',
+      solution_description: parsedPayload.solution_description ?? '',
+      objectives: parsedPayload.objectives ?? '',
+      scope: parsedPayload.scope ?? '',
+      methodology: parsedPayload.methodology ?? '',
+    };
+
+    const confidence = Object.fromEntries(
+      Object.entries(reviewFields).map(([key, value]) => {
+        const text = String(value ?? '').trim();
+        if (!text) {
+          return [key, 'failed'];
+        }
+
+        return [key, text.length < 40 ? 'low' : 'verified'];
+      }),
+    ) as Record<string, 'verified' | 'low' | 'failed'>;
+
+    await this.em.persistAndFlush(
+      this.em.create(OcrDocument, {
+        originalFilename: file.originalname,
+        extractedText: parsedText,
+        processingStatus: 'processed',
+        fieldConfidence: Object.fromEntries(
+          Object.entries(confidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+        ),
+        sourcePath: undefined,
+        createdAt: new Date(),
+        legibilityStatus: legibility.isLegible ? 'verified' : 'failed',
+        sketchDetected: sketchInfo.sketchDetected,
+        sketchConfidence: sketchInfo.sketchConfidence,
+        visionLabels: visionLabels,
+        imageWidth: legibility.width ?? undefined,
+        imageHeight: legibility.height ?? undefined,
+      }),
+    );
+
+    return {
+      ...reviewFields,
+      fieldConfidence: confidence,
+      legibilityStatus: legibility.isLegible ? 'verified' : 'failed',
+      legibilityReason: legibility.reason,
+      imageWidth: legibility.width,
+      imageHeight: legibility.height,
+    };
   }
   private async createStartupProposal(
     startup: Startup,
@@ -153,11 +422,10 @@ export class StartupService {
       const aiAnalysisSummary =
         await this.aiService.generateStartupAnalysisSummary(dto);
 
-      if (startup.capsuleProposal) {
+        if (startup.capsuleProposal) {
         const proposal = startup.capsuleProposal;
         proposal.title = dto.title;
         proposal.description = dto.description;
-        proposal.problemStatement = dto.problemStatement;
         proposal.targetMarket = dto.targetMarket;
         proposal.solutionDescription = dto.solutionDescription;
 

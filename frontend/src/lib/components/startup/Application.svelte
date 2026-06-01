@@ -1,13 +1,17 @@
-<script lang="ts" context="module">
+<script lang="ts">
+  import { onMount } from 'svelte';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
+
   export async function getData() {
     const uratQuestions = await fetch(
-      `${PUBLIC_API_URL}/readinesslevel/urat-questions/`
+      `${PUBLIC_API_URL}/readinesslevel/urat-questions`
     );
 
     const data = await uratQuestions.json();
     if (uratQuestions.ok) {
       const calculatorQuestions = await fetch(
-        `${PUBLIC_API_URL}/readinesslevel/calculator-questions/`
+        `${PUBLIC_API_URL}/readinesslevel/calculator-questions`
       );
 
       const data2 = await calculatorQuestions.json();
@@ -37,10 +41,6 @@
       }
     }
   }
-</script>
-
-<script lang="ts">
-  import { onMount } from 'svelte';
 
   import Button from '../ui/button/button.svelte';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
@@ -56,7 +56,6 @@
   import Organizational from './application/Organizational.svelte';
   import TechnologyCalculator from './application/Calculator.svelte';
   import Waitlisted from './application/Waitlisted.svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
   import { ChevronLeft, ChevronRight, Check, Shield, FileText, ClipboardList, Cpu } from 'lucide-svelte';
 
   let data: any;

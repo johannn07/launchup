@@ -24,5 +24,131 @@
         "Invalid input: expected string, received null"
       ]
     }
+  },
+  {
+    "timestamp": "2026-05-28T18:27:14.403Z",
+    "type": "schema_invalid",
+    "detail": {
+      "attempt": 1,
+      "issues": [
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-05-28T18:27:24.345Z",
+    "type": "schema_invalid",
+    "detail": {
+      "attempt": 2,
+      "issues": [
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-05-28T18:28:55.459Z",
+    "type": "schema_invalid",
+    "detail": {
+      "attempt": 1,
+      "issues": [
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-05-28T18:29:02.819Z",
+    "type": "schema_invalid",
+    "detail": {
+      "attempt": 2,
+      "issues": [
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-05-28T18:42:15.310Z",
+    "type": "schema_invalid",
+    "detail": {
+      "attempt": 1,
+      "issues": [
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-05-28T18:42:25.379Z",
+    "type": "schema_invalid",
+    "detail": {
+      "attempt": 2,
+      "issues": [
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined",
+        "Invalid input: expected string, received undefined"
+      ]
+    }
   }
 ]

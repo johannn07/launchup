@@ -96,3 +96,9 @@ Nest is an MIT-licensed open source project. It can grow thanks to the sponsors 
 ## License
 
 Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+
+## New test endpoints (added by assistant)
+
+- `GET /ocr/parse?file=relative/path` : simple OCR placeholder that returns a stubbed transcription for a file path.
+- `GET /ai/baseline/normalize?score=NUMBER` : normalize a scalar AI score using local baseline stats in `data/ai-baseline.json`.
+- `POST /ai/baseline/update` : update baseline stats (body: `{ mean:number, std:number }`).

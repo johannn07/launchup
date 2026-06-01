@@ -16,7 +16,7 @@
   });
 </script>
 
-<ModeWatcher />
+<ModeWatcher defaultMode="light" />
 <Toaster richColors duration={2000} />
 <QueryClientProvider client={queryClient}>
   <div class="h-screen w-full overflow-x-clip">

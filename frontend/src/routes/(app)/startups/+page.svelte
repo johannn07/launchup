@@ -439,7 +439,7 @@
 {/if}
 
 <Dialog.Root open={showApplicationForm} onOpenChange={toggleApplicationForm}>
-  <Dialog.Content class="flex flex-col h-[90vh] max-w-4xl overflow-hidden rounded-3xl border-slate-200/70 bg-white/95 p-6 shadow-[0_32px_80px_rgba(15,23,42,0.2)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
+  <Dialog.Content class="flex flex-col h-[90vh] max-w-4xl rounded-3xl border-slate-200/70 bg-white/95 p-6 shadow-[0_32px_80px_rgba(15,23,42,0.2)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
     <Application access={data.access!} startup={selectedStartup} />
   </Dialog.Content>
 </Dialog.Root>

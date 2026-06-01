@@ -68,36 +68,21 @@
   };
 
   const getTierLabel = (startupData: any) => {
-    if (!startupData?.readinessLevels || startupData.readinessLevels.length === 0) {
+    if (startupData?.qualificationStatus !== QualificationStatus.QUALIFIED) {
       return 'Pending';
     }
-
-    const scoreByType = new Map<string, number>();
-    for (const readiness of startupData.readinessLevels) {
-      const type = readiness.readinessLevel?.readinessType;
-      const level = readiness.readinessLevel?.level;
-      if (type && level !== undefined) {
-        scoreByType.set(type, Number(level));
-      }
+    if (startupData?.readinessEvaluations && startupData.readinessEvaluations.length > 0) {
+      return startupData.readinessEvaluations[startupData.readinessEvaluations.length - 1].tierLabel;
     }
-
-    const compositeScore = Math.round(
-      Object.entries(readinessWeightMap).reduce((total, [type, weight]) => {
-        const level = scoreByType.get(type) ?? 0;
-        return total + ((level / 5) * 100 * weight);
-      }, 0)
-    );
-
-    if (compositeScore >= 85) return 'Strong';
-    if (compositeScore >= 70) return 'Ready';
-    if (compositeScore >= 55) return 'Emerging';
-    if (compositeScore >= 40) return 'Developing';
-    return 'Early';
+    return 'Pending';
   };
 
   const tier = $derived(getTierLabel(startup));
   
   const getTierColor = (t: string) => {
+    if (t === 'Gold') return 'bg-amber-400/10 text-amber-500 border-amber-400/20';
+    if (t === 'Silver') return 'bg-slate-400/10 text-slate-500 border-slate-400/20';
+    if (t === 'Bronze') return 'bg-orange-600/10 text-orange-600 border-orange-600/20';
     if (t === 'Strong') return 'bg-green-500/10 text-green-500 border-green-500/20';
     if (t === 'Developing') return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
     if (t === 'Early') return 'bg-orange-500/10 text-orange-500 border-orange-500/20';

@@ -4,7 +4,8 @@
   import * as Card from '$lib/components/ui/card';
   import Input from '$lib/components/ui/input/input.svelte';
   import Textarea from '$lib/components/ui/textarea/textarea.svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   export let open: boolean = false;
   export let onOpenChange: () => void;

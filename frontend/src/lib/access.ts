@@ -125,6 +125,29 @@ export const access = {
         }
       ]
     },
+    Admin: {
+      // Give Admin the same modules as Manager plus an Admin hub
+      modules: [
+        startupModule,
+        {
+          name: 'Admin',
+          link: 'admin',
+          subModule: []
+        },
+        {
+          name: 'Account',
+          link: 'account',
+          subModule: [
+            ...settingsModule.subModule,
+            {
+              name: 'Role',
+              link: 'role',
+              subModule: []
+            }
+          ]
+        }
+      ]
+    },
     'Manager as Mentor': {
       modules: [
         startupModule,

@@ -12,7 +12,10 @@
     { name: 'Dashboard', href: '/admin' },
     { name: 'Users', href: '/admin/users' },
     { name: 'Startups', href: '/admin/startups' },
-    { name: 'Assessments', href: '/admin/assessments' }
+    { name: 'Assessments', href: '/admin/assessments' },
+    { name: 'Tiers', href: '/admin/tiers' },
+    { name: 'OCR', href: '/admin/ocr-documents' },
+    { name: 'AI Bias', href: '/admin/ai/bias-audits' }
   ];
 
   let dropdownOpen = $state(false);

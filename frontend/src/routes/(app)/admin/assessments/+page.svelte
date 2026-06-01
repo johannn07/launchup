@@ -16,7 +16,8 @@
     Upload,
     ChevronRight
   } from 'lucide-svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   import { ASSESSMENT_TYPES } from '$lib/types/assessment.types';
   import { invalidateAll } from '$app/navigation';
 
@@ -202,31 +203,37 @@
   }
 </script>
 
-<div class="space-y-6">
-  <div class="flex items-center justify-between">
+<div class="space-y-8 max-w-7xl mx-auto pb-12">
+  <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight">Assessments</h1>
-      <p class="mt-1 text-sm text-muted-foreground">
-        View all assessments organized by type
+      <h1 class="text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
+        <ClipboardList class="h-8 w-8 text-primary opacity-80" />
+        Assessment Types
+      </h1>
+      <p class="mt-2 text-muted-foreground">
+        Configure and organize assessment fields and categories.
       </p>
     </div>
-    <Button onclick={() => (showCreateTypeModal = true)} class="gap-2">
+    <Button onclick={() => (showCreateTypeModal = true)} class="gap-2 shadow-sm transition-all hover:-translate-y-0.5">
       <Plus class="h-4 w-4" />
       Add Assessment
     </Button>
   </div>
 
-  <div class="rounded-lg border bg-card shadow-sm">
+  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
     <div
-      class="bg-muted/50 flex items-center justify-between border-b px-6 py-4"
+      class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4"
     >
-      <h2 class="font-semibold">All Assessments by Type</h2>
-      <span class="text-xs text-muted-foreground">
+      <h2 class="font-semibold text-foreground flex items-center gap-2">
+        <ClipboardList class="h-4 w-4 text-muted-foreground" />
+        All Assessments by Type
+      </h2>
+      <span class="text-xs font-medium text-muted-foreground bg-background/50 px-2.5 py-1 rounded-full border border-border/30">
         {Object.keys(data.assessments || {}).length} types
       </span>
     </div>
 
-    <div class="divide-y">
+    <div class="divide-y divide-border/50">
       {#each ASSESSMENT_TYPES as typeName}
         {@const assessments = data.assessments?.[typeName] || []}
         {@const isExpanded = expandedTypes.has(typeName)}
@@ -234,75 +241,77 @@
         <div>
           <!-- Type Header (Collapsible) -->
           <button
-            class="hover:bg-muted/50 group flex w-full items-center justify-between px-6 py-4 text-left transition-colors"
+            class="hover:bg-muted/30 group flex w-full items-center justify-between px-6 py-5 text-left transition-colors"
             onclick={() => toggleType(typeName)}
           >
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
               <div
-                class="bg-flutter-blue/10 group-hover:bg-flutter-blue/20 rounded-lg p-2 transition-colors"
+                class="bg-primary/10 group-hover:bg-primary/20 rounded-lg p-2.5 transition-colors border border-primary/20"
               >
-                <ClipboardList class="text-flutter-blue h-5 w-5" />
+                <ClipboardList class="text-primary h-5 w-5" />
               </div>
               <div>
-                <span class="font-medium">{typeName}</span>
-                <span class="ml-2 text-xs text-muted-foreground">
+                <span class="font-bold text-foreground text-lg">{typeName}</span>
+                <span class="ml-3 text-xs font-medium text-muted-foreground bg-background/50 px-2 py-0.5 rounded-md border border-border/30">
                   {assessments.length}
                   {assessments.length === 1 ? 'assessment' : 'assessments'}
                 </span>
               </div>
             </div>
             <ChevronRight
-              class="h-4 w-4 text-muted-foreground transition-transform {isExpanded
-                ? 'rotate-90'
-                : ''}"
+              class="h-5 w-5 text-muted-foreground transition-transform duration-200 {isExpanded
+                ? 'rotate-90 text-primary'
+                : 'group-hover:text-foreground'}"
             />
           </button>
 
           <!-- Assessments List (Collapsible Content) -->
           {#if isExpanded}
-            <div class="bg-muted/20 border-t px-6 py-4">
+            <div class="bg-muted/10 border-t border-border/50 px-6 py-5">
               {#if assessments.length > 0}
-                <div class="space-y-2">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {#each assessments as assessment}
                     {@const AnswerTypeIcon =
                       FIELD_TYPES.find((t) => t.label === assessment.answerType)
                         ?.icon ?? FileText}
                     <button
-                      class="hover:bg-card/80 hover:border-flutter-blue/30 w-full rounded-lg border bg-card p-4 text-left transition-colors"
+                      class="hover:border-primary/40 hover:bg-card/80 group w-full rounded-xl border border-border/50 bg-card p-4 text-left transition-all hover:shadow-md hover:-translate-y-0.5"
                       onclick={() => openAssessmentFields(assessment)}
                     >
                       <div class="flex items-start gap-3">
-                        <div class="rounded-lg bg-muted p-2">
+                        <div class="rounded-lg bg-muted/50 p-2.5 border border-border/50 group-hover:bg-primary/5 group-hover:border-primary/20 transition-colors">
                           <AnswerTypeIcon
-                            class="h-4 w-4 text-muted-foreground"
+                            class="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors"
                           />
                         </div>
-                        <div class="min-w-0 flex-1">
-                          <p class="text-sm font-medium">{assessment.name}</p>
-                          <div class="mt-1 flex items-center gap-2">
-                            <Badge variant="secondary" class="text-xs">
+                        <div class="min-w-0 flex-1 space-y-1.5">
+                          <p class="text-sm font-semibold text-foreground group-hover:text-primary transition-colors truncate">{assessment.name}</p>
+                          <div class="flex items-center gap-2">
+                            <Badge variant="secondary" class="text-[10px] shadow-none bg-secondary/60">
                               {assessment.answerType}
                             </Badge>
                           </div>
                         </div>
-                        <ChevronRight class="h-4 w-4 text-muted-foreground" />
                       </div>
                     </button>
                   {/each}
                 </div>
               {:else}
                 <div
-                  class="flex flex-col items-center justify-center py-8 text-center"
+                  class="flex flex-col items-center justify-center py-12 text-center bg-background/50 rounded-xl border border-dashed border-border/60"
                 >
-                  <div class="mb-3 rounded-full bg-muted p-3">
-                    <FileText class="h-6 w-6 text-muted-foreground" />
+                  <div class="mb-4 rounded-full bg-muted/50 p-4 border border-border/50">
+                    <FileText class="h-8 w-8 text-muted-foreground/50" />
                   </div>
-                  <p class="text-sm font-medium text-muted-foreground">
+                  <p class="text-base font-medium text-foreground">
                     No assessments for {typeName}
                   </p>
-                  <p class="mt-1 text-xs text-muted-foreground">
+                  <p class="mt-1 text-sm text-muted-foreground">
                     Add assessments to this type to get started
                   </p>
+                  <Button variant="outline" size="sm" class="mt-4" onclick={() => { showCreateTypeModal = true; selectedAssessmentType = typeName; }}>
+                    <Plus class="h-4 w-4 mr-2" /> Add Assessment
+                  </Button>
                 </div>
               {/if}
             </div>
@@ -349,29 +358,20 @@
         <Label>Field Type</Label>
         <Select.Root type="single" bind:value={editingField.answerType}>
           <Select.Trigger class="w-full">
-            {#snippet children()}
-              {@const SelectedIcon =
-                FIELD_TYPES.find(
-                  (t) => t.value === Number(editingField.answerType)
-                )?.icon ?? FileText}
               <div class="flex items-center gap-2">
-                <SelectedIcon class="h-4 w-4" />
                 {FIELD_TYPES.find(
                   (t) => t.value === Number(editingField.answerType)
                 )?.label ?? 'Select type'}
               </div>
-            {/snippet}
           </Select.Trigger>
           <Select.Content>
             {#each FIELD_TYPES as t}
               {@const Icon = t.icon}
               <Select.Item value={String(t.value)}>
-                {#snippet children()}
                   <div class="flex items-center gap-2">
                     <Icon class="h-4 w-4" />
                     {t.label}
                   </div>
-                {/snippet}
               </Select.Item>
             {/each}
           </Select.Content>
@@ -382,22 +382,18 @@
         <Label for="assessmentType">Assessment Type</Label>
         <Select.Root type="single" bind:value={editingField.assessmentType}>
           <Select.Trigger class="w-full">
-            {#snippet children()}
               <div class="flex items-center gap-2">
                 <ClipboardList class="h-4 w-4" />
                 <span>{editingField.assessmentType}</span>
               </div>
-            {/snippet}
           </Select.Trigger>
           <Select.Content>
             {#each ASSESSMENT_TYPES as assessmentType}
               <Select.Item value={assessmentType}>
-                {#snippet children()}
                   <div class="flex items-center gap-2">
                     <ClipboardList class="h-4 w-4" />
                     <span>{assessmentType}</span>
                   </div>
-                {/snippet}
               </Select.Item>
             {/each}
           </Select.Content>
@@ -500,27 +496,19 @@
         <Label>Field Type</Label>
         <Select.Root type="single" bind:value={selectedFieldType}>
           <Select.Trigger class="w-full">
-            {#snippet children()}
-              {@const SelectedIcon =
-                FIELD_TYPES.find((t) => t.value === Number(selectedFieldType))
-                  ?.icon ?? FileText}
               <div class="flex items-center gap-2">
-                <SelectedIcon class="h-4 w-4" />
                 {FIELD_TYPES.find((t) => t.value === Number(selectedFieldType))
                   ?.label ?? 'Select type'}
               </div>
-            {/snippet}
           </Select.Trigger>
           <Select.Content>
             {#each FIELD_TYPES as t}
               {@const Icon = t.icon}
               <Select.Item value={String(t.value)}>
-                {#snippet children()}
                   <div class="flex items-center gap-2">
                     <Icon class="h-4 w-4" />
                     {t.label}
                   </div>
-                {/snippet}
               </Select.Item>
             {/each}
           </Select.Content>
@@ -531,22 +519,18 @@
         <Label for="assessmentType">Assessment Type</Label>
         <Select.Root type="single" bind:value={selectedAssessmentType}>
           <Select.Trigger class="w-full">
-            {#snippet children()}
               <div class="flex items-center gap-2">
                 <ClipboardList class="h-4 w-4" />
                 <span>{selectedAssessmentType}</span>
               </div>
-            {/snippet}
           </Select.Trigger>
           <Select.Content>
             {#each ASSESSMENT_TYPES as assessmentType}
               <Select.Item value={assessmentType}>
-                {#snippet children()}
                   <div class="flex items-center gap-2">
                     <ClipboardList class="h-4 w-4" />
                     <span>{assessmentType}</span>
                   </div>
-                {/snippet}
               </Select.Item>
             {/each}
           </Select.Content>

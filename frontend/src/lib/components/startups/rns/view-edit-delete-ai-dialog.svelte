@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   import { Button } from '$lib/components/ui/button';
   import * as Dialog from '$lib/components/ui/dialog/index.js';
   import { Textarea } from '$lib/components/ui/textareav2';

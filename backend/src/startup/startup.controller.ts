@@ -17,8 +17,7 @@ import { AiService } from 'src/ai/ai.service';
 import { StartupService } from './startup.service';
 import { JwtGuard } from 'src/auth/guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { UploadedFile, BadRequestException } from '@nestjs/common';
-import * as PdfParse from 'pdf-parse';
+import { UploadedFile } from '@nestjs/common';
 import { UpdateStartupDto } from '../admin/dto/update-startup.dto';
 import {
   StartupApplicationDto,
@@ -60,6 +59,12 @@ export class StartupController {
     return await this.startupService.getAllStartups();
   }
 
+  @Get('/debug-evals')
+  async debugEvals() {
+    const conn = this.startupService['em'].getConnection();
+    return await conn.execute(`SELECT id, startup_id, composite_score, tier_label FROM readiness_evaluations`);
+  }
+
   // ==================================================
   // Deprecated endpoints - keeping for backward compatibility
   @Get('/ranking-by-urat')
@@ -99,20 +104,18 @@ export class StartupController {
   @UseInterceptors(FileInterceptor('capsuleProposal'))
   async getCapsuleProposal(@UploadedFile() file: Express.Multer.File) {
     try {
-      if (!file) {
-        throw new BadRequestException('No file uploaded');
-      }
-
-      const data = await PdfParse(file.buffer);
-      let res = await this.aiService.getCapsuleProposalInfo(data.text);
-
-      if (res) {
-        res = res.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        return JSON.parse(res);
-      }
+      return await this.startupService.parseCapsuleProposal(file);
     } catch (error) {
-      console.error(error);
-      throw new BadRequestException('Failed to process PDF');
+      const { Logger } = require('@nestjs/common');
+      new Logger('StartupController').error('Failed to process capsule proposal: ' + (error.stack || error));
+      const { InternalServerErrorException } = require('@nestjs/common');
+      
+      let errorMessage = error.message || 'Failed to process capsule proposal';
+      if (errorMessage.includes('429 Too Many Requests') || errorMessage.includes('quota')) {
+        errorMessage = 'AI quota exceeded. The server is receiving too many requests. Please wait a minute and try again.';
+      }
+      
+      throw new InternalServerErrorException(errorMessage);
     }
   }
 

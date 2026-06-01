@@ -10,14 +10,23 @@ import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 import { AiService } from 'src/ai/ai.service';
+import { RagQueryService } from './rag-query.service';
+import { GroundedPromptBuilderService } from './grounded-prompt-builder.service';
+import { OutputValidatorService } from './output-validator.service';
+import { RecommendationStorageService } from './recommendation-storage.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
+
 
 @Injectable()
 export class RnaService {
   constructor(
     private em: EntityManager,
     private readonly aiService: AiService,
+    private readonly ragQueryService: RagQueryService,
+    private readonly groundedPromptBuilderService: GroundedPromptBuilderService,
+    private readonly outputValidatorService: OutputValidatorService,
+    private readonly recommendationStorageService: RecommendationStorageService,
   ) {}
 
   async getRNAbyId(startupId: number) {
@@ -122,77 +131,92 @@ export class RnaService {
       return [];
     }
 
-    // 7. Build readiness level data for prompt
-    const readinessLevelByType = new Map(
-      startupReadinessLevels.map((startupReadinessLevel) => [
-        startupReadinessLevel.readinessLevel.readinessType,
-        startupReadinessLevel.readinessLevel.level,
-      ]),
-    );
+    // --- RAG pipeline integration ---
+    // Query vector DB for context
+    const ragContext = await this.ragQueryService.queryVectorDatabase(id.toString());
 
-    const readinessLevelData = startupReadinessLevels.map((srl) => ({
-      type: srl.readinessLevel.readinessType,
-      level: srl.readinessLevel.level,
-      hasRNA: existingRNAs.some(
-        (rna) => rna.readinessLevel.id === srl.readinessLevel.id,
-      ),
-    }));
+    // Build a profile object (simplified, extend as needed)
+    const startupProfile = {
+      ...capsuleProposalInfo,
+      readinessLevels: startupReadinessLevels.map((srl) => ({
+        type: srl.readinessLevel.readinessType,
+        level: srl.readinessLevel.level,
+      })),
+    };
 
-    const trl = readinessLevelByType.get(ReadinessType.T) || 0;
-    const mrl = readinessLevelByType.get(ReadinessType.M) || 0;
-    const arl = readinessLevelByType.get(ReadinessType.A) || 0;
-    const orl = readinessLevelByType.get(ReadinessType.O) || 0;
-    const rrl = readinessLevelByType.get(ReadinessType.R) || 0;
-    const irl = readinessLevelByType.get(ReadinessType.I) || 0;
+    // Use grounded prompt builder if RAG context is available
+    let prompt: string;
+   if (ragContext) {
+  const missingTypes = readinessLevelsWithoutRNA.map(
+    (rl) => rl.readinessLevel.readinessType,
+  );
+  prompt = this.groundedPromptBuilderService.buildGroundedPrompt(
+    ragContext,
+    startupProfile,
+    missingTypes,
+  );
+} else {
+      // fallback to legacy prompt
+      const readinessLevelByType = new Map(
+        startupReadinessLevels.map((startupReadinessLevel) => [
+          startupReadinessLevel.readinessLevel.readinessType,
+          startupReadinessLevel.readinessLevel.level,
+        ]),
+      );
+      const trl = readinessLevelByType.get(ReadinessType.T) || 0;
+      const mrl = readinessLevelByType.get(ReadinessType.M) || 0;
+      const arl = readinessLevelByType.get(ReadinessType.A) || 0;
+      const orl = readinessLevelByType.get(ReadinessType.O) || 0;
+      const rrl = readinessLevelByType.get(ReadinessType.R) || 0;
+      const irl = readinessLevelByType.get(ReadinessType.I) || 0;
+      const basePrompt = `
+        Given these data:
+        Acceleration Proposal Title: ${capsuleProposalInfo.title}
+        Duration: 3 months
+        I. About the startup
+        A. Startup Description
+        ${capsuleProposalInfo.description}
+        B. Problem Statement
+        ${capsuleProposalInfo.problemStatement}
+        C. Target Market
+        ${capsuleProposalInfo.targetMarket}
+        D. Solution Description
+        ${capsuleProposalInfo.solutionDescription}
+        II. About the Proposed Acceleration
+        A. Objectives
+        ${capsuleProposalInfo.objectives}
+        B. Scope of The Proposal
+        ${capsuleProposalInfo.scope}
+        C. Methodology and Expected Outputs
+        ${capsuleProposalInfo.methodology}
+        Initial Readiness Level:
+        TRL ${trl}
+        MRL ${mrl}
+        ARL ${arl}
+        ORL ${orl}
+        RRL ${rrl}
+        IRL ${irl}
+        `;
+      const missingReadinessTypes = readinessLevelsWithoutRNA.map(
+        (rl) => rl.readinessLevel.readinessType,
+      );
+      prompt = `
+        ${basePrompt}
+        
+        TASK: Generate a RNA(Readiness and Needs Assessment) for the following readiness levels that are missing: ${missingReadinessTypes.join(', ')}.
+        Requirement: The response should be in a JSON format.
+        JSON format: [{"readiness_level_type": (string), "rna": ""(string)}]
+        Requirement:
+        - readiness_level_type should only be one of: ${missingReadinessTypes.join(', ')}
+        - rna has a max length of 500
+        - rna should be specific to that readiness type only.
+        - IMPORTANT: If you do not have enough factual information from the Capsule Proposal to generate a meaningful RNA for a specific readiness type, return null for its "rna" value instead of inventing facts.
+        `;
+    }
 
-    const basePrompt = `
-      Given these data:
-      Acceleration Proposal Title: ${capsuleProposalInfo.title}
-      Duration: 3 months
-      I. About the startup
-      A. Startup Description
-      ${capsuleProposalInfo.description}
-      B. Problem Statement
-      ${capsuleProposalInfo.problemStatement}
-      C. Target Market
-      ${capsuleProposalInfo.targetMarket}
-      D. Solution Description
-      ${capsuleProposalInfo.solutionDescription}
-      II. About the Proposed Acceleration
-      A. Objectives
-      ${capsuleProposalInfo.objectives}
-      B. Scope of The Proposal
-      ${capsuleProposalInfo.scope}
-      C. Methodology and Expected Outputs
-      ${capsuleProposalInfo.methodology}
-      Initial Readiness Level:
-      TRL ${trl}
-      MRL ${mrl}
-      ARL ${arl}
-      ORL ${orl}
-      RRL ${rrl}
-      IRL ${irl}
-      `;
-
-    // 8. Create prompt for only missing readiness types
-    const missingReadinessTypes = readinessLevelsWithoutRNA.map(
-      (rl) => rl.readinessLevel.readinessType,
-    );
-    const prompt = `
-      ${basePrompt}
-      
-      TASK: Generate a RNA(Readiness and Needs Assessment) for the following readiness levels that are missing: ${missingReadinessTypes.join(', ')}.
-      Requirement: The response should be in a JSON format.
-      JSON format: [{"readiness_level_type": (string), "rna": ""(string)}]
-      Requirement:
-      - readiness_level_type should only be one of: ${missingReadinessTypes.join(', ')}
-      - rna has a max length of 500
-      - rna should be specific to that readiness type only.
-      - IMPORTANT: If you do not have enough factual information from the Capsule Proposal to generate a meaningful RNA for a specific readiness type, return null for its "rna" value instead of inventing facts.
-      `;
-
+    // Use AI service as before
     const generatedRNAs = await this.aiService.generateRNAsFromPrompt(prompt);
-
+    console.log('AI generatedRNAs:', JSON.stringify(generatedRNAs, null, 2));
     // 9. Create RNA entries only for missing readiness types
     const createdRNAs: StartupRNA[] = [];
     for (const generatedRNA of generatedRNAs) {
@@ -210,6 +234,15 @@ export class RnaService {
 
         await this.em.persist(newRNA);
         createdRNAs.push(newRNA);
+
+        await this.aiService.recordAiRecommendation({
+          startupId: startup.id,
+          dimensionKey: matchingReadinessLevel.readinessLevel.readinessType,
+          recommendationKind: 'RNA',
+          content: newRNA.rna,
+          validationStatus: 'validated',
+          confidenceStatus: 'high-confidence',
+        });
       }
     }
     await this.em.flush();

@@ -7,7 +7,9 @@ import { StartupModule } from './startup/startup.module';
 import { ReadinesslevelModule } from './readinesslevel/readinesslevel.module';
 import { ReadinessModule } from './readiness/readiness.module';
 import { AiModule } from './ai/ai.module';
+import { BaselineModule } from './ai/baseline.module';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { PostgreSqlDriver } from '@mikro-orm/postgresql';   // added
 import { ChatHistoryModule } from './chat_history/chat-history.module';
 import { AdminModule } from './admin/admin.module';
 import { User } from './entities/user.entity';
@@ -24,7 +26,15 @@ import { ProgressModule } from './progress/progress.module';
 import { OverviewModule } from './overview/overview.module';
 import { ElevateModule } from './elevate/elevate.module';
 import { AssessmentModule } from './assessment/assessment.module';
+import { OcrModule } from './ocr/ocr.module';
 import { UploadModule } from './upload/upload.module';
+
+// New entities and custom type
+import { Recommendation } from './entities/recommendation.entity';
+import { RagRetrievalLog } from './entities/rag-retrieval-log.entity';
+import { VectorEmbedding } from './entities/vector-embeddings.entity'; // if you plan to use it
+
+import config from './mikro-orm.config';
 
 @Module({
   controllers: [AppController],
@@ -32,9 +42,18 @@ import { UploadModule } from './upload/upload.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    MikroOrmModule.forRoot(),
+    MikroOrmModule.forRoot(config as any),
     MikroOrmModule.forFeature({
-      entities: [User, Startup, CapsuleProposal, UratQuestion, RnaChatHistory],
+      entities: [
+        User,
+        Startup,
+        CapsuleProposal,
+        UratQuestion,
+        RnaChatHistory,
+        Recommendation,        // new
+        RagRetrievalLog,        // new
+        VectorEmbedding,        // new (optional)
+      ],
     }),
     AiModule,
     AuthModule,
@@ -53,6 +72,8 @@ import { UploadModule } from './upload/upload.module';
     UploadModule,
     AdminModule,
     AssessmentModule,
+    OcrModule,
+    BaselineModule,
   ],
   providers: [AppService],
 })

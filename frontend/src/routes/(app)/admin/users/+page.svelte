@@ -6,7 +6,8 @@
   import { Label } from '$lib/components/ui/label';
   import * as Select from '$lib/components/ui/select';
   import { Plus, Edit2, Trash2, Users, Loader2 } from 'lucide-svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   let { data } = $props<{ data: { users: Array<any>; access: string } }>();
   let users = $state(data.users);
@@ -161,27 +162,33 @@
   };
 </script>
 
-<div class="space-y-6">
-  <div class="flex items-center justify-between">
+<div class="space-y-8 max-w-7xl mx-auto pb-12">
+  <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight">Users</h1>
-      <p class="mt-1 text-sm text-muted-foreground">
-        Manage user accounts and permissions
+      <h1 class="text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
+        <Users class="h-8 w-8 text-primary opacity-80" />
+        Manage Users
+      </h1>
+      <p class="mt-2 text-muted-foreground">
+        Administer user accounts, permissions, and roles across the platform.
       </p>
     </div>
-    <Button onclick={openCreateModal} class="gap-2">
+    <Button onclick={openCreateModal} class="gap-2 shadow-sm transition-all hover:-translate-y-0.5">
       <Plus class="h-4 w-4" />
       Create User
     </Button>
   </div>
 
-  <div class="rounded-lg border bg-card shadow-sm">
+  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
     <div
-      class="bg-muted/50 flex items-center justify-between border-b px-6 py-4"
+      class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4"
     >
-      <h2 class="font-semibold">All Users</h2>
+      <h2 class="font-semibold text-foreground flex items-center gap-2">
+        <Users class="h-4 w-4 text-muted-foreground" />
+        All Users
+      </h2>
       {#if users.length}
-        <span class="text-xs text-muted-foreground"
+        <span class="text-xs font-medium text-muted-foreground bg-background/50 px-2.5 py-1 rounded-full border border-border/30"
           >{users.length} {users.length === 1 ? 'user' : 'users'}</span
         >
       {/if}
@@ -189,50 +196,72 @@
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr class="bg-muted/30 border-b">
-            <th class="px-6 py-3 text-left font-medium">ID</th>
-            <th class="px-6 py-3 text-left font-medium">Email</th>
-            <th class="px-6 py-3 text-left font-medium">Name</th>
-            <th class="px-6 py-3 text-left font-medium">Role</th>
-            <th class="px-6 py-3 text-right font-medium">Actions</th>
+          <tr class="bg-muted/40 border-b border-border/50">
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">ID</th>
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Name</th>
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Email</th>
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Role</th>
+            <th class="px-6 py-4 text-right font-semibold text-muted-foreground">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {#each users as u}
-            <tr class="hover:bg-muted/50 group border-b transition-colors">
-              <td class="px-6 py-4 font-mono text-xs text-muted-foreground"
-                >{u.id}</td
-              >
-              <td class="px-6 py-4">{u.email}</td>
-              <td class="px-6 py-4"
-                >{(u.firstName ?? '') + ' ' + (u.lastName ?? '')}</td
-              >
-              <td class="px-6 py-4">
-                <Badge variant={getRoleBadgeVariant(u.role)}>{u.role}</Badge>
-              </td>
-              <td class="px-6 py-4 text-right">
-                <div class="flex items-center justify-end gap-2">
-                  <button
-                    onclick={() => openEditModal(u)}
-                    class="text-flutter-blue hover:bg-flutter-blue/10 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
-                  >
-                    <Edit2 class="h-3.5 w-3.5" />
-                    Edit
-                  </button>
-                  <button
-                    class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-50"
-                    onclick={() => {
-                      toDelete = u;
-                      deleteOpen = true;
-                    }}
-                  >
-                    <Trash2 class="h-3.5 w-3.5" />
-                    Delete
-                  </button>
+          {#if users.length === 0}
+            <tr>
+              <td colspan="5" class="px-6 py-16 text-center text-muted-foreground">
+                <div class="flex flex-col items-center justify-center space-y-4">
+                  <div class="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center">
+                    <Users class="h-8 w-8 text-muted-foreground/40" />
+                  </div>
+                  <p class="text-lg font-medium">No users found</p>
+                  <p class="text-sm opacity-80">Create a user to get started.</p>
                 </div>
               </td>
             </tr>
-          {/each}
+          {:else}
+            {#each users as u}
+              <tr class="hover:bg-muted/30 group border-b border-border/50 transition-colors last:border-0">
+                <td class="px-6 py-5 font-mono text-xs text-muted-foreground/70"
+                  >#{u.id}</td
+                >
+                <td class="px-6 py-5">
+                  <span class="font-medium text-foreground">
+                    {(u.firstName ?? '') + ' ' + (u.lastName ?? '')}
+                  </span>
+                </td>
+                <td class="px-6 py-5 text-muted-foreground">{u.email}</td>
+                <td class="px-6 py-5">
+                  <Badge variant={getRoleBadgeVariant(u.role)} class="shadow-none">
+                    {u.role}
+                  </Badge>
+                </td>
+                <td class="px-6 py-5 text-right">
+                  <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onclick={() => openEditModal(u)}
+                      class="h-8 bg-secondary/60 hover:bg-secondary text-xs"
+                    >
+                      <Edit2 class="h-3.5 w-3.5 mr-1.5" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      class="h-8 bg-destructive/10 text-destructive hover:bg-destructive hover:text-destructive-foreground text-xs shadow-none border border-destructive/20"
+                      onclick={() => {
+                        toDelete = u;
+                        deleteOpen = true;
+                      }}
+                    >
+                      <Trash2 class="h-3.5 w-3.5 mr-1.5" />
+                      Delete
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            {/each}
+          {/if}
         </tbody>
       </table>
     </div>

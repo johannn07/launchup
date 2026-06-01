@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   export let stepName: string;
   export let currentStep: string;
   import { Input } from '$lib/components/ui/input/index.js';
@@ -19,7 +20,23 @@
     objectives: string;
     scope: string;
     methodology: string;
+    fieldConfidence?: Record<string, 'verified' | 'low' | 'failed'>;
+    legibilityStatus?: 'verified' | 'failed';
+    legibilityReason?: string | null;
+    sketchDetected?: boolean;
+    sketchConfidence?: number;
   };
+
+  const reviewFields = [
+    { key: 'title', label: 'Acceleration Proposal Title' },
+    { key: 'startup_description', label: 'Startup Description' },
+    { key: 'problem_statement', label: 'Problem Statement' },
+    { key: 'target_market', label: 'Target Market' },
+    { key: 'solution_description', label: 'Solution Description' },
+    { key: 'objectives', label: 'Objectives' },
+    { key: 'scope', label: 'Scope' },
+    { key: 'methodology', label: 'Methodology' }
+  ] as const;
 
   let formData = {
     name: startup?.name ?? '',
@@ -40,34 +57,99 @@
     };
   }
 
+  import { toast } from 'svelte-sonner';
+
   async function getInformation() {
     processing = true;
     if (!files || !files[0]) {
       console.error('No file selected');
+      processing = false;
       return;
     }
 
     const formData = new FormData();
     formData.append('capsuleProposal', files[0]);
 
-    const response = await fetch(
-      `${PUBLIC_API_URL}/startups/parse-capsule-proposal`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${access}`
-        },
-        body: formData
+    try {
+      const response = await fetch(
+        `${PUBLIC_API_URL}/startups/parse-capsule-proposal`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${access}`
+          },
+          body: formData
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        information = {
+          title: data.title || '',
+          startup_description: data.startup_description || '',
+          problem_statement: data.problem_statement || '',
+          target_market: data.target_market || '',
+          solution_description: data.solution_description || '',
+          objectives: data.objectives || '',
+          scope: data.scope || '',
+          methodology: data.methodology || '',
+          fieldConfidence: data.fieldConfidence || {},
+          legibilityStatus: data.legibilityStatus || 'verified',
+          legibilityReason: data.legibilityReason || null,
+          sketchDetected: data.sketchDetected || false,
+          sketchConfidence: data.sketchConfidence || 0,
+        };
+      } else {
+        toast.error(data.message || 'Failed to process document. Please try again.');
+        resetUpload();
       }
-    );
+    } catch (err) {
+      toast.error('Network error occurred while processing document.');
+      resetUpload();
+    } finally {
+      processing = false;
+    }
+  }
 
-    const data = await response.json();
+  function resetUpload() {
+    files = null;
+    information = undefined as never;
+  }
 
-    if (response.ok) {
-      information = data;
+  function getReviewStatus(value: string | undefined) {
+    if (!value || !value.trim()) {
+      return {
+        label: 'Failed',
+        tone: 'border-rose-200 bg-rose-50 text-rose-700'
+      };
     }
 
-    processing = false;
+    if (value.trim().length < 40) {
+      return {
+        label: 'Low',
+        tone: 'border-amber-200 bg-amber-50 text-amber-700'
+      };
+    }
+
+    return {
+      label: 'Verified',
+      tone: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    };
+  }
+
+  function getConfidenceLabel(fieldKey: keyof typeof information.fieldConfidence | string) {
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'verified';
+    if (confidence === 'failed') return 'Failed';
+    if (confidence === 'low') return 'Low';
+    return 'Verified';
+  }
+
+  function getConfidenceTone(fieldKey: keyof typeof information.fieldConfidence | string) {
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'verified';
+    if (confidence === 'failed') return 'border-rose-200 bg-rose-50 text-rose-700';
+    if (confidence === 'low') return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   }
 
   $: if (files) {
@@ -75,7 +157,7 @@
   }
 </script>
 
-<div class="flex-1 overflow-auto px-1" class:hidden={currentStep !== stepName}>
+<div class="flex-1 min-h-0 overflow-auto px-1" class:hidden={currentStep !== stepName}>
   <div class="flex flex-col gap-5">
     <div class="grid gap-4 sm:grid-cols-2">
       <div class="grid gap-2">
@@ -143,6 +225,57 @@
         bind:files
       />
     </div>
+
+    {#if information}
+      <div class="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-white/40">OCR review</p>
+            <h3 class="mt-1 text-lg font-bold text-slate-900 dark:text-white">Review the extracted proposal before continuing</h3>
+            {#if information.legibilityStatus === 'failed'}
+              <p class="mt-2 max-w-2xl text-sm leading-6 text-rose-700 dark:text-rose-300">
+                The image quality check failed{information.legibilityReason ? `: ${information.legibilityReason}` : '.'} Re-upload a clearer image or switch to a PDF.
+              </p>
+            {/if}
+            {#if information.sketchDetected}
+              <p class="mt-2 max-w-2xl text-sm leading-6 text-amber-700 dark:text-amber-300">
+                The uploaded image appears to be a sketch/diagram (confidence {information.sketchConfidence}). Please provide a typed proposal if possible or transcribe key points manually below.
+              </p>
+            {/if}
+          </div>
+          <button
+            type="button"
+            class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#6366f1]/30 hover:text-[#4f46e5] dark:border-white/10 dark:text-white/70"
+            onclick={resetUpload}
+          >
+            Re-upload file
+          </button>
+        </div>
+
+        <div class="mt-4 grid gap-3 md:grid-cols-2">
+          {#each reviewFields as field}
+            {@const status = getReviewStatus(information[field.key])}
+            <div class={`rounded-xl border p-4 ${status.tone}`}>
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">{field.label}</p>
+                  <textarea
+                    bind:value={information[field.key]}
+                    disabled={information.legibilityStatus === 'failed'}
+                    class="mt-2 min-h-[7rem] w-full rounded-xl border border-slate-200 bg-white/90 p-3 text-sm leading-6 text-slate-800 outline-none transition focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/15 dark:border-white/10 dark:bg-slate-950/40 dark:text-white/85"
+                    placeholder="No text extracted yet"
+                  ></textarea>
+                </div>
+                <span class={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${getConfidenceTone(field.key)}`}>
+                  {getConfidenceLabel(field.key)}
+                </span>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
     {#if information}
       <input type="hidden" name="title" value={information.title} />
       <input type="hidden" name="startupDescription" value={information.startup_description} />

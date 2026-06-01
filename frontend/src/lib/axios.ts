@@ -1,8 +1,10 @@
-import { PUBLIC_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 import axios from 'axios';
 
+const PUBLIC_API_URL = (env && env.PUBLIC_API_URL) ? env.PUBLIC_API_URL : '';
+
 const axiosInstance = axios.create({
-  baseURL: `${PUBLIC_API_URL}`,
+  baseURL: PUBLIC_API_URL,
   headers: {
     'Content-Type': 'application/json'
   }

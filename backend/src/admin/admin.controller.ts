@@ -18,6 +18,28 @@ import { UpdateStartupDto } from './dto/update-startup.dto';
 import { EntityManager } from '@mikro-orm/core';
 import { ActivityLog } from '../entities/activity-log.entity';
 import { JwtGuard, AdminGuard } from '../auth/guard';
+import { TierConfig } from '../entities/tier-config.entity';
+import { IsArray, IsObject, IsString, IsNumber, ValidateNested, IsOptional } from 'class-validator';
+import { Type } from 'class-transformer';
+
+class TierConfigItemDto {
+  @IsString()
+  tierLabel!: string;
+
+  @IsNumber()
+  threshold!: number;
+
+  @IsObject()
+  @IsOptional()
+  weights?: Record<string, number>;
+}
+
+class TierConfigUpdateDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => TierConfigItemDto)
+  configs!: TierConfigItemDto[];
+}
 
 @UseGuards(JwtGuard, AdminGuard)
 @Controller('admin')
@@ -106,6 +128,63 @@ export class AdminController {
   @Get('startups/:id-json')
   async getStartupJson(@Param('id', ParseIntPipe) id: number) {
     return this.adminService.getStartupById(id);
+  }
+
+  // --- Tier config ---
+  @Get('tiers/check-evals')
+  async checkEvals() {
+    const conn = this.adminService['em'].getConnection();
+    const res = await conn.execute(`SELECT id, startup_id, composite_score, tier_label FROM readiness_evaluations`);
+    return res;
+  }
+
+  @Get('tiers')
+  async getTierConfigs() {
+    return this.adminService.getTierConfigs();
+  }
+
+  @Post('tiers/update')
+  async updateTiers(@Body() body: any) {
+    // Basic validation performed in service; accept array of configs
+    if (!Array.isArray(body)) {
+      throw new BadRequestException('Expected an array of tier configs');
+    }
+    const sanitized = body.map((b: any) => ({ tierLabel: String(b.tierLabel), threshold: Number(b.threshold), weights: b.weights ?? null }));
+    return this.adminService.upsertTierConfigs(sanitized);
+  }
+
+  // --- AI bias audits ---
+  @Get('ai/bias-audits')
+  async getBiasAudits() {
+    return this.adminService.getBiasAudits();
+  }
+
+  @Post('ai/bias-audits/override/:id')
+  async overrideBiasAudit(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+    const payload = {
+      correctedScore: body.correctedScore !== undefined ? Number(body.correctedScore) : undefined,
+      biasFlagged: typeof body.biasFlagged === 'boolean' ? body.biasFlagged : undefined,
+      biasStatus: body.biasStatus,
+      justification: body.justification,
+    };
+    return this.adminService.overrideBiasAudit(id, payload);
+  }
+
+  // OCR documents
+  @Get('ocr-documents')
+  async getOcrDocuments() {
+    return this.adminService.getOcrDocuments();
+  }
+
+  @Post('ocr-documents/flag/:id')
+  async flagOcrDocument(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+    const payload = {
+      sketchDetected: typeof body.sketchDetected === 'boolean' ? body.sketchDetected : undefined,
+      sketchConfidence: body.sketchConfidence !== undefined ? Number(body.sketchConfidence) : undefined,
+      legibilityStatus: body.legibilityStatus,
+      note: body.note,
+    };
+    return this.adminService.flagOcrDocument(id, payload);
   }
 
   @Post('startups/create-json')

@@ -3,6 +3,9 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { Rns } from 'src/entities/rns.entity';
 import { Startup } from 'src/entities/startup.entity';
@@ -13,12 +16,16 @@ import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 import { AiService } from 'src/ai/ai.service';
 import { RnsChatHistory } from 'src/entities/rns-chat-history.entity';
+import { RagQueryService } from '../rna/rag-query.service';
+import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
 
 @Injectable()
 export class RnsService {
   constructor(
     private em: EntityManager,
     private readonly aiService: AiService,
+    private readonly ragQueryService: RagQueryService,                // new
+    private readonly groundedPromptBuilderService: GroundedPromptBuilderService, // new
   ) {}
 
   async getStartupRns(startupId: number) {
@@ -153,64 +160,75 @@ export class RnsService {
     return rns;
   }
 
-  async generateTasks(dto: GenerateTasksDto) {
-    // 1. Validate startup exists
-    const startup = await this.em.findOne(
-      Startup,
-      { id: dto.startup_id },
-      {
-        populate: ['capsuleProposal'],
-      },
-    );
-    if (!startup) throw new NotFoundException('Startup not found');
+async generateTasks(dto: GenerateTasksDto) {
+  const startup = await this.em.findOne(Startup, { id: dto.startup_id }, {
+    populate: ['capsuleProposal'],
+  });
+  if (!startup) throw new NotFoundException('Startup not found');
 
-    // 2. Get capsule proposal info
-    const capsuleProposalInfo = startup.capsuleProposal;
-    if (!capsuleProposalInfo)
-      throw new BadRequestException('No capsule proposal found.');
+  const capsuleProposalInfo = startup.capsuleProposal;
+  if (!capsuleProposalInfo)
+    throw new BadRequestException('No capsule proposal found.');
 
-    // Determine the source of RNS generation (selected RNS IDs or readinessType)
-    let rnasToGenerateFrom: StartupRNA[] = [];
+  let rnasToGenerateFrom: StartupRNA[] = [];
+  if (dto.rnaIds && dto.rnaIds.length > 0) {
+    rnasToGenerateFrom = await this.em.find(StartupRNA, {
+      id: { $in: dto.rnaIds },
+      startup: startup,
+    }, { populate: ['readinessLevel'] });
+    if (rnasToGenerateFrom.length === 0)
+      throw new BadRequestException('No valid RNA found for the provided RNS IDs.');
+  } else {
+    throw new BadRequestException('Either rnaIds or readinessType must be provided.');
+  }
 
-    if (dto.rnaIds && dto.rnaIds.length > 0) {
-      // If RNS IDs are provided, fetch the corresponding StartupRNA entities
-      rnasToGenerateFrom = await this.em.find(
-        StartupRNA,
-        {
-          id: { $in: dto.rnaIds },
-          startup: startup,
-        },
-        {
-          populate: ['readinessLevel'],
-        },
-      );
+  const startupReadinessLevels = await this.em.find(
+    StartupReadinessLevel,
+    { startup: startup },
+    { populate: ['readinessLevel'] },
+  );
 
-      if (rnasToGenerateFrom.length === 0) {
-        throw new BadRequestException(
-          'No valid RNA found for the provided RNS IDs.',
-        );
-      }
-    } else {
-      throw new BadRequestException(
-        'Either rnaIds or readinessType must be provided.',
-      );
-    }
+  const trl = startupReadinessLevels[0]?.readinessLevel.level || 0;
+  const mrl = startupReadinessLevels[1]?.readinessLevel.level || 0;
+  const arl = startupReadinessLevels[2]?.readinessLevel.level || 0;
+  const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
+  const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
+  const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
 
-    // Readiness levels for prompt building
-    const startupReadinessLevels = await this.em.find(
-      StartupReadinessLevel,
-      { startup: startup },
-      { populate: ['readinessLevel'] },
-    );
+  const startupProfile = {
+    title: capsuleProposalInfo.title,
+    description: capsuleProposalInfo.description,
+    objectives: capsuleProposalInfo.objectives,
+    scope: capsuleProposalInfo.scope,
+    readinessLevels: startupReadinessLevels.map(srl => ({
+      type: srl.readinessLevel.readinessType,
+      level: srl.readinessLevel.level,
+    })),
+  };
 
-    const trl = startupReadinessLevels[0]?.readinessLevel.level || 0;
-    const mrl = startupReadinessLevels[1]?.readinessLevel.level || 0;
-    const arl = startupReadinessLevels[2]?.readinessLevel.level || 0;
-    const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
-    const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
-    const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
+  const ragContext = await this.ragQueryService.queryVectorDatabase(dto.startup_id.toString());
 
-    const basePrompt = `
+  const createdRns: Rns[] = [];
+  let currentPriorityNumber = dto.startPriorityNumber || 1;
+
+  const existingRns = await this.em.find(Rns, { startup: startup }, { orderBy: { priorityNumber: 'ASC' } });
+  for (const rns of existingRns) {
+    rns.priorityNumber += (dto.no_of_tasks_to_create || 1) * rnasToGenerateFrom.length;
+    this.em.persist(rns);
+  }
+  await this.em.flush();
+
+  const targetReadinessLevel: Record<string, number> = {
+    T: trl,
+    M: mrl,
+    A: arl,
+    O: orl,
+    R: rrl,
+    I: irl,
+  };
+
+  // Full fallback basePrompt (same as original code)
+  const basePrompt = `
     Given these data:
     Acceleration Proposal Title: ${capsuleProposalInfo.title}
     Duration: 3 months
@@ -237,49 +255,53 @@ export class RnsService {
     ORL ${orl}
     RRL ${rrl}
     IRL ${irl}
-    `;
+  `;
 
-    const createdRns: Rns[] = [];
-    let currentPriorityNumber = dto.startPriorityNumber || 1; // Use startPriorityNumber if provided, otherwise 1
+  for (const rna of rnasToGenerateFrom) {
+    const readinessType = rna.readinessLevel.readinessType;
+    const term = 'Short-term';
 
-    // Increment existing RNS priority numbers to make room for new ones
-    const existingRns = await this.em.find(
-      Rns,
-      { startup: startup },
-      { orderBy: { priorityNumber: 'ASC' } },
-    );
-    if (dto.rnaIds && dto.rnaIds.length > 0) {
-      for (const rns of existingRns) {
-        rns.priorityNumber +=
-          (dto.no_of_tasks_to_create || 1) * rnasToGenerateFrom.length; // Increment by total expected new tasks
-        this.em.persist(rns);
-      }
-      await this.em.flush(); // Flush once after all increments
+    const rnsTaskBlock = `
+--- Task ---
+This is the RNA for ${readinessType} Readiness Type:
+Readiness Level ${rna.readinessLevel.level}: ${rna.rna}
+
+Create ${dto.no_of_tasks_to_create || 1} ${term} tasks for the startup's personalized learning path based on the above RNA.
+Requirement: The response must be in JSON format.
+JSON format: [{"target_level": (int), "description": ""}]
+Requirements:
+- target_level is an integer from 1 to 9
+- the tasks should help increase the level of the ${readinessType} readiness type from its current level
+- target_level must not exceed 9
+- description has a max length of 500 characters
+`;
+
+    let prompt: string;
+    if (ragContext && !ragContext.lowConfidence && ragContext.similarProfiles?.length > 0) {
+      prompt = this.groundedPromptBuilderService.buildGroundedPrompt(
+        ragContext,
+        startupProfile,
+        [readinessType],
+        rnsTaskBlock,
+      );
+    } else {
+      prompt = `
+${basePrompt}
+
+This is the RNA for ${readinessType} Readiness Type Of Startup:
+Readiness Level ${rna.readinessLevel.level}: ${rna.rna}
+
+TASK: Create me ${dto.no_of_tasks_to_create || 1} ${term} tasks for the startup's personalized learning path based on the above RNA.
+Requirement: The response should be in a JSON format.
+It should consist of readiness level type, target level, description
+JSON format: [{"target_level": (int), "description": ""}]
+Requirement note:
+- target_level is from 1-9
+- make sure that the tasks will increase the level(target_level) of the specified readiness level type from the initial readiness level type
+- target_level should not exceed to 9
+- description has a max length of 500
+      `;
     }
-
-    for (const rna of rnasToGenerateFrom) {
-      const readinessType = rna.readinessLevel.readinessType;
-      // Term will be short-term for newly generated RNS, as it's not directly from an existing RNS
-      const term = 'Short-term'; // Assuming newly generated RNS are short-term
-
-      let startupRnaPrompt = `This is the RNA for ${readinessType} Readiness Type Of Startup:\n`;
-      startupRnaPrompt += `Readiness Level ${rna.readinessLevel.level}: ${rna.rna}\n`;
-
-      const prompt = `
-        ${basePrompt}
-
-        ${startupRnaPrompt}
-
-        TASK: Create me ${dto.no_of_tasks_to_create || 1} ${term} tasks for the startup's personalized learning path based on the above RNA.
-        Requirement: The response should be in a JSON format.
-        It should consist of readiness level type, target level, description
-        JSON format: [{"target_level": (int), "description": ""}]
-        Requirement note:
-        - target_level is from 1-9
-        - make sure that the tasks will increase the level(target_level) of the specified readiness level type from the initial readiness level type
-        - target_level should not exceed to 9
-        - description has a max length of 500
-        `;
 
       const aiTasks = await this.aiService.generateTasksFromPrompt(prompt);
 
@@ -298,10 +320,22 @@ export class RnsService {
 
       for (let i = 0; i < aiTasks.length; i++) {
         const task = aiTasks[i];
+        const reviewedTarget = await this.aiService.reviewBiasScore({
+          dimensionKey: readinessType,
+          rawScore: Number(task.target_level) || targetReadinessLevel[readinessType] + 1,
+          maxScore: 9,
+          context: [
+            `Startup: ${startup.name}`,
+            `Readiness type: ${readinessType}`,
+            `RNA: ${rna.rna ?? ''}`,
+            `Task description: ${task.description}`,
+          ].join('\n'),
+        });
+
         const targetLevel = await this.em.findOne(ReadinessLevel, {
           readinessType: readinessType,
           level: Math.min(
-            Number(task.target_level) ||
+            reviewedTarget.correctedScore ||
               targetReadinessLevel[readinessType] + 1,
             9,
           ),
@@ -313,39 +347,62 @@ export class RnsService {
           continue;
         }
 
-        const newRns = new Rns();
-        newRns.priorityNumber = currentPriorityNumber++; // Assign and then increment for the next RNS
-        newRns.description = task.description;
-        newRns.targetLevel = targetLevel;
-        newRns.readinessType = readinessType;
-        newRns.startup = startup;
-        newRns.requestedStatus = 1;
-        newRns.status = 1; // Use provided term or default to short-term status (1)
-        newRns.assignee = startup.user;
+      const newRns = new Rns();
+      newRns.priorityNumber = currentPriorityNumber++;
+      newRns.description = task.description;
+      newRns.targetLevel = targetLevel;
+      newRns.readinessType = readinessType;
+      newRns.startup = startup;
+      newRns.requestedStatus = 1;
+      newRns.status = 1;
+      newRns.assignee = startup.user;
+      newRns.isAiGenerated = true;
 
         this.em.persist(newRns);
         createdRns.push(newRns);
+
+        await this.aiService.recordAiRecommendation({
+          startupId: startup.id,
+          dimensionKey: readinessType,
+          recommendationKind: 'RNS',
+          content: task.description,
+          validationStatus: 'validated',
+          confidenceStatus: 'high-confidence',
+        });
+
+        const rawTarget = Number(task.target_level);
+        const normalizedTarget = Number((task as any).target_level_normalized ?? rawTarget);
+        const deviation = Math.abs(normalizedTarget - rawTarget);
+        await this.aiService.recordBiasAudit({
+          startupId: startup.id,
+          dimensionKey: readinessType,
+          rawScore: Number(task.target_level) || targetReadinessLevel[readinessType] + 1,
+          correctedScore: reviewedTarget.correctedScore,
+          deviation: Math.abs(reviewedTarget.correctedScore - (Number(task.target_level) || targetReadinessLevel[readinessType] + 1)),
+          threshold: 2,
+          biasFlagged: reviewedTarget.biasFlagged,
+          biasStatus: reviewedTarget.biasFlagged ? 'flagged' : 'normalized',
+          justification: reviewedTarget.justification,
+        });
       }
     }
     await this.em.flush(); // Flush all new RNS after the loop
 
-    if (dto.debug) {
-      return {
-        prompt: 'See console for prompts if multiple RNS were generated.',
-      }; // Return placeholder for debug if multiple prompts
-    } else {
-      return createdRns.map((r: Rns) => ({
-        id: r.id,
-        priorityNumber: r.priorityNumber,
-        description: r.description,
-        targetLevelId: r.targetLevel.id,
-        isAiGenerated: r.isAiGenerated,
-        status: r.status,
-        readinessType: r.readinessType,
-        startup: r.startup.id,
-      }));
-    }
+  if (dto.debug) {
+    return { prompt: 'See console for prompts if multiple RNS were generated.' };
+  } else {
+    return createdRns.map((r: Rns) => ({
+      id: r.id,
+      priorityNumber: r.priorityNumber,
+      description: r.description,
+      targetLevelId: r.targetLevel.id,
+      isAiGenerated: r.isAiGenerated,
+      status: r.status,
+      readinessType: r.readinessType,
+      startup: r.startup.id,
+    }));
   }
+}
 
   async refineRnsDescription(
     rnsId: number,

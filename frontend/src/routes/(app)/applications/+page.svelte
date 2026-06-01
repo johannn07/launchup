@@ -2,7 +2,8 @@
   import * as Tabs from '$lib/components/ui/tabs/index.js';
   import { goto } from '$app/navigation';
   import StartupCard from '$lib/components/dashboard/StartupCard.svelte';
-  import { PUBLIC_API_URL } from '$env/static/public';
+  import { env } from '$env/dynamic/public';
+  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   import type { PageData } from './$types';
   import { page } from '$app/stores';
   import PendingDialog from '$lib/components/dashboard/PendingDialog.svelte';

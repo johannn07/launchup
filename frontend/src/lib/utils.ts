@@ -2,7 +2,9 @@ import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { browser } from '$app/environment';
 import axiosInstance from './axios';
-import { PUBLIC_API_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
+
+const PUBLIC_API_URL = (env && env.PUBLIC_API_URL) ? env.PUBLIC_API_URL : '';
 import type { RNSItem } from './types/rns.types';
 import type { Role } from './types/user.types';
 import { mode } from 'mode-watcher';
