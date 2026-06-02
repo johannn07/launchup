@@ -6,11 +6,23 @@
   import { superForm } from 'sveltekit-superforms';
   import { toast } from 'svelte-sonner';
   import { goto } from '$app/navigation';
-  import { Loader } from 'lucide-svelte';
+  import { Loader, Sun, Moon, Rocket, Eye, EyeOff } from 'lucide-svelte';
 
   let { data }: { data: PageData } = $props();
 
   const { form, errors, enhance, message, submitting } = superForm(data.form);
+
+  let dark = $state(false);
+  let showPassword = $state(false);
+
+  function toggleTheme() {
+    dark = !dark;
+    document.documentElement.classList.toggle('dark', dark);
+  }
+
+  $effect(() => {
+    dark = document.documentElement.classList.contains('dark');
+  });
 
   $effect(() => {
     if ($message && !$submitting) {
@@ -20,7 +32,7 @@
     }
     if ($errors.email && !$submitting) {
       toast.dismiss();
-      toast.error($errors.email as string);
+      toast.error(($errors.email as unknown) as string);
     }
   });
 </script>
@@ -30,15 +42,36 @@
 </svelte:head>
 
 <div class="grid min-h-screen lg:grid-cols-[1.08fr_0.92fr]">
+  <!-- LEFT PANEL -->
   <div class="relative hidden overflow-hidden bg-slate-50 dark:bg-slate-950 lg:flex lg:flex-col">
     <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.08),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.06),transparent_30%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.28),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.2),transparent_30%)]"></div>
     <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.02),transparent_40%,rgba(0,0,0,0.01))] dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_40%,rgba(255,255,255,0.03))]"></div>
-    <div class="relative z-10 flex items-center justify-between px-10 py-8 text-slate-900 dark:text-white/90">
-      <a href="/" class="text-xl font-black tracking-tight text-slate-950 dark:text-white">LaunchUp Admin</a>
-      <div class="rounded-full border border-slate-200 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-white/90">
-        System Control
+
+    <!-- Navbar -->
+    <div class="relative z-10 flex items-center justify-between px-10 py-8">
+      <div class="flex items-center gap-2">
+        <Rocket class="h-5 w-5 text-[#6366f1]" />
+        <a href="/" class="text-xl font-black tracking-tight text-slate-950 dark:text-white">LaunchUp Admin</a>
+      </div>
+      <div class="flex items-center gap-3">
+        <button
+          onclick={toggleTheme}
+          class="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/60 text-slate-600 backdrop-blur transition-all hover:border-[#6366f1]/30 hover:text-[#6366f1] dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:text-white"
+          aria-label="Toggle theme"
+        >
+          {#if dark}
+            <Sun class="h-4 w-4" />
+          {:else}
+            <Moon class="h-4 w-4" />
+          {/if}
+        </button>
+        <div class="rounded-full border border-slate-200 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-white/90">
+          System Control
+        </div>
       </div>
     </div>
+
+    <!-- Content -->
     <div class="relative z-10 flex flex-1 items-center px-10 pb-10">
       <div class="max-w-xl space-y-6">
         <p class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-white/60">Administrator</p>
@@ -64,11 +97,13 @@
         </div>
       </div>
     </div>
+
     <div class="absolute bottom-10 right-10 w-[24rem]">
       <img src="/loginv2.svg" alt="" class="w-full drop-shadow-[0_30px_60px_rgba(0,0,0,0.28)]" />
     </div>
   </div>
 
+  <!-- RIGHT PANEL -->
   <div class="relative flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.08),transparent_36%),linear-gradient(to_bottom,#ffffff,#f7f9ff)] px-6 py-10 dark:bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_36%),linear-gradient(to_bottom,#020617,#050816)]">
     <div class="absolute left-6 top-6 lg:hidden">
       <a href="/" class="text-xl font-black tracking-tight">LaunchUp Admin</a>
@@ -101,14 +136,28 @@
         </div>
         <div class="grid gap-2.5">
           <Label for="password">Password</Label>
-          <Input
-            name="password"
-            id="password"
-            type="password"
-            required
-            bind:value={$form.password}
-            class="h-12 rounded-2xl border-white/50 bg-white/70 shadow-sm transition-all focus-visible:border-[#6366f1]/50 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#6366f1]/10 focus-visible:ring-offset-0 dark:border-white/10 dark:bg-white/5 dark:focus-visible:border-[#6366f1]/50 dark:focus-visible:bg-white/10"
-          />
+          <div class="relative">
+            <Input
+              name="password"
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              required
+              bind:value={$form.password}
+              class="h-12 rounded-2xl border-white/50 bg-white/70 pr-12 shadow-sm transition-all focus-visible:border-[#6366f1]/50 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#6366f1]/10 focus-visible:ring-offset-0 dark:border-white/10 dark:bg-white/5 dark:focus-visible:border-[#6366f1]/50 dark:focus-visible:bg-white/10"
+            />
+            <button
+              type="button"
+              onclick={() => (showPassword = !showPassword)}
+              class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {#if showPassword}
+                <EyeOff class="h-4 w-4" />
+              {:else}
+                <Eye class="h-4 w-4" />
+              {/if}
+            </button>
+          </div>
         </div>
         {#if $errors.email}
           <p class="text-sm font-medium text-rose-500">{$errors.email}</p>
