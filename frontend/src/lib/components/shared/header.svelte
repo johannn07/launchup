@@ -10,6 +10,7 @@
   import { getProfileColor } from '$lib/utils';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import { Rocket } from 'lucide-svelte';
 
   const { user, startup, scrollContainer } = $props();
 
@@ -85,15 +86,15 @@
   style="backdrop-filter: blur(16px);"
 >
   <nav class="flex h-16 w-4/5 items-center px-0">
-    <div class="flex flex-1 cursor-pointer gap-2">
+    <div class="flex flex-1 cursor-pointer items-center gap-2">
       <!-- <img src="/logo.png" alt="citeams_logo" class="h-7 w-7" /> -->
+      <Rocket class="h-5 w-5" style="color: var(--primary);" />
       <a
         data-sveltekit-preload-data="tap"
         href={`/${modules[0]?.link ?? ''}`}
         class="cursor-pointer text-xl font-black normal-case"
         style="color: var(--primary);">LaunchUp</a
       >
-      <a class="ml-4 text-sm" href="/dashboard" style="color: var(--primary);">Dashboard</a>
     </div>
     <div class="flex h-1/3 items-center justify-center gap-5">
       <ul class="flex flex-1 cursor-pointer items-center gap-7 text-sm">

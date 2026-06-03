@@ -209,12 +209,15 @@
   </div>
   <Can role={['Startup']} userRole={role}>
     <div class="flex gap-5">
-      <Button
-        class="flex items-center justify-center gap-2 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] hover:-translate-y-0.5 transition-all duration-200"
+      <button
         onclick={toggleApplicationForm}
+        class="group relative flex items-center gap-2.5 overflow-hidden rounded-xl bg-[#6366f1] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(99,102,241,0.55)] active:translate-y-0 active:shadow-[0_2px_10px_rgba(99,102,241,0.3)]"
       >
-        <RocketIcon class="h-4 w-4" /> Apply
-      </Button>
+        <!-- animated shimmer -->
+        <span class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-500 group-hover:translate-x-full"></span>
+        <RocketIcon class="relative h-4 w-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+        <span class="relative">Apply</span>
+      </button>
     </div>
   </Can>
 </div>
