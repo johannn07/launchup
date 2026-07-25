@@ -3,10 +3,24 @@ import { AiService } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
 import { AiMetricsController } from './ai-metrics.controller';
 import { BaselineService } from './baseline.service';
+import { AiConfigService } from './ai-config.service';
+import { AiRunService } from './ai-run.service';
 
 @Module({
-  providers: [AiService, AiMetricsService, BaselineService],
+  providers: [
+    AiService,
+    AiMetricsService,
+    BaselineService,
+    AiConfigService,
+    AiRunService,
+  ],
   controllers: [AiMetricsController],
-  exports: [AiService, AiMetricsService, BaselineService],
+  exports: [
+    AiService,
+    AiMetricsService,
+    BaselineService,
+    AiConfigService,
+    AiRunService,
+  ],
 })
 export class AiModule {}
