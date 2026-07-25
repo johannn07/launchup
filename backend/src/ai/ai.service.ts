@@ -12,6 +12,7 @@ import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
 import { AiRunContext } from './ai-run.service';
+import { AiConfigService } from './ai-config.service';
 
 const AI_GROUNDING_INSTRUCTION =
   'Only use facts explicitly present in the user-provided input. Never invent names, numbers, dates, or organizations. If you are uncertain about a field, return null instead of guessing.';
@@ -62,6 +63,7 @@ export class AiService {
     private metrics: AiMetricsService,
     private baselineService: BaselineService,
     private readonly em: EntityManager,
+    private readonly aiConfig: AiConfigService,
   ) {
     this.ai = new GoogleGenAI({
       apiKey: this.config.get<string>('GEMINI_API_KEY'),
@@ -364,10 +366,8 @@ export class AiService {
     return fallback;
   }
 
-  async getCapsuleProposalInfo(ctx: AiRunContext, text: string) {
-    const res = await this.generate(
-      ctx,
-      `Based on the text ${text},
+  async getCapsuleProposalInfo(text: string) {
+    const prompt = `Based on the text ${text},
         Task: extract the text for:
         -Acceleration Proposal Title ( can be found above the Duration: 3 months, etc.)
         - Startup Description
@@ -381,8 +381,16 @@ export class AiService {
         Requirement: The response should be in a JSON format.
         It should consist of title, startup_description, problem_statement, target_market, solution_description, objectives, scope, and methodology
         JSON format: {"title": "", "startup_description": "", "problem_statement": (int), "target_market": "", "solution_description": "", "objectives": "", "scope": "", "methodology": ""}
-        `,
-    );
+        `;
+
+    const res = await this.ai.models.generateContent({
+      model: this.aiConfig.defaults.model,
+      contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
+      config: {
+        temperature: this.aiConfig.defaults.temperature,
+        maxOutputTokens: 1024,
+      },
+    });
     return res.text;
   }
 
@@ -393,7 +401,7 @@ export class AiService {
   async getCapsuleProposalInfoFromImage(imageBuffer: Buffer, mimeType: string) {
     const base64Image = imageBuffer.toString('base64');
     const res = await this.ai.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
+      model: this.aiConfig.defaults.model,
       contents: [
         {
           role: 'user',
@@ -437,12 +445,9 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateStartupAnalysisSummary(
-    ctx: AiRunContext,
     dto: StartupApplicationDto,
   ): Promise<string> {
-    const res = await this.generate(
-      ctx,
-      `Please provide a comprehensive analysis of the following startup proposal:
+    const prompt = `Please provide a comprehensive analysis of the following startup proposal:
 
       Title: ${dto.title}
       Description: ${dto.description}
@@ -475,8 +480,16 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       - Start directly with the analysis, no introductory phrases
       - Be clear and direct about the startup's potential
       - Focus on the most impactful insights
-      - Keep output concise while covering essential points`,
-    );
+      - Keep output concise while covering essential points`;
+
+    const res = await this.ai.models.generateContent({
+      model: this.aiConfig.defaults.model,
+      contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
+      config: {
+        temperature: this.aiConfig.defaults.temperature,
+        maxOutputTokens: 1024,
+      },
+    });
 
     if (!res.text) {
       throw new Error('AI response did not contain any text');

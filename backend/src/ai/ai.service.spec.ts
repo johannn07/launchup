@@ -3,6 +3,12 @@ import { AiService } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { AiRunContext } from './ai-run.service';
+import { AiConfigService } from './ai-config.service';
+
+// Same pattern as ai-config.service.spec.ts's `configFrom` — a `get` that
+// always returns undefined so AiConfigService falls back to its documented
+// defaults (model: 'gemini-2.5-flash-lite', temperature: 0, grounding: true).
+const undefinedConfigService = { get: () => undefined } as unknown as ConfigService;
 
 const ctxWith = (overrides: Partial<AiRunContext['config']> = {}): AiRunContext =>
   ({
@@ -41,6 +47,7 @@ describe('AiService', () => {
         normalizeScore: jest.fn().mockResolvedValue({ scaled: 5, z: 0 }),
       } as any,
       {} as any,
+      new AiConfigService(undefinedConfigService),
     );
 
     (service as unknown as { ai: { models: { generateContent: jest.Mock } } }).ai = {
@@ -112,5 +119,19 @@ describe('AiService', () => {
     await service.generateRNAsFromPrompt(ctxWith({ model: 'gemini-2.5-pro' }), 'prompt');
 
     expect(generateContent.mock.calls[0][0].model).toBe('gemini-2.5-pro');
+  });
+
+  it('falls back to the injected AiConfigService defaults for untracked (non-run) calls', async () => {
+    generateContent.mockResolvedValue({ text: '{"title":"Example"}' });
+
+    await service.getCapsuleProposalInfo('some proposal text');
+
+    const request = generateContent.mock.calls[0][0];
+    expect(request.model).toBe('gemini-2.5-flash-lite');
+    expect(request.config).toEqual(
+      expect.objectContaining({ temperature: 0, maxOutputTokens: expect.any(Number) }),
+    );
+    expect(request).not.toHaveProperty('temperature');
+    expect(request).not.toHaveProperty('maxOutputTokens');
   });
 });
