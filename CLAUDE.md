@@ -35,10 +35,8 @@ pnpm lint            # prettier --check . && eslint .
 pnpm format          # prettier --write .
 ```
 
-Local database:
-```bash
-docker-compose up -d db
-```
+Database: **Neon (hosted Postgres), not Docker.** `backend/.env` points `DB_HOST` at an `…aws.neon.tech` endpoint, so `docker-compose.yml` (local `launchup_db`) is unused — don't tell the user to run it. Each developer should work on their own Neon branch, because `main.ts` auto-syncs schema and seeds demo data on every boot against whatever DB is configured.
+
 Both apps read DB/JWT config from their own `.env` (see `backend/.env.example`, `frontend/.env.example`). **`JWT_SECRET` must be identical in both `.env` files** — the frontend verifies the JWT itself rather than calling the backend (see Auth below).
 
 ## Architecture
@@ -54,6 +52,21 @@ Notable non-obvious behavior:
 - Auth: `JwtGuard` (passport `jwt` strategy) is applied per-controller via `@UseGuards`; `AdminGuard` is a separate `CanActivate` checking `req.user.role === Role.Admin` and must be paired with `JwtGuard` (it reads `req.user`, it doesn't authenticate). Roles: `Startup | Mentor | Manager | Admin` (`entities/enums/role.enum.ts`).
 - `mikro-orm.config.ts` falls back to an in-memory SQLite DB when `DB_HOST` isn't set — useful for quick local runs without Docker, but state won't persist and won't match Postgres-only SQL behavior.
 - OCR (`src/ocr/`, Tesseract.js) and AI baseline scoring (`src/ai/`, Gemini) are separate modules from the core assessment domain — the "AI insights" and "OCR document parsing" features are additive layers on top of the assessment/readiness data, not built into it.
+- **File storage is unconfigured.** `upload.service.ts` reads five `DO_SPACES_*` vars left over from the previous team; none are set, so it sets `enabled = false` and all uploads 503. It uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, so any S3-compatible provider is a drop-in — only env values change.
+
+### Capstone context (this is a rebase, not a greenfield build)
+
+This repo is **LaunchUp Enhanced**, a capstone extending a prior team's LaunchUp. Four objectives drive all new work: reduce AI hallucination (RAG + output validation), improve readiness differentiation (tiers + weighted scoring + gap analysis), add multimodal/handwriting intake (OCR + sketch recognition), and correct AI leniency bias (adversarial prompting + score normalization). Source documents live in the team's capstone folder, not the repo.
+
+Things that look implemented but are not — check before building on them:
+- **There is no RAG pipeline.** No embedding model is called anywhere in `backend/src`. `vector_embeddings` is read by `rna/rag-query.service.ts` but never written, so `queryVectorDatabase()` always returns empty with `lowConfidence: true`. The retrieval actually wired into generation (`ai.service.ts:596`) is token-overlap keyword matching, not semantic search. pgvector is installed but unused.
+- **`rna/output-validator.service.ts` and `rna/recommendation-storage.service.ts` are stubs** — every method body is a `// TODO`. `validateEach()` returns `isValid: true` unconditionally.
+- **`TierConfig.weights` is never read by the scorer** — `readiness.service.ts` uses hardcoded weight constants, so the `/admin/tiers` weight editor has no effect.
+- **Scored dimensions don't match the spec:** documents specify TRL/MRL/**RRL**/ARL/ORL; the code scores Technology/Market/Acceptance/Organizational/**Investment**, omitting Regulatory.
+
+Prefer **`gemini-2.5-flash-lite` is not the right model** for bias/hallucination work — see `TODO_CHECKLIST.md §5` before adding AI calls. Structured outputs should use `responseMimeType: 'application/json'` + `responseSchema` rather than the current regex fence-stripping in `extractJsonPayload`.
+
+**`PROJECT_OVERVIEW.md` and `TODO_CHECKLIST.md` in the repo root are the maintained reference** for architecture, known gaps, and prioritized work. Read them before a broad change; update them when findings change.
 
 ### Frontend (SvelteKit)
 

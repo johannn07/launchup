@@ -205,7 +205,7 @@
 <div class="mb-8 flex items-center justify-between">
   <div>
     <h2 class="text-4xl font-black tracking-tight text-slate-950 dark:text-white">Startups</h2>
-    <p class="text-slate-600 dark:text-slate-400 mt-1">Manage assigned startups</p>
+    <p class="text-slate-600 dark:text-slate-400 mt-1">Manage your startups</p>
   </div>
   <Can role={['Startup']} userRole={role}>
     <div class="flex gap-5">

@@ -13,7 +13,61 @@ Prioritized backlog derived from a full read of the codebase (see [PROJECT_OVERV
 
 **Effort:** S ≈ under an hour · M ≈ half a day · L ≈ multiple days
 
-> **Suggested order:** everything in §1 → the §2 items your demo actually touches → make §3 decisions → §4 last.
+> **Suggested order:** §0 is the capstone itself and outranks everything else. Then §1 security → the §2 items your demo touches → §3 decisions → §4 last.
+
+---
+
+## 0. Capstone objectives — actual implementation status
+
+Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against the code. **This is the section that determines whether you pass**, and several objectives are less built than the scaffolding suggests.
+
+| Objective | Status | Evidence |
+|---|---|---|
+| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:271`); `GroundedPromptBuilderService` exists |
+| **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist |
+| **1c** Output validation layer flagging inconsistent recs | 🔴 **Stub** | `output-validator.service.ts` — `validateEach()` returns `isValid: true` for everything with `// TODO`; `flagInconsistencies()` and `markUnverifiable()` have empty bodies |
+| **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
+| **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. |
+| **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
+| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:376`); `OcrDocument` stores `fieldConfidence` |
+| **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
+| **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
+| **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
+| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:82-133`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. |
+| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI |
+
+### The critical one — Objective 1b has no RAG
+
+- [ ] 🔴 **OBJECTIVE · L · Implement the RAG pipeline — it currently does not exist**
+  Verified across the whole backend:
+  - **No embedding model is called anywhere.** No `embedContent`, no `text-embedding`, nothing (grepped `backend/src` entirely).
+  - **`vector_embeddings` is read-only.** `RagQueryService` reads it (`rag-query.service.ts:20,31`); **nothing ever writes it.** So `queryVectorDatabase()` always takes the `if (!sourceEmbedding)` branch and returns `lowConfidence: true` with empty arrays — on every single call.
+  - **pgvector is installed but unused for search.** `Migration20260528160512_InstallVectorExtension` ran, but similarity is computed in JavaScript by loading every row into memory (`rag-query.service.ts:33-38`).
+  - **The path actually wired into generation is keyword matching, not RAG.** `getRelevantRagContexts()` (`ai.service.ts:237`, called at `:596`) scores candidates by **token overlap** (`scoreRagMatch`, `:212`) — a bag-of-words Jaccard score. That is lexical retrieval, not semantic.
+  - **The corpus is self-referential.** `RagContext` rows are only written from `startup.service.ts:151` during capsule-proposal parsing, so the system retrieves the startup's *own* prior text. `verifiedFrameworks` and `businessModels` are hardcoded `[]` with TODOs (`rag-query.service.ts:66-67`).
+
+  **Why it matters:** Objective 1 and Research Question 1 are both entirely about RAG. As written you cannot answer RQ1, because there is no retrieval-augmented pipeline to measure against the baseline.
+  **Work required:** add an embedding model call, backfill embeddings for startup profiles + a seeded framework corpus, switch similarity to a pgvector `<=>` query, and populate `verifiedFrameworks` / `businessModels` with real business-framework documents.
+  *Blocks nothing else technically, but it is the single largest gap between the proposal and the code.*
+
+- [ ] 🔴 **OBJECTIVE · M · Implement the output validation layer (1c)**
+  `rna/output-validator.service.ts` is three stub methods. `rna/recommendation-storage.service.ts` is **four stub methods with empty bodies** — including `saveRecommendations()`, so validated recommendations are never persisted.
+  **Why it matters:** SRS §2.2 acceptance criteria require schema validation, `null`/`unknown` for unverifiable fields, and a confidence indicator in API responses. The SDD specifies "Validated / Flagged / Low Confidence" badges on each recommendation card. None of that can work against stubs.
+  **Note:** `callAiExpectJson()` (`ai.service.ts`) already does schema-checked parsing with a corrective retry — good foundation to build the validator on rather than starting fresh.
+
+### Spec mismatch worth resolving now
+
+- [ ] 🔴 **OBJECTIVE · S · The scored dimensions don't match the specification**
+  Proposal, SRS, and SDD all consistently specify five dimensions: **TRL, MRL, RRL, ARL, ORL** (Technology, Market, **Regulatory**, Acceptance, Organizational).
+  The code scores: Technology, Market, Acceptance, Organizational, **Investment** (`readiness.service.ts:38-73`).
+  So it **omits Regulatory (RRL), which is in the spec**, and **scores Investment (IRL), which is not**. The `ReadinessType` enum has all six.
+  **Why it matters:** a panel comparing your SDD to a live demo will see five dimension labels that don't match the document. This is a ~10-line fix and it removes an easy line of questioning.
+  **Decision:** align the code to the spec (recommended), or amend the documents to a six-dimension model and justify Investment's inclusion.
+
+- [ ] 🟡 **OBJECTIVE · M · Make composite weights configurable and sector-aware (2b)**
+  Objective 2b requires weights that vary "depending on the startup's industry sector and business model type." Today they are five `const` declarations, and `TierConfig.weights` — the column designed to hold them — is never read.
+  **Why it matters:** this is a stated specific objective, and the plumbing is already half-there.
+  **Work:** read weights from `TierConfig`, add a sector field to `Startup`, and key weight sets by sector. *Do this together with the clamp fix in §3.*
 
 ---
 
@@ -231,6 +285,38 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 
 - [ ] 🧹 **DEBT · S · Add `README.md` corrections**
   `README.md:29` lists `DISQUALIFIED` as a qualification status; the enum has no such value — it has `COMPLETED` (`backend/src/entities/enums/qualification-status.enum.ts`). The README also doesn't mention that `JWT_SECRET` must match across both `.env` files, which is the most common setup failure.
+
+---
+
+## 5. Infrastructure decisions (open questions)
+
+Neither the SRS nor the SDD names a storage vendor, a specific model version, or Docker — so these are genuinely your call. Recommendations below.
+
+- [ ] ❓ **SCOPE · S · Pick a file-storage provider to replace DigitalOcean Spaces**
+  `backend/src/upload/upload.service.ts:24-45` reads five `DO_SPACES_*` vars; none are set, so `enabled = false` and uploads 503 (`:52`). The SDD only ever says *"Object storage (file storage service)"* (p.48) — **no vendor is specified**, so you're free.
+  **Key fact:** the service uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, so **any S3-compatible provider is a drop-in** — no code change beyond env values.
+  **Recommendation: Cloudflare R2** — S3-compatible, 10 GB free, zero egress fees, and egress is what bites you when a dashboard re-renders stored images. **Supabase Storage** is the easier-signup alternative (1 GB free, no card). Avoid local-filesystem storage: Vercel and Render have ephemeral disks, so uploads vanish on redeploy.
+  **Also do:** rename `DO_SPACES_*` → `S3_*` (or `STORAGE_*`) so the config isn't misleadingly vendor-specific, and update `backend/.env.example`.
+
+- [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
+  Every AI call uses one model: `gemini-2.5-flash-lite` (`ai.service.ts:58`, and `:379` for vision) — the smallest and weakest tier in the family.
+  **Why it matters for *this* project specifically:** Objectives 1 and 4 are about hallucination and leniency bias, and the lite tier is the most susceptible to both — weakest instruction-following, weakest reasoning, most sycophantic. Objective 3 needs handwriting and sketch understanding, which is exactly where a lite vision model is weakest. A weak model doesn't just degrade UX here; it **biases your research results against your own hypothesis**.
+  **Recommendation — tier by task rather than one model everywhere:**
+  - Scoring, bias review, adversarial re-prompting (Obj. 1 + 4) → **Gemini 2.5 Pro**, low temperature, thinking enabled
+  - RNA/RNS generation and refinement chat → **Gemini 2.5 Flash**
+  - Handwriting / sketch vision (Obj. 3) → **Gemini 2.5 Flash or Pro**
+  - RAG embeddings → **`gemini-embedding-001`** — currently missing entirely (see §0)
+  Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast.
+  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:275`). That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`), and SRS §2.3 requires scoring to be *reproducible*.
+
+- [ ] ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
+  The configured key starts with `AQ.Ab8RN6…`. Google AI Studio keys normally begin with `AIzaSy`. Confirm this is a valid AI Studio key (and not a Vertex/OAuth credential, which `@google/genai` would need different auth for) — a bad key here would make every AI feature fail at demo time.
+
+- [ ] ❓ **SCOPE · S · Drop Docker, and give each developer a Neon branch instead**
+  `docker-compose.yml` only ever provided local Postgres, and `backend/.env` now points at Neon (`ep-still-salad-…aws.neon.tech`). **Neither the SRS nor the SDD mentions Docker anywhere** — there is no requirement to satisfy.
+  **Recommendation: don't adopt it.** Nothing in your remaining work is containerization-shaped (it's AI and scoring logic), Vercel/Render don't build from your compose file, and it's friction for a 5-person Windows team.
+  **But fix the real problem it masks:** `backend/src/main.ts:292` runs `updateSchema()` and seeds demo data **on every boot**, and all five of you now point at the *same* Neon database. Every `pnpm dev` mutates shared schema and re-inserts demo rows. Use **Neon branching** (one branch per developer, free tier supports it) so everyone gets an isolated database from the same provider. Combine with gating the auto-sync behind `NODE_ENV !== 'production'` (see §4).
+  **Then:** delete `docker-compose.yml` or mark it clearly unused, and correct `README.md` / `CLAUDE.md` / `PROJECT_OVERVIEW.md` §8, which all still describe the Docker path.
 
 ---
 

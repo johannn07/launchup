@@ -757,9 +757,7 @@ Checked so you don't re-investigate: `.env` files are **not** tracked in git (on
 
 ## 8. Running it locally
 
-```bash
-docker-compose up -d db          # Postgres on :5432 (launchup_db)
-```
+**The database is Neon (hosted Postgres), not Docker.** `backend/.env` points `DB_HOST` at an `…aws.neon.tech` endpoint, so `docker-compose.yml` is currently unused — see §9.
 
 ```bash
 cd backend && pnpm install && pnpm dev      # :3000, auto-syncs schema + seeds demo data
@@ -769,6 +767,33 @@ cd backend && pnpm install && pnpm dev      # :3000, auto-syncs schema + seeds d
 cd frontend && pnpm install && pnpm dev     # :5173
 ```
 
-Both need their own `.env` (`backend/.env.example`, `frontend/.env.example`). **`JWT_SECRET` must match in both files** (§5.1). The backend additionally wants `GEMINI_API_KEY` for any AI feature and `DO_SPACES_*` for uploads. If `DB_HOST` is unset the backend silently falls back to in-memory SQLite (`backend/src/mikro-orm.config.ts:8-16`), which starts fine but loses everything on restart.
+Both need their own `.env` (`backend/.env.example`, `frontend/.env.example`). **`JWT_SECRET` must match in both files** (§5.1). The backend additionally wants `GEMINI_API_KEY` for any AI feature and S3-compatible storage credentials for uploads (the `DO_SPACES_*` vars are currently unset, so uploads return 503 — `upload.service.ts:52`). If `DB_HOST` is unset the backend silently falls back to in-memory SQLite (`backend/src/mikro-orm.config.ts:8-16`), which starts fine but loses everything on restart.
+
+⚠️ **`backend/src/main.ts:292` runs `updateSchema()` and seeds demo data on every boot.** Against a shared Neon database that means every developer's `pnpm dev` mutates the same schema and re-inserts demo rows. Give each developer their own **Neon branch**, and gate the auto-sync on `NODE_ENV`.
 
 Log in with any seeded account at `password123`; use `/admin-login` for `admin@launchup.local`.
+
+---
+
+## 9. Capstone objectives vs. implementation
+
+The four general objectives come from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2). Full item-by-item status, with the remediation work, is in **[TODO_CHECKLIST.md §0](TODO_CHECKLIST.md)**. Summary:
+
+| Objective | Status |
+|---|---|
+| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🔴 RAG not implemented; validator is a stub |
+| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟡 Tiers + gap analysis built; sector-aware weights not |
+| 3. Multimodal intake (handwriting OCR, sketch recognition) | 🟡 OCR partial; canvas-section recognition minimal |
+| 4. Leniency bias correction (adversarial prompting, normalization) | 🟡 Normalization + audit trail built; prompting is post-hoc review, not adversarial |
+
+Three findings deserve emphasis because the scaffolding hides them:
+
+- **There is no RAG pipeline.** No embedding model is called anywhere in `backend/src`; `vector_embeddings` is read but never written, so `RagQueryService.queryVectorDatabase()` always returns empty with `lowConfidence: true`. The retrieval actually wired into generation (`ai.service.ts:596` → `getRelevantRagContexts`) is **token-overlap keyword matching** (`scoreRagMatch`, `:212`), not semantic search. pgvector is installed but unused.
+- **`OutputValidatorService` and `RecommendationStorageService` are stubs** — every method body is a `// TODO`. `validateEach()` returns `isValid: true` unconditionally; `saveRecommendations()` does nothing.
+- **The scored dimensions don't match the specification.** All three documents specify TRL, MRL, **RRL**, ARL, ORL. The code scores Technology, Market, Acceptance, Organizational, and **Investment** — omitting Regulatory, adding Investment (`readiness.service.ts:38-73`).
+
+### Infrastructure the documents leave open
+
+The SRS and SDD deliberately do **not** name a storage vendor (SDD p.48 says only *"Object storage (file storage service)"*), a model version, or a container strategy — Docker is not mentioned in either document. Those are open decisions; recommendations are in [TODO_CHECKLIST.md §5](TODO_CHECKLIST.md).
+
+What the documents *do* fix: SvelteKit + NestJS + PostgreSQL + MikroORM as the foundational stack (SRS §2.5), the **Gemini API** as the LLM provider (SRS §2.4 constraint and §2.5 assumption), and Google Cloud Vision **or** Tesseract for OCR (SDD p.48). So the model *family* is committed, but the model *tier* is not.
