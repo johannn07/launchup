@@ -764,6 +764,20 @@ git commit -m "feat(ai): add AiRunService to open and close generation runs"
 - Consumes: `AiPipelineConfig` from Task 1, `AiRunContext` from Task 4
 - Produces: private `AiService.generate(ctx, prompt, maxOutputTokens?)` returning the raw SDK response. All public generation methods gain a leading `ctx: AiRunContext` parameter: `generateRNAsFromPrompt(ctx, prompt)`, `generateTasksFromPrompt(ctx, prompt)`, `generateInitiativesFromPrompt(ctx, prompt)`, `generateRoadblocksFromPrompt(ctx, prompt)`, `refineRna(ctx, prompt)`, `refineRnsDescription(ctx, ...)`, `refineInitiative(ctx, prompt)`, `refineRoadblock(ctx, prompt)`.
 
+**Correction discovered during implementation — tracked vs untracked AI calls.**
+
+`startup.service.ts` is a **fifth** caller of `AiService`, missed when this plan was written. It calls `getCapsuleProposalInfo` and `generateStartupAnalysisSummary` during capsule-proposal parsing. There is also `getCapsuleProposalInfoFromImage`, which the original step list omitted entirely.
+
+These three are **not** generation runs — capsule parsing is not one of the four operations in the baseline-vs-enhanced comparison, and `AiRunOperation` has no member for it. They should still honour the configured model, otherwise `GEMINI_MODEL` would apply inconsistently.
+
+Resolution, which keeps `startup.service.ts` untouched and avoids widening `AiRunOperation`:
+
+- `AiService` injects `AiConfigService`.
+- **Tracked calls** (the four generation operations) take config from `ctx.config`, which may carry a per-request override.
+- **Untracked calls** (`getCapsuleProposalInfo`, `generateStartupAnalysisSummary`, `getCapsuleProposalInfoFromImage`) take config from `this.aiConfig.defaults`. They gain no `ctx` parameter and write no `ai_generation_runs` row.
+
+The rule is: *if you have a context, use it; otherwise use the defaults.* Consequently Tasks 8 and 9 wire four services, not five, and `startup.service.ts` needs no changes anywhere in this plan.
+
 **Background:** `ai.service.ts` currently passes sampling parameters at the top level of `generateContent` with an `as any` cast:
 
 ```ts
