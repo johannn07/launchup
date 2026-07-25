@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
+import { AiRunContext } from './ai-run.service';
 
 const AI_GROUNDING_INSTRUCTION =
   'Only use facts explicitly present in the user-provided input. Never invent names, numbers, dates, or organizations. If you are uncertain about a field, return null instead of guessing.';
@@ -55,7 +56,6 @@ const biasReviewSchema = z.object({
 @Injectable()
 export class AiService {
   private readonly ai: GoogleGenAI;
-  private readonly modelName = 'gemini-2.5-flash-lite';
 
   constructor(
     private config: ConfigService,
@@ -79,12 +79,15 @@ export class AiService {
     }
   }
 
-  async reviewBiasScore(input: {
-    dimensionKey: string;
-    rawScore: number;
-    maxScore: number;
-    context: string;
-  }): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string }> {
+  async reviewBiasScore(
+    ctx: AiRunContext,
+    input: {
+      dimensionKey: string;
+      rawScore: number;
+      maxScore: number;
+      context: string;
+    },
+  ): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string }> {
     const normalized = await this.normalizeAiScore(input.rawScore);
     const baselineScore = Math.max(1, Math.min(input.maxScore, Math.round(normalized.scaled)));
     const prompt = `
@@ -102,6 +105,7 @@ export class AiService {
 
     try {
       const review = await this.callAiExpectJson({
+        ctx,
         prompt,
         schema: biasReviewSchema,
         fallback: {
@@ -272,6 +276,26 @@ export class AiService {
     return `${prompt}\n\nGrounding instruction: ${AI_GROUNDING_INSTRUCTION}`;
   }
 
+  /**
+   * Single chokepoint for every Gemini call. Sampling parameters go inside
+   * `config` — passing them at the top level silently does nothing.
+   */
+  private async generate(
+    ctx: AiRunContext,
+    prompt: string,
+    maxOutputTokens = 1024,
+    temperatureOverride?: number,
+  ) {
+    return this.ai.models.generateContent({
+      model: ctx.config.model,
+      contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
+      config: {
+        temperature: temperatureOverride ?? ctx.config.temperature,
+        maxOutputTokens,
+      },
+    });
+  }
+
   private extractJsonPayload(text: string) {
     const firstCurly = text.indexOf('{');
     const firstSquare = text.indexOf('[');
@@ -289,20 +313,21 @@ export class AiService {
   }
 
   private async callAiExpectJson<T>(options: {
+    ctx: AiRunContext;
     prompt: string;
     schema: z.ZodType<T>;
     fallback: T;
     correctivePrompt: string;
   }): Promise<T> {
-    const { prompt, schema, fallback, correctivePrompt } = options;
+    const { ctx, prompt, schema, fallback, correctivePrompt } = options;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const res = await this.ai.models.generateContent({
-        model: this.modelName,
-        contents: this.groundPrompt(attempt === 1 ? prompt : `${prompt}\n\n${correctivePrompt}`),
-        temperature: attempt === 1 ? 0.0 : 0.2,
-        maxOutputTokens: 1024,
-      } as any);
+      const res = await this.generate(
+        ctx,
+        attempt === 1 ? prompt : `${prompt}\n\n${correctivePrompt}`,
+        1024,
+        attempt === 1 ? ctx.config.temperature : ctx.config.temperature + 0.2,
+      );
 
       const text = res?.text?.trim();
       if (!text) {
@@ -339,18 +364,10 @@ export class AiService {
     return fallback;
   }
 
-  async test() {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt('what is the lyrics for bloom necry talkie'),
-    });
-    return res.text;
-  }
-
-  async getCapsuleProposalInfo(text: string) {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(`Based on the text ${text},
+  async getCapsuleProposalInfo(ctx: AiRunContext, text: string) {
+    const res = await this.generate(
+      ctx,
+      `Based on the text ${text},
         Task: extract the text for:
         -Acceleration Proposal Title ( can be found above the Duration: 3 months, etc.)
         - Startup Description
@@ -364,8 +381,8 @@ export class AiService {
         Requirement: The response should be in a JSON format.
         It should consist of title, startup_description, problem_statement, target_market, solution_description, objectives, scope, and methodology
         JSON format: {"title": "", "startup_description": "", "problem_statement": (int), "target_market": "", "solution_description": "", "objectives": "", "scope": "", "methodology": ""}
-        `),
-    });
+        `,
+    );
     return res.text;
   }
 
@@ -420,12 +437,13 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateStartupAnalysisSummary(
+    ctx: AiRunContext,
     dto: StartupApplicationDto,
   ): Promise<string> {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(`Please provide a comprehensive analysis of the following startup proposal:
-      
+    const res = await this.generate(
+      ctx,
+      `Please provide a comprehensive analysis of the following startup proposal:
+
       Title: ${dto.title}
       Description: ${dto.description}
       Problem Statement: ${dto.problemStatement}
@@ -457,8 +475,8 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       - Start directly with the analysis, no introductory phrases
       - Be clear and direct about the startup's potential
       - Focus on the most impactful insights
-      - Keep output concise while covering essential points`),
-    });
+      - Keep output concise while covering essential points`,
+    );
 
     if (!res.text) {
       throw new Error('AI response did not contain any text');
@@ -468,9 +486,11 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateRNAsFromPrompt(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ readiness_level_type: string; rna: string | null }[]> {
     return this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessRnaSchema,
       fallback: [],
@@ -480,9 +500,11 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateTasksFromPrompt(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ target_level: number; description: string }[]> {
     const tasks = await this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessTaskSchema,
       fallback: [],
@@ -504,7 +526,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     return normalized as any;
   }
 
-  async generateInitiativesFromPrompt(prompt: string): Promise<
+  async generateInitiativesFromPrompt(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<
     {
       description: string;
       measures: string;
@@ -513,6 +538,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }[]
   > {
     return this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessInitiativeSchema,
       fallback: [],
@@ -522,12 +548,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async refineRnsDescription(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ refinedDescription: string; aiCommentary: string }> {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const res = await this.generate(ctx, prompt);
 
     if (!res.text) {
       throw new Error('AI response did not contain any text');
@@ -546,9 +570,11 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateRoadblocksFromPrompt(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ description: string; fix: string; riskNumber: number }[]> {
     const roadblocks = await this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessRoadblockSchema,
       fallback: [],
@@ -631,17 +657,17 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   `;
   }
 
-  async refineInitiative(prompt: string): Promise<{
+  async refineInitiative(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<{
     refinedDescription?: string;
     refinedMeasures?: string;
     refinedTargets?: string;
     refinedRemarks?: string;
     aiCommentary: string;
   }> {
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const response = await this.generate(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');
@@ -676,15 +702,15 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }
   }
 
-  async refineRoadblock(prompt: string): Promise<{
+  async refineRoadblock(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<{
     refinedDescription?: string;
     refinedFix?: string;
     aiCommentary: string;
   }> {
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const response = await this.generate(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');
@@ -715,14 +741,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }
   }
 
-  async refineRna(prompt: string): Promise<{
+  async refineRna(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<{
     refinedRna?: string;
     aiCommentary: string;
   }> {
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const response = await this.generate(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');

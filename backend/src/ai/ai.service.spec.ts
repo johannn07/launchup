@@ -1,7 +1,23 @@
 import { ConfigService } from '@nestjs/config';
 import { AiService } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
-import { BaselineService } from './baseline.service'; 
+import { BaselineService } from './baseline.service';
+import { AiRunContext } from './ai-run.service';
+
+const ctxWith = (overrides: Partial<AiRunContext['config']> = {}): AiRunContext =>
+  ({
+    runId: 1,
+    run: {} as any,
+    config: Object.freeze({
+      model: 'gemini-2.5-flash-lite',
+      temperature: 0,
+      grounding: true,
+      rag: true,
+      biasReview: true,
+      scoreNormalization: true,
+      ...overrides,
+    }),
+  }) as AiRunContext;
 
 describe('AiService', () => {
   let service: AiService;
@@ -39,7 +55,7 @@ describe('AiService', () => {
         text: '[{"readiness_level_type":"Technology","rna":"Build a validated prototype"}]',
       });
 
-    await expect(service.generateRNAsFromPrompt('prompt')).resolves.toEqual([
+    await expect(service.generateRNAsFromPrompt(ctxWith(), 'prompt')).resolves.toEqual([
       {
         readiness_level_type: 'Technology',
         rna: 'Build a validated prototype',
@@ -54,7 +70,7 @@ describe('AiService', () => {
       text: '[{"unexpected":"field"}]',
     });
 
-    await expect(service.generateRNAsFromPrompt('prompt')).resolves.toEqual([]);
+    await expect(service.generateRNAsFromPrompt(ctxWith(), 'prompt')).resolves.toEqual([]);
 
     expect(generateContent).toHaveBeenCalledTimes(2);
   });
@@ -64,7 +80,7 @@ describe('AiService', () => {
       text: '[{"target_level":3,"description":"Validate the product hypothesis"}]',
     });
 
-    await expect(service.generateTasksFromPrompt('prompt')).resolves.toEqual([
+    await expect(service.generateTasksFromPrompt(ctxWith(), 'prompt')).resolves.toEqual([
       {
         target_level: 3,
         description: 'Validate the product hypothesis',
@@ -73,5 +89,28 @@ describe('AiService', () => {
     ]);
 
     expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes sampling parameters inside config, not at the top level', async () => {
+    generateContent.mockResolvedValue({
+      text: '[{"readiness_level_type":"Technology","rna":"Ship a prototype"}]',
+    });
+
+    await service.generateRNAsFromPrompt(ctxWith({ temperature: 0 }), 'prompt');
+
+    const request = generateContent.mock.calls[0][0];
+    expect(request.config).toEqual(
+      expect.objectContaining({ temperature: 0, maxOutputTokens: expect.any(Number) }),
+    );
+    expect(request).not.toHaveProperty('temperature');
+    expect(request).not.toHaveProperty('maxOutputTokens');
+  });
+
+  it('uses the model from the run context', async () => {
+    generateContent.mockResolvedValue({ text: '[]' });
+
+    await service.generateRNAsFromPrompt(ctxWith({ model: 'gemini-2.5-pro' }), 'prompt');
+
+    expect(generateContent.mock.calls[0][0].model).toBe('gemini-2.5-pro');
   });
 });
