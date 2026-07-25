@@ -21,6 +21,8 @@
 - `backend/src/app.module.ts` has a `MikroOrmModule.forFeature()` entity list that is **not** exhaustive. New entities used via repository injection must be added there.
 - The per-request override travels in an `X-Ai-Pipeline-Config` header (JSON string), not a body field, because `GET /rna/:id/generate-rna` has no body.
 - Do not add authentication guards to the `rna`/`rns`/`initiatives`/`roadblocks` controllers in this work. They are missing and that is a known security issue, but it is tracked separately in `TODO_CHECKLIST.md` §1 and would confuse this diff.
+- **Never run `pnpm lint`.** In this repo that script is `eslint "{src,apps,libs,test}/**/*.ts" --fix`, which rewrites **every** TypeScript file under `backend/src` — including all 34 historical migration files — with prettier formatting. It produced 73 files of unrelated churn during Task 3 and had to be discarded. Verify your work with `pnpm test` and `pnpm build` only. If you want to check formatting on a file you actually changed, run `npx prettier --check <path>` on that specific path.
+- **Two tests fail before this work begins** and are not yours to fix: `ReadinessService > returns a weighted score, tier, and prioritized recommendations` and `AiService > passes valid task responses through unchanged`. A green run is 18/20 with exactly those two failing.
 
 ---
 
@@ -1478,9 +1480,9 @@ git commit -m "docs(ai): document pipeline flags and add generation runs migrati
 
 After Task 10, confirm all of the following:
 
-- [ ] `pnpm test` passes with no failures
+- [ ] `pnpm test` passes except the two pre-existing failures named in Global Constraints
 - [ ] `pnpm build` exits 0
-- [ ] `pnpm lint` reports no new errors
+- [ ] `git status` is clean — no stray reformatting of files this plan did not intend to change
 - [ ] With every flag at its default, generation output is unchanged from before this work
 - [ ] `ai_generation_runs` gains one `completed` row per generation call
 - [ ] Setting `AI_RAG_ENABLED=false` produces a run row whose `config` records `"rag": false`
