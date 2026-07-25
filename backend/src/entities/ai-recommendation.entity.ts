@@ -1,5 +1,12 @@
-import { DateTimeType, Entity, ManyToOne, PrimaryKey, Property } from '@mikro-orm/core';
+import {
+  DateTimeType,
+  Entity,
+  ManyToOne,
+  PrimaryKey,
+  Property,
+} from '@mikro-orm/core';
 import { Startup } from './startup.entity';
+import { AiGenerationRun } from './ai-generation-run.entity';
 
 @Entity({ tableName: 'ai_recommendations' })
 export class AiRecommendation {
@@ -29,4 +36,7 @@ export class AiRecommendation {
 
   @Property({ type: DateTimeType })
   createdAt: Date = new Date();
+
+  @ManyToOne(() => AiGenerationRun, { nullable: true, deleteRule: 'set null' })
+  generationRun?: AiGenerationRun;
 }

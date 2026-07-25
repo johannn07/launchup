@@ -3,6 +3,7 @@ import { User } from './user.entity';
 import { Startup } from './startup.entity';
 import { Rns } from './rns.entity';
 import { RnsStatus } from './enums/rns.enum';
+import { AiGenerationRun } from './ai-generation-run.entity';
 
 @Entity({ tableName: 'initiatives' })
 export class Initiative {
@@ -59,4 +60,7 @@ export class Initiative {
 
   @Property({ fieldName: 'datetime_updated', onUpdate: () => new Date() })
   updatedAt: Date = new Date();
+
+  @ManyToOne(() => AiGenerationRun, { nullable: true, deleteRule: 'set null' })
+  generationRun?: AiGenerationRun;
 }
