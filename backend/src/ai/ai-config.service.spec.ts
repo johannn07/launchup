@@ -1,3 +1,4 @@
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiConfigService } from './ai-config.service';
 
@@ -53,18 +54,70 @@ describe('AiConfigService', () => {
   });
 
   it('throws when temperature is not a number', () => {
-    expect(() => new AiConfigService(configFrom({ AI_TEMPERATURE: 'warm' }))).toThrow(
-      /AI_TEMPERATURE/,
-    );
+    expect(
+      () => new AiConfigService(configFrom({ AI_TEMPERATURE: 'warm' })),
+    ).toThrow(/AI_TEMPERATURE/);
   });
 
   it('throws when temperature is out of range', () => {
-    expect(() => new AiConfigService(configFrom({ AI_TEMPERATURE: '5' }))).toThrow(
-      /AI_TEMPERATURE/,
-    );
+    expect(
+      () => new AiConfigService(configFrom({ AI_TEMPERATURE: '5' })),
+    ).toThrow(/AI_TEMPERATURE/);
   });
 
   it('throws when the model is blank', () => {
-    expect(() => new AiConfigService(configFrom({ GEMINI_MODEL: '' }))).toThrow(/GEMINI_MODEL/);
+    expect(() => new AiConfigService(configFrom({ GEMINI_MODEL: '' }))).toThrow(
+      /GEMINI_MODEL/,
+    );
+  });
+});
+
+describe('AiConfigService.resolve', () => {
+  const permissive = () =>
+    new AiConfigService(configFrom({ AI_ALLOW_REQUEST_OVERRIDE: 'true' }));
+
+  it('returns defaults when no override is supplied', () => {
+    expect(permissive().resolve(undefined, true)).toEqual({
+      model: 'gemini-2.5-flash-lite',
+      temperature: 0,
+      grounding: true,
+      rag: true,
+      biasReview: true,
+      scoreNormalization: true,
+    });
+  });
+
+  it('merges a partial override over the defaults', () => {
+    const resolved = permissive().resolve('{"rag":false,"model":"gemini-2.5-pro"}', true);
+
+    expect(resolved.rag).toBe(false);
+    expect(resolved.model).toBe('gemini-2.5-pro');
+    expect(resolved.grounding).toBe(true);
+  });
+
+  it('freezes the resolved config', () => {
+    const resolved = permissive().resolve('{"rag":false}', true);
+    expect(Object.isFrozen(resolved)).toBe(true);
+  });
+
+  it('rejects an override when the deployment disallows it', () => {
+    const strict = new AiConfigService(configFrom({ AI_ALLOW_REQUEST_OVERRIDE: 'false' }));
+    expect(() => strict.resolve('{"rag":false}', true)).toThrow(ForbiddenException);
+  });
+
+  it('rejects an override from an unprivileged caller', () => {
+    expect(() => permissive().resolve('{"rag":false}', false)).toThrow(ForbiddenException);
+  });
+
+  it('rejects malformed JSON', () => {
+    expect(() => permissive().resolve('not json', true)).toThrow(BadRequestException);
+  });
+
+  it('rejects unknown override fields', () => {
+    expect(() => permissive().resolve('{"nope":true}', true)).toThrow(BadRequestException);
+  });
+
+  it('rejects an out-of-range temperature override', () => {
+    expect(() => permissive().resolve('{"temperature":9}', true)).toThrow(BadRequestException);
   });
 });
