@@ -182,4 +182,62 @@ describe('AiService', () => {
       expect(spy).not.toHaveBeenCalled();
     });
   });
+
+  describe('reviewBiasScore flag gating', () => {
+    const input = { dimensionKey: 'market', rawScore: 8, maxScore: 9, context: 'ctx' };
+
+    it('skips normalization when scoreNormalization is disabled', async () => {
+      const normalizeSpy = jest.spyOn(service as any, 'normalizeAiScore');
+      generateContent.mockResolvedValue({
+        text: '{"corrected_score":6,"bias_flagged":true,"justification":"inflated"}',
+      });
+
+      await service.reviewBiasScore(ctxWith({ scoreNormalization: false }), input);
+
+      expect(normalizeSpy).not.toHaveBeenCalled();
+    });
+
+    it('skips the model call when biasReview is disabled', async () => {
+      const result = await service.reviewBiasScore(
+        ctxWith({ biasReview: false, scoreNormalization: false }),
+        input,
+      );
+
+      expect(generateContent).not.toHaveBeenCalled();
+      expect(result.correctedScore).toBe(8);
+      expect(result.biasFlagged).toBe(false);
+    });
+
+    it('returns the normalized baseline when review is off but normalization is on', async () => {
+      const result = await service.reviewBiasScore(
+        ctxWith({ biasReview: false, scoreNormalization: true }),
+        input,
+      );
+
+      expect(generateContent).not.toHaveBeenCalled();
+      expect(result.correctedScore).toBe(5); // baselineService mock returns scaled: 5
+    });
+
+    it('does not include "Baseline normalized score" line in prompt when scoreNormalization is disabled', async () => {
+      generateContent.mockResolvedValue({
+        text: '{"corrected_score":6,"bias_flagged":true,"justification":"x"}',
+      });
+
+      await service.reviewBiasScore(ctxWith({ scoreNormalization: false, biasReview: true }), input);
+
+      const promptPassed = generateContent.mock.calls[0][0].contents;
+      expect(promptPassed).not.toContain('Baseline normalized score');
+    });
+
+    it('includes "Baseline normalized score" line in prompt when scoreNormalization is enabled', async () => {
+      generateContent.mockResolvedValue({
+        text: '{"corrected_score":6,"bias_flagged":true,"justification":"x"}',
+      });
+
+      await service.reviewBiasScore(ctxWith({ scoreNormalization: true, biasReview: true }), input);
+
+      const promptPassed = generateContent.mock.calls[0][0].contents;
+      expect(promptPassed).toContain('Baseline normalized score');
+    });
+  });
 });

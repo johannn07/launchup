@@ -90,13 +90,33 @@ export class AiService {
       context: string;
     },
   ): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string }> {
-    const normalized = await this.normalizeAiScore(input.rawScore);
-    const baselineScore = Math.max(1, Math.min(input.maxScore, Math.round(normalized.scaled)));
+    // Objective 4c - score normalization, independently toggleable.
+    const baselineScore = ctx.config.scoreNormalization
+      ? Math.max(
+          1,
+          Math.min(input.maxScore, Math.round((await this.normalizeAiScore(input.rawScore)).scaled)),
+        )
+      : input.rawScore;
+
+    // Objective 4b - model-based bias review, independently toggleable.
+    if (!ctx.config.biasReview) {
+      return {
+        correctedScore: baselineScore,
+        biasFlagged: baselineScore !== input.rawScore,
+        justification: ctx.config.scoreNormalization
+          ? 'Baseline normalization applied; model bias review disabled.'
+          : 'Bias review and normalization disabled; raw score used.',
+      };
+    }
+
+    const baselineScoreLine = ctx.config.scoreNormalization
+      ? `
+      Baseline normalized score: ${baselineScore}`
+      : '';
     const prompt = `
       You are reviewing a startup assessment score for possible bias.
       Dimension: ${input.dimensionKey}
-      Raw score: ${input.rawScore}
-      Baseline normalized score: ${baselineScore}
+      Raw score: ${input.rawScore}${baselineScoreLine}
       Maximum allowed score: ${input.maxScore}
       Context: ${input.context}
 
@@ -113,7 +133,9 @@ export class AiService {
         fallback: {
           corrected_score: baselineScore,
           bias_flagged: baselineScore !== input.rawScore,
-          justification: 'Baseline normalization applied because the model review could not be parsed.',
+          justification: ctx.config.scoreNormalization
+            ? 'Baseline normalization applied because the model review could not be parsed.'
+            : 'Model bias review could not be parsed; raw score used.',
         },
         correctivePrompt:
           'Return valid JSON only. Keep the corrected score within the allowed range and explain the adjustment briefly.',
@@ -133,7 +155,9 @@ export class AiService {
       return {
         correctedScore: baselineScore,
         biasFlagged: baselineScore !== input.rawScore,
-        justification: 'Baseline normalization applied because the model review failed.',
+        justification: ctx.config.scoreNormalization
+          ? 'Baseline normalization applied because the model review failed.'
+          : 'Model bias review failed; raw score used.',
       };
     }
   }
