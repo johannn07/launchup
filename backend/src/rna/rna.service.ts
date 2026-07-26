@@ -16,6 +16,7 @@ import { OutputValidatorService } from './output-validator.service';
 import { RecommendationStorageService } from './recommendation-storage.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
+import { AiRunContext } from '../ai/ai-run.service';
 
 
 @Injectable()
@@ -84,7 +85,7 @@ export class RnaService {
     return rna;
   }
 
-  async generateRNA(id: number) {
+  async generateRNA(id: number, ctx: AiRunContext) {
     // 1. Validate startup exists
     const startup = await this.em.findOne(
       Startup,
@@ -215,7 +216,7 @@ export class RnaService {
     }
 
     // Use AI service as before
-    const generatedRNAs = await this.aiService.generateRNAsFromPrompt(prompt);
+    const generatedRNAs = await this.aiService.generateRNAsFromPrompt(ctx, prompt);
     console.log('AI generatedRNAs:', JSON.stringify(generatedRNAs, null, 2));
     // 9. Create RNA entries only for missing readiness types
     const createdRNAs: StartupRNA[] = [];
@@ -231,6 +232,7 @@ export class RnaService {
         newRNA.isAiGenerated = true; // Mark as AI generated
         newRNA.startup = startup;
         newRNA.readinessLevel = matchingReadinessLevel.readinessLevel;
+        newRNA.generationRun = ctx.run;
 
         await this.em.persist(newRNA);
         createdRNAs.push(newRNA);
@@ -242,6 +244,7 @@ export class RnaService {
           content: newRNA.rna,
           validationStatus: 'validated',
           confidenceStatus: 'high-confidence',
+          generationRun: ctx.run,
         });
       }
     }
@@ -290,6 +293,7 @@ export class RnaService {
     rnaId: number,
     chatHistory: { role: 'User' | 'Ai'; content: string }[],
     latestPrompt: string,
+    ctx: AiRunContext,
   ): Promise<{
     refinedRna?: string;
     aiCommentary: string;
@@ -304,13 +308,17 @@ export class RnaService {
     if (!rna) throw new NotFoundException('RNA not found');
 
     const startup = rna.startup;
+    // The refine run is opened with startupId: null (the route only has the
+    // RNA id), so attribute it to the startup now that it's in hand — this
+    // is the same entity already loaded above, no extra query.
+    ctx.run.startup = startup;
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(
         'No capsule proposal found for this startup.',
       );
 
-    const basePrompt = await this.aiService.createBasePrompt(startup, this.em);
+    const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em);
 
     const prompt = `${basePrompt}
 
@@ -356,7 +364,7 @@ export class RnaService {
       - Always include the ========= separator followed by your commentary
       - DO NOT MENTION THE FORMATTING INSTRUCTIONS OR HOW YOU FORMATTED THE RESPONSE IN THE COMMENTARY.`;
 
-    const result = await this.aiService.refineRna(prompt);
+    const result = await this.aiService.refineRna(ctx, prompt);
 
     // Save chat history
     const newMessages = [
