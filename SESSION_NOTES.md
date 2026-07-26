@@ -33,7 +33,16 @@ The live data confirmed the `-1` diagnosis exactly: id 9 = Regulatory 3 (old map
 1. **The fix is not retroactive.** 22 `rns` + 24 `rna` rows already in the DB have `is_ai_generated = true` but `generation_run_id IS NULL` (they predate the provenance work). They still fail the frontend filter, so the existing backlog stays permanently invisible — only *new* generations surface. Needs a one-off backfill or a purge; **decision required.**
 2. **`generation_run_id IS NOT NULL` is not a complete "AI rows" predicate.** The checklist had recommended it as the replacement for `isAiGenerated`, but it misses those 46 legacy rows. The two populations are disjoint, so a correct query currently needs `generation_run_id IS NOT NULL OR is_ai_generated = true`.
 
-**RNA path not live-verified — blocked, not skipped.** No startup in the shared DB can generate an RNA without mutating data first: 7/10/12/14 have all 6 readiness levels *and* all 6 RNAs (nothing missing), 13/15 have a proposal but zero `startups_readiness_level` rows, 8/9 have no capsule proposal. Forcing it means deleting an existing RNA (irreversibly loses its text — regeneration differs) or seeding readiness levels. Both are writes to shared team data, so I stopped and left it for a decision. The change is a one-line flip identical to the verified RNS one.
+**RNA: verified by delete+regenerate — and it overturned the premise.** With John's approval, deleted RNA id 25 (startup 10, Regulatory — full backup kept) and regenerated. Generation worked and wrote `isAiGenerated: false` with `generation_run_id = 12`. But loading `/startups/10/rna` in a real browser as Manager showed **all six RNAs rendering, including the five legacy `isAiGenerated: true` ones** — so the RNA page has no display filter at all (`{#each $rnaQueries[1].data as rna}`, `rna/+page.svelte:255`).
+
+The `rna/+page.svelte:77` grep hit that the checklist listed as "same pattern" is **inside `addToRNA()`** — the accept-action dedup lookup, not a display filter. So:
+
+- The RNA module never had this bug; the flip there fixed nothing.
+- Worse, it was harmful: it erases the dialog's "AI Generated: Yes/No" provenance label, and it makes `addToRNA()`'s `find(d => d.isAiGenerated === false && same type)` match **the row being accepted itself**, deleting it and then PATCHing a deleted id (reachable from the Startup role).
+
+**Reverted `rna.service.ts` to `isAiGenerated = true`** with a comment explaining why it intentionally differs from the other three generators. Set the regenerated row 41's flag back to `true` so the data matches the code. Rebuilt, 4/4 suites pass, and re-confirmed in the browser that all six rows still render.
+
+**Net: RNS was the only module that needed the change.** Its filters are real and its `addToRNS()` only PATCHes — no self-match. Initiative/roadblock already wrote `false`. Whether *their* pages have real display filters was not browser-checked.
 
 Also noted in passing: `backend/src/mikro-orm.config.ts:30` sets `ssl: { rejectUnauthorized: false }` against Neon. Neon presents a publicly-trusted cert, so this needlessly allows MITM — spawned as a separate task chip, not fixed here.
 
