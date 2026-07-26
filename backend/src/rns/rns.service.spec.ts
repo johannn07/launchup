@@ -1,4 +1,5 @@
 import { RnsService } from './rns.service';
+import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
@@ -16,6 +17,19 @@ import { Rns } from 'src/entities/rns.entity';
 // assertions below are adjusted to match the real control flow while
 // preserving the original intent: verify `ctx` is threaded into every AI
 // call and that generated rows/records are stamped with the run.
+
+// A *real* AiRunService over a stub EntityManager, so these tests exercise
+// the actual durable-attribution write rather than a mock that only mutates
+// ctx.run in memory.
+function buildAiRunService() {
+  const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
+  const service = new AiRunService(
+    { fork: () => forkedEm } as any,
+    {} as any, // AiConfigService, unused by attribute()
+  );
+  return { aiRunService: service, forkedEm };
+}
+
 describe('RnsService.generateTasks provenance', () => {
   it('stamps generated RNS rows, recommendations, and bias audits with the run id', async () => {
     const persisted: any[] = [];
@@ -106,6 +120,7 @@ describe('RnsService.generateTasks provenance', () => {
       aiService as any,
       ragQueryService as any,
       {} as any, // GroundedPromptBuilderService
+      buildAiRunService().aiRunService,
     );
     await service.generateTasks(
       { startup_id: 1, rnaIds: [10], no_of_tasks_to_create: 1 } as any,
@@ -178,6 +193,7 @@ describe('RnsService.refineRnsDescription provenance', () => {
     const ctx = {
       runId: 55,
       run: { id: 55, startup: undefined } as any,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
       config: Object.freeze({
         model: 'gemini-2.5-flash-lite',
         temperature: 0,
@@ -188,12 +204,24 @@ describe('RnsService.refineRnsDescription provenance', () => {
       }),
     } as any;
 
-    const service = new RnsService(em as any, aiService as any, {} as any, {} as any);
+    const { aiRunService, forkedEm } = buildAiRunService();
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      {} as any,
+      {} as any,
+      aiRunService,
+    );
 
     const result = await service.refineRnsDescription(20, [], 'Make it punchier', ctx);
 
     expect(aiService.refineRnsDescription).toHaveBeenCalledWith(ctx, expect.any(String));
     expect(ctx.run.startup).toBe(startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 55 },
+      { startup: startup.id },
+    );
     expect(result.refinedDescription).toBe('New, punchier description');
   });
 });

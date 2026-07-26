@@ -17,13 +17,14 @@ import { RnsStatus } from 'src/entities/enums/rns.enum';
 import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { RoadblockChatHistory } from 'src/entities/roadblock-chat-history.entity';
-import { AiRunContext } from '../ai/ai-run.service';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 
 @Injectable()
 export class RoadblockService {
   constructor(
     private readonly em: EntityManager,
     private readonly aiService: AiService,
+    private readonly aiRunService: AiRunService,
   ) {}
 
   async getByStartupId(startupId: number): Promise<Roadblock[]> {
@@ -296,8 +297,10 @@ export class RoadblockService {
     // roadblock id), so attribute it to the startup now that it's in hand —
     // this is the same entity already loaded above, no extra query. Placed
     // before the capsule-proposal check below so even that failure path
-    // leaves the run attributed rather than null.
-    ctx.run.startup = startup;
+    // leaves the run attributed rather than null — and written immediately
+    // via AiRunService.attribute, because on the failure path the
+    // request-context EM is discarded and a bare assignment never lands.
+    await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(

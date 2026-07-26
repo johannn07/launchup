@@ -8,11 +8,37 @@ import {
 } from '../entities/ai-generation-run.entity';
 import { Startup } from '../entities/startup.entity';
 
-/** Immutable handle carried through one generation call. */
+/**
+ * Running total of Gemini token spend for one run.
+ *
+ * A single run can make several model calls — `callAiExpectJson` retries once
+ * on unparseable/invalid output, and a batch generation loops per item — so
+ * this must *accumulate*; recording only the last call's usage would
+ * under-report the run's real cost.
+ *
+ * `recorded` distinguishes "the model reported zero tokens" from "no response
+ * ever carried usageMetadata". Only when it is true do we write the counts,
+ * so a run whose responses lacked usage metadata leaves the columns NULL
+ * (unknown) rather than claiming a measured 0.
+ */
+export interface AiRunTokenTotals {
+  promptTokens: number;
+  completionTokens: number;
+  recorded: boolean;
+}
+
+/**
+ * Handle carried through one generation call.
+ *
+ * `config`, `runId` and `run` are fixed for the life of the run; `tokens` is a
+ * deliberately mutable accumulator that the AiService generation chokepoint
+ * adds into on every model call.
+ */
 export interface AiRunContext {
   readonly config: AiPipelineConfig;
   readonly runId: number;
   readonly run: AiGenerationRun;
+  readonly tokens: AiRunTokenTotals;
 }
 
 export type AiRunOutcome =
@@ -22,7 +48,13 @@ export type AiRunOutcome =
       promptTokens?: number;
       completionTokens?: number;
     }
-  | { status: 'failed'; latencyMs: number; error: string };
+  | {
+      status: 'failed';
+      latencyMs: number;
+      error: string;
+      promptTokens?: number;
+      completionTokens?: number;
+    };
 
 @Injectable()
 export class AiRunService {
@@ -50,7 +82,45 @@ export class AiRunService {
 
     await this.em.persistAndFlush(run);
 
-    return { config, runId: run.id, run };
+    return {
+      config,
+      runId: run.id,
+      run,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+    };
+  }
+
+  /**
+   * Durably attributes an already-open run to a startup.
+   *
+   * Several operations open their run before the startup id is known (the
+   * refine routes only carry the artifact id; generate-initiatives has no
+   * startup in its DTO) and backfill it once the owning entity is loaded.
+   * Assigning `ctx.run.startup` alone is *not* enough: `finish` writes a
+   * fixed payload through a forked EM and never includes `startup`, so on the
+   * failure path — where nothing else flushes the request-context EM before
+   * the exception reaches Nest — the mutation is discarded and the row keeps
+   * `startup_id NULL`. Failed runs are exactly the ones a startup-filtered
+   * provenance query most needs to surface, so the attribution gets its own
+   * immediate, forked write.
+   *
+   * Like `finish`, this must never throw: it is bookkeeping, and a failure
+   * here must not replace whatever the caller is actually doing.
+   */
+  async attribute(ctx: AiRunContext, startup: Startup): Promise<void> {
+    // Keep the in-memory view accurate for callers that read ctx.run.
+    ctx.run.startup = startup;
+
+    try {
+      await this.em
+        .fork()
+        .nativeUpdate(AiGenerationRun, { id: ctx.runId }, { startup: startup.id });
+    } catch (bookkeepingError) {
+      console.error(
+        `AiRunService.attribute: failed to persist startup attribution for run ${ctx.runId}`,
+        bookkeepingError,
+      );
+    }
   }
 
   async finish(ctx: AiRunContext, outcome: AiRunOutcome): Promise<void> {
@@ -60,10 +130,18 @@ export class AiRunService {
       completedAt: new Date(),
     };
 
-    if (outcome.status === 'completed') {
+    // Token counts are recorded for failed runs too — a run that made a model
+    // call and then threw still cost money, and the point of these columns is
+    // to make Gemini spend measurable. They stay absent (NULL) when no
+    // response carried usage metadata.
+    if (outcome.promptTokens !== undefined) {
       update.promptTokens = outcome.promptTokens;
+    }
+    if (outcome.completionTokens !== undefined) {
       update.completionTokens = outcome.completionTokens;
-    } else {
+    }
+
+    if (outcome.status === 'failed') {
       update.error = outcome.error;
     }
 
@@ -122,6 +200,7 @@ export class AiRunService {
       await this.finish(ctx, {
         status: 'completed',
         latencyMs: Date.now() - startedAt,
+        ...this.tokenTotals(ctx),
       });
       return result;
     } catch (error) {
@@ -129,8 +208,22 @@ export class AiRunService {
         status: 'failed',
         latencyMs: Date.now() - startedAt,
         error: error instanceof Error ? error.message : String(error),
+        ...this.tokenTotals(ctx),
       });
       throw error;
     }
+  }
+
+  /**
+   * The run's accumulated token spend, or an empty object when no model
+   * response carried usage metadata — so the columns stay NULL rather than
+   * recording a fabricated 0.
+   */
+  private tokenTotals(ctx: AiRunContext) {
+    if (!ctx.tokens?.recorded) return {};
+    return {
+      promptTokens: ctx.tokens.promptTokens,
+      completionTokens: ctx.tokens.completionTokens,
+    };
   }
 }

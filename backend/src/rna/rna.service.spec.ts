@@ -1,4 +1,5 @@
 import { RnaService } from './rna.service';
+import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
@@ -12,6 +13,19 @@ import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.enti
 // call returns a truthy context — a falsy/no-context result routes the
 // method through its inline legacy-prompt fallback instead, which is what
 // these tests exercise so `groundedPromptBuilderService` can stay `{} as any`.
+
+// A *real* AiRunService over a stub EntityManager, so these tests exercise
+// the actual durable-attribution write rather than a mock that only mutates
+// ctx.run in memory.
+function buildAiRunService() {
+  const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
+  const service = new AiRunService(
+    { fork: () => forkedEm } as any,
+    {} as any, // AiConfigService, unused by attribute()
+  );
+  return { aiRunService: service, forkedEm };
+}
+
 describe('RnaService.generateRNA provenance', () => {
   it('threads ctx into the AI call and stamps generated rows and recommendations with the run', async () => {
     const persisted: any[] = [];
@@ -90,6 +104,7 @@ describe('RnaService.generateRNA provenance', () => {
       {} as any, // GroundedPromptBuilderService, unused on this fallback path
       {} as any, // OutputValidatorService, unused by generateRNA
       {} as any, // RecommendationStorageService, unused by generateRNA
+      buildAiRunService().aiRunService,
     );
 
     await service.generateRNA(1, ctx);
@@ -153,6 +168,7 @@ describe('RnaService.refineRna provenance', () => {
     const ctx = {
       runId: 55,
       run: { id: 55, startup: undefined } as any,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
       config: Object.freeze({
         model: 'gemini-2.5-flash-lite',
         temperature: 0,
@@ -163,6 +179,7 @@ describe('RnaService.refineRna provenance', () => {
       }),
     } as any;
 
+    const { aiRunService, forkedEm } = buildAiRunService();
     const service = new RnaService(
       em as any,
       aiService as any,
@@ -170,6 +187,7 @@ describe('RnaService.refineRna provenance', () => {
       {} as any,
       {} as any,
       {} as any,
+      aiRunService,
     );
 
     const result = await service.refineRna(20, [], 'Make it punchier', ctx);
@@ -177,6 +195,11 @@ describe('RnaService.refineRna provenance', () => {
     expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, startup, em);
     expect(aiService.refineRna).toHaveBeenCalledWith(ctx, expect.any(String));
     expect(ctx.run.startup).toBe(startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 55 },
+      { startup: startup.id },
+    );
     expect(result.refinedRna).toBe('New, punchier RNA description');
   });
 });

@@ -16,13 +16,14 @@ import { Startup } from 'src/entities/startup.entity';
 import { AiService } from 'src/ai/ai.service';
 import { RnsStatus } from 'src/entities/enums/rns.enum';
 import { InitiativeChatHistory } from 'src/entities/initiative-chat-history.entity';
-import { AiRunContext } from '../ai/ai-run.service';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 
 @Injectable()
 export class InitiativeService {
   constructor(
     private readonly em: EntityManager,
     private readonly aiService: AiService,
+    private readonly aiRunService: AiRunService,
   ) {}
 
   //find one ra guro ni dapat?
@@ -188,8 +189,11 @@ export class InitiativeService {
           // startup's page) but not enforced by the DTO — so a hypothetical
           // multi-startup batch would attribute the run to the first
           // startup rather than silently to whichever one was processed
-          // last.
-          ctx.run.startup = rns.startup;
+          // last. Written immediately via AiRunService.attribute — a bare
+          // assignment is discarded on any path that never flushes (a throw,
+          // or the empty-fallback success path where no Initiative is
+          // persisted), leaving the row's startup_id NULL.
+          await this.aiRunService.attribute(ctx, rns.startup);
         }
       }
 
@@ -292,7 +296,9 @@ export class InitiativeService {
       // The run is opened with startupId: null (generate-initiatives has no
       // startup id in its DTO), so attribute it now that the Rns's startup
       // is in hand — the same entity already loaded above, no extra query.
-      ctx.run.startup = rns.startup;
+      // Written immediately via AiRunService.attribute; see the batch branch
+      // above for why a bare assignment is not enough.
+      await this.aiRunService.attribute(ctx, rns.startup);
 
       // Similar logic for single RNS
       const existingInitiatives = await this.em.find(
@@ -393,8 +399,11 @@ export class InitiativeService {
     const startup = initiative.startup;
     // The refine run is opened with startupId: null (the route only has the
     // initiative id), so attribute it to the startup now that it's in hand —
-    // this is the same entity already loaded above, no extra query.
-    ctx.run.startup = startup;
+    // this is the same entity already loaded above, no extra query. Goes
+    // through AiRunService.attribute so the attribution is written
+    // immediately: on the failure path nothing else flushes, and a bare
+    // assignment would be discarded with the request-context EM.
+    await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(

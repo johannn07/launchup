@@ -16,7 +16,7 @@ import { OutputValidatorService } from './output-validator.service';
 import { RecommendationStorageService } from './recommendation-storage.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
-import { AiRunContext } from '../ai/ai-run.service';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 
 
 @Injectable()
@@ -28,6 +28,7 @@ export class RnaService {
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService,
     private readonly outputValidatorService: OutputValidatorService,
     private readonly recommendationStorageService: RecommendationStorageService,
+    private readonly aiRunService: AiRunService,
   ) {}
 
   async getRNAbyId(startupId: number) {
@@ -310,8 +311,11 @@ export class RnaService {
     const startup = rna.startup;
     // The refine run is opened with startupId: null (the route only has the
     // RNA id), so attribute it to the startup now that it's in hand — this
-    // is the same entity already loaded above, no extra query.
-    ctx.run.startup = startup;
+    // is the same entity already loaded above, no extra query. Goes through
+    // AiRunService.attribute so the attribution is written immediately: on
+    // the failure path nothing else flushes, and a bare assignment would be
+    // discarded with the request-context EM.
+    await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(

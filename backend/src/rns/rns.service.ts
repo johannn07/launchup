@@ -18,7 +18,7 @@ import { AiService } from 'src/ai/ai.service';
 import { RnsChatHistory } from 'src/entities/rns-chat-history.entity';
 import { RagQueryService } from '../rna/rag-query.service';
 import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
-import { AiRunContext } from '../ai/ai-run.service';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 
 @Injectable()
 export class RnsService {
@@ -27,6 +27,7 @@ export class RnsService {
     private readonly aiService: AiService,
     private readonly ragQueryService: RagQueryService,                // new
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService, // new
+    private readonly aiRunService: AiRunService,
   ) {}
 
   async getStartupRns(startupId: number) {
@@ -427,8 +428,11 @@ Requirement note:
     const startup = rns.startup;
     // The refine run is opened with startupId: null (the route only has the
     // Rns id), so attribute it to the startup now that it's in hand — this
-    // is the same entity already loaded above, no extra query.
-    ctx.run.startup = startup;
+    // is the same entity already loaded above, no extra query. Goes through
+    // AiRunService.attribute so the attribution is written immediately: on
+    // the failure path nothing else flushes, and a bare assignment would be
+    // discarded with the request-context EM.
+    await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(

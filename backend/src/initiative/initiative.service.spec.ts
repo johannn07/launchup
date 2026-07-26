@@ -1,6 +1,19 @@
 import { InitiativeService } from './initiative.service';
+import { AiRunService } from 'src/ai/ai-run.service';
 import { Initiative } from 'src/entities/initiative.entity';
 import { Rns } from 'src/entities/rns.entity';
+
+// A *real* AiRunService over a stub EntityManager, so these tests exercise
+// the actual durable-attribution write rather than a mock that only mutates
+// ctx.run in memory.
+function buildAiRunService() {
+  const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
+  const service = new AiRunService(
+    { fork: () => forkedEm } as any,
+    {} as any, // AiConfigService, unused by attribute()
+  );
+  return { aiRunService: service, forkedEm };
+}
 
 // InitiativeService's real constructor arity (EntityManager, AiService)
 // matches what the brief assumed, so no correction was needed there.
@@ -58,6 +71,7 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     return {
       runId: 77,
       run: {} as any,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
       config: Object.freeze({
         model: 'gemini-2.5-flash-lite',
         temperature: 0,
@@ -84,7 +98,8 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     };
 
     const ctx = buildCtx();
-    const service = new InitiativeService(em as any, aiService as any);
+    const { aiRunService, forkedEm } = buildAiRunService();
+    const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
     const result = await service.generateInitiatives(
       { rnsIds: [10], no_of_initiatives_to_create: 1 } as any,
@@ -100,8 +115,15 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     expect(result.some((row: any) => row.generationRun === ctx.run)).toBe(true);
 
     // generate-initiatives has no startup id in its DTO, so the run must be
-    // attributed here, from the Rns entity the service already loaded.
+    // attributed here, from the Rns entity the service already loaded — and
+    // the attribution has to reach the database, not just ctx.run, because
+    // `finish`'s payload never carries `startup`.
     expect(ctx.run.startup).toBe(rns.startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 77 },
+      { startup: rns.startup.id },
+    );
   });
 
   it('threads ctx into the AI calls and stamps generated rows for the single-rnsId branch', async () => {
@@ -119,7 +141,8 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     };
 
     const ctx = buildCtx();
-    const service = new InitiativeService(em as any, aiService as any);
+    const { aiRunService, forkedEm } = buildAiRunService();
+    const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
     const result = await service.generateInitiatives(
       { rnsId: 20, no_of_initiatives_to_create: 1 } as any,
@@ -131,6 +154,11 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     expect(created.some((row) => row.generationRun === ctx.run)).toBe(true);
     expect(result.some((row: any) => row.generationRun === ctx.run)).toBe(true);
     expect(ctx.run.startup).toBe(rns.startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 77 },
+      { startup: rns.startup.id },
+    );
   });
 
   it('leaves the run attributed to the first resolved startup when a later rnsId in the batch fails', async () => {
@@ -150,7 +178,8 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     };
 
     const ctx = buildCtx();
-    const service = new InitiativeService(em as any, aiService as any);
+    const { aiRunService, forkedEm } = buildAiRunService();
+    const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
     await expect(
       service.generateInitiatives(
@@ -167,8 +196,15 @@ describe('InitiativeService.generateInitiatives provenance', () => {
 
     // The run must still be attributed to the startup that *was*
     // successfully resolved (id 10), not left with startup: undefined,
-    // even though the overall call rejected.
+    // even though the overall call rejected. This is the failure path where
+    // nothing ever flushes the request-context EM, so the in-memory
+    // assertion alone is not evidence — the durable write is.
     expect(ctx.run.startup).toBe(firstRns.startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 77 },
+      { startup: firstRns.startup.id },
+    );
   });
 
   it('attributes a multi-rnsId batch to the first startup, not the last, when the ids span different startups', async () => {
@@ -193,7 +229,8 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     };
 
     const ctx = buildCtx();
-    const service = new InitiativeService(em as any, aiService as any);
+    const { aiRunService, forkedEm } = buildAiRunService();
+    const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
     await service.generateInitiatives(
       { rnsIds: [10, 11], no_of_initiatives_to_create: 1 } as any,
@@ -205,6 +242,12 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     // must be the *first* Rns's startup, not the last one processed.
     expect(ctx.run.startup).toBe(firstRns.startup);
     expect(ctx.run.startup).not.toBe(secondRns.startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledTimes(1);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 77 },
+      { startup: firstRns.startup.id },
+    );
     expect(created.every((row) => row.generationRun === ctx.run)).toBe(true);
   });
 });
@@ -250,6 +293,7 @@ describe('InitiativeService.refineInitiative provenance', () => {
     const ctx = {
       runId: 88,
       run: { id: 88, startup: undefined } as any,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
       config: Object.freeze({
         model: 'gemini-2.5-flash-lite',
         temperature: 0,
@@ -260,13 +304,19 @@ describe('InitiativeService.refineInitiative provenance', () => {
       }),
     } as any;
 
-    const service = new InitiativeService(em as any, aiService as any);
+    const { aiRunService, forkedEm } = buildAiRunService();
+    const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
     const result = await service.refineInitiative(30, [], 'Make it sharper', ctx);
 
     expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, startup, em);
     expect(aiService.refineInitiative).toHaveBeenCalledWith(ctx, expect.any(String));
     expect(ctx.run.startup).toBe(startup);
+    expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 88 },
+      { startup: 1 },
+    );
     expect(result.refinedDescription).toBe('New, sharper description');
   });
 });

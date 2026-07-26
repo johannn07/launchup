@@ -106,11 +106,30 @@ describe('AiService', () => {
     await service.generateRNAsFromPrompt(ctxWith({ temperature: 0 }), 'prompt');
 
     const request = generateContent.mock.calls[0][0];
-    expect(request.config).toEqual(
-      expect.objectContaining({ temperature: 0, maxOutputTokens: expect.any(Number) }),
-    );
+    expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
+    // No output cap anywhere: at the base commit these calls passed
+    // maxOutputTokens at the top level, where the SDK dropped it, so nothing
+    // was ever actually capped. Sending one now would be a new, unrequested
+    // truncation regression. See TODO_CHECKLIST §5.
+    expect(request.config).not.toHaveProperty('maxOutputTokens');
     expect(request).not.toHaveProperty('maxOutputTokens');
+  });
+
+  it('bumps the temperature by 0.2 on the corrective retry', async () => {
+    generateContent
+      .mockResolvedValueOnce({ text: 'not json' })
+      .mockResolvedValueOnce({
+        text: '[{"readiness_level_type":"Technology","rna":"Ship a prototype"}]',
+      });
+
+    await service.generateRNAsFromPrompt(ctxWith({ temperature: 0.3 }), 'prompt');
+
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    expect(generateContent.mock.calls[0][0].config.temperature).toBe(0.3);
+    // The retry deliberately loosens sampling so the model does not just
+    // reproduce the same unparseable output verbatim.
+    expect(generateContent.mock.calls[1][0].config.temperature).toBeCloseTo(0.5);
   });
 
   it('uses the model from the run context', async () => {
@@ -128,10 +147,12 @@ describe('AiService', () => {
 
     const request = generateContent.mock.calls[0][0];
     expect(request.model).toBe('gemini-2.5-flash-lite');
-    expect(request.config).toEqual(
-      expect.objectContaining({ temperature: 0, maxOutputTokens: expect.any(Number) }),
-    );
+    expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
+    // Uncapped on purpose: this prompt asks for eight full prose fields from
+    // a whole document, and a truncated response fails JSON.parse in
+    // startup.service.ts, which shows the founder a blank review screen.
+    expect(request.config).not.toHaveProperty('maxOutputTokens');
     expect(request).not.toHaveProperty('maxOutputTokens');
   });
 
@@ -142,10 +163,11 @@ describe('AiService', () => {
 
     const request = generateContent.mock.calls[0][0];
     expect(request.model).toBe('gemini-2.5-flash-lite');
-    expect(request.config).toEqual(
-      expect.objectContaining({ temperature: 0, maxOutputTokens: expect.any(Number) }),
-    );
+    expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
+    // Uncapped: the response carries a full raw_transcription on top of the
+    // eight extracted fields.
+    expect(request.config).not.toHaveProperty('maxOutputTokens');
     expect(request).not.toHaveProperty('maxOutputTokens');
   });
 
@@ -174,6 +196,24 @@ describe('AiService', () => {
     it('omits retrieved context when rag is disabled', async () => {
       const prompt = await service.createBasePrompt(ctxWith({ rag: false }), startup, emWithContexts());
       expect(prompt).not.toContain('Verified context retrieved');
+    });
+
+    // The third arm of the ragBlock three-way, and the only one that had no
+    // test. The literal "none found" is a deliberate anti-hallucination cue:
+    // it tells the model retrieval ran and came back empty, rather than
+    // leaving a silence the model is free to fill by inventing context.
+    it('states that retrieval found nothing when rag is enabled but no context matches', async () => {
+      const emWithNoContexts = { find: jest.fn().mockResolvedValue([]) } as any;
+
+      const prompt = await service.createBasePrompt(
+        ctxWith({ rag: true }),
+        startup,
+        emWithNoContexts,
+      );
+
+      expect(prompt).toContain(
+        'Verified context retrieved from similar startup records: none found',
+      );
     });
 
     it('does not query for contexts at all when rag is disabled', async () => {

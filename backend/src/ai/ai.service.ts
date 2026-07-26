@@ -313,6 +313,11 @@ export class AiService {
    * ai_generation_runs row. Sampling parameters go inside `config` — passing
    * them at the top level silently does nothing.
    *
+   * No `maxOutputTokens` is sent: none of these calls was ever actually
+   * capped (the pre-existing top-level value was silently dropped by the
+   * SDK), and picking one now would be a guess that can truncate long
+   * extractions. See TODO_CHECKLIST §5.
+   *
    * Not used by the three untracked capsule-parsing methods
    * (getCapsuleProposalInfo, generateStartupAnalysisSummary,
    * getCapsuleProposalInfoFromImage), which aren't generation runs and have
@@ -322,17 +327,37 @@ export class AiService {
   private async generate(
     ctx: AiRunContext,
     prompt: string,
-    maxOutputTokens = 1024,
     temperatureOverride?: number,
   ) {
-    return this.ai.models.generateContent({
+    const res = await this.ai.models.generateContent({
       model: ctx.config.model,
       contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
         temperature: temperatureOverride ?? ctx.config.temperature,
-        maxOutputTokens,
       },
     });
+
+    this.accumulateTokenUsage(ctx, res?.usageMetadata);
+
+    return res;
+  }
+
+  /**
+   * Folds one model response's usage into the run's running total, so the
+   * ai_generation_runs row records the whole run's spend rather than the last
+   * call's — `callAiExpectJson` retries, and batch generation loops, so a run
+   * routinely makes more than one call. Usage metadata is optional on the
+   * SDK response, so an absent block simply contributes nothing.
+   */
+  private accumulateTokenUsage(
+    ctx: AiRunContext,
+    usage?: { promptTokenCount?: number; candidatesTokenCount?: number },
+  ) {
+    if (!usage || !ctx?.tokens) return;
+
+    ctx.tokens.promptTokens += usage.promptTokenCount ?? 0;
+    ctx.tokens.completionTokens += usage.candidatesTokenCount ?? 0;
+    ctx.tokens.recorded = true;
   }
 
   private extractJsonPayload(text: string) {
@@ -364,7 +389,6 @@ export class AiService {
       const res = await this.generate(
         ctx,
         attempt === 1 ? prompt : `${prompt}\n\n${correctivePrompt}`,
-        1024,
         attempt === 1 ? ctx.config.temperature : ctx.config.temperature + 0.2,
       );
 
@@ -420,12 +444,14 @@ export class AiService {
         JSON format: {"title": "", "startup_description": "", "problem_statement": (int), "target_market": "", "solution_description": "", "objectives": "", "scope": "", "methodology": ""}
         `;
 
+    // No maxOutputTokens: this extracts eight full prose fields from a whole
+    // document, and a cap here truncates the JSON mid-object, which the
+    // caller's JSON.parse turns into a blank extraction review screen.
     const res = await this.ai.models.generateContent({
       model: this.aiConfig.defaults.model,
       contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
         temperature: this.aiConfig.defaults.temperature,
-        maxOutputTokens: 1024,
       },
     });
     return res.text;
@@ -446,12 +472,11 @@ export class AiService {
     const base64Image = imageBuffer.toString('base64');
     const res = await this.ai.models.generateContent({
       model: this.aiConfig.defaults.model,
+      // No maxOutputTokens: the response carries a raw_transcription field
+      // (the full document text) on top of the 8 extracted proposal fields,
+      // so any fixed cap risks truncating the JSON.
       config: {
         temperature: this.aiConfig.defaults.temperature,
-        // Higher than the 1024 used elsewhere: the response includes a
-        // raw_transcription field (the full document text) on top of the
-        // 8 extracted proposal fields, so it needs more headroom.
-        maxOutputTokens: 2048,
       },
       contents: [
         {
@@ -538,7 +563,6 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
         temperature: this.aiConfig.defaults.temperature,
-        maxOutputTokens: 1024,
       },
     });
 
