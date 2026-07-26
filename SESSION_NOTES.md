@@ -1,0 +1,40 @@
+# Session Notes — 2026-07-26
+
+## What we did
+
+**Branch:** `feat/ai-config-flags-plan` — 25 commits ahead of `master`, not merged, nothing pushed.
+
+Built AI pipeline configuration and per-run provenance — step 1 of the agreed 4-step sequence (**config flags → R2 + presigned URLs → model tiering → RAG pipeline**). This makes the four capstone AI enhancements independently toggleable and every generation attributable to the exact config that produced it, so a baseline-vs-enhanced comparison is actually runnable.
+
+- `AiConfigService` resolves `{ model, temperature, grounding, rag, biasReview, scoreNormalization }` from env vars (`GEMINI_MODEL`, `AI_TEMPERATURE`, `AI_GROUNDING_ENABLED`, `AI_RAG_ENABLED`, `AI_BIAS_REVIEW_ENABLED`, `AI_SCORE_NORMALIZATION_ENABLED`). Booleans default `true`, reproducing prior behaviour.
+- Optional per-request override via `X-Ai-Pipeline-Config` header, gated on `AI_ALLOW_REQUEST_OVERRIDE` (default `false`) **and** a Manager/Admin caller.
+- Every AI generation opens an `ai_generation_runs` row (model, config snapshot, latency, status, tokens); every generated artifact carries a `generation_run_id` FK. Eight tracked operations — one generation + one refine route per module across RNA, RNS, initiatives, roadblocks.
+- Score normalization decoupled from bias review — it previously ran *inside* bias review and couldn't be exercised independently.
+- **Real bug fixed:** `temperature`/`maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them (`as any` hid the type error). Every Gemini call had been running at the API default temperature, never at the configured `0`.
+- Built via brainstorm → spec → 10-task plan → subagent-driven execution (fresh implementer + independent review per task, 5 fix rounds triggered, final whole-branch review on the most capable model). The final review caught 3 cross-cutting bugs invisible to any single task's diff — most notably that run attribution wasn't durably persisted on the failure path, which two earlier fix rounds believed they'd already fixed.
+- **Live-verified against the real Neon DB and live Gemini:** triggered one RNS generation, confirmed a `completed` row in `ai_generation_runs` with the correct config, and confirmed 6 well-formed RNS rows persisted with correct `targetLevelId` values.
+
+While verifying live, found and diagnosed (not fixed) two pre-existing bugs unrelated to this branch:
+
+1. **AI-generated RNS never display.** Both RNS display surfaces filter `isAiGenerated === false`; generation writes `true`. The accept action (`addToRNS`) already flips the flag and works — there's just no review surface that calls it. **Decision made:** flip generation to write `isAiGenerated: false` directly, once this branch is merged. Now safe to do because `generation_run_id` — not `isAiGenerated` — is what carries AI provenance; the flag becomes a pure display concern. Trades away a review/accept gate.
+2. **`targetLevelScore` is `-1` on every RNS row.** `getTargetLevelScore()` matches against a hardcoded id→level map in `utils.ts` that no longer matches the live `readiness_levels` table (verified via `GET /readinesslevel/readiness-levels`). Fix is a deletion: `getStartupRns` already populates `targetLevel`, so `this.targetLevel.level` is the answer sitting in memory.
+
+Both are logged in `TODO_CHECKLIST.md` §2 with root cause, file:line, and fix shape.
+
+Docs updated throughout: `CLAUDE.md`, `PROJECT_OVERVIEW.md`, `TODO_CHECKLIST.md` (new "Recently completed" section, objective-table flag annotations, both new bugs, the visibility decision).
+
+## Still in progress
+
+- **`feat/ai-config-flags-plan` is not merged.** Live verification passed; nothing else is blocking it.
+- **`.claude/launch.json`** (backend :3000 / frontend :5173 dev-server config) is untracked — written this session, not yet committed either way.
+- **Backend dev server may still be running** on `:3000` from live verification — stop it if you're done testing.
+- A separate background session was spawned to fix the pre-existing `generateRoadblocks` always-returns-`[]` bug on its own branch (`claude/xenodochial-colden-25e582`, based on `master`). It ended with **no commits** — check its output before assuming that bug is fixed; treat it as still open.
+- A second background chip was spawned for the `requestedStatus` asymmetry in `generateInitiatives` (bulk branch sets it, single branch doesn't) — status unknown, not checked this session.
+
+## Next step
+
+1. **Merge `feat/ai-config-flags-plan` into `master`** (or open a PR) — live verification is done, this is the only remaining gate.
+2. Then, in order:
+   - Fix the two logged pre-existing bugs (`-1` target level; flip `isAiGenerated` on the 4 generation call sites — `rns.service.ts` `generateTasks`, `rna.service.ts` `generateRNA`, `initiative.service.ts` `generateInitiatives`, `roadblock.service.ts` `generateRoadblocks`)
+   - Continue the agreed sequence: **R2 + presigned URLs** (unblocks Objective 3 uploads — `upload.service.ts` currently 503s, no `DO_SPACES_*` vars set) → **model tiering** (env-driven now, but still `gemini-2.5-flash-lite` everywhere — TODO_CHECKLIST.md §5) → **RAG pipeline** (§0 — no embedding model exists anywhere; `AI_RAG_ENABLED` currently gates keyword-overlap retrieval, not semantic search)
+3. Before then: check on the two background follow-up sessions (roadblock empty-array fix, initiative `requestedStatus` fix) — confirm whether either actually landed a commit.
