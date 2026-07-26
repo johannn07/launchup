@@ -13,6 +13,7 @@ import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
+import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
 
 const AI_GROUNDING_INSTRUCTION =
   'Only use facts explicitly present in the user-provided input. Never invent names, numbers, dates, or organizations. If you are uncertain about a field, return null instead of guessing.';
@@ -170,6 +171,7 @@ export class AiService {
     validationStatus?: string;
     confidenceStatus?: string;
     notes?: string | null;
+    generationRun?: AiGenerationRun;
   }) {
     const recommendation = this.em.create(AiRecommendation, {
       startup: input.startupId ? this.em.getReference(Startup, input.startupId) : undefined,
@@ -179,6 +181,7 @@ export class AiService {
       validationStatus: input.validationStatus ?? 'validated',
       confidenceStatus: input.confidenceStatus ?? 'high-confidence',
       notes: input.notes ?? null,
+      generationRun: input.generationRun,
       createdAt: new Date(),
     });
 
@@ -197,6 +200,7 @@ export class AiService {
     biasFlagged?: boolean;
     biasStatus?: string;
     justification?: string | null;
+    generationRun?: AiGenerationRun;
   }) {
     const audit = this.em.create(AiBiasAudit, {
       startup: input.startupId ? this.em.getReference(Startup, input.startupId) : undefined,
@@ -208,6 +212,7 @@ export class AiService {
       biasFlagged: input.biasFlagged ?? false,
       biasStatus: input.biasStatus ?? 'normalized',
       justification: input.justification ?? null,
+      generationRun: input.generationRun,
       createdAt: new Date(),
     });
 

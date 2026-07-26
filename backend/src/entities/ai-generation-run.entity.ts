@@ -7,7 +7,7 @@ import {
 } from '@mikro-orm/core';
 import { Startup } from './startup.entity';
 
-export type AiRunOperation = 'rna' | 'rns' | 'initiatives' | 'roadblocks';
+export type AiRunOperation = 'rna' | 'rns' | 'rns_refine' | 'initiatives' | 'roadblocks';
 export type AiRunStatus = 'running' | 'completed' | 'failed';
 
 /**
