@@ -14,6 +14,7 @@ import {
 import { RnsService } from './rns.service';
 import { CreateRnsDto, UpdateRnsDto, GenerateTasksDto } from './dto';
 import { AiRunService } from '../ai/ai-run.service';
+import { Role } from '../entities/enums/role.enum';
 
 @Controller('rns')
 export class RnsController {
@@ -38,30 +39,14 @@ export class RnsController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === 'Manager' || req.user?.role === 'Admin';
-    const ctx = await this.aiRunService.begin(
+    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    return this.aiRunService.track(
       dto.startup_id,
       'rns',
       pipelineConfig,
       isPrivileged,
+      (ctx) => this.rnsService.generateTasks(dto, ctx),
     );
-    const startedAt = Date.now();
-
-    try {
-      const result = await this.rnsService.generateTasks(dto, ctx);
-      await this.aiRunService.finish(ctx, {
-        status: 'completed',
-        latencyMs: Date.now() - startedAt,
-      });
-      return result;
-    } catch (error) {
-      await this.aiRunService.finish(ctx, {
-        status: 'failed',
-        latencyMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
   }
 
   @Delete(':id')
@@ -92,38 +77,18 @@ export class RnsController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === 'Manager' || req.user?.role === 'Admin';
-    // No startup id is available here: the only route param is the Rns id,
-    // and the service already loads the startup itself, so we don't
-    // duplicate that query just to attribute this run.
-    const ctx = await this.aiRunService.begin(
+    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    // No startup id is available here: the only route param is the Rns id.
+    // We still open the run with startupId: null rather than duplicating a
+    // startup lookup the service already performs — RnsService.refineRnsDescription
+    // sets ctx.run.startup itself once it has loaded the Rns's startup.
+    return this.aiRunService.track(
       null,
       'rns_refine',
       pipelineConfig,
       isPrivileged,
+      (ctx) => this.rnsService.refineRnsDescription(id, dto.chatHistory, dto.latestPrompt, ctx),
     );
-    const startedAt = Date.now();
-
-    try {
-      const result = await this.rnsService.refineRnsDescription(
-        id,
-        dto.chatHistory,
-        dto.latestPrompt,
-        ctx,
-      );
-      await this.aiRunService.finish(ctx, {
-        status: 'completed',
-        latencyMs: Date.now() - startedAt,
-      });
-      return result;
-    } catch (error) {
-      await this.aiRunService.finish(ctx, {
-        status: 'failed',
-        latencyMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
   }
 
   @Patch(':id/roleDependent')

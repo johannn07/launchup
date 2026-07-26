@@ -425,6 +425,10 @@ Requirement note:
     );
     if (!rns) throw new NotFoundException('RNS not found');
     const startup = rns.startup;
+    // The refine run is opened with startupId: null (the route only has the
+    // Rns id), so attribute it to the startup now that it's in hand — this
+    // is the same entity already loaded above, no extra query.
+    ctx.run.startup = startup;
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(
