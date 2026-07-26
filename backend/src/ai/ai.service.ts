@@ -11,6 +11,9 @@ import { z } from 'zod';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
+import { AiRunContext } from './ai-run.service';
+import { AiConfigService } from './ai-config.service';
+import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
 
 const AI_GROUNDING_INSTRUCTION =
   'Only use facts explicitly present in the user-provided input. Never invent names, numbers, dates, or organizations. If you are uncertain about a field, return null instead of guessing.';
@@ -55,13 +58,13 @@ const biasReviewSchema = z.object({
 @Injectable()
 export class AiService {
   private readonly ai: GoogleGenAI;
-  private readonly modelName = 'gemini-2.5-flash-lite';
 
   constructor(
     private config: ConfigService,
     private metrics: AiMetricsService,
     private baselineService: BaselineService,
     private readonly em: EntityManager,
+    private readonly aiConfig: AiConfigService,
   ) {
     this.ai = new GoogleGenAI({
       apiKey: this.config.get<string>('GEMINI_API_KEY'),
@@ -79,19 +82,42 @@ export class AiService {
     }
   }
 
-  async reviewBiasScore(input: {
-    dimensionKey: string;
-    rawScore: number;
-    maxScore: number;
-    context: string;
-  }): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string }> {
-    const normalized = await this.normalizeAiScore(input.rawScore);
-    const baselineScore = Math.max(1, Math.min(input.maxScore, Math.round(normalized.scaled)));
+  async reviewBiasScore(
+    ctx: AiRunContext,
+    input: {
+      dimensionKey: string;
+      rawScore: number;
+      maxScore: number;
+      context: string;
+    },
+  ): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string }> {
+    // Objective 4c - score normalization, independently toggleable.
+    const baselineScore = ctx.config.scoreNormalization
+      ? Math.max(
+          1,
+          Math.min(input.maxScore, Math.round((await this.normalizeAiScore(input.rawScore)).scaled)),
+        )
+      : input.rawScore;
+
+    // Objective 4b - model-based bias review, independently toggleable.
+    if (!ctx.config.biasReview) {
+      return {
+        correctedScore: baselineScore,
+        biasFlagged: baselineScore !== input.rawScore,
+        justification: ctx.config.scoreNormalization
+          ? 'Baseline normalization applied; model bias review disabled.'
+          : 'Bias review and normalization disabled; raw score used.',
+      };
+    }
+
+    const baselineScoreLine = ctx.config.scoreNormalization
+      ? `
+      Baseline normalized score: ${baselineScore}`
+      : '';
     const prompt = `
       You are reviewing a startup assessment score for possible bias.
       Dimension: ${input.dimensionKey}
-      Raw score: ${input.rawScore}
-      Baseline normalized score: ${baselineScore}
+      Raw score: ${input.rawScore}${baselineScoreLine}
       Maximum allowed score: ${input.maxScore}
       Context: ${input.context}
 
@@ -102,12 +128,15 @@ export class AiService {
 
     try {
       const review = await this.callAiExpectJson({
+        ctx,
         prompt,
         schema: biasReviewSchema,
         fallback: {
           corrected_score: baselineScore,
           bias_flagged: baselineScore !== input.rawScore,
-          justification: 'Baseline normalization applied because the model review could not be parsed.',
+          justification: ctx.config.scoreNormalization
+            ? 'Baseline normalization applied because the model review could not be parsed.'
+            : 'Model bias review could not be parsed; raw score used.',
         },
         correctivePrompt:
           'Return valid JSON only. Keep the corrected score within the allowed range and explain the adjustment briefly.',
@@ -127,7 +156,9 @@ export class AiService {
       return {
         correctedScore: baselineScore,
         biasFlagged: baselineScore !== input.rawScore,
-        justification: 'Baseline normalization applied because the model review failed.',
+        justification: ctx.config.scoreNormalization
+          ? 'Baseline normalization applied because the model review failed.'
+          : 'Model bias review failed; raw score used.',
       };
     }
   }
@@ -140,6 +171,7 @@ export class AiService {
     validationStatus?: string;
     confidenceStatus?: string;
     notes?: string | null;
+    generationRun?: AiGenerationRun;
   }) {
     const recommendation = this.em.create(AiRecommendation, {
       startup: input.startupId ? this.em.getReference(Startup, input.startupId) : undefined,
@@ -149,6 +181,7 @@ export class AiService {
       validationStatus: input.validationStatus ?? 'validated',
       confidenceStatus: input.confidenceStatus ?? 'high-confidence',
       notes: input.notes ?? null,
+      generationRun: input.generationRun,
       createdAt: new Date(),
     });
 
@@ -167,6 +200,7 @@ export class AiService {
     biasFlagged?: boolean;
     biasStatus?: string;
     justification?: string | null;
+    generationRun?: AiGenerationRun;
   }) {
     const audit = this.em.create(AiBiasAudit, {
       startup: input.startupId ? this.em.getReference(Startup, input.startupId) : undefined,
@@ -178,6 +212,7 @@ export class AiService {
       biasFlagged: input.biasFlagged ?? false,
       biasStatus: input.biasStatus ?? 'normalized',
       justification: input.justification ?? null,
+      generationRun: input.generationRun,
       createdAt: new Date(),
     });
 
@@ -272,6 +307,64 @@ export class AiService {
     return `${prompt}\n\nGrounding instruction: ${AI_GROUNDING_INSTRUCTION}`;
   }
 
+  /**
+   * Chokepoint for tracked, ctx-driven Gemini calls — i.e. the four
+   * AiRunOperation generation types that open an AiRunContext and get an
+   * ai_generation_runs row. Sampling parameters go inside `config` — passing
+   * them at the top level silently does nothing.
+   *
+   * No `maxOutputTokens` is sent: none of these calls was ever actually
+   * capped (the pre-existing top-level value was silently dropped by the
+   * SDK), and picking one now would be a guess that can truncate long
+   * extractions. See TODO_CHECKLIST §5.
+   *
+   * Not used by the three untracked capsule-parsing methods
+   * (getCapsuleProposalInfo, generateStartupAnalysisSummary,
+   * getCapsuleProposalInfoFromImage), which aren't generation runs and have
+   * no AiRunContext to drive from — they read this.aiConfig.defaults
+   * directly instead.
+   */
+  private async generate(
+    ctx: AiRunContext,
+    prompt: string,
+    temperatureOverride?: number,
+  ) {
+    const res = await this.ai.models.generateContent({
+      model: ctx.config.model,
+      contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
+      config: {
+        temperature: temperatureOverride ?? ctx.config.temperature,
+      },
+    });
+
+    this.accumulateTokenUsage(ctx, res?.usageMetadata);
+
+    return res;
+  }
+
+  /**
+   * Folds one model response's usage into the run's running total, so the
+   * ai_generation_runs row records the whole run's spend rather than the last
+   * call's — `callAiExpectJson` retries, and batch generation loops, so a run
+   * routinely makes more than one call. Usage metadata is optional on the
+   * SDK response, so an absent block simply contributes nothing.
+   *
+   * Known under-count: completionTokens sums `candidatesTokenCount` only.
+   * Gemini 2.5 bills thinking tokens separately as `thoughtsTokenCount`, which
+   * is NOT included in that figure, so recorded output spend is a floor rather
+   * than a total on any thinking-enabled model. See TODO_CHECKLIST.md section 5.
+   */
+  private accumulateTokenUsage(
+    ctx: AiRunContext,
+    usage?: { promptTokenCount?: number; candidatesTokenCount?: number },
+  ) {
+    if (!usage || !ctx?.tokens) return;
+
+    ctx.tokens.promptTokens += usage.promptTokenCount ?? 0;
+    ctx.tokens.completionTokens += usage.candidatesTokenCount ?? 0;
+    ctx.tokens.recorded = true;
+  }
+
   private extractJsonPayload(text: string) {
     const firstCurly = text.indexOf('{');
     const firstSquare = text.indexOf('[');
@@ -289,20 +382,20 @@ export class AiService {
   }
 
   private async callAiExpectJson<T>(options: {
+    ctx: AiRunContext;
     prompt: string;
     schema: z.ZodType<T>;
     fallback: T;
     correctivePrompt: string;
   }): Promise<T> {
-    const { prompt, schema, fallback, correctivePrompt } = options;
+    const { ctx, prompt, schema, fallback, correctivePrompt } = options;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
-      const res = await this.ai.models.generateContent({
-        model: this.modelName,
-        contents: this.groundPrompt(attempt === 1 ? prompt : `${prompt}\n\n${correctivePrompt}`),
-        temperature: attempt === 1 ? 0.0 : 0.2,
-        maxOutputTokens: 1024,
-      } as any);
+      const res = await this.generate(
+        ctx,
+        attempt === 1 ? prompt : `${prompt}\n\n${correctivePrompt}`,
+        attempt === 1 ? ctx.config.temperature : ctx.config.temperature + 0.2,
+      );
 
       const text = res?.text?.trim();
       if (!text) {
@@ -339,18 +432,8 @@ export class AiService {
     return fallback;
   }
 
-  async test() {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt('what is the lyrics for bloom necry talkie'),
-    });
-    return res.text;
-  }
-
   async getCapsuleProposalInfo(text: string) {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(`Based on the text ${text},
+    const prompt = `Based on the text ${text},
         Task: extract the text for:
         -Acceleration Proposal Title ( can be found above the Duration: 3 months, etc.)
         - Startup Description
@@ -364,7 +447,17 @@ export class AiService {
         Requirement: The response should be in a JSON format.
         It should consist of title, startup_description, problem_statement, target_market, solution_description, objectives, scope, and methodology
         JSON format: {"title": "", "startup_description": "", "problem_statement": (int), "target_market": "", "solution_description": "", "objectives": "", "scope": "", "methodology": ""}
-        `),
+        `;
+
+    // No maxOutputTokens: this extracts eight full prose fields from a whole
+    // document, and a cap here truncates the JSON mid-object, which the
+    // caller's JSON.parse turns into a blank extraction review screen.
+    const res = await this.ai.models.generateContent({
+      model: this.aiConfig.defaults.model,
+      contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
+      config: {
+        temperature: this.aiConfig.defaults.temperature,
+      },
     });
     return res.text;
   }
@@ -372,11 +465,24 @@ export class AiService {
   /**
    * Send an image directly to Gemini's vision model for OCR + field extraction.
    * This bypasses Tesseract entirely and gives far better results for handwritten documents.
+   *
+   * Untracked (no AiRunContext, no ai_generation_runs row) — reads
+   * this.aiConfig.defaults directly, same as getCapsuleProposalInfo and
+   * generateStartupAnalysisSummary. Deliberately does not apply the
+   * groundPrompt() wrapper: contents here is an image array (inlineData +
+   * instruction text), not a string prompt, so the text-oriented grounding
+   * instruction doesn't apply cleanly.
    */
   async getCapsuleProposalInfoFromImage(imageBuffer: Buffer, mimeType: string) {
     const base64Image = imageBuffer.toString('base64');
     const res = await this.ai.models.generateContent({
-      model: 'gemini-2.5-flash-lite',
+      model: this.aiConfig.defaults.model,
+      // No maxOutputTokens: the response carries a raw_transcription field
+      // (the full document text) on top of the 8 extracted proposal fields,
+      // so any fixed cap risks truncating the JSON.
+      config: {
+        temperature: this.aiConfig.defaults.temperature,
+      },
       contents: [
         {
           role: 'user',
@@ -422,10 +528,8 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   async generateStartupAnalysisSummary(
     dto: StartupApplicationDto,
   ): Promise<string> {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(`Please provide a comprehensive analysis of the following startup proposal:
-      
+    const prompt = `Please provide a comprehensive analysis of the following startup proposal:
+
       Title: ${dto.title}
       Description: ${dto.description}
       Problem Statement: ${dto.problemStatement}
@@ -457,7 +561,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       - Start directly with the analysis, no introductory phrases
       - Be clear and direct about the startup's potential
       - Focus on the most impactful insights
-      - Keep output concise while covering essential points`),
+      - Keep output concise while covering essential points`;
+
+    const res = await this.ai.models.generateContent({
+      model: this.aiConfig.defaults.model,
+      contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
+      config: {
+        temperature: this.aiConfig.defaults.temperature,
+      },
     });
 
     if (!res.text) {
@@ -468,9 +579,11 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateRNAsFromPrompt(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ readiness_level_type: string; rna: string | null }[]> {
     return this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessRnaSchema,
       fallback: [],
@@ -480,9 +593,11 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateTasksFromPrompt(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ target_level: number; description: string }[]> {
     const tasks = await this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessTaskSchema,
       fallback: [],
@@ -504,7 +619,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     return normalized as any;
   }
 
-  async generateInitiativesFromPrompt(prompt: string): Promise<
+  async generateInitiativesFromPrompt(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<
     {
       description: string;
       measures: string;
@@ -513,6 +631,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }[]
   > {
     return this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessInitiativeSchema,
       fallback: [],
@@ -522,12 +641,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async refineRnsDescription(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ refinedDescription: string; aiCommentary: string }> {
-    const res = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const res = await this.generate(ctx, prompt);
 
     if (!res.text) {
       throw new Error('AI response did not contain any text');
@@ -546,9 +663,11 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async generateRoadblocksFromPrompt(
+    ctx: AiRunContext,
     prompt: string,
   ): Promise<{ description: string; fix: string; riskNumber: number }[]> {
     const roadblocks = await this.callAiExpectJson({
+      ctx,
       prompt,
       schema: readinessRoadblockSchema,
       fallback: [],
@@ -571,6 +690,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async createBasePrompt(
+    ctx: AiRunContext,
     startup: Startup,
     em: EntityManager,
   ): Promise<string | null> {
@@ -593,12 +713,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
     const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
     const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
-    const ragContexts = await this.getRelevantRagContexts(startup, em);
+    const ragContexts = ctx.config.rag
+      ? await this.getRelevantRagContexts(startup, em)
+      : [];
     const ragBlock = ragContexts.length
       ? `\nVerified context retrieved from similar startup records:\n${ragContexts
           .map((context) => `- [${context.sourceType}] ${context.title}: ${context.content}`)
           .join('\n')}`
-      : '\nVerified context retrieved from similar startup records: none found';
+      : ctx.config.rag ? '\nVerified context retrieved from similar startup records: none found' : '';
 
     return `
       Given these data:
@@ -631,17 +753,17 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   `;
   }
 
-  async refineInitiative(prompt: string): Promise<{
+  async refineInitiative(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<{
     refinedDescription?: string;
     refinedMeasures?: string;
     refinedTargets?: string;
     refinedRemarks?: string;
     aiCommentary: string;
   }> {
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const response = await this.generate(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');
@@ -676,15 +798,15 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }
   }
 
-  async refineRoadblock(prompt: string): Promise<{
+  async refineRoadblock(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<{
     refinedDescription?: string;
     refinedFix?: string;
     aiCommentary: string;
   }> {
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const response = await this.generate(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');
@@ -715,14 +837,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }
   }
 
-  async refineRna(prompt: string): Promise<{
+  async refineRna(
+    ctx: AiRunContext,
+    prompt: string,
+  ): Promise<{
     refinedRna?: string;
     aiCommentary: string;
   }> {
-    const response = await this.ai.models.generateContent({
-      model: this.modelName,
-      contents: this.groundPrompt(prompt),
-    });
+    const response = await this.generate(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');

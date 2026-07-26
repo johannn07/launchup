@@ -9,7 +9,7 @@ import { ReadinessModule } from './readiness/readiness.module';
 import { AiModule } from './ai/ai.module';
 import { BaselineModule } from './ai/baseline.module';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
-import { PostgreSqlDriver } from '@mikro-orm/postgresql';   // added
+import { PostgreSqlDriver } from '@mikro-orm/postgresql'; // added
 import { ChatHistoryModule } from './chat_history/chat-history.module';
 import { AdminModule } from './admin/admin.module';
 import { User } from './entities/user.entity';
@@ -33,6 +33,7 @@ import { UploadModule } from './upload/upload.module';
 import { Recommendation } from './entities/recommendation.entity';
 import { RagRetrievalLog } from './entities/rag-retrieval-log.entity';
 import { VectorEmbedding } from './entities/vector-embeddings.entity'; // if you plan to use it
+import { AiGenerationRun } from './entities/ai-generation-run.entity';
 
 import config from './mikro-orm.config';
 
@@ -50,9 +51,10 @@ import config from './mikro-orm.config';
         CapsuleProposal,
         UratQuestion,
         RnaChatHistory,
-        Recommendation,        // new
-        RagRetrievalLog,        // new
-        VectorEmbedding,        // new (optional)
+        Recommendation, // new
+        RagRetrievalLog, // new
+        VectorEmbedding, // new (optional)
+        AiGenerationRun,
       ],
     }),
     AiModule,

@@ -3,18 +3,25 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { RnsService } from './rns.service';
 import { CreateRnsDto, UpdateRnsDto, GenerateTasksDto } from './dto';
+import { AiRunService } from '../ai/ai-run.service';
+import { Role } from '../entities/enums/role.enum';
 
 @Controller('rns')
 export class RnsController {
-  constructor(private rnsService: RnsService) {}
+  constructor(
+    private rnsService: RnsService,
+    private readonly aiRunService: AiRunService,
+  ) {}
 
   @Get()
   async getStartupRns(@Query('startupId', ParseIntPipe) startupId: number) {
@@ -27,8 +34,19 @@ export class RnsController {
   }
 
   @Post('generate-tasks')
-  async generateTasks(@Body() dto: GenerateTasksDto) {
-    return await this.rnsService.generateTasks(dto);
+  async generateTasks(
+    @Body() dto: GenerateTasksDto,
+    @Req() req: any,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
+  ) {
+    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    return this.aiRunService.track(
+      dto.startup_id,
+      'rns',
+      pipelineConfig,
+      isPrivileged,
+      (ctx) => this.rnsService.generateTasks(dto, ctx),
+    );
   }
 
   @Delete(':id')
@@ -56,11 +74,20 @@ export class RnsController {
       }[];
       latestPrompt: string;
     },
+    @Req() req: any,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    return await this.rnsService.refineRnsDescription(
-      id,
-      dto.chatHistory,
-      dto.latestPrompt,
+    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    // No startup id is available here: the only route param is the Rns id.
+    // We still open the run with startupId: null rather than duplicating a
+    // startup lookup the service already performs — RnsService.refineRnsDescription
+    // sets ctx.run.startup itself once it has loaded the Rns's startup.
+    return this.aiRunService.track(
+      null,
+      'rns_refine',
+      pipelineConfig,
+      isPrivileged,
+      (ctx) => this.rnsService.refineRnsDescription(id, dto.chatHistory, dto.latestPrompt, ctx),
     );
   }
 

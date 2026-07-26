@@ -18,6 +18,7 @@ import { AiService } from 'src/ai/ai.service';
 import { RnsChatHistory } from 'src/entities/rns-chat-history.entity';
 import { RagQueryService } from '../rna/rag-query.service';
 import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 
 @Injectable()
 export class RnsService {
@@ -26,6 +27,7 @@ export class RnsService {
     private readonly aiService: AiService,
     private readonly ragQueryService: RagQueryService,                // new
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService, // new
+    private readonly aiRunService: AiRunService,
   ) {}
 
   async getStartupRns(startupId: number) {
@@ -160,7 +162,7 @@ export class RnsService {
     return rns;
   }
 
-async generateTasks(dto: GenerateTasksDto) {
+async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
   const startup = await this.em.findOne(Startup, { id: dto.startup_id }, {
     populate: ['capsuleProposal'],
   });
@@ -303,7 +305,7 @@ Requirement note:
       `;
     }
 
-      const aiTasks = await this.aiService.generateTasksFromPrompt(prompt);
+      const aiTasks = await this.aiService.generateTasksFromPrompt(ctx, prompt);
 
       if (!aiTasks || !Array.isArray(aiTasks) || aiTasks.length === 0) {
         console.warn(`AI did not return any tasks for RNA ID: ${rna.id}`);
@@ -320,7 +322,7 @@ Requirement note:
 
       for (let i = 0; i < aiTasks.length; i++) {
         const task = aiTasks[i];
-        const reviewedTarget = await this.aiService.reviewBiasScore({
+        const reviewedTarget = await this.aiService.reviewBiasScore(ctx, {
           dimensionKey: readinessType,
           rawScore: Number(task.target_level) || targetReadinessLevel[readinessType] + 1,
           maxScore: 9,
@@ -357,6 +359,7 @@ Requirement note:
       newRns.status = 1;
       newRns.assignee = startup.user;
       newRns.isAiGenerated = true;
+      newRns.generationRun = ctx.run;
 
         this.em.persist(newRns);
         createdRns.push(newRns);
@@ -368,6 +371,7 @@ Requirement note:
           content: task.description,
           validationStatus: 'validated',
           confidenceStatus: 'high-confidence',
+          generationRun: ctx.run,
         });
 
         const rawTarget = Number(task.target_level);
@@ -383,6 +387,7 @@ Requirement note:
           biasFlagged: reviewedTarget.biasFlagged,
           biasStatus: reviewedTarget.biasFlagged ? 'flagged' : 'normalized',
           justification: reviewedTarget.justification,
+          generationRun: ctx.run,
         });
       }
     }
@@ -412,6 +417,7 @@ Requirement note:
       refinedDescription: string | null;
     }[],
     latestPrompt: string,
+    ctx: AiRunContext,
   ): Promise<{ refinedDescription: string; aiCommentary: string }> {
     const rns = await this.em.findOne(
       Rns,
@@ -420,6 +426,13 @@ Requirement note:
     );
     if (!rns) throw new NotFoundException('RNS not found');
     const startup = rns.startup;
+    // The refine run is opened with startupId: null (the route only has the
+    // Rns id), so attribute it to the startup now that it's in hand — this
+    // is the same entity already loaded above, no extra query. Goes through
+    // AiRunService.attribute so the attribution is written immediately: on
+    // the failure path nothing else flushes, and a bare assignment would be
+    // discarded with the request-context EM.
+    await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(
@@ -492,7 +505,7 @@ Requirement note:
       DO NOT MENTION THE FORMATTING INSTRUCTIONS OR HOW YOU FORMATTED THE RESPONSE IN THE COMMENTARY.
     `;
 
-    const result = await this.aiService.refineRnsDescription(prompt);
+    const result = await this.aiService.refineRnsDescription(ctx, prompt);
 
     const newMessages = [
       new RnsChatHistory({

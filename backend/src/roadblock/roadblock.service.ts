@@ -17,12 +17,14 @@ import { RnsStatus } from 'src/entities/enums/rns.enum';
 import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { RoadblockChatHistory } from 'src/entities/roadblock-chat-history.entity';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 
 @Injectable()
 export class RoadblockService {
   constructor(
     private readonly em: EntityManager,
     private readonly aiService: AiService,
+    private readonly aiRunService: AiRunService,
   ) {}
 
   async getByStartupId(startupId: number): Promise<Roadblock[]> {
@@ -124,7 +126,11 @@ export class RoadblockService {
     return { message: 'Roadblock deleted successfully' };
   }
 
-  async generateRoadblocks(dto: GenerateRoadblocksDto) {
+  async generateRoadblocks(dto: GenerateRoadblocksDto, ctx: AiRunContext) {
+    // dto.startupId is a real field on GenerateRoadblocksDto, so the caller
+    // (RoadblockController) already passes it straight to AiRunService.track()
+    // when opening the run — ctx.run.startup is attributed before this method
+    // even runs. No backfill needed here.
     const startup = await this.em.findOneOrFail(
       Startup,
       { id: dto.startupId },
@@ -137,7 +143,7 @@ export class RoadblockService {
       throw new BadRequestException('No capsule proposal found.');
     }
 
-    const basePrompt = await this.aiService.createBasePrompt(startup, this.em); // You'll implement this helper
+    const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em); // You'll implement this helper
 
     const excludeStatuses = [RnsStatus.Discontinued, RnsStatus.Completed];
 
@@ -206,7 +212,7 @@ export class RoadblockService {
     }
 
     const resultData =
-      await this.aiService.generateRoadblocksFromPrompt(prompt); // your JSON parser helper
+      await this.aiService.generateRoadblocksFromPrompt(ctx, prompt); // your JSON parser helper
 
     // if(dto.debug){
     //     return resultData;
@@ -214,7 +220,7 @@ export class RoadblockService {
 
     const roadblocks: Roadblock[] = [];
     for (const data of resultData) {
-      const reviewedRisk = await this.aiService.reviewBiasScore({
+      const reviewedRisk = await this.aiService.reviewBiasScore(ctx, {
         dimensionKey: 'roadblock',
         rawScore: Number(data.riskNumber),
         maxScore: 5,
@@ -236,6 +242,7 @@ export class RoadblockService {
       roadblock.description = data.description;
       roadblock.fix = data.fix;
       roadblock.requestedStatus = 1;
+      roadblock.generationRun = ctx.run;
 
       await this.em.persistAndFlush(roadblock);
 
@@ -246,6 +253,7 @@ export class RoadblockService {
         content: `${data.description}\n\nFix: ${data.fix}`,
         validationStatus: 'validated',
         confidenceStatus: 'high-confidence',
+        generationRun: ctx.run,
       });
 
       await this.aiService.recordBiasAudit({
@@ -258,6 +266,7 @@ export class RoadblockService {
         biasFlagged: reviewedRisk.biasFlagged,
         biasStatus: reviewedRisk.biasFlagged ? 'flagged' : 'normalized',
         justification: reviewedRisk.justification,
+        generationRun: ctx.run,
       });
     }
 
@@ -268,6 +277,7 @@ export class RoadblockService {
     roadblockId: number,
     chatHistory: { role: 'User' | 'Ai'; content: string }[],
     latestPrompt: string,
+    ctx: AiRunContext,
   ): Promise<{
     refinedDescription?: string;
     refinedFix?: string;
@@ -283,13 +293,21 @@ export class RoadblockService {
     if (!roadblock) throw new NotFoundException('Roadblock not found');
 
     const startup = roadblock.startup;
+    // The refine run is opened with startupId: null (the route only has the
+    // roadblock id), so attribute it to the startup now that it's in hand —
+    // this is the same entity already loaded above, no extra query. Placed
+    // before the capsule-proposal check below so even that failure path
+    // leaves the run attributed rather than null — and written immediately
+    // via AiRunService.attribute, because on the failure path the
+    // request-context EM is discarded and a bare assignment never lands.
+    await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(
         'No capsule proposal found for this startup.',
       );
 
-    const basePrompt = await this.aiService.createBasePrompt(startup, this.em);
+    const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em);
 
     const prompt = `${basePrompt}
 
@@ -348,7 +366,7 @@ export class RoadblockService {
         - DO NOT MENTION THE FORMATTING INSTRUCTIONS OR HOW YOU FORMATTED THE RESPONSE IN THE COMMENTARY.
         `;
 
-    const result = await this.aiService.refineRoadblock(prompt);
+    const result = await this.aiService.refineRoadblock(ctx, prompt);
 
     // Save chat history
     const newMessages = [

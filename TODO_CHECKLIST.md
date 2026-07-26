@@ -17,24 +17,38 @@ Prioritized backlog derived from a full read of the codebase (see [PROJECT_OVERV
 
 ---
 
+## Recently completed — AI pipeline configuration and run provenance
+
+Branch `feat/ai-config-flags-plan` (22 commits, not yet merged). This makes the baseline-vs-enhanced comparison *runnable and attributable*; it does not implement any missing objective.
+
+- **The model and all four pipeline enhancements are env-driven.** `AiConfigService` resolves `{ model, temperature, grounding, rag, biasReview, scoreNormalization }` from `GEMINI_MODEL`, `AI_TEMPERATURE`, `AI_GROUNDING_ENABLED`, `AI_RAG_ENABLED`, `AI_BIAS_REVIEW_ENABLED`, `AI_SCORE_NORMALIZATION_ENABLED`. The four booleans default to `true`, reproducing prior behaviour. Documented in `backend/.env.example`.
+- **Per-request override** via the `X-Ai-Pipeline-Config` header, gated on `AI_ALLOW_REQUEST_OVERRIDE` (defaults `false`) **and** a Manager/Admin caller. Safe-closed: because these controllers still have no `JwtGuard` (§1), `req.user` is always undefined, so every override is currently rejected with 403.
+- **Every AI generation opens an `ai_generation_runs` row** recording the resolved config, model, latency and status, and every generated artifact carries a `generation_run_id` FK. Eight operations — one generation plus one refine route per module across RNA, RNS, initiatives, roadblocks. Migration `Migration20260726120000_AiGenerationRuns.ts`.
+- **Score normalization is now independent of bias review.** It previously ran *inside* `reviewBiasScore()` and could not be exercised without it, so two of the four arms were unreachable.
+- **A real bug fix:** `temperature` and `maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them, with an `as any` hiding the type error. See §5 for what changed as a result — the temperature fix is a genuine behaviour change, not a no-op.
+
+**Not done, deliberately:** live verification against a real database and a live Gemini call. Boot the backend, trigger one generation, and confirm a `completed` row appears with the expected `config` snapshot.
+
+---
+
 ## 0. Capstone objectives — actual implementation status
 
 Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against the code. **This is the section that determines whether you pass**, and several objectives are less built than the scaffolding suggests.
 
 | Objective | Status | Evidence |
 |---|---|---|
-| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:271`); `GroundedPromptBuilderService` exists |
-| **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist |
+| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:307`); `GroundedPromptBuilderService` exists. Toggleable via `AI_GROUNDING_ENABLED` |
+| **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist. `AI_RAG_ENABLED` gates the **keyword-overlap** retrieval standing in for it, so toggling that flag measures lexical matching, not semantic search — do not report it as a RAG result |
 | **1c** Output validation layer flagging inconsistent recs | 🔴 **Stub** | `output-validator.service.ts` — `validateEach()` returns `isValid: true` for everything with `// TODO`; `flagInconsistencies()` and `markUnverifiable()` have empty bodies |
 | **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
 | **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. |
 | **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
-| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:376`); `OcrDocument` stores `fieldConfidence` |
+| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
-| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:82-133`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. |
-| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI |
+| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. Toggleable via `AI_BIAS_REVIEW_ENABLED` |
+| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI. Toggleable via `AI_SCORE_NORMALIZATION_ENABLED`, now **independent of 4b** — it previously ran inside `reviewBiasScore()` and could not be exercised without it |
 
 ### The critical one — Objective 1b has no RAG
 
@@ -43,7 +57,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   - **No embedding model is called anywhere.** No `embedContent`, no `text-embedding`, nothing (grepped `backend/src` entirely).
   - **`vector_embeddings` is read-only.** `RagQueryService` reads it (`rag-query.service.ts:20,31`); **nothing ever writes it.** So `queryVectorDatabase()` always takes the `if (!sourceEmbedding)` branch and returns `lowConfidence: true` with empty arrays — on every single call.
   - **pgvector is installed but unused for search.** `Migration20260528160512_InstallVectorExtension` ran, but similarity is computed in JavaScript by loading every row into memory (`rag-query.service.ts:33-38`).
-  - **The path actually wired into generation is keyword matching, not RAG.** `getRelevantRagContexts()` (`ai.service.ts:237`, called at `:596`) scores candidates by **token overlap** (`scoreRagMatch`, `:212`) — a bag-of-words Jaccard score. That is lexical retrieval, not semantic.
+  - **The path actually wired into generation is keyword matching, not RAG.** `getRelevantRagContexts()` (`ai.service.ts:272`, called at `:688`) scores candidates by **token overlap** (`scoreRagMatch`, `:247`) — a bag-of-words Jaccard score. That is lexical retrieval, not semantic.
   - **The corpus is self-referential.** `RagContext` rows are only written from `startup.service.ts:151` during capsule-proposal parsing, so the system retrieves the startup's *own* prior text. `verifiedFrameworks` and `businessModels` are hardcoded `[]` with TODOs (`rag-query.service.ts:66-67`).
 
   **Why it matters:** Objective 1 and Research Question 1 are both entirely about RAG. As written you cannot answer RQ1, because there is no retrieval-augmented pipeline to measure against the baseline.
@@ -172,6 +186,24 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** the RNA panel on the Elevate tab never populates.
   **Fix:** change to `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
 
+- [ ] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them**
+  Confirmed live: generation succeeds, `ai_generation_runs` records a `completed` row, and `GET /rns/?startupId=10` returns six well-formed rows — yet the page renders nothing.
+  The RNS page has exactly two display surfaces and **both exclude AI output**: the kanban columns (`frontend/src/routes/(app)/startups/[id]/rns/+page.svelte:384-392`) and the table (`:690`) each filter `isAiGenerated === false`. Generated rows are written with `isAiGenerated: true`, so neither can ever show them.
+  The *acceptance* half exists — `addToRNS()` (`:187-228`) PATCHes a row to `isAiGenerated: false`, which is what makes it appear, and the `card` snippet (`:490`) already takes an `ai` flag and an `addToRns` handler that `RnsCard` renders as an add button. **What's missing is the pending-AI review list that would invoke it.** The snippet is only ever passed to `KanbanBoardNew` (`:670`), whose columns are themselves `isAiGenerated === false`, so the `ai = true` variant is unreachable.
+  **This is not new.** `git diff master..HEAD -- frontend/` for the AI-config branch is empty, and `getStartupRns` was not modified. Generation has presumably always written rows nothing displays.
+  **Why it matters:** every AI feature in the capstone demo — Objectives 1 and 4 both — produces output the user cannot see. It also silently inflates the DB: each generation adds rows that can never be reached or cleaned up from the UI.
+  **Same pattern, verify each:** `rna/+page.svelte:77`, `initiatives/+page.svelte:170,232,254,494,857`, `roadblocks/+page.svelte:657`, `progress-report/+page.svelte:220,259,299` all filter `isAiGenerated === false` too. Check whether *any* of them has a working review surface — if one does, copy it.
+  **DECIDED (2026-07-26): write generated rows with `isAiGenerated: false`** so they appear in the board and table alongside manual rows. Chosen over a dedicated AI-suggestions panel or a post-generation review dialog. **Do this after the AI-config branch is merged**, not before.
+  **Why this is now safe:** the usual objection is that flipping the flag destroys the ability to distinguish AI output from manual entry. That stopped being true with the provenance work — every AI-generated row carries a `generation_run_id` FK to `ai_generation_runs`, which records the operation, model and full pipeline config. Provenance no longer depends on `isAiGenerated`, so the flag becomes purely a display concern. Queries that need "AI rows only" should join on `generation_run_id IS NOT NULL` instead.
+  **What this trades away, knowingly:** the human-in-the-loop accept/discard step the SRS describes. Generated rows go live immediately, with no review gate. If a panel is wanted later, the pieces are still there — `addToRNS()` is the accept action, and the `card` snippet's `ai` variant already renders an add button.
+  **Scope when you do it:** set the flag at the four generation sites (`rns.service.ts` `generateTasks`, `rna.service.ts` `generateRNA`, `initiative.service.ts` `generateInitiatives`, `roadblock.service.ts` `generateRoadblocks`) — the frontend filters can then stay untouched. Confirm each module's rows actually surface afterwards; `progress-report/+page.svelte:299` additionally filters `status === 7`, so that view may still look empty for unrelated reasons.
+
+- [ ] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row**
+  `Rns.getTargetLevelScore()` (`backend/src/entities/rns.entity.ts:54-61`) resolves a level by filtering a **hardcoded id→level map** in `backend/src/utils.ts` that assumes `readiness_levels` was seeded as exactly 54 ordered rows: Technology 1-9, Market 10-18, Acceptance 19-27, Organizational 28-36, Regulatory 37-45, Investment 46-54.
+  The live table looks nothing like that — verified via `GET /readinesslevel/readiness-levels`: id 9 is *Regulatory* level 3, id 11 is *Technology* level 8, id 13 is *Acceptance* level 7, there are gaps (no id 6), and observed RNS rows reference ids 35, 54 and 71 — past the map's ceiling. Ids drift every time `main.ts` re-seeds on boot.
+  So the filter matches nothing and the method returns its `-1` sentinel for every row. Displayed raw as "Target Level: -1" (`lib/components/startups/rns/card.svelte:105`, `rns/+page.svelte:697`, `progress-report/+page.svelte:226,305`).
+  **Fix is a deletion, not a lookup table update:** `getStartupRns` already populates `targetLevel`, so `this.targetLevel.level` is the correct value sitting in memory. Return that and drop the `utils.ts` map. Grep for other `getReadinessLevels` callers first — the same stale assumption may be relied on elsewhere.
+
 - [ ] 🐞 **BUG · S · Approve-applicant is two non-transactional calls**
   `frontend/src/routes/(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback between them.
   **Why it matters:** if the second call fails, the startup is `QUALIFIED` with no mentor — it lands in a state no screen is designed to show, and the Manager gets no error.
@@ -186,6 +218,16 @@ Each of these was verified by reading **both** sides of the call.
   `frontend/src/routes/(auth)/logout/+page.server.ts:19-22`. The refresh interceptor in `frontend/src/lib/axios.ts:13-45` is fully commented out and no `/tokens/refresh/` endpoint exists.
   **Why it matters:** harmless on its own, but it implies a refresh flow that doesn't exist. Combined with the 5h cookie, users are silently logged out mid-session with no renewal path.
   **Fix:** delete the dead cookie clear, and decide whether refresh tokens are in scope (❓SCOPE if yes — that's M–L).
+
+- [ ] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't**
+  `backend/src/initiative/initiative.service.ts` `generateInitiatives()`: the bulk `dto.rnsIds` branch sets `initiative.requestedStatus = 1` for each created row (`:264`); the single `dto.rnsId` branch's identical creation loop (`:348-360`) never sets it, so `requestedStatus` is left `undefined` there.
+  **Why it matters:** the two entry points to the same generator produce initiatives in inconsistent states depending only on which DTO shape the caller used. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
+  **Fix:** set `initiative.requestedStatus = 1` in the single-`rnsId` branch too, or factor the shared creation loop out so the two branches can't drift again.
+
+- [ ] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly**
+  `backend/src/roadblock/roadblock.service.ts` `generateRoadblocks()`: declares `const roadblocks: Roadblock[] = []` (`:220`), persists each generated `Roadblock` via `em.persistAndFlush(roadblock)` inside the loop, but never pushes the created row onto `roadblocks` — then `return roadblocks;` (`:272`) always returns an empty array.
+  **Why it matters:** the roadblocks are correctly written to the database (side effect works), but any caller relying on the endpoint's response body (e.g. the frontend rendering the just-generated roadblocks) gets nothing back. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
+  **Fix:** `roadblocks.push(roadblock);` after persisting, inside the loop.
 
 ---
 
@@ -250,7 +292,7 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 
 - [ ] 🧹 **DEBT · S · Consolidate duplicate enums and tables**
   - `RnsStatus` (integer-backed, `backend/src/entities/enums/rns.enum.ts`) and `Status` (string-backed, `enums/status.enum.ts`) define the same seven states. `Status` also carries a Cebuano comment (`// basin pwede sa RNS…`) that should go before submission.
-  - `recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:135`) overlap heavily.
+  - `recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:176`) overlap heavily.
   **Fix:** pick one of each and migrate.
 
 - [ ] 🧹 **DEBT · S · Remove committed scratch files**
@@ -299,7 +341,8 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
   **Also do:** rename `DO_SPACES_*` → `S3_*` (or `STORAGE_*`) so the config isn't misleadingly vendor-specific, and update `backend/.env.example`.
 
 - [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
-  Every AI call uses one model: `gemini-2.5-flash-lite` (`ai.service.ts:58`, and `:379` for vision) — the smallest and weakest tier in the family.
+  **Partially addressed:** the model is no longer a hardcoded literal — `AiConfigService` (`backend/src/ai/ai-config.service.ts`) now resolves `model` and `temperature` from `GEMINI_MODEL` / `AI_TEMPERATURE` env vars (see `backend/.env.example`), and every call site in `ai.service.ts` reads `this.aiConfig.defaults.model` / `.temperature` instead of a literal, so switching models is now an env change, not a code change. `temperature` is also now applied consistently across call sites (defaulting to `0`), which resolves the "pin `temperature: 0` on all scoring calls" ask two paragraphs down.
+  **Still not done:** the *default* remains the same weak `gemini-2.5-flash-lite` tier for every call, and there is still only one model for every task — the per-task tiering recommendation below (Pro for scoring/bias, Flash for generation, a real embedding model for RAG) requires an actual env/config value change plus verifying vision quality, not just code.
   **Why it matters for *this* project specifically:** Objectives 1 and 4 are about hallucination and leniency bias, and the lite tier is the most susceptible to both — weakest instruction-following, weakest reasoning, most sycophantic. Objective 3 needs handwriting and sketch understanding, which is exactly where a lite vision model is weakest. A weak model doesn't just degrade UX here; it **biases your research results against your own hypothesis**.
   **Recommendation — tier by task rather than one model everywhere:**
   - Scoring, bias review, adversarial re-prompting (Obj. 1 + 4) → **Gemini 2.5 Pro**, low temperature, thinking enabled
@@ -307,7 +350,14 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
   - Handwriting / sketch vision (Obj. 3) → **Gemini 2.5 Flash or Pro**
   - RAG embeddings → **`gemini-embedding-001`** — currently missing entirely (see §0)
   Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast.
-  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:275`). That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`), and SRS §2.3 requires scoring to be *reproducible*.
+  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement. **Note this is a real behaviour change, not a no-op.** That one call site passed `temperature` at the *top level* of the request, where the SDK dropped it exactly as it dropped `maxOutputTokens` — so every Gemini call in this codebase previously ran at the API default temperature, never at `0`. Baseline-arm results gathered before this change are therefore not sampling-comparable with results gathered after it.
+
+- [ ] ❓ **SCOPE · M · Decide whether Gemini calls should have output caps at all, and pick values per call site**
+  **No call in `ai.service.ts` currently sends `maxOutputTokens`, and none ever effectively did.** Before the AI-config work, `callAiExpectJson` passed `maxOutputTokens: 1024` at the *top level* of the `@google/genai` request — but `GenerateContentParameters` only accepts `model`, `contents`, and `config`, so the SDK silently dropped it (an `as any` hid the type error). The other calls (`getCapsuleProposalInfo`, `getCapsuleProposalInfoFromImage`, `generateStartupAnalysisSummary`, and the four `refine*` methods) passed no cap at all. So every Gemini call in this codebase has always been uncapped.
+  **Why it is now explicitly absent:** moving sampling params into `config` (which was the point — it is what made `temperature` take effect) would have *newly enforced* those caps for the first time. That is a user-visible regression, not a no-op: `getCapsuleProposalInfo` extracts eight full prose fields from a whole document, and truncation at 1024 tokens makes `JSON.parse` throw at `startup/startup.service.ts:355`, whose catch at `:356` sets `parsedPayload = {}` — the founder gets a completely blank extraction review screen with only a `console.error` in the logs. The caps were therefore removed rather than moved, so default behaviour matches the base commit exactly.
+  **The open decision:** if the team *wants* caps (cost control, latency bounds, or forcing concise output), choose a value per call site from the actual prompt shape — the capsule extraction and image OCR paths need far more headroom than a three-sentence summary — and add a test per site that a realistic full-length response is not truncated. Do not reintroduce a single blanket number.
+  **Note if you do add caps:** Gemini 2.5 models bill and count *thinking* tokens against `maxOutputTokens`, so a cap sized to the visible JSON alone can truncate before the model emits any answer at all.
+  **Related under-count in the provenance data:** `ai_generation_runs.completion_tokens` sums only `candidatesTokenCount` (`accumulateTokenUsage`, `ai.service.ts:352`). `thoughtsTokenCount` is billed separately and is *not* included in that figure, so recorded output spend is a floor, not a total, on any thinking-enabled model. Fold it in before using these columns for a cost analysis.
 
 - [ ] ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
   The configured key starts with `AQ.Ab8RN6…`. Google AI Studio keys normally begin with `AIzaSy`. Confirm this is a valid AI Studio key (and not a Vertex/OAuth credential, which `@google/genai` would need different auth for) — a bad key here would make every AI feature fail at demo time.

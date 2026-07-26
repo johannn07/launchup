@@ -5,6 +5,7 @@ import { RnsStatus } from './enums/rns.enum';
 import { ReadinessType } from './enums/readiness-type.enum';
 import { ReadinessLevel } from './readiness-level.entity';
 import { getReadinessLevels } from '../utils';
+import { AiGenerationRun } from './ai-generation-run.entity';
 
 @Entity({ tableName: 'rns' })
 export class Rns {
@@ -46,6 +47,9 @@ export class Rns {
 
   @ManyToOne(() => User, { deleteRule: 'cascade' })
   assignee!: User;
+
+  @ManyToOne(() => AiGenerationRun, { nullable: true, deleteRule: 'set null' })
+  generationRun?: AiGenerationRun;
 
   getTargetLevelScore(): number {
     const levels = getReadinessLevels(this.readinessType);

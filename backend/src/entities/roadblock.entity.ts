@@ -2,6 +2,7 @@ import { Entity, PrimaryKey, Property, ManyToOne, Enum } from '@mikro-orm/core';
 import { User } from './user.entity';
 import { Startup } from './startup.entity';
 import { RnsStatus } from './enums/rns.enum';
+import { AiGenerationRun } from './ai-generation-run.entity';
 
 @Entity({ tableName: 'roadblocks' })
 export class Roadblock {
@@ -46,4 +47,7 @@ export class Roadblock {
 
   @Property()
   clickedByStartup: boolean = false;
+
+  @ManyToOne(() => AiGenerationRun, { nullable: true, deleteRule: 'set null' })
+  generationRun?: AiGenerationRun;
 }

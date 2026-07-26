@@ -3,11 +3,13 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
 import { InitiativeService } from './initiative.service';
 import {
@@ -15,10 +17,15 @@ import {
   GenerateInitiativeDto,
   UpdateInitiativeDto,
 } from './dto/initiative.dto';
+import { AiRunService } from '../ai/ai-run.service';
+import { Role } from '../entities/enums/role.enum';
 
 @Controller('initiatives')
 export class InitiativeController {
-  constructor(private initiativeService: InitiativeService) {}
+  constructor(
+    private initiativeService: InitiativeService,
+    private readonly aiRunService: AiRunService,
+  ) {}
 
   @Get()
   async getStartupInitiative(
@@ -46,8 +53,23 @@ export class InitiativeController {
   }
 
   @Post('generate-initiatives')
-  async generateInitiatives(@Body() dto: GenerateInitiativeDto) {
-    return await this.initiativeService.generateInitiatives(dto);
+  async generateInitiatives(
+    @Body() dto: GenerateInitiativeDto,
+    @Req() req: any,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
+  ) {
+    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    // GenerateInitiativeDto carries no startup id (only rnsId/rnsIds) — the
+    // startup is only known once InitiativeService loads the referenced Rns,
+    // so the run is opened startup-less and InitiativeService.generateInitiatives
+    // attributes it itself, same as the *_refine routes below.
+    return this.aiRunService.track(
+      null,
+      'initiatives',
+      pipelineConfig,
+      isPrivileged,
+      (ctx) => this.initiativeService.generateInitiatives(dto, ctx),
+    );
   }
 
   @Post(':id/refine')
@@ -58,11 +80,20 @@ export class InitiativeController {
       chatHistory: { role: 'User' | 'Ai'; content: string }[];
       latestPrompt: string;
     },
+    @Req() req: any,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    return await this.initiativeService.refineInitiative(
-      id,
-      dto.chatHistory,
-      dto.latestPrompt,
+    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    // No startup id is available here: the only route param is the
+    // initiative id. InitiativeService.refineInitiative sets ctx.run.startup
+    // itself once it has loaded the initiative's startup, rather than
+    // duplicating that lookup here.
+    return this.aiRunService.track(
+      null,
+      'initiatives_refine',
+      pipelineConfig,
+      isPrivileged,
+      (ctx) => this.initiativeService.refineInitiative(id, dto.chatHistory, dto.latestPrompt, ctx),
     );
   }
 

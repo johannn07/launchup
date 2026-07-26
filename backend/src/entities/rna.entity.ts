@@ -1,6 +1,7 @@
 import { Entity, PrimaryKey, Property, ManyToOne } from '@mikro-orm/core';
 import { ReadinessLevel } from './readiness-level.entity';
 import { Startup } from './startup.entity';
+import { AiGenerationRun } from './ai-generation-run.entity';
 
 @Entity({ tableName: 'rna' })
 export class StartupRNA {
@@ -29,4 +30,7 @@ export class StartupRNA {
 
   @Property({ fieldName: 'updated_at', onUpdate: () => new Date() })
   updatedAt?: Date = new Date();
+
+  @ManyToOne(() => AiGenerationRun, { nullable: true, deleteRule: 'set null' })
+  generationRun?: AiGenerationRun;
 }
