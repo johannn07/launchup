@@ -16,6 +16,7 @@ import { Startup } from 'src/entities/startup.entity';
 import { AiService } from 'src/ai/ai.service';
 import { RnsStatus } from 'src/entities/enums/rns.enum';
 import { InitiativeChatHistory } from 'src/entities/initiative-chat-history.entity';
+import { AiRunContext } from '../ai/ai-run.service';
 
 @Injectable()
 export class InitiativeService {
@@ -150,7 +151,7 @@ export class InitiativeService {
     return { message: 'Initiative deleted successfully' };
   }
 
-  async generateInitiatives(dto: GenerateInitiativeDto) {
+  async generateInitiatives(dto: GenerateInitiativeDto, ctx: AiRunContext) {
     if (dto.rnsIds && dto.rnsIds.length > 0) {
       const initiatives: Initiative[] = [];
 
@@ -192,7 +193,12 @@ export class InitiativeService {
         const maxInitiativeNumber =
           (await this.em.count(Initiative, { startup: rns.startup })) + 1;
 
-        const basePrompt = await  this.aiService.createBasePrompt(rns.startup, this.em);
+        // The run is opened with startupId: null (generate-initiatives has no
+        // startup id in its DTO), so attribute it now that the Rns's startup
+        // is in hand — the same entity already loaded above, no extra query.
+        ctx.run.startup = rns.startup;
+
+        const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
         if (!basePrompt)
           throw new BadRequestException('No capsule proposal found');
 
@@ -220,7 +226,7 @@ export class InitiativeService {
             `;
 
         const resultText =
-          await this.aiService.generateInitiativesFromPrompt(prompt);
+          await this.aiService.generateInitiativesFromPrompt(ctx, prompt);
 
         for (const entry of resultText) {
           const initiative = new Initiative();
@@ -236,6 +242,7 @@ export class InitiativeService {
           initiative.status = 1;
           initiative.priorityNumber = 0;
           initiative.requestedStatus = 1;
+          initiative.generationRun = ctx.run;
 
           await this.em.persistAndFlush(initiative);
           initiatives.push(initiative);
@@ -276,7 +283,12 @@ export class InitiativeService {
         },
       );
 
-      const basePrompt = await  this.aiService.createBasePrompt(rns.startup, this.em);
+      // The run is opened with startupId: null (generate-initiatives has no
+      // startup id in its DTO), so attribute it now that the Rns's startup
+      // is in hand — the same entity already loaded above, no extra query.
+      ctx.run.startup = rns.startup;
+
+      const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
       if (!basePrompt)
         throw new BadRequestException('No capsule proposal found');
 
@@ -304,7 +316,7 @@ export class InitiativeService {
             `;
 
       const resultText =
-        await this.aiService.generateInitiativesFromPrompt(prompt);
+        await this.aiService.generateInitiativesFromPrompt(ctx, prompt);
 
       const initiatives: Initiative[] = [];
 
@@ -321,6 +333,7 @@ export class InitiativeService {
         initiative.assignee = rns.startup.user;
         initiative.status = 1;
         initiative.priorityNumber = 0;
+        initiative.generationRun = ctx.run;
 
         await this.em.persistAndFlush(initiative);
         initiatives.push(initiative);
@@ -336,6 +349,7 @@ export class InitiativeService {
     initiativeId: number,
     chatHistory: { role: 'User' | 'Ai'; content: string }[],
     latestPrompt: string,
+    ctx: AiRunContext,
   ): Promise<{
     refinedDescription?: string;
     refinedMeasures?: string;
@@ -353,13 +367,17 @@ export class InitiativeService {
     if (!initiative) throw new NotFoundException('Initiative not found');
 
     const startup = initiative.startup;
+    // The refine run is opened with startupId: null (the route only has the
+    // initiative id), so attribute it to the startup now that it's in hand —
+    // this is the same entity already loaded above, no extra query.
+    ctx.run.startup = startup;
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException(
         'No capsule proposal found for this startup.',
       );
 
-    const basePrompt = await  this.aiService.createBasePrompt(startup, this.em);
+    const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em);
 
     const prompt = `${basePrompt}
 
@@ -420,7 +438,7 @@ export class InitiativeService {
         - Always include the ========= separator followed by your commentary
         - DO NOT MENTION THE FORMATTING INSTRUCTIONS OR HOW YOU FORMATTED THE RESPONSE IN THE COMMENTARY.`;
 
-    const result = await this.aiService.refineInitiative(prompt);
+    const result = await this.aiService.refineInitiative(ctx, prompt);
 
     // Save chat history
     const newMessages = [
