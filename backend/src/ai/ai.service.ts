@@ -632,6 +632,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
   }
 
   async createBasePrompt(
+    ctx: AiRunContext,
     startup: Startup,
     em: EntityManager,
   ): Promise<string | null> {
@@ -654,12 +655,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
     const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
     const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
-    const ragContexts = await this.getRelevantRagContexts(startup, em);
+    const ragContexts = ctx.config.rag
+      ? await this.getRelevantRagContexts(startup, em)
+      : [];
     const ragBlock = ragContexts.length
       ? `\nVerified context retrieved from similar startup records:\n${ragContexts
           .map((context) => `- [${context.sourceType}] ${context.title}: ${context.content}`)
           .join('\n')}`
-      : '\nVerified context retrieved from similar startup records: none found';
+      : ctx.config.rag ? '\nVerified context retrieved from similar startup records: none found' : '';
 
     return `
       Given these data:

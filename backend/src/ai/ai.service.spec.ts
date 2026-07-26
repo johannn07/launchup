@@ -148,4 +148,38 @@ describe('AiService', () => {
     expect(request).not.toHaveProperty('temperature');
     expect(request).not.toHaveProperty('maxOutputTokens');
   });
+
+  describe('createBasePrompt RAG gating', () => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: { title: 'AgroLink', description: 'd', problemStatement: 'p' },
+    } as any;
+
+    const emWithContexts = () =>
+      ({
+        find: jest.fn(async (entity: any) => {
+          if (entity?.name === 'RagContext') {
+            return [{ sourceType: 'profile', title: 'AgroLink', content: 'agro', confidence: 1 }];
+          }
+          return [];
+        }),
+      }) as any;
+
+    it('includes retrieved context when rag is enabled', async () => {
+      const prompt = await service.createBasePrompt(ctxWith({ rag: true }), startup, emWithContexts());
+      expect(prompt).toContain('Verified context retrieved');
+    });
+
+    it('omits retrieved context when rag is disabled', async () => {
+      const prompt = await service.createBasePrompt(ctxWith({ rag: false }), startup, emWithContexts());
+      expect(prompt).not.toContain('Verified context retrieved');
+    });
+
+    it('does not query for contexts at all when rag is disabled', async () => {
+      const spy = jest.spyOn(service, 'getRelevantRagContexts');
+      await service.createBasePrompt(ctxWith({ rag: false }), startup, emWithContexts());
+      expect(spy).not.toHaveBeenCalled();
+    });
+  });
 });
