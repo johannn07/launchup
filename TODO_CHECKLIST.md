@@ -209,7 +209,19 @@ Each of these was verified by reading **both** sides of the call.
   1. It erases the only UI provenance signal on an RNA — the dialog's "AI Generated: Yes/No" field (`view-edit-delete-ai-dialog.svelte:289`).
   2. It creates a **self-delete**: `addToRNA()` looks up `data.find(d => d.isAiGenerated === false && same readinessType)` (`rna/+page.svelte:75-80`) to delete the superseded manual row. With generated rows written `false`, that lookup matches **the row being accepted itself** — so it `DELETE`s the row and then `PATCH`es a now-deleted id. Reachable from the Startup role (`view-edit-delete-dialog.svelte:108`).
   `rna.service.ts` keeps `isAiGenerated = true`, with a comment recording why it deliberately differs from the other three generators. **RNS is the only module where the flip was needed** — its board and table filters are real, and its `addToRNS()` only PATCHes, with no self-matching lookup. `initiative`/`roadblock` already wrote `false`.
-  **Still open:** whether the initiative/roadblock/progress-report pages have real display filters was not re-checked in the browser — only RNS (confirmed real, via the DB+API path) and RNA (confirmed absent, in the browser).
+  ✅ **All display surfaces now verified in the browser** (2026-07-26, against a freshly reseeded DB):
+
+  | Page | Filter real? | Generated rows render? |
+  |---|---|---|
+  | RNS (board + table) | ✅ Yes | ✅ Yes, after the flip |
+  | RNA | ❌ **No filter at all** | ✅ Always did — see the correction above |
+  | Initiatives (`:857`) | ✅ Yes | ✅ Yes — 2/2 rendered |
+  | Roadblocks (`:657`) | ✅ Yes | ✅ Yes — 2/2 rendered |
+  | Progress report (`:220`, `:259`) | ✅ Yes | ✅ Yes — RNS, initiatives, roadblocks all rendered |
+
+  **The `status === 7` filter at `progress-report:299` is not a bug.** It drives the *"RNS — Long Term"* section; `7` is the long-term status. It renders empty only because no seeded RNS has that status, which is correct behaviour, not a hidden-rows problem.
+
+  ⚠️ **Progress report is unreachable without a nav change.** With Progress Report commented out of `access.ts:36-40`, `/startups/:id/progress-report` does not merely lack a nav link — the route **redirects away** to the RNA page. The §3 "re-enable Progress Report" item is therefore a *prerequisite* for using the page at all, not a cosmetic nav tidy. Verified by temporarily uncommenting those five lines (reverted afterwards — the scope decision is still open): the page then rendered completely and correctly.
 
 - [x] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
   `Rns.getTargetLevelScore()` now returns `this.targetLevel.level` directly; the stale hardcoded id→level map in `backend/src/utils.ts` (the only caller) has been deleted along with the file.
@@ -267,6 +279,7 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 - [ ] ❓ **SCOPE · S · Three finished features are hidden from navigation**
   Commented out in `frontend/src/lib/access.ts`: Progress Report (`:36-40`), Analytics (`:104-108`), Cohorts (`:109-113`). Progress Report is fully working — UI plus `GET /progress/:startupId/progress-report`.
   **Decision:** Progress Report looks like a *re-enable* (one line, and it works). Analytics/Cohorts fold into the first item in this section.
+  **Confirmed 2026-07-26:** commenting it out of `access.ts` doesn't just hide the nav link — `/startups/:id/progress-report` **redirects to the RNA page**, so the feature is entirely unreachable. Temporarily uncommenting `:36-40` was verified to make it render completely and correctly (all 6 RNAs, both RNS with correct target levels, both initiatives, both roadblocks) against live data. The re-enable really is a five-line uncomment with no other work required.
 
 - [ ] ❓ **SCOPE · M · "Rate applicant" was designed but never built**
   `frontend/src/lib/components/admin/PendingTab.svelte:105-107` — a commented-out call to `/startups/:id/rate-applicant/` with the note *"COMMENT FOR NOW, NEED TO IMPLEMENT BACKEND FIRST."* The `RatedTab` component and a `rated` tab in `/applications` both exist.

@@ -48,7 +48,39 @@ Also noted in passing: `backend/src/mikro-orm.config.ts:30` sets `ssl: { rejectU
 
 Still unchecked: `progress-report/+page.svelte:299`'s separate `status === 7` filter.
 
-**Next:** decide the legacy-row backfill question and the RNA verification, then continue the agreed sequence — R2 + presigned URLs → model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5).
+### Database reset + full reseed (same session)
+
+John confirmed the shared Neon data was throwaway test data from development, so it was wiped and rebuilt.
+
+- **Backed up first** — full JSON dump of all 42 tables / 352 rows to `Projects/Launchup/db-backups/` (outside the git repo), with `restore-neon.js` to replay it. The wipe is reversible.
+- Dropped all tables **preserving the `vector` (pgvector) extension** — `DROP SCHEMA public CASCADE` would have taken it with them.
+- Rebooted the backend so `updateSchema()` rebuilt the schema (41 tables; the 42nd was the MikroORM migrations table, which auto-sync doesn't recreate).
+- **New `backend/seed-demo-full.js`** — the boot seeder in `main.ts` creates the four demo accounts and two startups but **never creates capsule proposals**, and seeds only ~13 readiness levels. That is exactly why generation paths couldn't run earlier. The new seeder adds the full 6×9 readiness grid (54 rows), capsule proposals for both startups, sets them QUALIFIED, and seeds RNAs for one of them.
+- The two startups are deliberately asymmetric so every path is testable at once: **AgroLink PH (id=1)** has a proposal but no RNAs → exercises RNA generation; **MediSync Cebu (id=2)** has a proposal + 6 RNAs → exercises RNS / initiative / roadblock generation.
+- Note `nest build` emits to `dist/src/`, not `dist/` (because `seed-dummy.ts` sits at the backend root). The pre-existing `seed-admin.js` and `seed-demo-runner.js` hardcode `./dist/` and are **broken** under the current layout; the new seeder resolves either.
+
+Smoke-tested end to end on the fresh data: RNS generation (2 rows), initiative generation via the single-`rnsId` branch (2 rows, `requestedStatus: 1`), roadblock generation (returned 2, not `[]`). Both of the day's fixes hold on clean data.
+
+### All display surfaces verified
+
+| Page | Filter real? | Generated rows render? |
+|---|---|---|
+| RNS | ✅ | ✅ |
+| RNA | ❌ no filter at all | ✅ (always did) |
+| Initiatives | ✅ | ✅ 2/2 |
+| Roadblocks | ✅ | ✅ 2/2 |
+| Progress report | ✅ | ✅ all sections |
+
+Two findings:
+
+1. **`progress-report:299`'s `status === 7` filter is not a bug** — it drives the "RNS — Long Term" section, and 7 *is* the long-term status. Empty is correct when no RNS has it.
+2. **Progress report is unreachable, not just unlinked.** With it commented out of `access.ts:36-40`, the route redirects to the RNA page. Temporarily uncommenting made it render perfectly (all 6 RNAs, both RNS at target level 7, both initiatives, both roadblocks) — reverted afterwards, the §3 decision is still John's. The re-enable is genuinely a five-line uncomment.
+
+Also visible in the UI: RNS target levels render as **7**, not `-1` — the entity fix confirmed end to end through the browser.
+
+**Provider decision:** staying on Gemini for now. Claude Pro ≠ API access (separate billing), the Claude API has no free tier, and Anthropic ships no embedding model — so a switch would mean running two providers once RAG lands, on top of breaking baseline-vs-enhanced comparability.
+
+**Next:** R2 + presigned URLs → model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 
 ---
 
