@@ -348,6 +348,11 @@ export class AiService {
    * call's — `callAiExpectJson` retries, and batch generation loops, so a run
    * routinely makes more than one call. Usage metadata is optional on the
    * SDK response, so an absent block simply contributes nothing.
+   *
+   * Known under-count: completionTokens sums `candidatesTokenCount` only.
+   * Gemini 2.5 bills thinking tokens separately as `thoughtsTokenCount`, which
+   * is NOT included in that figure, so recorded output spend is a floor rather
+   * than a total on any thinking-enabled model. See TODO_CHECKLIST.md section 5.
    */
   private accumulateTokenUsage(
     ctx: AiRunContext,
