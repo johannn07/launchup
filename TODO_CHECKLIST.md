@@ -186,6 +186,21 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** the RNA panel on the Elevate tab never populates.
   **Fix:** change to `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
 
+- [ ] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them**
+  Confirmed live: generation succeeds, `ai_generation_runs` records a `completed` row, and `GET /rns/?startupId=10` returns six well-formed rows — yet the page renders nothing.
+  The RNS page has exactly two display surfaces and **both exclude AI output**: the kanban columns (`frontend/src/routes/(app)/startups/[id]/rns/+page.svelte:384-392`) and the table (`:690`) each filter `isAiGenerated === false`. Generated rows are written with `isAiGenerated: true`, so neither can ever show them.
+  The *acceptance* half exists — `addToRNS()` (`:187-228`) PATCHes a row to `isAiGenerated: false`, which is what makes it appear, and the `card` snippet (`:490`) already takes an `ai` flag and an `addToRns` handler that `RnsCard` renders as an add button. **What's missing is the pending-AI review list that would invoke it.** The snippet is only ever passed to `KanbanBoardNew` (`:670`), whose columns are themselves `isAiGenerated === false`, so the `ai = true` variant is unreachable.
+  **This is not new.** `git diff master..HEAD -- frontend/` for the AI-config branch is empty, and `getStartupRns` was not modified. Generation has presumably always written rows nothing displays.
+  **Why it matters:** every AI feature in the capstone demo — Objectives 1 and 4 both — produces output the user cannot see. It also silently inflates the DB: each generation adds rows that can never be reached or cleaned up from the UI.
+  **Same pattern, verify each:** `rna/+page.svelte:77`, `initiatives/+page.svelte:170,232,254,494,857`, `roadblocks/+page.svelte:657`, `progress-report/+page.svelte:220,259,299` all filter `isAiGenerated === false` too. Check whether *any* of them has a working review surface — if one does, copy it.
+  **Decision needed:** a dedicated "AI suggestions" panel/tab listing `isAiGenerated === true` rows with accept/discard, or show the generation response in a review dialog immediately after the call returns. Either way `addToRNS` is the accept action and already works.
+
+- [ ] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row**
+  `Rns.getTargetLevelScore()` (`backend/src/entities/rns.entity.ts:54-61`) resolves a level by filtering a **hardcoded id→level map** in `backend/src/utils.ts` that assumes `readiness_levels` was seeded as exactly 54 ordered rows: Technology 1-9, Market 10-18, Acceptance 19-27, Organizational 28-36, Regulatory 37-45, Investment 46-54.
+  The live table looks nothing like that — verified via `GET /readinesslevel/readiness-levels`: id 9 is *Regulatory* level 3, id 11 is *Technology* level 8, id 13 is *Acceptance* level 7, there are gaps (no id 6), and observed RNS rows reference ids 35, 54 and 71 — past the map's ceiling. Ids drift every time `main.ts` re-seeds on boot.
+  So the filter matches nothing and the method returns its `-1` sentinel for every row. Displayed raw as "Target Level: -1" (`lib/components/startups/rns/card.svelte:105`, `rns/+page.svelte:697`, `progress-report/+page.svelte:226,305`).
+  **Fix is a deletion, not a lookup table update:** `getStartupRns` already populates `targetLevel`, so `this.targetLevel.level` is the correct value sitting in memory. Return that and drop the `utils.ts` map. Grep for other `getReadinessLevels` callers first — the same stale assumption may be relied on elsewhere.
+
 - [ ] 🐞 **BUG · S · Approve-applicant is two non-transactional calls**
   `frontend/src/routes/(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback between them.
   **Why it matters:** if the second call fails, the startup is `QUALIFIED` with no mentor — it lands in a state no screen is designed to show, and the Manager gets no error.
