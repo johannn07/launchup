@@ -305,6 +305,12 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 - [ ] 🧹 **DEBT · S · Delete `ReadinessCard.svelte`**
   `frontend/src/lib/components/dashboard/ReadinessCard.svelte` — orphaned (verified). Note `ReadinessDashboard.svelte`, which it wraps, *is* used in three places, so delete only the card.
 
+- [ ] 🐞 **BUG · S · The boot seeder gives startups to staff accounts and assigns no mentor**
+  `backend/src/main.ts` `seedDemoStartups()` sets `user: managerUser` for AgroLink PH (`:176`) and `user: mentorUser` for MediSync Cebu (`:226`) — so a **Manager owns one startup and a Mentor owns the other**, while `demo@launchup.local` (the only `Startup`-role account) owns nothing. Neither startup gets a `startups_mentors` row, so the seeded state shows a Manager running the whole coaching flow with no mentor involved — a workflow the SRS doesn't describe, and misleading in a demo or screenshot.
+  **Why it matters beyond cosmetics:** any ownership/IDOR work in §1 will be tested against data where the roles are already conflated, so a broken ownership check can look correct.
+  **Fix:** seed dedicated `Startup`-role founders as owners, and populate `startups_mentors` explicitly. `backend/seed-demo-full.js` already corrects this after the fact (creates `founder.agrolink@` / `founder.medisync@`, transfers ownership + membership, assigns `mentor@launchup.local` to both) — but `main.ts` still produces the wrong shape on every fresh boot.
+  *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached.*
+
 - [ ] 🧹 **DEBT · S · Drop three unused entities and their tables**
   Never referenced by any service or controller (verified across the whole backend):
   - `MentorAssignment` (`backend/src/entities/mentor-assignment.entity.ts`) — mentor assignment actually writes to the `startups`↔`users` pivot (`backend/src/startup/startup.service.ts:942-963). Misleading, because the entity looks like the source of truth and even has an `assignedBy` audit field the real path lacks.

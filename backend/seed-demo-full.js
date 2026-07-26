@@ -15,6 +15,14 @@
  * testable at once:
  *   AgroLink PH   — proposal, no RNAs  -> exercises RNA generation
  *   MediSync Cebu — proposal + 6 RNAs  -> exercises RNS / initiative / roadblock generation
+ *
+ * Role separation matters here. main.ts's boot seeder makes managerUser own
+ * AgroLink and mentorUser own MediSync, which misrepresents the workflow: a
+ * founder owns the startup, a Manager runs admissions, and a Mentor is attached
+ * through startups_mentors. This script corrects that — dedicated Startup-role
+ * founders own the startups, and mentorUser is assigned as mentor to both
+ * (never to one they own). Only the four real roles are used; the frontend-only
+ * `Manager as Mentor` pseudo-role is deliberately not exercised.
  */
 const { MikroORM } = require('@mikro-orm/core');
 
@@ -29,6 +37,14 @@ const req = (p) => require(`${DIST}/${p}`);
 
 const ormConfigModule = req('mikro-orm.config');
 const ormConfig = ormConfigModule.default || ormConfigModule;
+
+// Founder accounts. main.ts only seeds demo/admin/manager/mentor, and the one
+// Startup-role account it does create (demo@) owns nothing — so startups end up
+// owned by staff accounts. These give each startup a real founder.
+const FOUNDERS = {
+  'AgroLink PH': { email: 'founder.agrolink@launchup.local', firstName: 'Rafael', lastName: 'Domingo' },
+  'MediSync Cebu': { email: 'founder.medisync@launchup.local', firstName: 'Elena', lastName: 'Reyes' },
+};
 
 const PROPOSALS = {
   'AgroLink PH': {
@@ -140,6 +156,7 @@ async function run() {
   const { StartupRNA } = req('entities/rna.entity');
   const { QualificationStatus } = req('entities/enums/qualification-status.enum');
   const { ReadinessType } = req('entities/enums/readiness-type.enum');
+  const { Role } = req('entities/enums/role.enum');
 
   const cfg = Object.assign({}, ormConfig, {
     entities: [User, Startup, CapsuleProposal, ReadinessLevel, StartupReadinessLevel, StartupRNA],
@@ -172,7 +189,51 @@ async function run() {
   await em.flush();
   console.log(`readiness levels: +${createdLevels} (grid now 6 types x 9 levels)`);
 
-  // 2. Capsule proposals + QUALIFIED status.
+  // 2. Role separation — founders own startups, a mentor is assigned to each.
+  const argon = require('argon2');
+  const password = await argon.hash('password123');
+  const mentorUser = await em.findOne(User, { email: 'mentor@launchup.local' });
+
+  for (const [startupName, f] of Object.entries(FOUNDERS)) {
+    let founder = await em.findOne(User, { email: f.email });
+    if (!founder) {
+      founder = em.create(User, {
+        email: f.email,
+        hash: password,
+        firstName: f.firstName,
+        lastName: f.lastName,
+        role: Role.Startup,
+      });
+      em.persist(founder);
+      await em.flush();
+      console.log(`  founder created: ${f.email}`);
+    }
+
+    const startup = await em.findOne(Startup, { name: startupName }, { populate: ['members', 'mentors'] });
+    if (!startup) continue;
+
+    // Owner must be the founder, not the Manager/Mentor main.ts assigned.
+    if (startup.user.id !== founder.id) {
+      startup.user = founder;
+      console.log(`  ${startupName}: owner -> ${f.email}`);
+    }
+
+    // Members: the founder, not staff accounts.
+    for (const m of startup.members.getItems()) {
+      if (m.id !== founder.id) startup.members.remove(m);
+    }
+    if (!startup.members.contains(founder)) startup.members.add(founder);
+
+    // Mentor assignment is what `appoint-mentors` would do. Setting
+    // QUALIFIED without it is the shortcut that leaves a startup mentorless.
+    if (mentorUser && !startup.mentors.contains(mentorUser)) {
+      startup.mentors.add(mentorUser);
+      console.log(`  ${startupName}: mentor -> mentor@launchup.local`);
+    }
+  }
+  await em.flush();
+
+  // 3. Capsule proposals + QUALIFIED status.
   for (const [name, proposal] of Object.entries(PROPOSALS)) {
     const startup = await em.findOne(Startup, { name }, { populate: ['capsuleProposal'] });
     if (!startup) {
@@ -195,7 +256,7 @@ async function run() {
   }
   await em.flush();
 
-  // 3. RNAs for MediSync only — AgroLink is deliberately left without any so
+  // 4. RNAs for MediSync only — AgroLink is deliberately left without any so
   //    RNA generation itself stays testable (it only generates for readiness
   //    types that have no RNA yet).
   const medi = await em.findOne(Startup, { name: 'MediSync Cebu' });
@@ -224,15 +285,20 @@ async function run() {
     console.log(`  MediSync Cebu: +${createdRnas} RNAs`);
   }
 
-  const summary = await em.find(Startup, {}, { populate: ['capsuleProposal'] });
+  const summary = await em.find(Startup, {}, { populate: ['capsuleProposal', 'user', 'mentors'] });
   console.log('\n=== startups ===');
   for (const s of summary) {
     const rnaCount = await em.count(StartupRNA, { startup: s });
-    console.log(
-      `  id=${s.id} ${s.name} | proposal=${s.capsuleProposal ? 'yes' : 'no'} | status=${s.qualificationStatus} | RNAs=${rnaCount}`,
-    );
+    const mentors = s.mentors.getItems().map((m) => m.email).join(', ') || 'NONE';
+    console.log(`  id=${s.id} ${s.name}`);
+    console.log(`     owner:    ${s.user.email} (${s.user.role})`);
+    console.log(`     mentor:   ${mentors}`);
+    console.log(`     proposal: ${s.capsuleProposal ? 'yes' : 'no'} | status: ${s.qualificationStatus} | RNAs: ${rnaCount}`);
   }
-  console.log('\naccounts: demo@ / admin@ / manager@ / mentor@launchup.local  (password123)');
+  console.log('\n=== accounts (all password123) ===');
+  for (const u of await em.find(User, {}, { orderBy: { id: 'ASC' } })) {
+    console.log(`  ${u.role.padEnd(8)} ${u.email}`);
+  }
 
   await orm.close(true);
 }
