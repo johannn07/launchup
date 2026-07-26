@@ -186,23 +186,46 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** the RNA panel on the Elevate tab never populates.
   **Fix:** change to `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
 
-- [ ] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them**
+- [x] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them** — **FIXED** (`fix/rns-generation-bugs`, see DONE note below)
   Confirmed live: generation succeeds, `ai_generation_runs` records a `completed` row, and `GET /rns/?startupId=10` returns six well-formed rows — yet the page renders nothing.
   The RNS page has exactly two display surfaces and **both exclude AI output**: the kanban columns (`frontend/src/routes/(app)/startups/[id]/rns/+page.svelte:384-392`) and the table (`:690`) each filter `isAiGenerated === false`. Generated rows are written with `isAiGenerated: true`, so neither can ever show them.
   The *acceptance* half exists — `addToRNS()` (`:187-228`) PATCHes a row to `isAiGenerated: false`, which is what makes it appear, and the `card` snippet (`:490`) already takes an `ai` flag and an `addToRns` handler that `RnsCard` renders as an add button. **What's missing is the pending-AI review list that would invoke it.** The snippet is only ever passed to `KanbanBoardNew` (`:670`), whose columns are themselves `isAiGenerated === false`, so the `ai = true` variant is unreachable.
   **This is not new.** `git diff master..HEAD -- frontend/` for the AI-config branch is empty, and `getStartupRns` was not modified. Generation has presumably always written rows nothing displays.
   **Why it matters:** every AI feature in the capstone demo — Objectives 1 and 4 both — produces output the user cannot see. It also silently inflates the DB: each generation adds rows that can never be reached or cleaned up from the UI.
   **Same pattern, verify each:** `rna/+page.svelte:77`, `initiatives/+page.svelte:170,232,254,494,857`, `roadblocks/+page.svelte:657`, `progress-report/+page.svelte:220,259,299` all filter `isAiGenerated === false` too. Check whether *any* of them has a working review surface — if one does, copy it.
-  **DECIDED (2026-07-26): write generated rows with `isAiGenerated: false`** so they appear in the board and table alongside manual rows. Chosen over a dedicated AI-suggestions panel or a post-generation review dialog. **Do this after the AI-config branch is merged**, not before.
+  **DECIDED (2026-07-26): write generated rows with `isAiGenerated: false`** so they appear in the board and table alongside manual rows. Chosen over a dedicated AI-suggestions panel or a post-generation review dialog.
   **Why this is now safe:** the usual objection is that flipping the flag destroys the ability to distinguish AI output from manual entry. That stopped being true with the provenance work — every AI-generated row carries a `generation_run_id` FK to `ai_generation_runs`, which records the operation, model and full pipeline config. Provenance no longer depends on `isAiGenerated`, so the flag becomes purely a display concern. Queries that need "AI rows only" should join on `generation_run_id IS NOT NULL` instead.
   **What this trades away, knowingly:** the human-in-the-loop accept/discard step the SRS describes. Generated rows go live immediately, with no review gate. If a panel is wanted later, the pieces are still there — `addToRNS()` is the accept action, and the `card` snippet's `ai` variant already renders an add button.
-  **Scope when you do it:** set the flag at the four generation sites (`rns.service.ts` `generateTasks`, `rna.service.ts` `generateRNA`, `initiative.service.ts` `generateInitiatives`, `roadblock.service.ts` `generateRoadblocks`) — the frontend filters can then stay untouched. Confirm each module's rows actually surface afterwards; `progress-report/+page.svelte:299` additionally filters `status === 7`, so that view may still look empty for unrelated reasons.
+  **DONE (`fix/rns-generation-bugs`):** `rns.service.ts` `generateTasks` now sets `isAiGenerated = false` — **this is the only code change the fix required.** `initiative.service.ts` and `roadblock.service.ts` already wrote `false` at their creation sites; `rna.service.ts` deliberately still writes `true` (see the correction below). Not yet re-verified: `progress-report/+page.svelte:299` additionally filters `status === 7`, so that view may still look empty for unrelated reasons — check separately.
+  **Live-verified (2026-07-26, Neon + live Gemini):** RNS generation persisted row id 30 with `isAiGenerated = false` **and** `generation_run_id = 5`, so it passes the frontend filter while remaining provably AI. Roadblock and initiative generation likewise persisted `false` with a `generation_run_id`. The RNA path is **not** live-verified — see the caveat below.
 
-- [ ] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row**
-  `Rns.getTargetLevelScore()` (`backend/src/entities/rns.entity.ts:54-61`) resolves a level by filtering a **hardcoded id→level map** in `backend/src/utils.ts` that assumes `readiness_levels` was seeded as exactly 54 ordered rows: Technology 1-9, Market 10-18, Acceptance 19-27, Organizational 28-36, Regulatory 37-45, Investment 46-54.
-  The live table looks nothing like that — verified via `GET /readinesslevel/readiness-levels`: id 9 is *Regulatory* level 3, id 11 is *Technology* level 8, id 13 is *Acceptance* level 7, there are gaps (no id 6), and observed RNS rows reference ids 35, 54 and 71 — past the map's ceiling. Ids drift every time `main.ts` re-seeds on boot.
-  So the filter matches nothing and the method returns its `-1` sentinel for every row. Displayed raw as "Target Level: -1" (`lib/components/startups/rns/card.svelte:105`, `rns/+page.svelte:697`, `progress-report/+page.svelte:226,305`).
-  **Fix is a deletion, not a lookup table update:** `getStartupRns` already populates `targetLevel`, so `this.targetLevel.level` is the correct value sitting in memory. Return that and drop the `utils.ts` map. Grep for other `getReadinessLevels` callers first — the same stale assumption may be relied on elsewhere.
+  ⚠️ **Two findings from live verification that qualify this decision:**
+  1. **The fix is not retroactive, and the backlog stays invisible.** 22 `rns` rows and 24 `rna` rows already in the DB have `is_ai_generated = true` with `generation_run_id IS NULL` (they predate the provenance work). They still fail the frontend's `isAiGenerated === false` filter, so **flipping the flag surfaces only newly generated rows** — the existing backlog remains permanently unreachable from the UI. If those rows matter, they need a one-off backfill (`UPDATE … SET is_ai_generated = false`); if they don't, they should be deleted.
+  2. **`generation_run_id IS NOT NULL` is *not* a complete "AI rows only" predicate.** This section previously recommended it as the replacement for `isAiGenerated`. It misses all 46 legacy AI rows above, which have the flag but no run FK. The two populations are disjoint: legacy AI rows have `is_ai_generated = true, generation_run_id IS NULL`; new AI rows have `is_ai_generated = false, generation_run_id IS NOT NULL`. Until the legacy rows are backfilled or purged, a correct "all AI rows" query needs **both**: `WHERE generation_run_id IS NOT NULL OR is_ai_generated = true`.
+
+  ❗ **CORRECTION — the RNA module was never affected by this bug, and the flip there was reverted.**
+  Verified in a real browser (logged in as Manager, `/startups/10/rna`): **the RNA page renders every row unfiltered** — `{#each $rnaQueries[1].data as rna}` at `rna/+page.svelte:255`, no `isAiGenerated` predicate. Legacy rows with `isAiGenerated: true` display perfectly well. The `rna/+page.svelte:77` hit listed above under "same pattern, verify each" is **inside `addToRNA()`**, the accept-action dedup lookup — not a display filter. That line was matched by grep and wrongly assumed to be the same bug.
+  Flipping RNA to `false` was therefore not merely unnecessary, it was **actively harmful**, for two reasons:
+  1. It erases the only UI provenance signal on an RNA — the dialog's "AI Generated: Yes/No" field (`view-edit-delete-ai-dialog.svelte:289`).
+  2. It creates a **self-delete**: `addToRNA()` looks up `data.find(d => d.isAiGenerated === false && same readinessType)` (`rna/+page.svelte:75-80`) to delete the superseded manual row. With generated rows written `false`, that lookup matches **the row being accepted itself** — so it `DELETE`s the row and then `PATCH`es a now-deleted id. Reachable from the Startup role (`view-edit-delete-dialog.svelte:108`).
+  `rna.service.ts` keeps `isAiGenerated = true`, with a comment recording why it deliberately differs from the other three generators. **RNS is the only module where the flip was needed** — its board and table filters are real, and its `addToRNS()` only PATCHes, with no self-matching lookup. `initiative`/`roadblock` already wrote `false`.
+  ✅ **All display surfaces now verified in the browser** (2026-07-26, against a freshly reseeded DB):
+
+  | Page | Filter real? | Generated rows render? |
+  |---|---|---|
+  | RNS (board + table) | ✅ Yes | ✅ Yes, after the flip |
+  | RNA | ❌ **No filter at all** | ✅ Always did — see the correction above |
+  | Initiatives (`:857`) | ✅ Yes | ✅ Yes — 2/2 rendered |
+  | Roadblocks (`:657`) | ✅ Yes | ✅ Yes — 2/2 rendered |
+  | Progress report (`:220`, `:259`) | ✅ Yes | ✅ Yes — RNS, initiatives, roadblocks all rendered |
+
+  **The `status === 7` filter at `progress-report:299` is not a bug.** It drives the *"RNS — Long Term"* section; `7` is the long-term status. It renders empty only because no seeded RNS has that status, which is correct behaviour, not a hidden-rows problem.
+
+  ⚠️ **Progress report is unreachable without a nav change.** With Progress Report commented out of `access.ts:36-40`, `/startups/:id/progress-report` does not merely lack a nav link — the route **redirects away** to the RNA page. The §3 "re-enable Progress Report" item is therefore a *prerequisite* for using the page at all, not a cosmetic nav tidy. Verified by temporarily uncommenting those five lines (reverted afterwards — the scope decision is still open): the page then rendered completely and correctly.
+
+- [x] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
+  `Rns.getTargetLevelScore()` now returns `this.targetLevel.level` directly; the stale hardcoded id→level map in `backend/src/utils.ts` (the only caller) has been deleted along with the file.
+  **Live-verified (2026-07-26):** `GET /rns?startupId=10` — all 6 previously-broken rows now return real levels, 0 rows return `-1`. The live data confirms the diagnosis exactly: id 9 = *Regulatory* level 3 (old map claimed Technology 9), id 11 = *Technology* level 8 (map claimed Market 2), id 23 = *Technology* level 3 (map claimed Acceptance 5), and id 71 is past the map's 54-entry ceiling entirely.
 
 - [ ] 🐞 **BUG · S · Approve-applicant is two non-transactional calls**
   `frontend/src/routes/(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback between them.
@@ -219,15 +242,13 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** harmless on its own, but it implies a refresh flow that doesn't exist. Combined with the 5h cookie, users are silently logged out mid-session with no renewal path.
   **Fix:** delete the dead cookie clear, and decide whether refresh tokens are in scope (❓SCOPE if yes — that's M–L).
 
-- [ ] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't**
-  `backend/src/initiative/initiative.service.ts` `generateInitiatives()`: the bulk `dto.rnsIds` branch sets `initiative.requestedStatus = 1` for each created row (`:264`); the single `dto.rnsId` branch's identical creation loop (`:348-360`) never sets it, so `requestedStatus` is left `undefined` there.
-  **Why it matters:** the two entry points to the same generator produce initiatives in inconsistent states depending only on which DTO shape the caller used. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
-  **Fix:** set `initiative.requestedStatus = 1` in the single-`rnsId` branch too, or factor the shared creation loop out so the two branches can't drift again.
+- [x] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
+  `initiative.service.ts` `generateInitiatives()` single-`rnsId` branch now also sets `initiative.requestedStatus = 1`, matching the bulk branch.
+  **Live-verified:** `POST /initiatives/generate-initiatives {"rnsId":30}` (the single-id branch specifically) created initiative id 14 with `requestedStatus: 1`, confirmed persisted via `GET /initiatives?startupId=10`.
 
-- [ ] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly**
-  `backend/src/roadblock/roadblock.service.ts` `generateRoadblocks()`: declares `const roadblocks: Roadblock[] = []` (`:220`), persists each generated `Roadblock` via `em.persistAndFlush(roadblock)` inside the loop, but never pushes the created row onto `roadblocks` — then `return roadblocks;` (`:272`) always returns an empty array.
-  **Why it matters:** the roadblocks are correctly written to the database (side effect works), but any caller relying on the endpoint's response body (e.g. the frontend rendering the just-generated roadblocks) gets nothing back. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
-  **Fix:** `roadblocks.push(roadblock);` after persisting, inside the loop.
+- [x] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
+  Added `roadblocks.push(roadblock);` after `persistAndFlush` inside the loop in `roadblock.service.ts`.
+  **Live-verified:** `POST /roadblocks/generate-roadblocks {"no_of_roadblocks_to_create":2}` returned a 2-element array (previously always `[]`), both rows persisted.
 
 ---
 
@@ -258,6 +279,7 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 - [ ] ❓ **SCOPE · S · Three finished features are hidden from navigation**
   Commented out in `frontend/src/lib/access.ts`: Progress Report (`:36-40`), Analytics (`:104-108`), Cohorts (`:109-113`). Progress Report is fully working — UI plus `GET /progress/:startupId/progress-report`.
   **Decision:** Progress Report looks like a *re-enable* (one line, and it works). Analytics/Cohorts fold into the first item in this section.
+  **Confirmed 2026-07-26:** commenting it out of `access.ts` doesn't just hide the nav link — `/startups/:id/progress-report` **redirects to the RNA page**, so the feature is entirely unreachable. Temporarily uncommenting `:36-40` was verified to make it render completely and correctly (all 6 RNAs, both RNS with correct target levels, both initiatives, both roadblocks) against live data. The re-enable really is a five-line uncomment with no other work required.
 
 - [ ] ❓ **SCOPE · M · "Rate applicant" was designed but never built**
   `frontend/src/lib/components/admin/PendingTab.svelte:105-107` — a commented-out call to `/startups/:id/rate-applicant/` with the note *"COMMENT FOR NOW, NEED TO IMPLEMENT BACKEND FIRST."* The `RatedTab` component and a `rated` tab in `/applications` both exist.
@@ -282,6 +304,19 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 
 - [ ] 🧹 **DEBT · S · Delete `ReadinessCard.svelte`**
   `frontend/src/lib/components/dashboard/ReadinessCard.svelte` — orphaned (verified). Note `ReadinessDashboard.svelte`, which it wraps, *is* used in three places, so delete only the card.
+
+- [x] 🐞 **BUG · S · The boot seeder gives startups to staff accounts and assigns no mentor** — *fixed*
+  `backend/src/main.ts` `seedDemoStartups()` set `user: managerUser` for AgroLink PH and `user: mentorUser` for MediSync Cebu — so a **Manager owned one startup and a Mentor owned the other**, while `demo@launchup.local` (the only `Startup`-role account) owned nothing. Neither startup got a `startups_mentors` row, so the seeded state showed a Manager running the whole coaching flow with no mentor involved — a workflow the SRS doesn't describe, and misleading in a demo or screenshot.
+  **Why it mattered beyond cosmetics:** any ownership/IDOR work in §1 would have been tested against data where the roles were already conflated, so a broken ownership check could look correct.
+  **Fix applied:** `seedLocalDemoData()` now also creates `founder.agrolink@launchup.local` (Rafael Domingo) and `founder.medisync@launchup.local` (Elena Reyes) as `Role.Startup`, and the two near-identical startup blocks were folded into a single `seedDemoStartup(em, spec)` helper that sets the founder as `user`, adds them to `members`, and adds `mentor@launchup.local` to `mentors`. Same accounts and emails `seed-demo-full.js` uses, so the two seeders now agree and the standalone script is a no-op on a fresh boot.
+  **Deliberately creation-only.** The `if (existing)` guard is kept, so the boot seeder never rewrites a startup it already created — auto-mutating ownership on every `pnpm dev` would be surprising, and other developers' Neon branches may hold intentional edits. Branches seeded by the old code keep the wrong shape until `node seed-demo-full.js` is run against them; the log line points at that.
+  **Verified** on a genuinely cold DB (throwaway `launchup_seedtest` on the same Neon instance, created with pgvector, booted, asserted, dropped): both startups took the create branch, owners are the two `Startup`-role founders, both have `mentor@launchup.local` in `startups_mentors`, and all three assertions — non-`Startup` owners, self-mentoring, mentorless startups — returned 0.
+  *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached — that shortcut is what left the startups mentorless in the first place.*
+
+- [ ] 🧹 **DEBT · S · The SQLite fallback in `mikro-orm.config.ts` does not work**
+  `backend/src/mikro-orm.config.ts:8` falls back to an in-memory SQLite DB when `DB_HOST` is unset, and `CLAUDE.md` describes it as "useful for quick local runs without Docker". It isn't — booting with `DB_HOST=` fails at connect with `Error: Could not locate the bindings file`, because `better-sqlite3`'s native bindings were never compiled for this install. **Verified** 2026-07-27.
+  Note also that `dotenv` never overrides a key already present in `process.env`, so `.env`'s `DB_HOST` always wins unless the variable is exported as an *empty string* — PowerShell's `$env:DB_HOST=''` deletes the variable rather than emptying it, so the fallback cannot be reached from PowerShell at all.
+  **Fix:** either make it work (`pnpm rebuild better-sqlite3`, and confirm the pgvector-typed entities can even be created under SQLite) or delete the branch and the `@mikro-orm/sqlite` dependency and correct `CLAUDE.md`. Deleting is probably right — the entity set now assumes Postgres.
 
 - [ ] 🧹 **DEBT · S · Drop three unused entities and their tables**
   Never referenced by any service or controller (verified across the whole backend):

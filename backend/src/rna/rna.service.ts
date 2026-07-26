@@ -230,7 +230,13 @@ export class RnaService {
       if (matchingReadinessLevel && generatedRNA.rna?.trim()) {
         const newRNA = new StartupRNA();
         newRNA.rna = generatedRNA.rna.trim();
-        newRNA.isAiGenerated = true; // Mark as AI generated
+        // Stays `true`, unlike the RNS/initiative/roadblock generators. The RNA
+        // page renders every row unfiltered (rna/+page.svelte:255), so the flag
+        // is not what hides AI output there — it only drives the "AI Generated"
+        // label in the dialog. Writing `false` would also make addToRNA's
+        // same-readiness-type lookup (rna/+page.svelte:75-80) match the row
+        // against itself, deleting it and then PATCHing a deleted id.
+        newRNA.isAiGenerated = true;
         newRNA.startup = startup;
         newRNA.readinessLevel = matchingReadinessLevel.readinessLevel;
         newRNA.generationRun = ctx.run;

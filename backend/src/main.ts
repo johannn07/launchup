@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { MikroORM } from '@mikro-orm/core';
+import { EntityManager, MikroORM } from '@mikro-orm/core';
 import { hash } from 'argon2';
 import { User } from './entities/user.entity';
 import { Startup } from './entities/startup.entity';
@@ -11,65 +11,82 @@ import { StartupReadinessLevel } from './entities/startup-readiness-level.entity
 import { QualificationStatus } from './entities/enums/qualification-status.enum';
 import { Role } from './entities/enums/role.enum';
 import { ReadinessType } from './entities/enums/readiness-type.enum';
-import { CapsuleProposal } from './entities/capsule-proposal.entity';
+
+async function ensureUser(
+  em: EntityManager,
+  passwordHash: string,
+  email: string,
+  firstName: string,
+  lastName: string,
+  role: Role,
+): Promise<User> {
+  let user = await em.findOne(User, { email });
+  if (!user) {
+    user = em.create(User, {
+      email,
+      hash: passwordHash,
+      firstName,
+      lastName,
+      role,
+    });
+    em.persist(user);
+  }
+  return user;
+}
 
 async function seedLocalDemoData(orm: MikroORM) {
   const em = orm.em.fork();
 
   const demoPasswordHash = await hash('password123');
+  const ensure = (
+    email: string,
+    firstName: string,
+    lastName: string,
+    role: Role,
+  ) => ensureUser(em, demoPasswordHash, email, firstName, lastName, role);
 
-  let demoUser = await em.findOne(User, { email: 'demo@launchup.local' });
-  if (!demoUser) {
-    demoUser = em.create(User, {
-      email: 'demo@launchup.local',
-      hash: demoPasswordHash,
-      firstName: 'Demo',
-      lastName: 'Founder',
-      role: Role.Startup,
-    });
-    em.persist(demoUser);
-  }
+  await ensure('demo@launchup.local', 'Demo', 'Founder', Role.Startup);
+  await ensure('admin@launchup.local', 'Demo', 'Admin', Role.Admin);
+  await ensure('manager@launchup.local', 'Demo', 'Manager', Role.Manager);
+  const mentorUser = await ensure(
+    'mentor@launchup.local',
+    'Demo',
+    'Mentor',
+    Role.Mentor,
+  );
 
-  let adminUser = await em.findOne(User, { email: 'admin@launchup.local' });
-  if (!adminUser) {
-    adminUser = em.create(User, {
-      email: 'admin@launchup.local',
-      hash: demoPasswordHash,
-      firstName: 'Demo',
-      lastName: 'Admin',
-      role: Role.Admin,
-    });
-    em.persist(adminUser);
-  }
-
-  let managerUser = await em.findOne(User, { email: 'manager@launchup.local' });
-  if (!managerUser) {
-    managerUser = em.create(User, {
-      email: 'manager@launchup.local',
-      hash: demoPasswordHash,
-      firstName: 'Demo',
-      lastName: 'Manager',
-      role: Role.Manager,
-    });
-    em.persist(managerUser);
-  }
-
-  let mentorUser = await em.findOne(User, { email: 'mentor@launchup.local' });
-  if (!mentorUser) {
-    mentorUser = em.create(User, {
-      email: 'mentor@launchup.local',
-      hash: demoPasswordHash,
-      firstName: 'Demo',
-      lastName: 'Mentor',
-      role: Role.Mentor,
-    });
-    em.persist(mentorUser);
-  }
+  // A startup is owned by its founder — a Startup-role account. Staff accounts
+  // (manager/mentor) must never be the `user` owner, and a mentor must never be
+  // assigned to a startup they own. Each demo startup gets its own founder.
+  const agroFounder = await ensure(
+    'founder.agrolink@launchup.local',
+    'Rafael',
+    'Domingo',
+    Role.Startup,
+  );
+  const mediFounder = await ensure(
+    'founder.medisync@launchup.local',
+    'Elena',
+    'Reyes',
+    Role.Startup,
+  );
 
   const readinessSeeds = [
-    { level: 3, name: 'Team traction baseline', readinessType: ReadinessType.A },
-    { level: 4, name: 'Market validation baseline', readinessType: ReadinessType.M },
-    { level: 2, name: 'Product maturity baseline', readinessType: ReadinessType.T },
+    {
+      level: 3,
+      name: 'Team traction baseline',
+      readinessType: ReadinessType.A,
+    },
+    {
+      level: 4,
+      name: 'Market validation baseline',
+      readinessType: ReadinessType.M,
+    },
+    {
+      level: 2,
+      name: 'Product maturity baseline',
+      readinessType: ReadinessType.T,
+    },
     { level: 3, name: 'Execution baseline', readinessType: ReadinessType.O },
     { level: 1, name: 'Funding baseline', readinessType: ReadinessType.I },
   ];
@@ -148,10 +165,14 @@ async function seedLocalDemoData(orm: MikroORM) {
   */
   // The original startup initialization remains unmodified
   // After ensuring baseline readiness levels and users, seed the demo startups
-  await seedDemoStartups(orm, demoUser, adminUser, managerUser, mentorUser);
+  await seedDemoStartups(orm, mentorUser, agroFounder, mediFounder);
 }
 
-async function ensureReadinessLevelExists(em, readinessType, level) {
+async function ensureReadinessLevelExists(
+  em: EntityManager,
+  readinessType: ReadinessType,
+  level: number,
+) {
   let rl = await em.findOne(ReadinessLevel, { readinessType, level });
   if (!rl) {
     rl = em.create(ReadinessLevel, {
@@ -165,106 +186,104 @@ async function ensureReadinessLevelExists(em, readinessType, level) {
   return rl;
 }
 
-async function seedDemoStartups(orm: MikroORM, demoUser: User, adminUser: User, managerUser: User, mentorUser: User) {
+async function seedDemoStartup(
+  em: EntityManager,
+  spec: {
+    name: string;
+    founder: User;
+    mentor: User;
+    links: Record<string, unknown>;
+    levels: [ReadinessType, number][];
+  },
+) {
+  const existing = await em.findOne(Startup, { name: spec.name });
+  if (existing) {
+    // Guarded, so an already-seeded startup is never rewritten. If an older
+    // boot left one owned by a staff account, run `node seed-demo-full.js` to
+    // repair it — this seeder deliberately does not mutate existing rows.
+    console.log(`${spec.name} already exists id=`, existing.id);
+    return;
+  }
+
+  const startup = em.create(Startup, {
+    name: spec.name,
+    user: spec.founder,
+    qualificationStatus: QualificationStatus.PENDING,
+    dataPrivacy: true,
+    eligibility: true,
+    links: JSON.stringify(spec.links),
+  });
+  em.persist(startup);
+  await em.flush();
+
+  startup.members.add(spec.founder);
+  // What `appoint-mentors` does after a Manager approves the applicant. Seeding
+  // the startup without it leaves it mentorless, which reads as the Manager
+  // doing the mentor's work.
+  startup.mentors.add(spec.mentor);
+  await em.flush();
+
+  for (const [type, level] of spec.levels) {
+    const readinessLevel = await ensureReadinessLevelExists(em, type, level);
+    const existingLink = await em.findOne(StartupReadinessLevel, {
+      startup: { id: startup.id },
+      readinessLevel: { id: readinessLevel.id },
+    });
+    if (!existingLink) {
+      em.persist(
+        em.create(StartupReadinessLevel, {
+          startup,
+          readinessLevel,
+          remark: `Seeded baseline for ${spec.name}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }),
+      );
+    }
+  }
+  await em.flush();
+  console.log(`Seeded startup ${spec.name} id=`, startup.id);
+}
+
+async function seedDemoStartups(
+  orm: MikroORM,
+  mentorUser: User,
+  agroFounder: User,
+  mediFounder: User,
+) {
   const em = orm.em.fork();
 
   // AgroLink PH (early stage)
-  let agro = await em.findOne(Startup, { name: 'AgroLink PH' });
-  if (!agro) {
-    agro = em.create(Startup, {
-      name: 'AgroLink PH',
-      user: managerUser,
-      qualificationStatus: QualificationStatus.PENDING,
-      dataPrivacy: true,
-      eligibility: true,
-      links: JSON.stringify({ team: '2 founders', revenue: 0, sector: 'agritech' }),
-    });
-    em.persist(agro);
-    await em.flush();
-    agro.members.add(managerUser);
-    await em.flush();
-
-    const agroLevels = [
+  await seedDemoStartup(em, {
+    name: 'AgroLink PH',
+    founder: agroFounder,
+    mentor: mentorUser,
+    links: { team: '2 founders', revenue: 0, sector: 'agritech' },
+    levels: [
       [ReadinessType.T, 2],
       [ReadinessType.M, 2],
       [ReadinessType.A, 1],
       [ReadinessType.O, 2],
       [ReadinessType.R, 1],
       [ReadinessType.I, 1],
-    ];
-
-    for (const [type, level] of agroLevels) {
-      const readinessLevel = await ensureReadinessLevelExists(em, type, level);
-      const existingLink = await em.findOne(StartupReadinessLevel, {
-        startup: { id: agro.id },
-        readinessLevel: { id: readinessLevel.id },
-      });
-      if (!existingLink) {
-        em.persist(
-          em.create(StartupReadinessLevel, {
-            startup: agro,
-            readinessLevel,
-            remark: 'Seeded baseline for AgroLink PH',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }),
-        );
-      }
-    }
-    await em.flush();
-    console.log('Seeded startup AgroLink PH id=', agro.id);
-  } else {
-    console.log('AgroLink PH already exists id=', agro.id);
-  }
+    ],
+  });
 
   // MediSync Cebu (mid stage)
-  let medi = await em.findOne(Startup, { name: 'MediSync Cebu' });
-  if (!medi) {
-    medi = em.create(Startup, {
-      name: 'MediSync Cebu',
-      user: mentorUser,
-      qualificationStatus: QualificationStatus.PENDING,
-      dataPrivacy: true,
-      eligibility: true,
-      links: JSON.stringify({ team: '3 founders', revenue: 5000, sector: 'healthtech' }),
-    });
-    em.persist(medi);
-    await em.flush();
-    medi.members.add(mentorUser);
-    await em.flush();
-
-    const mediLevels = [
+  await seedDemoStartup(em, {
+    name: 'MediSync Cebu',
+    founder: mediFounder,
+    mentor: mentorUser,
+    links: { team: '3 founders', revenue: 5000, sector: 'healthtech' },
+    levels: [
       [ReadinessType.T, 5],
       [ReadinessType.M, 4],
       [ReadinessType.A, 3],
       [ReadinessType.O, 4],
       [ReadinessType.R, 3],
       [ReadinessType.I, 3],
-    ];
-
-    for (const [type, level] of mediLevels) {
-      const readinessLevel = await ensureReadinessLevelExists(em, type, level);
-      const existingLink = await em.findOne(StartupReadinessLevel, {
-        startup: { id: medi.id },
-        readinessLevel: { id: readinessLevel.id },
-      });
-      if (!existingLink) {
-        em.persist(
-          em.create(StartupReadinessLevel, {
-            startup: medi,
-            readinessLevel,
-            remark: 'Seeded baseline for MediSync Cebu',
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }),
-        );
-      }
-    }
-    await em.flush();
-    console.log('Seeded startup MediSync Cebu id=', medi.id);
-  } else {
-    console.log('MediSync Cebu already exists id=', medi.id);
-  }
+    ],
+  });
 }
 
 async function bootstrap() {

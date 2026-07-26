@@ -358,7 +358,7 @@ Requirement note:
       newRns.requestedStatus = 1;
       newRns.status = 1;
       newRns.assignee = startup.user;
-      newRns.isAiGenerated = true;
+      newRns.isAiGenerated = false;
       newRns.generationRun = ctx.run;
 
         this.em.persist(newRns);

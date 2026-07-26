@@ -4,7 +4,6 @@ import { User } from './user.entity';
 import { RnsStatus } from './enums/rns.enum';
 import { ReadinessType } from './enums/readiness-type.enum';
 import { ReadinessLevel } from './readiness-level.entity';
-import { getReadinessLevels } from '../utils';
 import { AiGenerationRun } from './ai-generation-run.entity';
 
 @Entity({ tableName: 'rns' })
@@ -52,12 +51,6 @@ export class Rns {
   generationRun?: AiGenerationRun;
 
   getTargetLevelScore(): number {
-    const levels = getReadinessLevels(this.readinessType);
-
-    const matchingLevels = levels.filter(
-      (level: any) => Number(level.id) === Number(this.targetLevel.id),
-    );
-
-    return matchingLevels.length > 0 ? Number(matchingLevels[0].level) : -1;
+    return this.targetLevel.level;
   }
 }
