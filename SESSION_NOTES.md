@@ -57,7 +57,7 @@ John confirmed the shared Neon data was throwaway test data from development, so
 - Rebooted the backend so `updateSchema()` rebuilt the schema (41 tables; the 42nd was the MikroORM migrations table, which auto-sync doesn't recreate).
 - **New `backend/seed-demo-full.js`** — the boot seeder in `main.ts` creates the four demo accounts and two startups but **never creates capsule proposals**, and seeds only ~13 readiness levels. That is exactly why generation paths couldn't run earlier. The new seeder adds the full 6×9 readiness grid (54 rows), capsule proposals for both startups, sets them QUALIFIED, and seeds RNAs for one of them.
 - The two startups are deliberately asymmetric so every path is testable at once: **AgroLink PH (id=1)** has a proposal but no RNAs → exercises RNA generation; **MediSync Cebu (id=2)** has a proposal + 6 RNAs → exercises RNS / initiative / roadblock generation.
-- **Role separation corrected** (John's callout). `main.ts`'s boot seeder makes `managerUser` own AgroLink and `mentorUser` own MediSync — staff accounts owning startups, with no mentor attached to either. Setting `QUALIFIED` directly compounded it by skipping the `approve-applicant` → `appoint-mentors` step where the mentor is actually assigned. The seeder now creates dedicated **Startup**-role founders (`founder.agrolink@`, `founder.medisync@`), transfers ownership and membership to them, and assigns `mentor@launchup.local` to both via `startups_mentors`. Verified: 0 startups owned by a non-Startup role, 0 startups mentored by their own owner. The frontend-only `Manager as Mentor` pseudo-role is deliberately not used anywhere in testing.
+- **Role separation corrected** (John's callout). `main.ts`'s boot seeder made `managerUser` own AgroLink and `mentorUser` own MediSync — staff accounts owning startups, with no mentor attached to either. Setting `QUALIFIED` directly compounded it by skipping the `approve-applicant` → `appoint-mentors` step where the mentor is actually assigned. `seed-demo-full.js` now creates dedicated **Startup**-role founders (`founder.agrolink@`, `founder.medisync@`), transfers ownership and membership to them, and assigns `mentor@launchup.local` to both via `startups_mentors`. Verified: 0 startups owned by a non-Startup role, 0 startups mentored by their own owner. The frontend-only `Manager as Mentor` pseudo-role is deliberately not used anywhere in testing.
 - Note `nest build` emits to `dist/src/`, not `dist/` (because `seed-dummy.ts` sits at the backend root). The pre-existing `seed-admin.js` and `seed-demo-runner.js` hardcode `./dist/` and are **broken** under the current layout; the new seeder resolves either.
 
 Smoke-tested end to end on the fresh data: RNS generation (2 rows), initiative generation via the single-`rnsId` branch (2 rows, `requestedStatus: 1`), roadblock generation (returned 2, not `[]`). Both of the day's fixes hold on clean data.
@@ -80,6 +80,20 @@ Two findings:
 Also visible in the UI: RNS target levels render as **7**, not `-1` — the entity fix confirmed end to end through the browser.
 
 **Provider decision:** staying on Gemini for now. Claude Pro ≠ API access (separate billing), the Claude API has no free tier, and Anthropic ships no embedding model — so a switch would mean running two providers once RAG lands, on top of breaking baseline-vs-enhanced comparability.
+
+### Boot seeder fixed at the source
+
+The `seed-demo-full.js` fix above only repaired the DB *after* boot — a fresh `pnpm dev` on an empty database still produced staff-owned, mentorless startups. `main.ts` is now fixed too:
+
+- `seedLocalDemoData()` seeds the two `Startup`-role founders itself, using the **same emails and names** as `seed-demo-full.js` so the two seeders agree and the standalone script is a no-op on a fresh boot.
+- The two near-identical startup blocks collapsed into one `seedDemoStartup(em, spec)` helper that sets the founder as `user`, adds them to `members`, and adds `mentor@launchup.local` to `mentors` — the `appoint-mentors` step the old seeder skipped.
+- Repeated user lookups collapsed into an `ensureUser()` helper; `ensureReadinessLevelExists` picked up real types (it was implicitly `any`).
+
+**Creation-only by design.** The `if (existing)` guard stays, so the boot seeder never rewrites a startup it already created — auto-mutating ownership on every `pnpm dev` would surprise people, and other developers' branches may hold intentional edits. Branches seeded before 2026-07-27 keep the wrong shape until `node seed-demo-full.js` is run against them; that script now documents itself as the migration path.
+
+**Verified on a genuinely cold database.** Created a throwaway `launchup_seedtest` DB on the same Neon instance (with pgvector), booted the real backend against it via `DB_NAME`, asserted, then dropped it — the shared branch was never touched. Both startups took the create branch; owners are the two founders (`Startup` role), both have `mentor@launchup.local` in `startups_mentors`, and all three assertions returned 0 (non-`Startup` owners / self-mentoring / mentorless).
+
+Side finding: **the SQLite fallback at `mikro-orm.config.ts:8` does not work** — `better-sqlite3`'s native bindings were never compiled, so booting with an empty `DB_HOST` dies at connect. `CLAUDE.md` describes it as a usable no-Docker path; it isn't. Logged in §2. (Also: `dotenv` never overrides an existing `process.env` key, and PowerShell's `$env:X=''` *deletes* rather than empties a variable — so `.env`'s `DB_HOST` always wins from PowerShell regardless.)
 
 **Next:** R2 + presigned URLs → model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 

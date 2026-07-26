@@ -16,13 +16,17 @@
  *   AgroLink PH   — proposal, no RNAs  -> exercises RNA generation
  *   MediSync Cebu — proposal + 6 RNAs  -> exercises RNS / initiative / roadblock generation
  *
- * Role separation matters here. main.ts's boot seeder makes managerUser own
- * AgroLink and mentorUser own MediSync, which misrepresents the workflow: a
- * founder owns the startup, a Manager runs admissions, and a Mentor is attached
- * through startups_mentors. This script corrects that — dedicated Startup-role
- * founders own the startups, and mentorUser is assigned as mentor to both
- * (never to one they own). Only the four real roles are used; the frontend-only
- * `Manager as Mentor` pseudo-role is deliberately not exercised.
+ * Role separation matters here: a founder owns the startup, a Manager runs
+ * admissions, and a Mentor is attached through startups_mentors. main.ts now
+ * seeds that shape itself, so step 2 below is a no-op on a fresh boot — it
+ * stays because it also *repairs* databases seeded by the older main.ts, which
+ * gave AgroLink to managerUser and MediSync to mentorUser and assigned no
+ * mentor at all. main.ts's own seeder is guarded on `if (existing)` and will
+ * never rewrite those rows, so this script is the migration path for any Neon
+ * branch created before 2026-07-27.
+ *
+ * Only the four real roles are used; the frontend-only `Manager as Mentor`
+ * pseudo-role is deliberately not exercised.
  */
 const { MikroORM } = require('@mikro-orm/core');
 
@@ -38,9 +42,8 @@ const req = (p) => require(`${DIST}/${p}`);
 const ormConfigModule = req('mikro-orm.config');
 const ormConfig = ormConfigModule.default || ormConfigModule;
 
-// Founder accounts. main.ts only seeds demo/admin/manager/mentor, and the one
-// Startup-role account it does create (demo@) owns nothing — so startups end up
-// owned by staff accounts. These give each startup a real founder.
+// Founder accounts. Emails and names must match the ones main.ts seeds, or the
+// two seeders would fight over ownership and create duplicate founders.
 const FOUNDERS = {
   'AgroLink PH': { email: 'founder.agrolink@launchup.local', firstName: 'Rafael', lastName: 'Domingo' },
   'MediSync Cebu': { email: 'founder.medisync@launchup.local', firstName: 'Elena', lastName: 'Reyes' },
@@ -190,6 +193,7 @@ async function run() {
   console.log(`readiness levels: +${createdLevels} (grid now 6 types x 9 levels)`);
 
   // 2. Role separation — founders own startups, a mentor is assigned to each.
+  //    A no-op on a DB seeded by the current main.ts; repairs older ones.
   const argon = require('argon2');
   const password = await argon.hash('password123');
   const mentorUser = await em.findOne(User, { email: 'mentor@launchup.local' });
@@ -212,7 +216,7 @@ async function run() {
     const startup = await em.findOne(Startup, { name: startupName }, { populate: ['members', 'mentors'] });
     if (!startup) continue;
 
-    // Owner must be the founder, not the Manager/Mentor main.ts assigned.
+    // Owner must be the founder, not the Manager/Mentor the old main.ts assigned.
     if (startup.user.id !== founder.id) {
       startup.user = founder;
       console.log(`  ${startupName}: owner -> ${f.email}`);
