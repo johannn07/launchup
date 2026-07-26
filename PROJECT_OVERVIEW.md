@@ -50,7 +50,7 @@ Every one of those four artifacts can be **AI-generated** (`isAiGenerated` flag)
 | Backend | NestJS 11 + TypeScript | `backend/src/` |
 | ORM | MikroORM 6 (PostgreSQL driver; SQLite fallback) | `backend/src/mikro-orm.config.ts` |
 | Auth | Passport JWT + argon2 hashing | `backend/src/auth/` |
-| AI | Google Gemini (`gemini-2.5-flash-lite`) | `backend/src/ai/ai.service.ts:58` |
+| AI | Google Gemini, model/temperature/pipeline flags env-configured via `AiConfigService` (default model `gemini-2.5-flash-lite`) | `backend/src/ai/ai-config.service.ts`, `backend/src/ai/ai.service.ts:58` |
 | OCR | Tesseract.js (+ `eng.traineddata`) | `backend/src/ocr/` |
 | File storage | AWS S3 SDK → DigitalOcean Spaces | `backend/src/upload/` |
 | Frontend | SvelteKit 2 / Svelte 5 (runes) | `frontend/src/` |
@@ -585,21 +585,26 @@ startup_waitlist_messages
 
 ```
 rna (rna)                              rna.entity.ts
-  readiness_level_id, startup_id, is_ai_generated, rna(text), timestamps
+  readiness_level_id, startup_id, is_ai_generated, rna(text), timestamps,
+  generationRun?→ai_generation_runs
 
 rns (rns)                              rns.entity.ts
   priorityNumber, description, targetLevel→readiness_levels, readinessType,
   status[RnsStatus], requestedStatus[RnsStatus], approvalStatus, isAiGenerated,
-  clickedByMentor, clickedByStartup, startup, assignee→users
+  clickedByMentor, clickedByStartup, startup, assignee→users,
+  generationRun?→ai_generation_runs
 
 initiatives                            initiative.entity.ts
   priorityNumber, initiativeNumber, rns→rns, description, measures, targets,
-  remarks, status/requestedStatus/approvalStatus, clicked flags, assignee, startup
+  remarks, status/requestedStatus/approvalStatus, clicked flags, assignee, startup,
+  generationRun?→ai_generation_runs
 
 roadblocks                             roadblock.entity.ts
   riskNumber, description, fix, status/requestedStatus/approvalStatus,
-  clicked flags, assignee, startup
+  clicked flags, assignee, startup, generationRun?→ai_generation_runs
 ```
+
+`generationRun` (nullable FK, `ON DELETE SET NULL`) on rna/rns/initiatives/roadblocks/ai_recommendations/ai_bias_audits attributes each generated row back to the `ai_generation_runs` row that produced it — see §6.7.
 
 The **triple-status pattern** (`status` + `requestedStatus` + `approvalStatus`) on rns/initiatives/roadblocks is the mechanical basis of the founder-requests / mentor-approves workflow in §3.2.
 
@@ -620,10 +625,19 @@ Each stores the conversation *and* the refined field values the model proposed, 
 ### 6.7 AI governance and RAG
 
 ```
+ai_generation_runs   startup?, operation[rna|rna_refine|rns|rns_refine|
+                     initiatives|initiatives_refine|roadblocks|roadblocks_refine],
+                     model, config(json), status[running|completed|failed],
+                     latencyMs?, promptTokens?, completionTokens?, error?
+                       ↑ one row per AI generation call (AiRunService.track());
+                         records the resolved AiPipelineConfig so every
+                         generated artifact is attributable to the exact arm
+                         of a baseline-vs-enhanced comparison
 ai_recommendations   dimensionKey, recommendationKind, content,
-                     validationStatus, confidenceStatus, notes?
+                     validationStatus, confidenceStatus, notes?, generationRun?
 ai_bias_audits       dimensionKey, rawScore, correctedScore, deviation,
-                     threshold, biasFlagged, biasStatus, justification?
+                     threshold, biasFlagged, biasStatus, justification?,
+                     generationRun?
                        ↑ surfaced at /admin/ai/bias-audits
 recommendations      dimension, type, text, status[PENDING|APPLIED|DISMISSED],
                      inconsistency_reason?, mentor_decision?
@@ -656,7 +670,7 @@ consultation_requests   startup, mentor, status[pending|accepted|completed],
 
 ### 6.9 Schema management
 
-`backend/src/main.ts:292` calls `orm.getSchemaGenerator().updateSchema()` on **every boot**, then seeds demo data. There are also **93 migration files** in `backend/src/migrations/`. In practice the auto-sync is what shapes your dev database; the migrations are effectively inert unless you run the MikroORM CLI explicitly.
+`backend/src/main.ts:292` calls `orm.getSchemaGenerator().updateSchema()` on **every boot**, then seeds demo data. There are also **94 migration files** in `backend/src/migrations/` (including `Migration20260726120000_AiGenerationRuns`, hand-written rather than CLI-generated to avoid diffing against the shared Neon instance — see its file header). In practice the auto-sync is what shapes your dev database; the migrations are effectively inert unless you run the MikroORM CLI explicitly.
 
 **Seeded demo accounts** (all password `password123`, `backend/src/main.ts:16-152`):
 `demo@launchup.local` (Startup) · `admin@launchup.local` (Admin) · `manager@launchup.local` (Manager) · `mentor@launchup.local` (Mentor), plus two demo startups (AgroLink PH, MediSync Cebu).

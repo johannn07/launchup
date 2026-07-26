@@ -187,6 +187,16 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** harmless on its own, but it implies a refresh flow that doesn't exist. Combined with the 5h cookie, users are silently logged out mid-session with no renewal path.
   **Fix:** delete the dead cookie clear, and decide whether refresh tokens are in scope (❓SCOPE if yes — that's M–L).
 
+- [ ] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't**
+  `backend/src/initiative/initiative.service.ts` `generateInitiatives()`: the bulk `dto.rnsIds` branch sets `initiative.requestedStatus = 1` for each created row (`:264`); the single `dto.rnsId` branch's identical creation loop (`:348-360`) never sets it, so `requestedStatus` is left `undefined` there.
+  **Why it matters:** the two entry points to the same generator produce initiatives in inconsistent states depending only on which DTO shape the caller used. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
+  **Fix:** set `initiative.requestedStatus = 1` in the single-`rnsId` branch too, or factor the shared creation loop out so the two branches can't drift again.
+
+- [ ] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly**
+  `backend/src/roadblock/roadblock.service.ts` `generateRoadblocks()`: declares `const roadblocks: Roadblock[] = []` (`:220`), persists each generated `Roadblock` via `em.persistAndFlush(roadblock)` inside the loop, but never pushes the created row onto `roadblocks` — then `return roadblocks;` (`:272`) always returns an empty array.
+  **Why it matters:** the roadblocks are correctly written to the database (side effect works), but any caller relying on the endpoint's response body (e.g. the frontend rendering the just-generated roadblocks) gets nothing back. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
+  **Fix:** `roadblocks.push(roadblock);` after persisting, inside the loop.
+
 ---
 
 ## 3. Incomplete features — need a scope decision
@@ -299,7 +309,8 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
   **Also do:** rename `DO_SPACES_*` → `S3_*` (or `STORAGE_*`) so the config isn't misleadingly vendor-specific, and update `backend/.env.example`.
 
 - [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
-  Every AI call uses one model: `gemini-2.5-flash-lite` (`ai.service.ts:58`, and `:379` for vision) — the smallest and weakest tier in the family.
+  **Partially addressed:** the model is no longer a hardcoded literal — `AiConfigService` (`backend/src/ai/ai-config.service.ts`) now resolves `model` and `temperature` from `GEMINI_MODEL` / `AI_TEMPERATURE` env vars (see `backend/.env.example`), and every call site in `ai.service.ts` reads `this.aiConfig.defaults.model` / `.temperature` instead of a literal, so switching models is now an env change, not a code change. `temperature` is also now applied consistently across call sites (defaulting to `0`), which resolves the "pin `temperature: 0` on all scoring calls" ask two paragraphs down.
+  **Still not done:** the *default* remains the same weak `gemini-2.5-flash-lite` tier for every call, and there is still only one model for every task — the per-task tiering recommendation below (Pro for scoring/bias, Flash for generation, a real embedding model for RAG) requires an actual env/config value change plus verifying vision quality, not just code.
   **Why it matters for *this* project specifically:** Objectives 1 and 4 are about hallucination and leniency bias, and the lite tier is the most susceptible to both — weakest instruction-following, weakest reasoning, most sycophantic. Objective 3 needs handwriting and sketch understanding, which is exactly where a lite vision model is weakest. A weak model doesn't just degrade UX here; it **biases your research results against your own hypothesis**.
   **Recommendation — tier by task rather than one model everywhere:**
   - Scoring, bias review, adversarial re-prompting (Obj. 1 + 4) → **Gemini 2.5 Pro**, low temperature, thinking enabled
@@ -307,7 +318,7 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
   - Handwriting / sketch vision (Obj. 3) → **Gemini 2.5 Flash or Pro**
   - RAG embeddings → **`gemini-embedding-001`** — currently missing entirely (see §0)
   Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast.
-  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:275`). That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`), and SRS §2.3 requires scoring to be *reproducible*.
+  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:275`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement.
 
 - [ ] ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
   The configured key starts with `AQ.Ab8RN6…`. Google AI Studio keys normally begin with `AIzaSy`. Confirm this is a valid AI Studio key (and not a Vertex/OAuth credential, which `@google/genai` would need different auth for) — a bad key here would make every AI feature fail at demo time.
