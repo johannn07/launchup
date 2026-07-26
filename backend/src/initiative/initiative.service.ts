@@ -363,6 +363,7 @@ export class InitiativeService {
         initiative.assignee = rns.startup.user;
         initiative.status = 1;
         initiative.priorityNumber = 0;
+        initiative.requestedStatus = 1;
         initiative.generationRun = ctx.run;
 
         await this.em.persistAndFlush(initiative);

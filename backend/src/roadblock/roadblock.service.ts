@@ -245,6 +245,7 @@ export class RoadblockService {
       roadblock.generationRun = ctx.run;
 
       await this.em.persistAndFlush(roadblock);
+      roadblocks.push(roadblock);
 
       await this.aiService.recordAiRecommendation({
         startupId: startup.id,

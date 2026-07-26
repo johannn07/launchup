@@ -230,7 +230,7 @@ export class RnaService {
       if (matchingReadinessLevel && generatedRNA.rna?.trim()) {
         const newRNA = new StartupRNA();
         newRNA.rna = generatedRNA.rna.trim();
-        newRNA.isAiGenerated = true; // Mark as AI generated
+        newRNA.isAiGenerated = false;
         newRNA.startup = startup;
         newRNA.readinessLevel = matchingReadinessLevel.readinessLevel;
         newRNA.generationRun = ctx.run;
