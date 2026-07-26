@@ -134,4 +134,18 @@ describe('AiService', () => {
     expect(request).not.toHaveProperty('temperature');
     expect(request).not.toHaveProperty('maxOutputTokens');
   });
+
+  it('sends the configured model and sampling params inside config for image OCR calls', async () => {
+    generateContent.mockResolvedValue({ text: '{"title":"Example"}' });
+
+    await service.getCapsuleProposalInfoFromImage(Buffer.from('fake-image'), 'image/png');
+
+    const request = generateContent.mock.calls[0][0];
+    expect(request.model).toBe('gemini-2.5-flash-lite');
+    expect(request.config).toEqual(
+      expect.objectContaining({ temperature: 0, maxOutputTokens: expect.any(Number) }),
+    );
+    expect(request).not.toHaveProperty('temperature');
+    expect(request).not.toHaveProperty('maxOutputTokens');
+  });
 });

@@ -279,8 +279,16 @@ export class AiService {
   }
 
   /**
-   * Single chokepoint for every Gemini call. Sampling parameters go inside
-   * `config` — passing them at the top level silently does nothing.
+   * Chokepoint for tracked, ctx-driven Gemini calls — i.e. the four
+   * AiRunOperation generation types that open an AiRunContext and get an
+   * ai_generation_runs row. Sampling parameters go inside `config` — passing
+   * them at the top level silently does nothing.
+   *
+   * Not used by the three untracked capsule-parsing methods
+   * (getCapsuleProposalInfo, generateStartupAnalysisSummary,
+   * getCapsuleProposalInfoFromImage), which aren't generation runs and have
+   * no AiRunContext to drive from — they read this.aiConfig.defaults
+   * directly instead.
    */
   private async generate(
     ctx: AiRunContext,
@@ -397,11 +405,25 @@ export class AiService {
   /**
    * Send an image directly to Gemini's vision model for OCR + field extraction.
    * This bypasses Tesseract entirely and gives far better results for handwritten documents.
+   *
+   * Untracked (no AiRunContext, no ai_generation_runs row) — reads
+   * this.aiConfig.defaults directly, same as getCapsuleProposalInfo and
+   * generateStartupAnalysisSummary. Deliberately does not apply the
+   * groundPrompt() wrapper: contents here is an image array (inlineData +
+   * instruction text), not a string prompt, so the text-oriented grounding
+   * instruction doesn't apply cleanly.
    */
   async getCapsuleProposalInfoFromImage(imageBuffer: Buffer, mimeType: string) {
     const base64Image = imageBuffer.toString('base64');
     const res = await this.ai.models.generateContent({
       model: this.aiConfig.defaults.model,
+      config: {
+        temperature: this.aiConfig.defaults.temperature,
+        // Higher than the 1024 used elsewhere: the response includes a
+        // raw_transcription field (the full document text) on top of the
+        // 8 extracted proposal fields, so it needs more headroom.
+        maxOutputTokens: 2048,
+      },
       contents: [
         {
           role: 'user',
