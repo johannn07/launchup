@@ -23,17 +23,17 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
 | Objective | Status | Evidence |
 |---|---|---|
-| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:271`); `GroundedPromptBuilderService` exists |
+| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:307`); `GroundedPromptBuilderService` exists |
 | **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist |
 | **1c** Output validation layer flagging inconsistent recs | 🔴 **Stub** | `output-validator.service.ts` — `validateEach()` returns `isValid: true` for everything with `// TODO`; `flagInconsistencies()` and `markUnverifiable()` have empty bodies |
 | **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
 | **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. |
 | **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
-| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:376`); `OcrDocument` stores `fieldConfidence` |
+| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
-| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:82-133`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. |
+| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI |
 
 ### The critical one — Objective 1b has no RAG
@@ -43,7 +43,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   - **No embedding model is called anywhere.** No `embedContent`, no `text-embedding`, nothing (grepped `backend/src` entirely).
   - **`vector_embeddings` is read-only.** `RagQueryService` reads it (`rag-query.service.ts:20,31`); **nothing ever writes it.** So `queryVectorDatabase()` always takes the `if (!sourceEmbedding)` branch and returns `lowConfidence: true` with empty arrays — on every single call.
   - **pgvector is installed but unused for search.** `Migration20260528160512_InstallVectorExtension` ran, but similarity is computed in JavaScript by loading every row into memory (`rag-query.service.ts:33-38`).
-  - **The path actually wired into generation is keyword matching, not RAG.** `getRelevantRagContexts()` (`ai.service.ts:237`, called at `:596`) scores candidates by **token overlap** (`scoreRagMatch`, `:212`) — a bag-of-words Jaccard score. That is lexical retrieval, not semantic.
+  - **The path actually wired into generation is keyword matching, not RAG.** `getRelevantRagContexts()` (`ai.service.ts:272`, called at `:688`) scores candidates by **token overlap** (`scoreRagMatch`, `:247`) — a bag-of-words Jaccard score. That is lexical retrieval, not semantic.
   - **The corpus is self-referential.** `RagContext` rows are only written from `startup.service.ts:151` during capsule-proposal parsing, so the system retrieves the startup's *own* prior text. `verifiedFrameworks` and `businessModels` are hardcoded `[]` with TODOs (`rag-query.service.ts:66-67`).
 
   **Why it matters:** Objective 1 and Research Question 1 are both entirely about RAG. As written you cannot answer RQ1, because there is no retrieval-augmented pipeline to measure against the baseline.
@@ -260,7 +260,7 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 
 - [ ] 🧹 **DEBT · S · Consolidate duplicate enums and tables**
   - `RnsStatus` (integer-backed, `backend/src/entities/enums/rns.enum.ts`) and `Status` (string-backed, `enums/status.enum.ts`) define the same seven states. `Status` also carries a Cebuano comment (`// basin pwede sa RNS…`) that should go before submission.
-  - `recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:135`) overlap heavily.
+  - `recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:176`) overlap heavily.
   **Fix:** pick one of each and migrate.
 
 - [ ] 🧹 **DEBT · S · Remove committed scratch files**
@@ -318,7 +318,7 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
   - Handwriting / sketch vision (Obj. 3) → **Gemini 2.5 Flash or Pro**
   - RAG embeddings → **`gemini-embedding-001`** — currently missing entirely (see §0)
   Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast.
-  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:275`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement.
+  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement.
 
 - [ ] ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
   The configured key starts with `AQ.Ab8RN6…`. Google AI Studio keys normally begin with `AIzaSy`. Confirm this is a valid AI Studio key (and not a Vertex/OAuth credential, which `@google/genai` would need different auth for) — a bad key here would make every AI feature fail at demo time.

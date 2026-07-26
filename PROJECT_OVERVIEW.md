@@ -50,7 +50,7 @@ Every one of those four artifacts can be **AI-generated** (`isAiGenerated` flag)
 | Backend | NestJS 11 + TypeScript | `backend/src/` |
 | ORM | MikroORM 6 (PostgreSQL driver; SQLite fallback) | `backend/src/mikro-orm.config.ts` |
 | Auth | Passport JWT + argon2 hashing | `backend/src/auth/` |
-| AI | Google Gemini, model/temperature/pipeline flags env-configured via `AiConfigService` (default model `gemini-2.5-flash-lite`) | `backend/src/ai/ai-config.service.ts`, `backend/src/ai/ai.service.ts:58` |
+| AI | Google Gemini, model/temperature/pipeline flags env-configured via `AiConfigService` (default model `gemini-2.5-flash-lite`) | `backend/src/ai/ai-config.service.ts:5` |
 | OCR | Tesseract.js (+ `eng.traineddata`) | `backend/src/ocr/` |
 | File storage | AWS S3 SDK → DigitalOcean Spaces | `backend/src/upload/` |
 | Frontend | SvelteKit 2 / Svelte 5 (runes) | `frontend/src/` |
@@ -654,7 +654,7 @@ activity_logs        action, details, actor?, createdAt
                        ↑ surfaced at /admin
 ```
 
-Note `recommendations` and `ai_recommendations` are **two different tables for overlapping purposes** — the former written by `rna/recommendation-storage.service.ts`, the latter by `ai/ai.service.ts:135`.
+Note `recommendations` and `ai_recommendations` are **two different tables for overlapping purposes** — the former written by `rna/recommendation-storage.service.ts`, the latter by `ai/ai.service.ts:176`.
 
 ### 6.8 Assessments
 
@@ -802,7 +802,7 @@ The four general objectives come from `Team_07_LaunchUpEnhanced_Software Proposa
 
 Three findings deserve emphasis because the scaffolding hides them:
 
-- **There is no RAG pipeline.** No embedding model is called anywhere in `backend/src`; `vector_embeddings` is read but never written, so `RagQueryService.queryVectorDatabase()` always returns empty with `lowConfidence: true`. The retrieval actually wired into generation (`ai.service.ts:596` → `getRelevantRagContexts`) is **token-overlap keyword matching** (`scoreRagMatch`, `:212`), not semantic search. pgvector is installed but unused.
+- **There is no RAG pipeline.** No embedding model is called anywhere in `backend/src`; `vector_embeddings` is read but never written, so `RagQueryService.queryVectorDatabase()` always returns empty with `lowConfidence: true`. The retrieval actually wired into generation (`ai.service.ts:688` → `getRelevantRagContexts`) is **token-overlap keyword matching** (`scoreRagMatch`, `:247`), not semantic search. pgvector is installed but unused.
 - **`OutputValidatorService` and `RecommendationStorageService` are stubs** — every method body is a `// TODO`. `validateEach()` returns `isValid: true` unconditionally; `saveRecommendations()` does nothing.
 - **The scored dimensions don't match the specification.** All three documents specify TRL, MRL, **RRL**, ARL, ORL. The code scores Technology, Market, Acceptance, Organizational, and **Investment** — omitting Regulatory, adding Investment (`readiness.service.ts:38-73`).
 
