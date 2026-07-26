@@ -155,6 +155,44 @@ export class InitiativeService {
     if (dto.rnsIds && dto.rnsIds.length > 0) {
       const initiatives: Initiative[] = [];
 
+      // Resolve every referenced Rns before anything else runs. This is the
+      // same lookup the per-item loop below used to do, just moved earlier:
+      // a bad id (e.g. a nonexistent rnsId) now throws before the
+      // renumbering loop mutates any existing Initiative row, and — via the
+      // ctx.run.startup assignment below — before the run can be left
+      // attributed to no startup at all for longer than necessary.
+      const rnsList: Rns[] = [];
+      for (const rnsId of dto.rnsIds) {
+        const rns = await this.em.findOneOrFail(
+          Rns,
+          { id: rnsId },
+          {
+            populate: [
+              'startup',
+              'startup.capsuleProposal',
+              'readinessType',
+              'status',
+              'targetLevel',
+            ],
+          },
+        );
+        rnsList.push(rns);
+
+        if (rnsList.length === 1) {
+          // The run is opened with startupId: null (generate-initiatives has
+          // no startup id in its DTO), so attribute it here, from the first
+          // resolved Rns, rather than reassigning on every iteration below.
+          // This assumes the batch belongs to a single startup — true for
+          // the only current caller (the initiatives board's "generate for
+          // selected RNS" action, which only ever sends RNS ids from one
+          // startup's page) but not enforced by the DTO — so a hypothetical
+          // multi-startup batch would attribute the run to the first
+          // startup rather than silently to whichever one was processed
+          // last.
+          ctx.run.startup = rns.startup;
+        }
+      }
+
       // Get current minimum priority number
       const existingInitiatives = await this.em.find(
         Initiative,
@@ -173,30 +211,12 @@ export class InitiativeService {
         await this.em.persistAndFlush(initiative);
       }
 
-      for (let i = 0; i < dto.rnsIds.length; i++) {
-        const rnsId = dto.rnsIds[i];
-        const rns = await this.em.findOneOrFail(
-          Rns,
-          { id: rnsId },
-          {
-            populate: [
-              'startup',
-              'startup.capsuleProposal',
-              'readinessType',
-              'status',
-              'targetLevel',
-            ],
-          },
-        );
+      for (let i = 0; i < rnsList.length; i++) {
+        const rns = rnsList[i];
 
         // Get the current max initiativeNumber for this startup
         const maxInitiativeNumber =
           (await this.em.count(Initiative, { startup: rns.startup })) + 1;
-
-        // The run is opened with startupId: null (generate-initiatives has no
-        // startup id in its DTO), so attribute it now that the Rns's startup
-        // is in hand — the same entity already loaded above, no extra query.
-        ctx.run.startup = rns.startup;
 
         const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
         if (!basePrompt)
@@ -251,24 +271,10 @@ export class InitiativeService {
 
       return initiatives;
     } else if (dto.rnsId) {
-      // Similar logic for single RNS
-      const existingInitiatives = await this.em.find(
-        Initiative,
-        {},
-        { orderBy: { initiativeNumber: 'ASC' } },
-      );
-      let minInitiativeNumber =
-        existingInitiatives.length > 0
-          ? existingInitiatives[0].initiativeNumber
-          : 1;
-      if (minInitiativeNumber > 1) minInitiativeNumber = 1;
-
-      // Increment existing initiatives' priority numbers
-      for (const initiative of existingInitiatives) {
-        initiative.initiativeNumber += 1;
-        await this.em.persistAndFlush(initiative);
-      }
-
+      // Resolve the Rns before anything else runs — same lookup as before,
+      // just moved above the renumbering loop, so a bad id throws before
+      // that loop mutates any existing Initiative row, and the run is
+      // attributed to its startup as early as possible.
       const rns = await this.em.findOneOrFail(
         Rns,
         { id: dto.rnsId },
@@ -287,6 +293,24 @@ export class InitiativeService {
       // startup id in its DTO), so attribute it now that the Rns's startup
       // is in hand — the same entity already loaded above, no extra query.
       ctx.run.startup = rns.startup;
+
+      // Similar logic for single RNS
+      const existingInitiatives = await this.em.find(
+        Initiative,
+        {},
+        { orderBy: { initiativeNumber: 'ASC' } },
+      );
+      let minInitiativeNumber =
+        existingInitiatives.length > 0
+          ? existingInitiatives[0].initiativeNumber
+          : 1;
+      if (minInitiativeNumber > 1) minInitiativeNumber = 1;
+
+      // Increment existing initiatives' priority numbers
+      for (const initiative of existingInitiatives) {
+        initiative.initiativeNumber += 1;
+        await this.em.persistAndFlush(initiative);
+      }
 
       const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
       if (!basePrompt)
