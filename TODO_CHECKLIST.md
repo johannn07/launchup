@@ -17,14 +17,28 @@ Prioritized backlog derived from a full read of the codebase (see [PROJECT_OVERV
 
 ---
 
+## Recently completed — AI pipeline configuration and run provenance
+
+Branch `feat/ai-config-flags-plan` (22 commits, not yet merged). This makes the baseline-vs-enhanced comparison *runnable and attributable*; it does not implement any missing objective.
+
+- **The model and all four pipeline enhancements are env-driven.** `AiConfigService` resolves `{ model, temperature, grounding, rag, biasReview, scoreNormalization }` from `GEMINI_MODEL`, `AI_TEMPERATURE`, `AI_GROUNDING_ENABLED`, `AI_RAG_ENABLED`, `AI_BIAS_REVIEW_ENABLED`, `AI_SCORE_NORMALIZATION_ENABLED`. The four booleans default to `true`, reproducing prior behaviour. Documented in `backend/.env.example`.
+- **Per-request override** via the `X-Ai-Pipeline-Config` header, gated on `AI_ALLOW_REQUEST_OVERRIDE` (defaults `false`) **and** a Manager/Admin caller. Safe-closed: because these controllers still have no `JwtGuard` (§1), `req.user` is always undefined, so every override is currently rejected with 403.
+- **Every AI generation opens an `ai_generation_runs` row** recording the resolved config, model, latency and status, and every generated artifact carries a `generation_run_id` FK. Eight operations — one generation plus one refine route per module across RNA, RNS, initiatives, roadblocks. Migration `Migration20260726120000_AiGenerationRuns.ts`.
+- **Score normalization is now independent of bias review.** It previously ran *inside* `reviewBiasScore()` and could not be exercised without it, so two of the four arms were unreachable.
+- **A real bug fix:** `temperature` and `maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them, with an `as any` hiding the type error. See §5 for what changed as a result — the temperature fix is a genuine behaviour change, not a no-op.
+
+**Not done, deliberately:** live verification against a real database and a live Gemini call. Boot the backend, trigger one generation, and confirm a `completed` row appears with the expected `config` snapshot.
+
+---
+
 ## 0. Capstone objectives — actual implementation status
 
 Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against the code. **This is the section that determines whether you pass**, and several objectives are less built than the scaffolding suggests.
 
 | Objective | Status | Evidence |
 |---|---|---|
-| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:307`); `GroundedPromptBuilderService` exists |
-| **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist |
+| **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:307`); `GroundedPromptBuilderService` exists. Toggleable via `AI_GROUNDING_ENABLED` |
+| **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist. `AI_RAG_ENABLED` gates the **keyword-overlap** retrieval standing in for it, so toggling that flag measures lexical matching, not semantic search — do not report it as a RAG result |
 | **1c** Output validation layer flagging inconsistent recs | 🔴 **Stub** | `output-validator.service.ts` — `validateEach()` returns `isValid: true` for everything with `// TODO`; `flagInconsistencies()` and `markUnverifiable()` have empty bodies |
 | **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
 | **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. |
@@ -33,8 +47,8 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
-| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. |
-| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI |
+| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. Toggleable via `AI_BIAS_REVIEW_ENABLED` |
+| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI. Toggleable via `AI_SCORE_NORMALIZATION_ENABLED`, now **independent of 4b** — it previously ran inside `reviewBiasScore()` and could not be exercised without it |
 
 ### The critical one — Objective 1b has no RAG
 
