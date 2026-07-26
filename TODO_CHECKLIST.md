@@ -186,23 +186,20 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** the RNA panel on the Elevate tab never populates.
   **Fix:** change to `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
 
-- [ ] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them**
+- [x] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them** — **FIXED** (`fix/rns-generation-bugs`, see DONE note below)
   Confirmed live: generation succeeds, `ai_generation_runs` records a `completed` row, and `GET /rns/?startupId=10` returns six well-formed rows — yet the page renders nothing.
   The RNS page has exactly two display surfaces and **both exclude AI output**: the kanban columns (`frontend/src/routes/(app)/startups/[id]/rns/+page.svelte:384-392`) and the table (`:690`) each filter `isAiGenerated === false`. Generated rows are written with `isAiGenerated: true`, so neither can ever show them.
   The *acceptance* half exists — `addToRNS()` (`:187-228`) PATCHes a row to `isAiGenerated: false`, which is what makes it appear, and the `card` snippet (`:490`) already takes an `ai` flag and an `addToRns` handler that `RnsCard` renders as an add button. **What's missing is the pending-AI review list that would invoke it.** The snippet is only ever passed to `KanbanBoardNew` (`:670`), whose columns are themselves `isAiGenerated === false`, so the `ai = true` variant is unreachable.
   **This is not new.** `git diff master..HEAD -- frontend/` for the AI-config branch is empty, and `getStartupRns` was not modified. Generation has presumably always written rows nothing displays.
   **Why it matters:** every AI feature in the capstone demo — Objectives 1 and 4 both — produces output the user cannot see. It also silently inflates the DB: each generation adds rows that can never be reached or cleaned up from the UI.
   **Same pattern, verify each:** `rna/+page.svelte:77`, `initiatives/+page.svelte:170,232,254,494,857`, `roadblocks/+page.svelte:657`, `progress-report/+page.svelte:220,259,299` all filter `isAiGenerated === false` too. Check whether *any* of them has a working review surface — if one does, copy it.
-  **DECIDED (2026-07-26): write generated rows with `isAiGenerated: false`** so they appear in the board and table alongside manual rows. Chosen over a dedicated AI-suggestions panel or a post-generation review dialog. **Do this after the AI-config branch is merged**, not before.
+  **DECIDED (2026-07-26): write generated rows with `isAiGenerated: false`** so they appear in the board and table alongside manual rows. Chosen over a dedicated AI-suggestions panel or a post-generation review dialog.
   **Why this is now safe:** the usual objection is that flipping the flag destroys the ability to distinguish AI output from manual entry. That stopped being true with the provenance work — every AI-generated row carries a `generation_run_id` FK to `ai_generation_runs`, which records the operation, model and full pipeline config. Provenance no longer depends on `isAiGenerated`, so the flag becomes purely a display concern. Queries that need "AI rows only" should join on `generation_run_id IS NOT NULL` instead.
   **What this trades away, knowingly:** the human-in-the-loop accept/discard step the SRS describes. Generated rows go live immediately, with no review gate. If a panel is wanted later, the pieces are still there — `addToRNS()` is the accept action, and the `card` snippet's `ai` variant already renders an add button.
-  **Scope when you do it:** set the flag at the four generation sites (`rns.service.ts` `generateTasks`, `rna.service.ts` `generateRNA`, `initiative.service.ts` `generateInitiatives`, `roadblock.service.ts` `generateRoadblocks`) — the frontend filters can then stay untouched. Confirm each module's rows actually surface afterwards; `progress-report/+page.svelte:299` additionally filters `status === 7`, so that view may still look empty for unrelated reasons.
+  **DONE (`fix/rns-generation-bugs`):** `rns.service.ts` `generateTasks` and `rna.service.ts` `generateRNA` now set `isAiGenerated = false`. `initiative.service.ts` `generateInitiatives` and `roadblock.service.ts` `generateRoadblocks` turned out to already set it `false` at both their creation sites — not verified when this note was first written. All four generation paths now surface without any frontend change. Not yet re-verified: `progress-report/+page.svelte:299` additionally filters `status === 7`, so that view may still look empty for unrelated reasons — check separately.
 
-- [ ] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row**
-  `Rns.getTargetLevelScore()` (`backend/src/entities/rns.entity.ts:54-61`) resolves a level by filtering a **hardcoded id→level map** in `backend/src/utils.ts` that assumes `readiness_levels` was seeded as exactly 54 ordered rows: Technology 1-9, Market 10-18, Acceptance 19-27, Organizational 28-36, Regulatory 37-45, Investment 46-54.
-  The live table looks nothing like that — verified via `GET /readinesslevel/readiness-levels`: id 9 is *Regulatory* level 3, id 11 is *Technology* level 8, id 13 is *Acceptance* level 7, there are gaps (no id 6), and observed RNS rows reference ids 35, 54 and 71 — past the map's ceiling. Ids drift every time `main.ts` re-seeds on boot.
-  So the filter matches nothing and the method returns its `-1` sentinel for every row. Displayed raw as "Target Level: -1" (`lib/components/startups/rns/card.svelte:105`, `rns/+page.svelte:697`, `progress-report/+page.svelte:226,305`).
-  **Fix is a deletion, not a lookup table update:** `getStartupRns` already populates `targetLevel`, so `this.targetLevel.level` is the correct value sitting in memory. Return that and drop the `utils.ts` map. Grep for other `getReadinessLevels` callers first — the same stale assumption may be relied on elsewhere.
+- [x] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row** — **FIXED** (`fix/rns-generation-bugs`)
+  `Rns.getTargetLevelScore()` now returns `this.targetLevel.level` directly; the stale hardcoded id→level map in `backend/src/utils.ts` (the only caller) has been deleted along with the file.
 
 - [ ] 🐞 **BUG · S · Approve-applicant is two non-transactional calls**
   `frontend/src/routes/(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback between them.
@@ -219,15 +216,11 @@ Each of these was verified by reading **both** sides of the call.
   **Why it matters:** harmless on its own, but it implies a refresh flow that doesn't exist. Combined with the 5h cookie, users are silently logged out mid-session with no renewal path.
   **Fix:** delete the dead cookie clear, and decide whether refresh tokens are in scope (❓SCOPE if yes — that's M–L).
 
-- [ ] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't**
-  `backend/src/initiative/initiative.service.ts` `generateInitiatives()`: the bulk `dto.rnsIds` branch sets `initiative.requestedStatus = 1` for each created row (`:264`); the single `dto.rnsId` branch's identical creation loop (`:348-360`) never sets it, so `requestedStatus` is left `undefined` there.
-  **Why it matters:** the two entry points to the same generator produce initiatives in inconsistent states depending only on which DTO shape the caller used. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
-  **Fix:** set `initiative.requestedStatus = 1` in the single-`rnsId` branch too, or factor the shared creation loop out so the two branches can't drift again.
+- [x] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't** — **FIXED** (`fix/rns-generation-bugs`)
+  `initiative.service.ts` `generateInitiatives()` single-`rnsId` branch now also sets `initiative.requestedStatus = 1`, matching the bulk branch.
 
-- [ ] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly**
-  `backend/src/roadblock/roadblock.service.ts` `generateRoadblocks()`: declares `const roadblocks: Roadblock[] = []` (`:220`), persists each generated `Roadblock` via `em.persistAndFlush(roadblock)` inside the loop, but never pushes the created row onto `roadblocks` — then `return roadblocks;` (`:272`) always returns an empty array.
-  **Why it matters:** the roadblocks are correctly written to the database (side effect works), but any caller relying on the endpoint's response body (e.g. the frontend rendering the just-generated roadblocks) gets nothing back. Found and deliberately left unfixed during the AI config-flags work (Task 10, `2026-07-26-ai-config-flags`); spawned as separate follow-up.
-  **Fix:** `roadblocks.push(roadblock);` after persisting, inside the loop.
+- [x] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly** — **FIXED** (`fix/rns-generation-bugs`)
+  Added `roadblocks.push(roadblock);` after `persistAndFlush` inside the loop in `roadblock.service.ts`.
 
 ---
 

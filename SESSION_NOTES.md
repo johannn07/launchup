@@ -1,5 +1,26 @@
 # Session Notes — 2026-07-26
 
+## Follow-up (later same day) — merge confirmed, four bug fixes
+
+`feat/ai-config-flags-plan` is now merged into `master` (PR #7, commit `661f27e`). Checked both background follow-up sessions mentioned below: neither `claude/xenodochial-colden-25e582` nor any branch for the `requestedStatus` fix had commits ahead of `master` — both were still open, contrary to hope.
+
+Fixed all four items from "Next step" §2 on a new branch, **`fix/rns-generation-bugs`** (based on `master`, not pushed, not merged — per standing instruction to test locally first):
+
+1. **`targetLevelScore` always `-1`** — `Rns.getTargetLevelScore()` now returns `this.targetLevel.level` directly; deleted the stale hardcoded id→level map (`backend/src/utils.ts`), which had no other callers.
+2. **AI-generated rows invisible** — flipped `isAiGenerated = false` at the two generation sites that still wrote `true`: `rns.service.ts generateTasks`, `rna.service.ts generateRNA`. Checked the other two call sites first: `initiative.service.ts generateInitiatives` and `roadblock.service.ts generateRoadblocks` **already wrote `isAiGenerated: false`** at both their creation points — that half of the original diagnosis didn't hold for those two modules, only RNS and RNA needed the change.
+3. **`generateRoadblocks` always returned `[]`** — added the missing `roadblocks.push(roadblock)` after `persistAndFlush` in the loop.
+4. **`requestedStatus` asymmetry in `generateInitiatives`** — the single-`rnsId` branch now sets `requestedStatus = 1` like the bulk branch does.
+
+Verified: `pnpm build` clean; `pnpm test -- rns roadblock initiative rna readiness` — all 4 touched suites pass. The one failing suite (`readiness.service.spec.ts`) is pre-existing and unrelated (matches the already-documented "`GET /readiness/:startupId` writes on every read" bug) — not touched this pass.
+
+`TODO_CHECKLIST.md` updated to mark all four items done.
+
+**Not yet done:** live-verify against the real Neon DB (trigger one generation per module, confirm rows render in the UI without the `isAiGenerated` filter blocking them) — same caveat as the AI-config branch, no live DB/browser check was run this pass. Also unchecked: `progress-report/+page.svelte:299`'s separate `status === 7` filter, flagged as possibly still hiding rows for an unrelated reason.
+
+**Next:** live-verify the four fixes, then continue the agreed sequence — R2 + presigned URLs → model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5).
+
+---
+
 ## What we did
 
 **Branch:** `feat/ai-config-flags-plan` — 25 commits ahead of `master`, not merged, nothing pushed.
