@@ -58,4 +58,23 @@ describe('readiness-rubrics.json', () => {
       expect(row.provenance).toBe('authored');
     }
   });
+
+  it('marks Market, Regulatory, Acceptance and Organizational as framework-derived', () => {
+    // These are the BRLa dimensions authored against a paywalled paper's stated
+    // criteria, not transcribed from a public standard. Without this check, a
+    // row mislabelled 'standard' here would pass every other assertion in this
+    // file while silently claiming a published standard's authority for text
+    // that was actually composed for this project.
+    const byType = (t: ReadinessType) => rows.filter((r) => r.readinessType === t);
+    for (const type of [
+      ReadinessType.M,
+      ReadinessType.R,
+      ReadinessType.A,
+      ReadinessType.O,
+    ]) {
+      for (const row of byType(type)) {
+        expect(row.provenance).toBe('framework-derived');
+      }
+    }
+  });
 });
