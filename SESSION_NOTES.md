@@ -194,6 +194,41 @@ Objective 1b now has an actual retrieval-augmented pipeline. Before this, `vecto
 
 Also still true: the only row in `rag_contexts` is titled "PROVENANCE PROBE - delete me" from an earlier session. Left in place — deleting it is John's call.
 
+### Security P0 (§1) — JWT secret + 11 unguarded controllers
+
+Branch `fix/auth-guards`, two commits off the post-merge `master` (`93b42c4`, `ad232d5`).
+
+**`JWT_SECRET` no longer falls back.** Both backend call sites go through `requireJwtSecret()` (`backend/src/auth/jwt-secret.ts`), which throws at boot instead of silently signing with `'launchup-dev-secret'` — a string committed to a public repo. The old `||` also treated a **whitespace-only** secret as valid and would have signed tokens with it; the new check trims. Tested against unset / empty / whitespace / real.
+
+The frontend had the same fallback. Its check had to go at **module scope**, not at the point of verification: that code sits inside a `try` whose `catch` redirects to `/login`, so throwing there would have made a misconfigured deployment present as "your password is wrong".
+
+**Eleven controllers were reachable with no credentials, not the four the checklist recorded.** `rna`, `rns`, `initiative`, `roadblock`, `chat-history`, `readiness`, `progress`, `elevate`, `ocr`, `ai/metrics`, `ai/baseline`. Anyone could read, edit and delete every startup's coaching data, read full AI transcripts, and spend Gemini quota through the generation routes. The two `ai/*` surfaces got `AdminGuard` as well — `POST /ai/baseline/update` rewrites the distribution that score normalization (4c) measures against, so an ordinary user could have moved every normalized score in the study.
+
+**Guarding them alone would have broken the entire UI, and finding out why was the real work.** The `Access` cookie is `httpOnly`, so no script can read it to build an `Authorization` header — and `axiosInstance` was configured with **no credentials of any kind**. All 13 client-side calls across 7 components were anonymous and would have started 401ing.
+
+The three components that *look* like they authenticate are worse than useless: `PendingTab`, `AcceptedTab` and `RatedTab` each hardcode a JWT string literal. Decoded, it is a **Django SimpleJWT token that expired 2024-09-06**, with a payload shape (`token_type`, `jti`, `user_id`) this backend has never issued. That dead credential is why "the frontend already sends Bearer tokens" looked true. Logged as debt; all three are also unimported.
+
+So `JwtStrategy` now also extracts the token from the `Access` cookie (hand-parsed, no new dependency), and axios sends `withCredentials`. Keeping the token httpOnly and reading it server-side is the stronger arrangement anyway.
+
+**A second pass caught what the first missed.** Two dialogs build their request with a bare `fetch` rather than the axios instance, so they never inherited `withCredentials` — `rna/view-edit-delete-ai-dialog.svelte` and `rns/view-edit-delete-ai-dialog.svelte`, both hitting `/:id/refine`. `fetch` defaults to `credentials: 'same-origin'` and `:5173 → :3000` is cross-origin, so both AI refine dialogs would have failed silently. Every *other* raw fetch in the frontend targets routes that were already guarded, so nothing else changed behaviour.
+
+**Verified live rather than by inspection:** all 11 routes 401 with no credentials and authenticate under both a Bearer header and a cookie; `GET /` and `POST /auth/signin` still work anonymously; the CORS preflight for a JSON POST returns 204 with `Access-Control-Allow-Credentials: true`; and the cookie-authenticated `POST /rna/1/refine` returned **201 after running the real Gemini refine**. `svelte-check` is unchanged at 160 pre-existing errors — confirmed by running it against `master`, not assumed.
+
+**Deliberately not changed — needs John's decision.** The login cookie is `sameSite: 'strict'`. That works locally, because `localhost:5173` and `localhost:3000` are the same *site* (cookie scope ignores the port). It will **not** work deployed: `launchup.vercel.app → launchup.onrender.com` are different sites, the browser will not attach the cookie, and every client-side call will 401. Either set `sameSite: 'none'; secure: true` (CSRF trade-off) or proxy client calls through SvelteKit server routes. Logged in `TODO_CHECKLIST.md` §1.
+
+**One gap I could not close myself:** the SvelteKit login form would not submit under browser automation — no POST ever reached the server — so the transport chain was proven directly instead of by clicking through the app. **One manual login + a click through a startup's RNA/RNS pages, including the AI refine dialog, is still owed before this merges.**
+
+### On the branches that ended up on GitHub
+
+John asked why commits were on the repo. Facts, since it matters for the local-first workflow:
+
+- No `git push` was ever issued from this session — every git command is in the transcript.
+- Commits are authored by this machine's git identity (`Johann-107 <johnanthonysb@gmail.com>`); the only marker of AI authorship is the `Co-Authored-By: Claude Opus 5` trailer. There is no separate AI identity.
+- The remote-tracking reflog records both pushes under that same identity: `origin/feat/model-tiering` at 08:59 UTC (matches the PR #10 merge) and `origin/fix/auth-guards` at 14:04 UTC — **3h42m after** its last commit was created, which rules out an immediate post-commit auto-push.
+- VS Code's Git extension is active on the repo (it wrote `branch.fix/auth-guards.vscode-merge-base` into git config). A manual Sync / Publish Branch is the most likely explanation.
+
+**Worth checking `git.postCommitCommand` in VS Code settings** — if it is set to `push` or `sync`, locally-made commits will keep going straight to GitHub and quietly defeat the "test before it reaches master" rule.
+
 ---
 
 ## What we did
@@ -219,18 +254,35 @@ Both are logged in `TODO_CHECKLIST.md` §2 with root cause, file:line, and fix s
 
 Docs updated throughout: `CLAUDE.md`, `PROJECT_OVERVIEW.md`, `TODO_CHECKLIST.md` (new "Recently completed" section, objective-table flag annotations, both new bugs, the visibility decision).
 
-## Still in progress
+*(The "What we did" block above is the original session's record — the four-step sequence it describes is now complete. Current status follows.)*
 
-- **`feat/ai-config-flags-plan` is not merged.** Live verification passed; nothing else is blocking it.
-- **`.claude/launch.json`** (backend :3000 / frontend :5173 dev-server config) is untracked — written this session, not yet committed either way.
-- **Backend dev server may still be running** on `:3000` from live verification — stop it if you're done testing.
-- A separate background session was spawned to fix the pre-existing `generateRoadblocks` always-returns-`[]` bug on its own branch (`claude/xenodochial-colden-25e582`, based on `master`). It ended with **no commits** — check its output before assuming that bug is fixed; treat it as still open.
-- A second background chip was spawned for the `requestedStatus` asymmetry in `generateInitiatives` (bulk branch sets it, single branch doesn't) — status unknown, not checked this session.
+---
 
-## Next step
+## Current status — 2026-07-27
 
-1. **Merge `feat/ai-config-flags-plan` into `master`** (or open a PR) — live verification is done, this is the only remaining gate.
-2. Then, in order:
-   - Fix the two logged pre-existing bugs (`-1` target level; flip `isAiGenerated` on the 4 generation call sites — `rns.service.ts` `generateTasks`, `rna.service.ts` `generateRNA`, `initiative.service.ts` `generateInitiatives`, `roadblock.service.ts` `generateRoadblocks`)
-   - Continue the agreed sequence: **R2 + presigned URLs** (unblocks Objective 3 uploads — `upload.service.ts` currently 503s, no `DO_SPACES_*` vars set) → **model tiering** (env-driven now, but still `gemini-2.5-flash-lite` everywhere — TODO_CHECKLIST.md §5) → **RAG pipeline** (§0 — no embedding model exists anywhere; `AI_RAG_ENABLED` currently gates keyword-overlap retrieval, not semantic search)
-3. Before then: check on the two background follow-up sessions (roadblock empty-array fix, initiative `requestedStatus` fix) — confirm whether either actually landed a commit.
+**Merged to `master`:** config flags (PR #7), RNS/RNA bug fixes (PR #8), storage + presigned uploads (PR #9), model tiering + RAG pipeline (PR #10).
+
+**Open:** `fix/auth-guards` — 2 commits ahead of `master`, pushed to GitHub but **not merged**. Security P0, described above.
+
+### Still in progress / owed
+
+- **One manual smoke test of `fix/auth-guards`** before merging: log in through the UI and click through a startup's RNA and RNS pages, including the AI refine dialog. Everything else about that branch is verified; browser automation could not drive the login form.
+- **The `sameSite` decision** blocks deployment, not merge. See §1 of the checklist.
+- **The RAG corpus is the real Objective 1b gap.** The pipeline is built and measured; it currently retrieves peer startup text rather than verified knowledge, and there are only 2 startups to retrieve from.
+- **`rag_contexts` still holds exactly one row**, titled "PROVENANCE PROBE - delete me". Deleting it is John's call.
+- **Two pre-existing test failures** on `master`, untouched all session: `ReadinessService › returns a weighted score…` and `AiService › passes valid task responses through unchanged`. Backend is otherwise 111 passing.
+- **`svelte-check` has 160 pre-existing errors** in 46 files. Not introduced this session (verified against `master`), but it means type-checking cannot currently gate anything.
+
+### Next step
+
+1. **Smoke-test and merge `fix/auth-guards`.** It is the last thing standing between the app and a demo where every coaching route is publicly writable.
+2. **Seed the RAG corpus (Objective 1b).** This is the highest-value item: it converts work already done into a claimable Objective 1 result. **No code change needed** — readiness-level rubrics and business-framework documents are just `rag_contexts` rows with a distinct `sourceType`, and the embedding + retrieval path picks them up automatically. Do this before reporting any Objective 1 result, or the measurement is peer similarity rather than grounding.
+3. **Output validation (1c).** `output-validator.service.ts` and `recommendation-storage.service.ts` are stubs with empty bodies, including `saveRecommendations()`. The SRS acceptance criteria and the SDD's Validated / Flagged / Low-Confidence badges are all specified against them. `callAiExpectJson()` already does schema-checked parsing with a corrective retry — build on that.
+4. **Dimension alignment.** ~10 lines. The documents specify TRL/MRL/**RRL**/ARL/ORL; the code scores Investment instead of Regulatory. Removes an easy line of panel questioning.
+5. **Weights (2b).** `TierConfig.weights` is still never read, so the admin editor has no effect. Worth fixing — but the Step 3 measurement showed the *model* was the binding constraint on differentiation, so do not expect weighting to be the win.
+
+### Operational notes for next session
+
+- **Do not run `pnpm build` while `pnpm dev` is watching.** Both write `dist/`; the race left the running server unable to resolve its own modules until restarted. `pnpm test` is safe (ts-jest does not touch `dist/`).
+- **Mocked unit tests here have repeatedly passed while the code was broken.** The boot-time embedding backfill failed on *every* startup with a MikroORM global-EntityManager error that no test could see. Exercise the real path: `preview_start` + `preview_logs`, or a script that builds the real DI graph via `NestFactory.createApplicationContext`. For SQL, run it against Neon inside `begin` / `rollback`.
+- **`backend/measurement/`** holds four reproducible harnesses (model comparison, differentiation, similarity calibration, retrieval arms). Re-run rather than re-cite if the model or embedding model changes.
