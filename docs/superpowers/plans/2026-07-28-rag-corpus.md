@@ -1931,7 +1931,7 @@ In `createBasePrompt`, after the existing `ragBlock` assignment, add:
     // how *peers* are found and its measured comparison must not be perturbed
     // by a rubric change.
     const rubricBlock = ctx.config.ragCorpus
-      ? await this.buildRubricBlock(em, startupReadinessLevels, ctx.config.rubricMode)
+      ? await this.buildRubricBlock(em, startupReadinessLevels)
       : '';
 ```
 
@@ -1948,16 +1948,12 @@ Add the helper method to `AiService`:
   private async buildRubricBlock(
     em: EntityManager,
     levels: StartupReadinessLevel[],
-    mode: RubricMode,
   ): Promise<string> {
-    if (mode === 'semantic') {
-      // Semantic mode is exercised through RagQueryService, which owns the
-      // vector path for the corpus. Path 1 keeps the deterministic lookup so a
-      // measurement run cannot accidentally compare two different mechanisms
-      // between the RNA path and the initiative path.
-      return '';
-    }
-
+    // Deliberately does not read ctx.config.rubricMode. That setting exists to
+    // compare two mechanisms on the RNA/RNS channel SDD §3.2 describes; letting
+    // it also swing the initiative and roadblock paths would change two things
+    // at once during a measurement run, which is a confound rather than a
+    // control. Path 1 always uses the exact lookup.
     const wanted = new Set<string>();
     for (const srl of levels) {
       const type = srl.readinessLevel.readinessType;
@@ -1979,7 +1975,7 @@ Add the helper method to `AiService`:
   }
 ```
 
-Import `RubricMode` from `./ai-config.types` and the corpus helpers from `./rag-corpus.types`.
+Import the corpus helpers from `./rag-corpus.types`.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
