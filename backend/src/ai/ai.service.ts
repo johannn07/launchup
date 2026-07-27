@@ -14,6 +14,7 @@ import { RagContext } from 'src/entities/rag-context.entity';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
+import { EmbeddingIndexService } from './embedding-index.service';
 
 const AI_GROUNDING_INSTRUCTION =
   'Only use facts explicitly present in the user-provided input. Never invent names, numbers, dates, or organizations. If you are uncertain about a field, return null instead of guessing.';
@@ -65,6 +66,7 @@ export class AiService {
     private baselineService: BaselineService,
     private readonly em: EntityManager,
     private readonly aiConfig: AiConfigService,
+    private readonly embeddingIndex: EmbeddingIndexService,
   ) {
     this.ai = new GoogleGenAI({
       apiKey: this.config.get<string>('GEMINI_API_KEY'),
@@ -241,6 +243,13 @@ export class AiService {
 
     this.em.persist(ragContext);
     await this.em.flush();
+
+    // Index immediately: a context row that is never embedded is invisible to
+    // semantic retrieval, and this is the only place rag_contexts is written.
+    // Deliberately not awaited-and-thrown — a failed embedding must not fail
+    // the startup application that produced the text.
+    await this.embeddingIndex.indexRagContext(ragContext);
+
     return ragContext;
   }
 
