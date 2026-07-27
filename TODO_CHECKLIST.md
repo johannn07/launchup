@@ -107,10 +107,11 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   **Why it matters:** all four endpoints expose full AI conversation transcripts for any RNA/RNS/initiative/roadblock id, unauthenticated. These transcripts contain the startup's business details.
   *Same change as the item above; do them together.*
 
-- [ ] 🔒 **SEC · S · Guard the file-upload endpoints**
-  `backend/src/upload/upload.controller.ts:15` — no guard on `POST /upload/single` or `POST /upload/multiple`.
-  **Why it matters:** anyone on the internet can upload arbitrary files (up to 10 at a time) into your DigitalOcean Spaces bucket at your cost. There is also no file-type or size validation.
-  **Fix:** add `JwtGuard`, plus a MIME/extension allowlist and a size cap.
+- [x] 🔒 **SEC · S · Guard the file-upload endpoints** — *fixed 2026-07-27*
+  `backend/src/upload/upload.controller.ts` had no guard on `POST /upload/single` or `POST /upload/multiple`. `@UseGuards(JwtGuard)` now sits on the controller, so it covers the new presign routes too. **Verified live:** `/upload/presign`, `/upload/signed-url`, and `/upload/test-connection` all return 401 unauthenticated. `test-connection` no longer echoes the raw SDK error, which named the bucket and endpoint.
+  **Why it matters:** anyone on the internet can upload arbitrary files (up to 10 at a time) into the bucket at your cost.
+  **Correction (2026-07-27):** this item previously claimed there was "no file-type or size validation" — that is **wrong**. `upload.service.ts:174-194` `validateFile()` already enforces a 10 MB cap and an 8-entry MIME allowlist, and it runs before the object is written. The real gap is authentication only.
+  **Fix:** add `JwtGuard` to the controller. Note the allowlist trusts the client-supplied `file.mimetype`, so it stops honest mistakes, not a determined uploader — sniff the magic bytes if that matters. Also `GET /upload/test-connection` (`:19`) is unauthenticated and leaks bucket-reachability plus raw SDK error text.
 
 ### P1 — before any real deployment
 
@@ -313,6 +314,17 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
   **Verified** on a genuinely cold DB (throwaway `launchup_seedtest` on the same Neon instance, created with pgvector, booted, asserted, dropped): both startups took the create branch, owners are the two `Startup`-role founders, both have `mentor@launchup.local` in `startups_mentors`, and all three assertions — non-`Startup` owners, self-mentoring, mentorless startups — returned 0.
   *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached — that shortcut is what left the startups mentorless in the first place.*
 
+- [ ] 🐞 **BUG · S · Two unit tests fail on `master` — the suite is red before anyone starts**
+  `pnpm test` is **74 passed / 2 failed** on a clean `master` checkout (verified 2026-07-27 by checking out `master` and re-running, so this is not from any feature branch). Both look like stale expectations rather than product defects, but a red baseline means nobody can tell a real regression from the noise.
+  - `src/ai/ai.service.spec.ts` › *"passes valid task responses through unchanged"* — the test's own context sets `scoreNormalization: true` and mocks `normalizeScore` to return `{ scaled: 5, z: 0 }`, so the service correctly emits `target_level_normalized: 5` plus `target_level_z: 0`. The assertion still expects `target_level_normalized: 3` and no `_z` field. **The expectation is wrong, not the code** — note the hand-edited comment on the line, which suggests it was patched without being run.
+  - `src/readiness/readiness.service.spec.ts` › *"returns a weighted score, tier, and prioritized recommendations"* — `expect(jest.fn()).toHaveBeenCalledTimes(1)` receives 2. Needs a look at whether the extra call is intended.
+  **Fix:** correct both expectations (or the code, if the second turns out to be a real double-call), then keep the suite green so CI is meaningful.
+
+- [ ] 🧹 **DEBT · S · Removing an uploaded file orphans the object in the bucket**
+  `FileUploadField.svelte`'s "Remove file" only rewrites the assessment's `answerValue` — it never deletes the stored object. `UploadService.deleteFile()` exists and works, but the only route that calls it is **commented out** (`backend/src/upload/upload.controller.ts`, the `@Delete(':key(*)')` block). So every removed or replaced attachment stays in storage forever, counting against the ~1 GB free tier with no way to find it from the app.
+  **Fix:** uncomment the delete route, put it behind `JwtGuard` (now on the controller), and have `removeUploadedFile()` call it with `file.key` before rewriting the answer. Ignore a 404 so a missing object doesn't block the UI. *Legacy rows store `url` rather than `key` and can't be resolved to an object — skip the delete for those.*
+  **Why it's worth doing now:** cheap while the storage code is fresh, and the alternative is a bucket nobody can safely clean because there's no record of which keys are still referenced.
+
 - [ ] 🧹 **DEBT · S · The SQLite fallback in `mikro-orm.config.ts` does not work**
   `backend/src/mikro-orm.config.ts:8` falls back to an in-memory SQLite DB when `DB_HOST` is unset, and `CLAUDE.md` describes it as "useful for quick local runs without Docker". It isn't — booting with `DB_HOST=` fails at connect with `Error: Could not locate the bindings file`, because `better-sqlite3`'s native bindings were never compiled for this install. **Verified** 2026-07-27.
   Note also that `dotenv` never overrides a key already present in `process.env`, so `.env`'s `DB_HOST` always wins unless the variable is exported as an *empty string* — PowerShell's `$env:DB_HOST=''` deletes the variable rather than emptying it, so the fallback cannot be reached from PowerShell at all.
@@ -370,10 +382,18 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 Neither the SRS nor the SDD names a storage vendor, a specific model version, or Docker — so these are genuinely your call. Recommendations below.
 
 - [ ] ❓ **SCOPE · S · Pick a file-storage provider to replace DigitalOcean Spaces**
-  `backend/src/upload/upload.service.ts:24-45` reads five `DO_SPACES_*` vars; none are set, so `enabled = false` and uploads 503 (`:52`). The SDD only ever says *"Object storage (file storage service)"* (p.48) — **no vendor is specified**, so you're free.
-  **Key fact:** the service uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, so **any S3-compatible provider is a drop-in** — no code change beyond env values.
-  **Recommendation: Cloudflare R2** — S3-compatible, 10 GB free, zero egress fees, and egress is what bites you when a dashboard re-renders stored images. **Supabase Storage** is the easier-signup alternative (1 GB free, no card). Avoid local-filesystem storage: Vercel and Render have ephemeral disks, so uploads vanish on redeploy.
-  **Also do:** rename `DO_SPACES_*` → `S3_*` (or `STORAGE_*`) so the config isn't misleadingly vendor-specific, and update `backend/.env.example`.
+  `backend/src/upload/upload.service.ts` read five `DO_SPACES_*` vars; none were set, so `enabled = false` and uploads 503'd. The SDD only ever says *"Object storage (file storage service)"* (p.48) — **no vendor is specified**.
+  **Code is done (2026-07-27); only credentials are outstanding.** Cloudflare R2 was the original recommendation but was ruled out — it requires a credit card on file even for the free tier. **Targeting Supabase Storage** instead: S3-compatible, no card, ~1 GB free.
+  **What landed:**
+  - `DO_SPACES_*` → `S3_*` throughout, plus `forcePathStyle: true` (Supabase addresses buckets as a path segment).
+  - Dropped `ACL: 'public-read'`. Supabase, R2, and modern S3 all control public access at the *bucket* level; per-object ACLs are not the model any more.
+  - **Presigned PUT** (`POST /upload/presign`) — the browser uploads straight to the bucket, so a 10 MB file no longer occupies an API request.
+  - **Presigned GET** (`GET /upload/signed-url?key=`) — the bucket is private, so this is the only read path.
+  - `JwtGuard` on the whole controller, closing the §1 SEC item.
+  - Frontend `FileUploadField.svelte` switched to presign → PUT, and now stores `{key, fileName}`. Legacy `{url, fileName}` rows still render.
+  **Two bugs the unit tests caught before they could reach production:** the AWS SDK signs a CRC32 checksum of the *empty* signing-time body by default, so every real upload would have failed validation at the bucket (fixed with `requestChecksumCalculation: 'WHEN_REQUIRED'`); and `getSignedUrl` signs only `host` unless told otherwise, which made the returned `Content-Type` requirement decorative (fixed with `signableHeaders`).
+  **Verified end to end against the live Supabase bucket (2026-07-27).** Credentials are in `backend/.env`; `test-connection` reports `connected`. API round trip: presign → PUT (200) → signed GET (200) returned a byte-identical file, and an **unsigned** GET on the same object returned **403**, confirming the bucket is genuinely private. Through the UI as `founder.agrolink@launchup.local` (Startup role): attached a PNG to "Upload your system architecture diagram", submitted, the assessment flipped to Completed, and Preview resolved a fresh signed URL that rendered the image. The stored `answerValue` is `{"files":[{"key":"assessments/…png","fileName":"architecture-diagram.png"}]}` — a **key, no URL**, as designed.
+  *The assessment tables were empty after the DB wipe, so `seed-demo-full.js` now also seeds 6 assessments (2 File-type) — without them the assessment page renders nothing and the upload field is unreachable.*
 
 - [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
   **Partially addressed:** the model is no longer a hardcoded literal — `AiConfigService` (`backend/src/ai/ai-config.service.ts`) now resolves `model` and `temperature` from `GEMINI_MODEL` / `AI_TEMPERATURE` env vars (see `backend/.env.example`), and every call site in `ai.service.ts` reads `this.aiConfig.defaults.model` / `.temperature` instead of a literal, so switching models is now an env change, not a code change. `temperature` is also now applied consistently across call sites (defaulting to `0`), which resolves the "pin `temperature: 0` on all scoring calls" ask two paragraphs down.

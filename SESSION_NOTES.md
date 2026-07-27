@@ -95,7 +95,40 @@ The `seed-demo-full.js` fix above only repaired the DB *after* boot — a fresh 
 
 Side finding: **the SQLite fallback at `mikro-orm.config.ts:8` does not work** — `better-sqlite3`'s native bindings were never compiled, so booting with an empty `DB_HOST` dies at connect. `CLAUDE.md` describes it as a usable no-Docker path; it isn't. Logged in §2. (Also: `dotenv` never overrides an existing `process.env` key, and PowerShell's `$env:X=''` *deletes* rather than empties a variable — so `.env`'s `DB_HOST` always wins from PowerShell regardless.)
 
-**Next:** R2 + presigned URLs → model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
+### Object storage: presigned uploads (Supabase, not R2)
+
+**R2 was ruled out** — Cloudflare requires a credit card even on the free tier. Switched to **Supabase Storage**: S3-compatible, no card, ~1 GB free. Because `upload.service.ts` uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, the provider change stayed a config swap rather than a rewrite.
+
+**Read path decision: private bucket + presigned GET**, storing the object *key* rather than a URL. Normally that costs a data migration, but the DB wipe left no upload rows to convert — so the secure option was effectively free. It matters here because assessment attachments and capsule proposals carry startup financials and IP status.
+
+What changed:
+- `DO_SPACES_*` → `S3_*`; added `forcePathStyle: true`; dropped `ACL: 'public-read'` (Supabase/R2/modern S3 all gate public access per *bucket*, not per object).
+- `POST /upload/presign` → browser PUTs straight to the bucket. `GET /upload/signed-url?key=` → temporary read URL.
+- `JwtGuard` on the whole controller (closes the §1 SEC item); `test-connection` no longer leaks raw SDK error text naming the bucket and endpoint.
+- `FileUploadField.svelte` switched to presign → PUT, stores `{key, fileName}`, still renders legacy `{url, fileName}`. Preview became a button, since a signed URL expires and there is no stable `href`.
+
+**Two real bugs the tests caught, both of which would have shipped silently:**
+1. The AWS SDK computes a CRC32 checksum by default. On a presigned PUT there is no body at signing time, so it signed the checksum of *nothing* — every real upload would have been rejected at the bucket. Fixed with `requestChecksumCalculation: 'WHEN_REQUIRED'`.
+2. `getSignedUrl` signs only `host` unless given `signableHeaders`. The `Content-Type` returned as "required" was therefore decorative — a client could request an image URL and PUT anything through it.
+
+Also hit a dependency trap: `pnpm add @aws-sdk/s3-request-presigner` resolved to 3.1095.0 against `client-s3` 3.901.0, pulling two copies of `@smithy/types` and breaking the build with a wall of structural-mismatch errors. Pin the presigner to the client's exact version.
+
+**Verified — end to end against the live bucket.** Credentials went into `backend/.env`; `test-connection` reports `connected`.
+
+- 14 unit tests pass (signing is a local HMAC, so the presigned URLs are genuinely SDK-produced).
+- Auth/degradation probe: 401 on all three routes unauthenticated, 400 on an oversize request (DTO-level, before storage is consulted), 503 when `S3_*` is unset instead of a crash.
+- API round trip: presign → PUT (200) → signed GET (200), **byte-identical** file back. An **unsigned** GET on the same object returned **403** — the bucket really is private, not merely assumed to be.
+- Through the UI as `founder.agrolink@launchup.local` (Startup role, not staff): attached a PNG, submitted, Technology moved 2 Pending → 1 Pending / 1 Done, and Preview resolved a fresh signed URL that rendered the image (10×10, `image/png`). No console errors.
+- Stored `answerValue` is `{"files":[{"key":"assessments/…png","fileName":"…"}]}` — a **key, no URL**, as designed.
+
+Two things surfaced during that verification:
+
+1. **The assessment tables were empty after the wipe**, so the assessment page rendered nothing and the File field was unreachable. `seed-demo-full.js` now seeds 6 assessments (2 File-type) applied to both startups. Worth knowing that the wipe took out more than the seeders replaced.
+2. **Removing a file orphans the object.** "Remove file" only rewrites `answerValue`; `deleteFile()` exists but its route is commented out, so removed attachments stay in the bucket forever with nothing in the app pointing at them. Logged in §2.
+
+Also note **PowerShell 5.1's `Invoke-WebRequest` reported the HTTPS PUT to Supabase as failed with no status code** — but a later bucket listing showed the object *had* been created, so the request reached storage and only the client-side completion or response read failed. Treat a PS failure against Supabase as unreliable in both directions: it may report failure on success, and it cannot be trusted to tell you why. The same request from Node worked and reported correctly. **Use Node for storage probes.**
+
+**Next:** model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 
 ---
 

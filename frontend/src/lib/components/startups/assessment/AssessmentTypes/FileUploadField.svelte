@@ -24,7 +24,11 @@
 
   let processing = false;
   let pendingFiles: File[] = [];
-  let uploadedFiles: Array<{ url: string; fileName: string }> = [];
+  // `key` is what new uploads store — the bucket is private, so a readable URL
+  // has to be signed on demand. `url` only appears on rows written before the
+  // move to presigned uploads, and is still rendered as-is.
+  type StoredFile = { key?: string; url?: string; fileName: string };
+  let uploadedFiles: StoredFile[] = [];
   let showDeleteConfirm = false;
   let fileToDeleteIndex: number | null = null;
   let initialized = false;
@@ -60,6 +64,42 @@
 
   function makeAbsoluteUrl(url: string): string {
     return url?.startsWith('http') ? url : `https://${url}`;
+  }
+
+  /** Signed GETs expire, so this resolves one per action rather than caching. */
+  async function resolveFileUrl(file: StoredFile): Promise<string> {
+    if (file.key) {
+      const response = await axiosInstance.get('/upload/signed-url', {
+        params: { key: file.key },
+        headers: { Authorization: `Bearer ${access}` }
+      });
+      return response.data.url;
+    }
+
+    if (file.url) {
+      return makeAbsoluteUrl(file.url);
+    }
+
+    throw new Error('File record has neither a key nor a URL');
+  }
+
+  async function previewFile(file: StoredFile): Promise<void> {
+    // Opened up front and pointed at the URL afterwards: opening it after the
+    // await would be treated as an unsolicited popup and blocked.
+    const tab = window.open('', '_blank', 'noopener,noreferrer');
+
+    try {
+      const url = await resolveFileUrl(file);
+      if (tab) {
+        tab.location.href = url;
+      } else {
+        window.location.href = url;
+      }
+    } catch (error) {
+      tab?.close();
+      console.error('Failed to open file:', error);
+      toast.error('Failed to open file');
+    }
   }
 
   function handleFileSelection(selectedFiles: FileList | null): void {
@@ -140,9 +180,9 @@
     fileToDeleteIndex = null;
   }
 
-  async function downloadFile(file: { url: string; fileName: string }): Promise<void> {
+  async function downloadFile(file: StoredFile): Promise<void> {
     try {
-      const response = await fetch(makeAbsoluteUrl(file.url));
+      const response = await fetch(await resolveFileUrl(file));
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -159,6 +199,42 @@
     }
   }
 
+  /**
+   * Two steps: ask the API to sign an upload, then PUT the bytes straight to
+   * the bucket. The file never passes through the API, so a slow 10MB upload
+   * no longer occupies a request there.
+   */
+  async function uploadOne(file: File): Promise<StoredFile> {
+    const { data: presigned } = await axiosInstance.post(
+      '/upload/presign',
+      {
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        folder: UPLOAD_FOLDER
+      },
+      { headers: { Authorization: `Bearer ${access}` } }
+    );
+
+    // Plain fetch, not axiosInstance: this goes to the storage provider, and
+    // the instance's baseURL and Authorization header would break the
+    // signature.
+    const response = await fetch(presigned.uploadUrl, {
+      method: 'PUT',
+      // Must match the headers the URL was signed with, exactly.
+      headers: presigned.requiredHeaders,
+      body: file
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Storage rejected the upload (${response.status} ${response.statusText})`
+      );
+    }
+
+    return { key: presigned.key, fileName: file.name };
+  }
+
   export async function uploadPendingFiles(): Promise<void> {
     if (pendingFiles.length === 0) {
       return;
@@ -167,40 +243,9 @@
     processing = true;
 
     try {
-      if (pendingFiles.length === 1) {
-        const formData = new FormData();
-        formData.append('file', pendingFiles[0]);
+      const newUploadedFiles = await Promise.all(pendingFiles.map(uploadOne));
 
-        const response = await axiosInstance.post(
-          `/upload/single?folder=${UPLOAD_FOLDER}`,
-          formData,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
-        );
-
-        uploadedFiles = [
-          ...uploadedFiles,
-          { url: response.data.url, fileName: response.data.originalName }
-        ];
-      } else {
-        const formData = new FormData();
-        pendingFiles.forEach((file) => {
-          formData.append('files', file);
-        });
-
-        const response = await axiosInstance.post(
-          `/upload/multiple?folder=${UPLOAD_FOLDER}`,
-          formData,
-          { headers: { 'Content-Type': 'multipart/form-data' } }
-        );
-
-        const newUploadedFiles = response.data.files.map((file: any) => ({
-          url: file.url,
-          fileName: file.originalName
-        }));
-
-        uploadedFiles = [...uploadedFiles, ...newUploadedFiles];
-      }
-
+      uploadedFiles = [...uploadedFiles, ...newUploadedFiles];
       updateValue();
       pendingFiles = [];
 
@@ -246,16 +291,17 @@
           </span>
 
           <div class="flex flex-shrink-0 items-center gap-2">
-            <a
-              href={makeAbsoluteUrl(file.url)}
-              target="_blank"
-              rel="noopener noreferrer"
+            <!-- A button, not a link: the URL is signed on demand and expires,
+                 so there is no stable href to put here. -->
+            <button
+              type="button"
+              onclick={() => previewFile(file)}
               class="flex items-center gap-1.5 rounded px-2 py-1 text-sm text-blue-500 hover:bg-blue-50 hover:text-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20 dark:hover:text-blue-300"
               title="Preview file"
             >
               <ExternalLink size={14} />
               <span>Preview</span>
-            </a>
+            </button>
 
             <button
               type="button"
