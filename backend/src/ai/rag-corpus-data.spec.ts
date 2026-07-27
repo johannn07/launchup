@@ -78,3 +78,37 @@ describe('readiness-rubrics.json', () => {
     }
   });
 });
+
+describe('business-frameworks.json', () => {
+  const rows = load('business-frameworks.json');
+
+  it('holds ten rows with unique keys', () => {
+    expect(rows).toHaveLength(10);
+    expect(new Set(rows.map((r) => r.key)).size).toBe(10);
+  });
+
+  it('carries no dimension key — these are not retrieved by dimension', () => {
+    for (const row of rows) {
+      expect(row.readinessType).toBeUndefined();
+      expect(row.level).toBeUndefined();
+    }
+  });
+
+  it('uses only the three provenance values, and cites anything not authored', () => {
+    for (const row of rows) {
+      expect(PROVENANCES).toContain(row.provenance);
+      if (row.provenance === 'authored') {
+        expect(row.citation).toBeNull();
+      } else {
+        expect(typeof row.citation).toBe('string');
+      }
+    }
+  });
+
+  it('gives every row substantive content and key terms', () => {
+    for (const row of rows) {
+      expect(row.content.length).toBeGreaterThan(200);
+      expect(row.keyTerms.length).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
