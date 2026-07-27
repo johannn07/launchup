@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   ParseIntPipe,
   Post,
@@ -14,8 +15,10 @@ import {
 } from '@nestjs/common';
 
 import { AiService } from 'src/ai/ai.service';
+import { AiRunService } from 'src/ai/ai-run.service';
 import { StartupService } from './startup.service';
 import { JwtGuard } from 'src/auth/guard';
+import { Role } from 'src/entities/enums/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadedFile } from '@nestjs/common';
 import { UpdateStartupDto } from '../admin/dto/update-startup.dto';
@@ -33,6 +36,7 @@ export class StartupController {
   constructor(
     private startupService: StartupService,
     private aiService: AiService,
+    private readonly aiRunService: AiRunService,
   ) {}
 
   @Get('/startups')
@@ -79,9 +83,23 @@ export class StartupController {
   // ==================================================
 
   @Post('/apply')
-  async applyStartup(@Body() dto: StartupApplicationDto, @Req() req: any) {
+  async applyStartup(
+    @Body() dto: StartupApplicationDto,
+    @Req() req: any,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
+  ) {
     const userId = req.user.id;
-    const data = await this.startupService.create(dto, userId);
+    const isPrivileged =
+      req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    // Opens with a null startupId — the startup is created inside create(),
+    // which calls aiRunService.attribute() once it has an id.
+    await this.aiRunService.track(
+      null,
+      'analysis_summary',
+      pipelineConfig,
+      isPrivileged,
+      (ctx) => this.startupService.create(dto, userId, ctx),
+    );
     return {
       message: 'yeahhhhhhhhhhhhh created startup',
     };
@@ -102,9 +120,23 @@ export class StartupController {
 
   @Post('/parse-capsule-proposal')
   @UseInterceptors(FileInterceptor('capsuleProposal'))
-  async getCapsuleProposal(@UploadedFile() file: Express.Multer.File) {
+  async getCapsuleProposal(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
+  ) {
+    // startupId is null: parsing happens while filling in the application, so
+    // no startup exists yet to attribute the run to.
+    const isPrivileged =
+      req.user?.role === Role.Manager || req.user?.role === Role.Admin;
     try {
-      return await this.startupService.parseCapsuleProposal(file);
+      return await this.aiRunService.track(
+        null,
+        'capsule_extract',
+        pipelineConfig,
+        isPrivileged,
+        (ctx) => this.startupService.parseCapsuleProposal(file, ctx),
+      );
     } catch (error) {
       const { Logger } = require('@nestjs/common');
       new Logger('StartupController').error('Failed to process capsule proposal: ' + (error.stack || error));

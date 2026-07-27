@@ -5,6 +5,8 @@ import { AiRunService } from './ai-run.service';
 import { AiService } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
+import { EmbeddingIndexService } from './embedding-index.service';
+import { EmbeddingService } from './embedding.service';
 
 const configService = () =>
   new AiConfigService({ get: () => undefined } as unknown as ConfigService);
@@ -40,12 +42,13 @@ describe('AiRunService', () => {
     const ctx = await service.begin(7, 'rns');
 
     expect(ctx.runId).toBe(42);
-    expect(ctx.config.model).toBe('gemini-2.5-flash-lite');
+    // configService() has no env set, so this is DEFAULT_MODEL.
+    expect(ctx.config.model).toBe('gemini-3.6-flash');
     expect(em.create).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         operation: 'rns',
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3.6-flash',
         status: 'running',
         config: expect.objectContaining({ rag: true, grounding: true }),
       }),
@@ -283,6 +286,9 @@ describe('AiRunService token accounting', () => {
       { normalizeScore: jest.fn() } as unknown as BaselineService,
       {} as unknown as EntityManager,
       configService(),
+      // Only reached via recordRagContext, which token accounting never calls.
+      { indexRagContext: jest.fn() } as unknown as EmbeddingIndexService,
+      { embed: jest.fn() } as unknown as EmbeddingService,
     );
     (service as unknown as { ai: unknown }).ai = { models: { generateContent } };
     return service;

@@ -28,6 +28,7 @@ import {
   UpdateCapsuleProposalDto,
 } from './dto';
 import { AiService } from '../ai/ai.service';
+import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
@@ -37,6 +38,7 @@ export class StartupService {
   constructor(
     private em: EntityManager,
     private readonly aiService: AiService,
+    private readonly aiRunService: AiRunService,
     private readonly ocrService: OcrService,
   ) {}
 
@@ -121,7 +123,7 @@ export class StartupService {
     return startup;
   }
 
-  async create(dto: StartupApplicationDto, userId: number) {
+  async create(dto: StartupApplicationDto, userId: number, ctx: AiRunContext) {
     return this.em.transactional(async () => {
       const user = await this.em.findOne(User, { id: userId });
       if (!user) {
@@ -141,11 +143,16 @@ export class StartupService {
 
       await this.em.persistAndFlush(startup);
 
+      // The run opened before the startup existed, so attribute it now that
+      // there is an id — otherwise a failed application leaves an orphaned
+      // run row that no startup-filtered provenance query would surface.
+      await this.aiRunService.attribute(ctx, startup);
+
       // Add the startup leader/owner to the members collection
       startup.members.add(user);
       await this.em.flush();
 
-      await this.createStartupProposal(startup, dto);
+      await this.createStartupProposal(startup, dto, ctx);
 
       if (startup.capsuleProposal) {
         await this.aiService.recordRagContext({
@@ -174,7 +181,7 @@ export class StartupService {
     });
   }
 
-  async parseCapsuleProposal(file: Express.Multer.File) {
+  async parseCapsuleProposal(file: Express.Multer.File, ctx: AiRunContext) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
@@ -237,6 +244,7 @@ export class StartupService {
       // This gives far superior results for handwritten documents compared to Tesseract
       try {
         aiPayload = await this.aiService.getCapsuleProposalInfoFromImage(
+          ctx,
           file.buffer,
           file.mimetype,
         );
@@ -256,7 +264,7 @@ export class StartupService {
 
       // If Gemini Vision failed, fall back to Tesseract text + AI text extraction
       if (!aiPayload && parsedText) {
-        aiPayload = await this.aiService.getCapsuleProposalInfo(parsedText);
+        aiPayload = await this.aiService.getCapsuleProposalInfo(ctx, parsedText);
       }
     } else {
       try {
@@ -319,7 +327,7 @@ export class StartupService {
       }
 
       // For PDFs, use the text-based AI extraction
-      aiPayload = await this.aiService.getCapsuleProposalInfo(parsedText);
+      aiPayload = await this.aiService.getCapsuleProposalInfo(ctx, parsedText);
     }
 
     const cleanPayload = aiPayload
@@ -417,10 +425,11 @@ export class StartupService {
   private async createStartupProposal(
     startup: Startup,
     dto: StartupApplicationDto,
+    ctx: AiRunContext,
   ) {
     try {
       const aiAnalysisSummary =
-        await this.aiService.generateStartupAnalysisSummary(dto);
+        await this.aiService.generateStartupAnalysisSummary(ctx, dto);
 
         if (startup.capsuleProposal) {
         const proposal = startup.capsuleProposal;

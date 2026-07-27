@@ -7,7 +7,26 @@ import {
 } from '@mikro-orm/core';
 import { Startup } from './startup.entity';
 
-export type AiRunOperation = 'rna' | 'rna_refine' | 'rns' | 'rns_refine' | 'initiatives' | 'initiatives_refine' | 'roadblocks' | 'roadblocks_refine';
+/**
+ * `capsule_extract` covers the whole capsule-proposal parse, including the
+ * Gemini Vision path used for handwritten documents (Objective 3). The vision
+ * call and the Tesseract-text fallback are two model calls within one run, not
+ * two runs — which one fired is visible in the token totals, not the operation.
+ *
+ * `analysis_summary` is the one-shot summary written when an application is
+ * submitted.
+ */
+export type AiRunOperation =
+  | 'rna'
+  | 'rna_refine'
+  | 'rns'
+  | 'rns_refine'
+  | 'initiatives'
+  | 'initiatives_refine'
+  | 'roadblocks'
+  | 'roadblocks_refine'
+  | 'capsule_extract'
+  | 'analysis_summary';
 export type AiRunStatus = 'running' | 'completed' | 'failed';
 
 /**

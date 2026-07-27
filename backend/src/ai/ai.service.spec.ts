@@ -48,6 +48,11 @@ describe('AiService', () => {
       } as any,
       {} as any,
       new AiConfigService(undefinedConfigService),
+      // recordRagContext indexes the row it just wrote; nothing under test here
+      // reaches that path, so a stub is enough.
+      { indexRagContext: jest.fn().mockResolvedValue(true) } as any,
+      // Only used by the semantic retrieval arm, which these tests do not take.
+      { embed: jest.fn().mockResolvedValue(null) } as any,
     );
 
     (service as unknown as { ai: { models: { generateContent: jest.Mock } } }).ai = {
@@ -140,13 +145,16 @@ describe('AiService', () => {
     expect(generateContent.mock.calls[0][0].model).toBe('gemini-2.5-pro');
   });
 
-  it('falls back to the injected AiConfigService defaults for untracked (non-run) calls', async () => {
+  it('drives capsule text extraction from the run context, not the global defaults', async () => {
     generateContent.mockResolvedValue({ text: '{"title":"Example"}' });
 
-    await service.getCapsuleProposalInfo('some proposal text');
+    await service.getCapsuleProposalInfo(
+      ctxWith({ model: 'gemini-3.6-flash' }),
+      'some proposal text',
+    );
 
     const request = generateContent.mock.calls[0][0];
-    expect(request.model).toBe('gemini-2.5-flash-lite');
+    expect(request.model).toBe('gemini-3.6-flash');
     expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
     // Uncapped on purpose: this prompt asks for eight full prose fields from
@@ -159,10 +167,14 @@ describe('AiService', () => {
   it('sends the configured model and sampling params inside config for image OCR calls', async () => {
     generateContent.mockResolvedValue({ text: '{"title":"Example"}' });
 
-    await service.getCapsuleProposalInfoFromImage(Buffer.from('fake-image'), 'image/png');
+    await service.getCapsuleProposalInfoFromImage(
+      ctxWith({ model: 'gemini-3.6-flash' }),
+      Buffer.from('fake-image'),
+      'image/png',
+    );
 
     const request = generateContent.mock.calls[0][0];
-    expect(request.model).toBe('gemini-2.5-flash-lite');
+    expect(request.model).toBe('gemini-3.6-flash');
     expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
     // Uncapped: the response carries a full raw_transcription on top of the
@@ -278,6 +290,99 @@ describe('AiService', () => {
 
       const promptPassed = generateContent.mock.calls[0][0].contents;
       expect(promptPassed).toContain('Baseline normalized score');
+    });
+  });
+
+  // These three used to read AiConfigService.defaults directly and opened no
+  // ai_generation_runs row, so the capsule-parsing path — including the Gemini
+  // Vision route behind Objective 3 — was invisible to the provenance table and
+  // silently ignored any X-Ai-Pipeline-Config override.
+  describe('capsule-parsing calls contribute to the run', () => {
+    const trackedCtx = (): AiRunContext =>
+      ({
+        ...ctxWith(),
+        tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      }) as AiRunContext;
+
+    it('accumulates token usage from text extraction', async () => {
+      generateContent.mockResolvedValue({
+        text: '{"title":"Example"}',
+        usageMetadata: { promptTokenCount: 900, candidatesTokenCount: 120 },
+      });
+
+      const ctx = trackedCtx();
+      await service.getCapsuleProposalInfo(ctx, 'proposal text');
+
+      expect(ctx.tokens).toEqual({
+        promptTokens: 900,
+        completionTokens: 120,
+        recorded: true,
+      });
+    });
+
+    it('accumulates token usage from the vision path', async () => {
+      generateContent.mockResolvedValue({
+        text: '{"title":"Example"}',
+        usageMetadata: { promptTokenCount: 1500, candidatesTokenCount: 300 },
+      });
+
+      const ctx = trackedCtx();
+      await service.getCapsuleProposalInfoFromImage(
+        ctx,
+        Buffer.from('fake-image'),
+        'image/png',
+      );
+
+      expect(ctx.tokens.promptTokens).toBe(1500);
+      expect(ctx.tokens.recorded).toBe(true);
+    });
+
+    it('sums the vision call and its text fallback into one run total', async () => {
+      // parseCapsuleProposal tries vision first and falls back to Tesseract
+      // text on failure — two model calls, one run.
+      generateContent
+        .mockResolvedValueOnce({
+          text: '{"title":"Example"}',
+          usageMetadata: { promptTokenCount: 1500, candidatesTokenCount: 300 },
+        })
+        .mockResolvedValueOnce({
+          text: '{"title":"Example"}',
+          usageMetadata: { promptTokenCount: 900, candidatesTokenCount: 120 },
+        });
+
+      const ctx = trackedCtx();
+      await service.getCapsuleProposalInfoFromImage(
+        ctx,
+        Buffer.from('fake-image'),
+        'image/png',
+      );
+      await service.getCapsuleProposalInfo(ctx, 'fallback text');
+
+      expect(ctx.tokens.promptTokens).toBe(2400);
+      expect(ctx.tokens.completionTokens).toBe(420);
+    });
+
+    it('accumulates token usage from the analysis summary', async () => {
+      generateContent.mockResolvedValue({
+        text: 'A three sentence summary.',
+        usageMetadata: { promptTokenCount: 700, candidatesTokenCount: 90 },
+      });
+
+      const ctx = trackedCtx();
+      await service.generateStartupAnalysisSummary(ctx, {
+        title: 'T',
+        description: 'D',
+        problemStatement: 'P',
+        targetMarket: 'M',
+        solutionDescription: 'S',
+        objectives: ['O'],
+        proposalScope: 'Sc',
+        methodology: 'Me',
+        intellectualPropertyStatus: 'None',
+      } as any);
+
+      expect(ctx.tokens.completionTokens).toBe(90);
+      expect(ctx.tokens.recorded).toBe(true);
     });
   });
 });

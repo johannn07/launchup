@@ -38,10 +38,10 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | Objective | Status | Evidence |
 |---|---|---|
 | **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:307`); `GroundedPromptBuilderService` exists. Toggleable via `AI_GROUNDING_ENABLED` |
-| **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist. `AI_RAG_ENABLED` gates the **keyword-overlap** retrieval standing in for it, so toggling that flag measures lexical matching, not semantic search — do not report it as a RAG result |
+| **1b** RAG pipeline grounding calls in retrieved context | 🟡 **Pipeline built, corpus inadequate** | Real semantic retrieval as of 2026-07-27: `gemini-embedding-2` at 768 dims, vectors written to `vector_embeddings`, ranked by pgvector `<=>`, floor calibrated to 0.78. `AI_RAG_STRATEGY=keyword\|semantic` makes the old token-overlap path an explicit baseline arm rather than something mislabelled as RAG. **Remaining gap:** the corpus is only other startups' capsule proposals, so this retrieves peer text, not verified knowledge — see below before reporting an Objective 1 result |
 | **1c** Output validation layer flagging inconsistent recs | 🔴 **Stub** | `output-validator.service.ts` — `validateEach()` returns `isValid: true` for everything with `// TODO`; `flagInconsistencies()` and `markUnverifiable()` have empty bodies |
 | **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
-| **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. |
+| **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. **But see §5:** measurement on 2026-07-27 showed the *model* was the binding constraint on differentiation — `gemini-2.5-flash-lite` scored an early-stage and a mid-stage startup identically on 5 of 6 dimensions, so no weighting scheme applied to those inputs could have separated them. Raising the model moved the gap from −0.17 to +2.28. Fix the weights, but do not expect them to be the differentiation win. |
 | **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
 | **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
@@ -50,19 +50,32 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. Toggleable via `AI_BIAS_REVIEW_ENABLED` |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI. Toggleable via `AI_SCORE_NORMALIZATION_ENABLED`, now **independent of 4b** — it previously ran inside `reviewBiasScore()` and could not be exercised without it |
 
-### The critical one — Objective 1b has no RAG
+### Objective 1b — RAG now exists; the corpus is what's left
 
-- [ ] 🔴 **OBJECTIVE · L · Implement the RAG pipeline — it currently does not exist**
-  Verified across the whole backend:
-  - **No embedding model is called anywhere.** No `embedContent`, no `text-embedding`, nothing (grepped `backend/src` entirely).
-  - **`vector_embeddings` is read-only.** `RagQueryService` reads it (`rag-query.service.ts:20,31`); **nothing ever writes it.** So `queryVectorDatabase()` always takes the `if (!sourceEmbedding)` branch and returns `lowConfidence: true` with empty arrays — on every single call.
-  - **pgvector is installed but unused for search.** `Migration20260528160512_InstallVectorExtension` ran, but similarity is computed in JavaScript by loading every row into memory (`rag-query.service.ts:33-38`).
-  - **The path actually wired into generation is keyword matching, not RAG.** `getRelevantRagContexts()` (`ai.service.ts:272`, called at `:688`) scores candidates by **token overlap** (`scoreRagMatch`, `:247`) — a bag-of-words Jaccard score. That is lexical retrieval, not semantic.
-  - **The corpus is self-referential.** `RagContext` rows are only written from `startup.service.ts:151` during capsule-proposal parsing, so the system retrieves the startup's *own* prior text. `verifiedFrameworks` and `businessModels` are hardcoded `[]` with TODOs (`rag-query.service.ts:66-67`).
+- [x] ✅ **OBJECTIVE · L · Semantic retrieval pipeline** — done 2026-07-27, commits `4708a2e`, `5c390de`, and the strategy commit that follows them.
+  - **Embeddings are produced and stored.** `EmbeddingService` (`ai/embedding.service.ts`) calls `gemini-embedding-2` at 768 dimensions; `EmbeddingIndexService` writes `vector_embeddings` on every `recordRagContext`, plus a boot-time backfill for rows written before any of this existed. Verified against Neon: first vector stored at 768 dims, norm 1.0000.
+  - **Similarity is computed by pgvector, not JavaScript.** Both `AiService.retrieveSemantic` and `RagQueryService.queryVectorDatabase` order by `<=>` in SQL. The old code loaded every vector into Node — ~3KB transferred per candidate to pick three.
+  - **`vector_embeddings` was pinned to `vector(768)`.** It was a dimensionless `vector`, which pgvector cannot index at all. 768 rather than the native 3072 because hnsw/ivfflat refuse anything above 2000 dimensions (verified, not assumed).
+  - **`RagQueryService` was looking for a source type nothing writes** (`source_type = 'startup'`), so it returned `lowConfidence: true` on literally every call. It now reads the one real corpus and reaches startups through `rag_contexts.startup_id`.
+  - **Three arms, not two.** `AI_RAG_STRATEGY=keyword|semantic` sits alongside `AI_RAG_ENABLED`, so the comparison can separate "does retrieval help at all" from "does *semantic* retrieval beat the token matching that was already here". An unknown value is rejected at boot rather than defaulted, so a typo cannot mislabel an arm.
+  - **A startup can no longer retrieve itself.** Its own capsule proposal was previously eligible as a "verified prior profile" — the model reading its own input back as independent corroboration.
 
-  **Why it matters:** Objective 1 and Research Question 1 are both entirely about RAG. As written you cannot answer RQ1, because there is no retrieval-augmented pipeline to measure against the baseline.
-  **Work required:** add an embedding model call, backfill embeddings for startup profiles + a seeded framework corpus, switch similarity to a pgvector `<=>` query, and populate `verifiedFrameworks` / `businessModels` with real business-framework documents.
-  *Blocks nothing else technically, but it is the single largest gap between the proposal and the code.*
+  **The arm comparison, measured** (`measurement/measure-retrieval.js`, 2026-07-27) — nine documents, three domains, each used as the query against the other eight, production scoring functions on both sides:
+
+  | arm | returned | correct | precision | top hit correct | same-domain recall |
+  |---|---|---|---|---|---|
+  | keyword | 27 | 15 | 56% | 7/9 | 15/18 (83%) |
+  | semantic | 21 | 16 | **76%** | 8/9 | 16/18 (89%) |
+
+  Semantic returned **fewer** documents and still surfaced **more** correct ones — precision was not bought with recall. Keyword's `score > 0` floor admits anything sharing one token, so it returns a full top-3 for every query no matter how unrelated. Caveats are real and written up in `measurement/README.md`: the documents are composed rather than sampled, ground truth is domain membership rather than human relevance judgement, and N is 9. Enough to justify the default; not enough to publish as an effect size.
+
+  **Similarity floor is calibrated, and the calibration matters.** `RAG_MIN_SIMILARITY = 0.78`, from `measurement/calibrate-similarity.js` (nine startups, three domains, 36 pairs). The distributions **overlap** — same-domain similarity runs as low as 0.7295, cross-domain as high as 0.8036 — so this is a trade-off, not a boundary: 0.78 keeps 8/9 true neighbours and leaks 11% of cross-domain pairs. A first guess of 0.70 leaked **78%** and let an agriculture startup through at 0.765 as context for a health platform. Re-run the calibration if the embedding model changes.
+
+- [ ] 🔴 **OBJECTIVE · M · The corpus is still self-referential — this is now the real Objective 1b gap**
+  Retrieval works, but it can only retrieve *other startups' capsule proposals*, because that is the only thing `rag_contexts` ever holds (written solely from `startup.service.ts:158`). `verifiedFrameworks` and `businessModels` are still hardcoded `[]`.
+  **Why it matters:** "retrieval-augmented against a verified knowledge base" is the claim. Retrieving peer startup text is peer comparison, not grounding in verified knowledge — and peer text is itself AI-parsed, so errors can propagate. With 2 startups seeded there is also almost nothing to retrieve.
+  **Work:** seed a real corpus of TRL/MRL definitions, readiness-level rubrics, and business-framework documents as `rag_contexts` rows with a distinct `sourceType`; the embedding and retrieval path then covers them with no code change. Populate `verifiedFrameworks` / `businessModels` from that corpus.
+  **Do this before claiming any Objective 1 result** — the pipeline is measurable now, but with this corpus it would measure peer similarity.
 
 - [ ] 🔴 **OBJECTIVE · M · Implement the output validation layer (1c)**
   `rna/output-validator.service.ts` is three stub methods. `rna/recommendation-storage.service.ts` is **four stub methods with empty bodies** — including `saveRecommendations()`, so validated recommendations are never persisted.
@@ -314,6 +327,14 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
   **Verified** on a genuinely cold DB (throwaway `launchup_seedtest` on the same Neon instance, created with pgvector, booted, asserted, dropped): both startups took the create branch, owners are the two `Startup`-role founders, both have `mentor@launchup.local` in `startups_mentors`, and all three assertions — non-`Startup` owners, self-mentoring, mentorless startups — returned 0.
   *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached — that shortcut is what left the startups mentorless in the first place.*
 
+- [ ] 🧹 **DEBT · S · `ai_generation_runs` cannot see thinking-token cost**
+  The table records `prompt_tokens` and `completion_tokens` but has no column for **thinking tokens**, which on `gemini-3.6-flash` are ~780 per call — more than twice the visible output. Since the default moved to a reasoning tier, the provenance table now systematically under-reports the true cost of every run, which matters for any "was the enhanced pipeline worth it?" comparison.
+  **Fix:** add a `thinking_tokens` column and populate it from `usageMetadata.thoughtsTokenCount`, which the SDK already returns. Cheap now; expensive to backfill once a study's worth of rows exists without it.
+
+- [ ] 🧹 **DEBT · S · `pnpm lint` is unusable because of a CRLF-vs-prettier conflict**
+  There is **no `.gitattributes`** and `core.autocrlf=true`, so files check out CRLF on Windows, while prettier (no `endOfLine` setting, therefore `"lf"`) flags **every line of every file** as `Delete ␍`. `ai-config.service.ts` + its spec alone account for 205 errors, and the repo-wide total is 727 — almost all of it this one rule. Real findings are buried, and `pnpm lint` runs `eslint --fix`, so anyone who runs it casually rewrites the entire `src/` tree.
+  **Fix:** add `.gitattributes` with `* text=auto eol=lf`, or set `"endOfLine": "auto"` in `.prettierrc`. Either drops the error count by roughly an order of magnitude and makes the linter worth running. Consider also splitting `lint` (check) from `lint:fix` so `--fix` is opt-in.
+
 - [ ] 🐞 **BUG · S · Two unit tests fail on `master` — the suite is red before anyone starts**
   `pnpm test` is **74 passed / 2 failed** on a clean `master` checkout (verified 2026-07-27 by checking out `master` and re-running, so this is not from any feature branch). Both look like stale expectations rather than product defects, but a red baseline means nobody can tell a real regression from the noise.
   - `src/ai/ai.service.spec.ts` › *"passes valid task responses through unchanged"* — the test's own context sets `scoreNormalization: true` and mocks `normalizeScore` to return `{ scaled: 5, z: 0 }`, so the service correctly emits `target_level_normalized: 5` plus `target_level_z: 0`. The assertion still expects `target_level_normalized: 3` and no `_z` field. **The expectation is wrong, not the code** — note the hand-edited comment on the line, which suggests it was patched without being run.
@@ -397,14 +418,59 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
 
 - [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
   **Partially addressed:** the model is no longer a hardcoded literal — `AiConfigService` (`backend/src/ai/ai-config.service.ts`) now resolves `model` and `temperature` from `GEMINI_MODEL` / `AI_TEMPERATURE` env vars (see `backend/.env.example`), and every call site in `ai.service.ts` reads `this.aiConfig.defaults.model` / `.temperature` instead of a literal, so switching models is now an env change, not a code change. `temperature` is also now applied consistently across call sites (defaulting to `0`), which resolves the "pin `temperature: 0` on all scoring calls" ask two paragraphs down.
-  **Still not done:** the *default* remains the same weak `gemini-2.5-flash-lite` tier for every call, and there is still only one model for every task — the per-task tiering recommendation below (Pro for scoring/bias, Flash for generation, a real embedding model for RAG) requires an actual env/config value change plus verifying vision quality, not just code.
+  **Default raised to `gemini-3.6-flash` (2026-07-27)** — `DEFAULT_MODEL` in `ai-config.service.ts` and `GEMINI_MODEL` in both `.env` and `.env.example`.
   **Why it matters for *this* project specifically:** Objectives 1 and 4 are about hallucination and leniency bias, and the lite tier is the most susceptible to both — weakest instruction-following, weakest reasoning, most sycophantic. Objective 3 needs handwriting and sketch understanding, which is exactly where a lite vision model is weakest. A weak model doesn't just degrade UX here; it **biases your research results against your own hypothesis**.
-  **Recommendation — tier by task rather than one model everywhere:**
-  - Scoring, bias review, adversarial re-prompting (Obj. 1 + 4) → **Gemini 2.5 Pro**, low temperature, thinking enabled
-  - RNA/RNS generation and refinement chat → **Gemini 2.5 Flash**
-  - Handwriting / sketch vision (Obj. 3) → **Gemini 2.5 Flash or Pro**
-  - RAG embeddings → **`gemini-embedding-001`** — currently missing entirely (see §0)
-  Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast.
+
+  ⚠️ **The earlier recommendation in this section was wrong, and measuring it is what caught that.** It named Gemini 2.5 Pro / 2.5 Flash. Measured against the project's own API key on 2026-07-27:
+
+  | Model | Latency | Output tok | **Thinking tok** | Total | JSON |
+  |---|---|---|---|---|---|
+  | `gemini-2.5-flash-lite` *(was default)* | 2.3s | 326 | **0** | 448 | fenced |
+  | `gemini-3.1-flash-lite` | 2.1s | 266 | 0 | 388 | clean |
+  | `gemini-3.5-flash-lite` | 1.9s | 280 | 0 | 402 | clean |
+  | **`gemini-3.6-flash`** *(new default)* | 6.5s | 343 | **779** | 1244 | clean |
+  | `gemini-3.5-flash` | 12.1s | 362 | 965 | 1449 | clean |
+  | `gemini-2.5-flash` | — | — | — | — | **404 "no longer available to new users"** |
+  | `gemini-2.5-pro`, `gemini-3-pro-preview`, `gemini-3.1-pro-preview` | — | — | — | — | **429 — not on the free tier** |
+
+  - **`gemini-2.5-flash` is gone.** Wiring the old recommendation would have 404'd every AI call.
+  - **No Pro-tier model is reachable on the free key.** All three 429 with 20s spacing, so it is tier exclusion, not a rate limit. **Any plan that puts Pro on scoring/bias requires paid billing.**
+  - **The lite tiers spend zero tokens reasoning.** Asked for *Technology* readiness, `2.5-flash-lite` answered about revenue and product-market fit — the wrong dimension. Every 3.x model stayed on-topic. That is the leniency-bias objective visible in one sample.
+  - **Cost:** ~2.8× tokens and ~3× latency versus the old default. If free-tier quota bites, `gemini-3.5-flash-lite` is the escape hatch — still better than `2.5-flash-lite` on every measured axis, but no reasoning.
+  - `gemini-embedding-2` (8192 input) and `gemini-embedding-001` (2048) are both reachable for the §0 RAG work.
+
+  **Verified live:** RNA generation for AgroLink returned 6 rows in 14s, citing specifics from the capsule proposal ("18 cooperative interviews", "1 provisional buyer agreement", "SMS fallback") rather than generic filler. `ai_generation_runs` id=5 records `model: gemini-3.6-flash` with the full resolved config.
+  **Instrumentation gap closed (2026-07-27).** Three calls previously read `AiConfigService.defaults` directly and opened **no** `ai_generation_runs` row — `getCapsuleProposalInfo`, `getCapsuleProposalInfoFromImage`, and `generateStartupAnalysisSummary`. They now take an `AiRunContext` like every other model call, under two new operations:
+  - `capsule_extract` — `POST /startups/parse-capsule-proposal`, opened with a null `startupId` because parsing happens while the application is still being filled in. Covers **Objective 3's Gemini Vision handwriting path**, which was entirely invisible to the comparison study before.
+  - `analysis_summary` — `POST /startups/apply`, also opened with a null `startupId` and then backfilled via `AiRunService.attribute()` once `create()` has persisted the startup.
+  Both now honour `X-Ai-Pipeline-Config` (they silently ignored it before) and contribute their token spend to the run. The vision call and its Tesseract-text fallback accumulate into **one** run rather than being counted separately.
+  **Verified live:** `capsule_extract` recorded `model: gemini-3.6-flash`, 26.5s, 1605 prompt / 251 completion tokens on a 1400×1000 image; `analysis_summary` recorded 9.1s, 324/106, attributed to the startup it created.
+  ### Measured old vs new (2026-07-27) — and the premise of this section was wrong
+
+  Same input, same production grounding instruction, `temperature: 0`, 3 repetitions, two documents (AgroLink = paper prototype and zero revenue; MediSync = 6 paying facilities and PHP 5k MRR). Only the model varied.
+
+  | | `gemini-2.5-flash-lite` | `gemini-3.6-flash` |
+  |---|---|---|
+  | AgroLink (early) mean level | 1.67 | 2.33 |
+  | MediSync (mid) mean level | 1.50 | 4.61 |
+  | **Gap between them** | **−0.17** | **+2.28** |
+  | Distinct levels used across both | 3 | 5 |
+  | Invented values for absent fields | 0 / 9 | 0 / 9 |
+  | Recalled facts present in the doc | 9 / 9 | 9 / 9 |
+  | Total tokens (6 calls) | 3,135 | 14,978 |
+
+  **1. The old model could not tell the two startups apart — it ranked them backwards.** A gap of −0.17 means the mid-stage venture with paying customers scored *marginally lower* than the one with a paper prototype. Per-dimension, **5 of 6 dimensions returned identical scores for both companies**. Every dimension moves the right way on 3.6-flash (Technology 3→6, Investment 1→4, Regulatory 1→3).
+
+  **2. This section's stated premise — that the lite tier is "most sycophantic", most prone to leniency — is not supported.** The lite model was not lenient; it was floor-bound and blind, collapsing everything to 1–3 regardless of evidence. The real defect was **differentiation, i.e. Objective 2**, not leniency (Objective 4).
+
+  **3. That reframes Objective 2b.** `TierConfig.weights` being unread by the scorer is still a real bug, but fixing weighted scoring alone would **not** have produced differentiation: the per-dimension inputs being weighted were nearly identical for both startups. The model was the binding constraint, not the formula.
+
+  **4. The model change did *not* measurably improve grounding.** Both models refused all 9 absent fields and recalled all 9 present ones. `groundPrompt()` is doing that work, and this test found no headroom — so **Objective 1 gains cannot be attributed to the model upgrade**. A harder probe (longer documents, adversarial distractors) is needed to find where grounding actually breaks.
+
+  **Limits, stated honestly:** N is small (3 reps × 6 dimensions × 2 documents); there is no expert ground truth, so the reliable signal is the *gap and its direction*, not the absolute levels; the prompt mirrors production shape but is not `createBasePrompt` with RAG attached; and 1 of 3 AgroLink reps on 3.6-flash returned output that did not parse into levels (n=12 rather than 18 for that cell), which is a small robustness caveat.
+
+  **Still open — per-task tiering:** deferred, not dropped. There is no seam between scoring and generation today (both read `ctx.config.model`), and with Pro unreachable there is no stronger model to point a seam at. The measurement above also weakens the case for one: the large differentiation win is already banked on 3.6-flash, and no leniency problem was observed that a stronger model would fix.
+  Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast — as this section demonstrates.
   **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement. **Note this is a real behaviour change, not a no-op.** That one call site passed `temperature` at the *top level* of the request, where the SDK dropped it exactly as it dropped `maxOutputTokens` — so every Gemini call in this codebase previously ran at the API default temperature, never at `0`. Baseline-arm results gathered before this change are therefore not sampling-comparable with results gathered after it.
 
 - [ ] ❓ **SCOPE · M · Decide whether Gemini calls should have output caps at all, and pick values per call site**

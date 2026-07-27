@@ -128,7 +128,71 @@ Two things surfaced during that verification:
 
 Also note **PowerShell 5.1's `Invoke-WebRequest` reported the HTTPS PUT to Supabase as failed with no status code** — but a later bucket listing showed the object *had* been created, so the request reached storage and only the client-side completion or response read failed. Treat a PS failure against Supabase as unreliable in both directions: it may report failure on success, and it cannot be trusted to tell you why. The same request from Node worked and reported correctly. **Use Node for storage probes.**
 
-**Next:** model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
+### Model tiering (§5) — steps 0–2
+
+**Step 0 — measure before choosing.** Queried the project's own key rather than trusting the docs, and it overturned the plan twice: **`gemini-2.5-flash`, the model this checklist recommended, now 404s** ("no longer available to new users"), and **no Pro-tier model is reachable on the free tier** (`gemini-2.5-pro`, `gemini-3-pro-preview`, `gemini-3.1-pro-preview` all 429 with 20s spacing, so tier exclusion rather than a rate limit). Per-task tiering with Pro on scoring is therefore impossible without paid billing.
+
+**Step 1 — default raised to `gemini-3.6-flash`.** The deciding measurement was thinking tokens: every `*-flash-lite` tier spends **0**, and 2.5-flash-lite answered a *Technology* readiness question in terms of revenue and product-market fit — the wrong dimension. 3.6-flash spends ~780 and stays on-topic. Picked over 3.5-flash on latency (6.5s vs 12.1s) and thinking cost (779 vs 965). Costs ~2.8× tokens and ~3× latency; `gemini-3.5-flash-lite` documented as the escape hatch (still beats 2.5-flash-lite on every axis). `gemini-embedding-2` is reachable for the §0 RAG work.
+
+**Step 2 — the three untracked calls now open runs.** `getCapsuleProposalInfo`, `getCapsuleProposalInfoFromImage`, and `generateStartupAnalysisSummary` read `AiConfigService.defaults` directly and left no `ai_generation_runs` row, so they ignored `X-Ai-Pipeline-Config` and were invisible to the comparison study — including the whole Objective 3 handwriting path. They now take an `AiRunContext` under two new operations, `capsule_extract` and `analysis_summary`. Both open with a null `startupId`; `analysis_summary` backfills via `AiRunService.attribute()` once the startup is persisted.
+
+Verified live against real routes, not just unit tests:
+
+| Operation | Model | Latency | Tokens | Attributed |
+|---|---|---|---|---|
+| `capsule_extract` (1400×1000 image) | gemini-3.6-flash | 26.5s | 1605 / 251 | n/a — no startup yet |
+| `analysis_summary` | gemini-3.6-flash | 9.1s | 324 / 106 | ✅ startup_id backfilled |
+
+Notes for whoever picks this up:
+- **The capsule route has a legibility gate** (`OcrService.checkLegibility`) requiring **≥1200×900 and tail entropy ≥4.2**. Below that it returns early and never calls the model, so a small test image silently proves nothing. No image in `frontend/static/` is large enough.
+- **My Step 1 commit left `ai-run.service.spec` red** — I ran only the `ai-config` spec then, not the full suite. Its `configService()` builds a real `AiConfigService` with no env, so it asserts `DEFAULT_MODEL`. Fixed in the Step 2 commit. Run the whole suite after touching a default.
+- The `deleteRule: 'set null'` on `ai_generation_runs.startup` means deleting a startup silently detaches its runs — worth knowing before reading attribution counts.
+
+**Step 3 — measured old vs new, and it overturned the section's premise.**
+
+Same input, production grounding instruction, `temperature: 0`, 3 reps, two documents (AgroLink = paper prototype, zero revenue; MediSync = 6 paying facilities, PHP 5k MRR). Only the model varied.
+
+| | `gemini-2.5-flash-lite` | `gemini-3.6-flash` |
+|---|---|---|
+| AgroLink mean level | 1.67 | 2.33 |
+| MediSync mean level | 1.50 | 4.61 |
+| **Gap** | **−0.17** | **+2.28** |
+| Invented values for absent fields | 0/9 | 0/9 |
+| Total tokens (6 calls) | 3,135 | 14,978 |
+
+Four findings, one of which contradicts what the checklist had assumed:
+
+1. **The old model ranked the two startups backwards.** A −0.17 gap means the venture with paying customers scored slightly *lower* than the paper-prototype one, and 5 of 6 dimensions returned identical scores for both. On 3.6-flash every dimension moves correctly (Technology 3→6, Investment 1→4).
+2. **"The lite tier is sycophantic / lenient" was wrong.** It was not lenient — it was floor-bound and blind, collapsing everything to 1–3 regardless of evidence. The real defect was **differentiation (Objective 2)**, not leniency (Objective 4).
+3. **This reframes Objective 2b.** `TierConfig.weights` going unread is still a bug, but weighting near-identical inputs could never have produced differentiation. The model was the binding constraint, not the formula — worth knowing before anyone invests in the weighted-scoring work expecting it to fix differentiation.
+4. **Grounding did not improve.** Both models refused all 9 absent fields and recalled all 9 present ones — `groundPrompt()` is doing that work and there was no headroom, so **no Objective 1 gain can be claimed from the model change.**
+
+Limits worth repeating before anyone cites these numbers: N is small (3 reps × 6 dimensions × 2 docs), there is no expert ground truth so the trustworthy signal is the *gap and its direction* rather than absolute levels, the prompt mirrors production shape but is not `createBasePrompt` with RAG attached, and 1 of 3 AgroLink reps on 3.6-flash produced unparseable output (n=12 not 18 for that cell).
+
+**Next:** RAG pipeline (§0) — `gemini-embedding-2` is reachable. Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
+
+### RAG pipeline (§0) — built and measured
+
+Branch `feat/model-tiering`, four commits (`4708a2e`, `5c390de`, `8abba71`, + docs). Nothing pushed.
+
+Objective 1b now has an actual retrieval-augmented pipeline. Before this, `vector_embeddings` had never held a single row since the table was created, and `RagQueryService` searched `source_type = 'startup'` — which nothing has ever written — so it returned `lowConfidence: true` on *every* call and the RNA/RNS prompts were "grounded" in nothing at all.
+
+**What was built.** `EmbeddingService` (`gemini-embedding-2`, 768 dims) + `EmbeddingIndexService` writing `vector_embeddings` on every `recordRagContext`, plus an idempotent boot-time backfill. Both retrieval paths now rank with pgvector `<=>` in SQL instead of loading every vector into Node. `AI_RAG_STRATEGY=keyword|semantic` sits alongside `AI_RAG_ENABLED` so the comparison has three arms, and an unrecognised value is rejected at boot rather than defaulted — a typo must not silently mislabel which arm a batch of generations ran under. A startup can also no longer retrieve its own capsule proposal as a "verified prior profile"; it previously could, letting the model read its own input back as corroboration.
+
+**Four things were measured rather than assumed, and three of them changed the design:**
+
+1. **`gemini-embedding-2` over `-001`.** Wider relevant/irrelevant separation, and it stays unit-normalised when truncated to 768 where `-001` drops to norm 0.59. It also ignores `taskType` entirely — DOCUMENT and QUERY return bit-identical vectors — so there is no asymmetric encoding to get wrong.
+2. **768 dimensions, not the native 3072.** pgvector refuses to build hnsw or ivfflat above 2000 dimensions. At 3072 the column could only ever be sequentially scanned. The column was also a *dimensionless* `vector`, which pgvector cannot index at all.
+3. **The similarity floor.** A first guess of 0.70 was fitted to one hand-picked pair and leaked **78%** of cross-domain pairs — an agriculture startup scored 0.765 against a health-referral query. Calibrated properly (`measurement/calibrate-similarity.js`, 9 documents / 36 pairs) the answer is **0.78**: keeps 8/9 true neighbours, leaks 11%. The distributions *overlap* (same-domain down to 0.7295, cross-domain up to 0.8036), so this is a trade-off and not a boundary.
+4. **The arm comparison** (`measurement/measure-retrieval.js`): keyword 56% precision / 15 of 18 same-domain surfaced; semantic **76%** / 16 of 18. Semantic returned **fewer** documents (21 vs 27) and still surfaced **more** correct ones, so precision was not bought with recall. Keyword's `score > 0` floor admits anything sharing one token.
+
+**What live verification caught that tests could not.** The backfill used the injected global `EntityManager` and failed on every boot with *"Using global EntityManager instance methods for context specific actions is disallowed"* — invisible to unit tests whose EM is a mock. It now forks, and the test double grew a `fork()` so the regression is catchable. Separately, the retrieval SQL was exercised against Neon in a rolled-back transaction with real embeddings (it correctly ranked a health context above an agriculture one), and then both retrieval methods were called through the real DI graph — because raw `pg` would not have covered MikroORM's own `?`→`$n` placeholder rewriting.
+
+**Operational note:** do not run `pnpm build` while `pnpm dev` is watching. Both write `dist/`, and the race left the running server unable to resolve its own modules until restarted.
+
+**The remaining Objective 1b gap is the corpus, not the pipeline.** `rag_contexts` only ever holds other startups' capsule proposals (written solely from `startup.service.ts:158`), so this retrieves peer text, not verified knowledge — and peer text is itself AI-parsed, so errors can propagate. `verifiedFrameworks` and `businessModels` are still hardcoded `[]`. Seeding a real corpus of readiness-level rubrics and business-framework documents needs no code change: they are `rag_contexts` rows with a distinct `sourceType`, and the embedding + retrieval path covers them automatically. **Do that before claiming any Objective 1 result.**
+
+Also still true: the only row in `rag_contexts` is titled "PROVENANCE PROBE - delete me" from an earlier session. Left in place — deleting it is John's call.
 
 ---
 

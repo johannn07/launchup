@@ -15,9 +15,26 @@ export interface AiPipelineConfig {
   temperature: number;
   grounding: boolean;
   rag: boolean;
+  ragStrategy: RagStrategy;
   biasReview: boolean;
   scoreNormalization: boolean;
 }
+
+/**
+ * How retrieval finds context, when `rag` is on.
+ *
+ * Separate from the `rag` boolean rather than folded into it, because the
+ * comparison needs three arms and not two. `rag: false` answers "does retrieval
+ * help at all"; these answer "does *semantic* retrieval beat what was already
+ * here". Collapsing them would make a semantic win indistinguishable from the
+ * win keyword matching already provided.
+ *
+ *   keyword  - token overlap between the startup's text and each stored
+ *              context. The pre-existing behaviour, kept as the baseline arm.
+ *   semantic - nearest neighbours by embedding cosine distance in pgvector.
+ */
+export const RAG_STRATEGIES = ['keyword', 'semantic'] as const;
+export type RagStrategy = (typeof RAG_STRATEGIES)[number];
 
 /** Accepts 'true'/'false'/'1'/'0'; anything else fails validation. */
 const envBoolean = (defaultValue: boolean) =>
@@ -45,6 +62,9 @@ export const aiEnvSchema = z.object({
     }),
   AI_GROUNDING_ENABLED: envBoolean(true),
   AI_RAG_ENABLED: envBoolean(true),
+  // Defaults to semantic: keyword matching is the thing being replaced, and a
+  // default that silently kept it would make the enhanced arm opt-in.
+  AI_RAG_STRATEGY: z.enum(RAG_STRATEGIES).optional().default('semantic'),
   AI_BIAS_REVIEW_ENABLED: envBoolean(true),
   AI_SCORE_NORMALIZATION_ENABLED: envBoolean(true),
   AI_ALLOW_REQUEST_OVERRIDE: envBoolean(false),
@@ -57,6 +77,7 @@ export const aiOverrideSchema = z
     temperature: z.number().min(0).max(2),
     grounding: z.boolean(),
     rag: z.boolean(),
+    ragStrategy: z.enum(RAG_STRATEGIES),
     biasReview: z.boolean(),
     scoreNormalization: z.boolean(),
   })

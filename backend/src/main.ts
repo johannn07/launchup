@@ -11,6 +11,7 @@ import { StartupReadinessLevel } from './entities/startup-readiness-level.entity
 import { QualificationStatus } from './entities/enums/qualification-status.enum';
 import { Role } from './entities/enums/role.enum';
 import { ReadinessType } from './entities/enums/readiness-type.enum';
+import { EmbeddingIndexService } from './ai/embedding-index.service';
 
 async function ensureUser(
   em: EntityManager,
@@ -286,6 +287,36 @@ async function seedDemoStartups(
   });
 }
 
+/**
+ * Embed any rag_contexts row that has no vector yet.
+ *
+ * Runs on boot for the same reason the schema sync and demo seed do: this
+ * database is developer-local and self-assembling. rag_contexts has been
+ * written since long before anything embedded it, so without this every
+ * existing row is invisible to semantic retrieval and the feature looks broken
+ * rather than unindexed.
+ *
+ * Idempotent — it only selects rows with no vector, so a second boot costs no
+ * API calls. Failures are logged and swallowed: an unreachable embedding API
+ * degrades retrieval, but it must not stop the server from starting.
+ */
+async function backfillRagEmbeddings(app: NestExpressApplication) {
+  try {
+    const result = await app.get(EmbeddingIndexService).backfill();
+    if (result.total > 0) {
+      console.log(
+        `RAG embeddings: indexed ${result.indexed}/${result.total} contexts` +
+          (result.skipped ? ` (${result.skipped} skipped)` : ''),
+      );
+    }
+  } catch (error) {
+    console.error(
+      'RAG embedding backfill failed; semantic retrieval will be degraded:',
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useGlobalPipes(
@@ -310,6 +341,7 @@ async function bootstrap() {
   const orm = app.get(MikroORM);
   await orm.getSchemaGenerator().updateSchema();
   await seedLocalDemoData(orm);
+  await backfillRagEmbeddings(app);
 
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');

@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
-import { VectorEmbedding } from '../entities/vector-embeddings.entity';
 import { RagRetrievalLog } from '../entities/rag-retrieval-log.entity';
 import { Startup } from '../entities/startup.entity';
+import { RAG_CONTEXT_SOURCE } from '../ai/embedding-index.service';
+import { RAG_MIN_SIMILARITY, RAG_TOP_K } from '../ai/ai.service';
 
 export interface RAGContext {
   verifiedFrameworks: any[];
@@ -11,65 +12,110 @@ export interface RAGContext {
   lowConfidence: boolean;
 }
 
+const EMPTY_CONTEXT: RAGContext = {
+  verifiedFrameworks: [],
+  businessModels: [],
+  similarProfiles: [],
+  lowConfidence: true,
+};
+
+/**
+ * Finds startups whose stored text is nearest to a given startup's.
+ *
+ * Two things changed here when embeddings started being written:
+ *
+ * 1. The corpus. This used to look for `source_type = 'startup'`, which nothing
+ *    has ever written — so it always returned empty with lowConfidence, and the
+ *    RNA/RNS prompts were "grounded" in nothing. Vectors live under
+ *    'rag_context'; a startup is reached through that row's startup_id.
+ *
+ * 2. Where the similarity is computed. It used to load every embedding into
+ *    Node and sort in JS. At 768 float4 per row that is ~3KB transferred per
+ *    candidate to pick three, and it cannot use an index. pgvector's `<=>`
+ *    does it in the database.
+ */
 @Injectable()
 export class RagQueryService {
+  private readonly logger = new Logger(RagQueryService.name);
+
   constructor(private readonly em: EntityManager) {}
 
   async queryVectorDatabase(startupId: string): Promise<RAGContext> {
-    // 1. Retrieve the embedding for the given startup
-    const sourceEmbedding = await this.em.findOne(VectorEmbedding, { source_type: 'startup', source_id: startupId });
-    if (!sourceEmbedding) {
-      return {
-        verifiedFrameworks: [],
-        businessModels: [],
-        similarProfiles: [],
-        lowConfidence: true,
-      };
+    const id = Number(startupId);
+    if (!Number.isInteger(id)) {
+      this.logger.warn(`Ignoring non-numeric startup id "${startupId}"`);
+      return EMPTY_CONTEXT;
     }
 
-    // 2. Retrieve all other embeddings (excluding this startup)
-    const allEmbeddings = await this.em.find(VectorEmbedding, { source_type: 'startup', source_id: { $ne: startupId } });
+    const rows = await this.em.getConnection().execute<
+      {
+        startup_id: number;
+        title: string;
+        source_type: string;
+        similarity: number;
+      }[]
+    >(
+      // The subquery is this startup's own vector, used as the query point.
+      // Ordering happens against `other.embedding` so the index on that column
+      // is what does the work.
+      `with source as (
+         select ve.embedding
+           from vector_embeddings ve
+           join rag_contexts rc on rc.id = ve.source_id::int
+          where ve.source_type = ? and rc.startup_id = ?
+          order by ve.id desc
+          limit 1
+       )
+       select rc.startup_id, rc.title, rc.source_type,
+              1 - (ve.embedding <=> (select embedding from source)) as similarity
+         from vector_embeddings ve
+         join rag_contexts rc on rc.id = ve.source_id::int
+        where ve.source_type = ?
+          and rc.startup_id is not null
+          and rc.startup_id <> ?
+          and exists (select 1 from source)
+        order by ve.embedding <=> (select embedding from source)
+        limit ?`,
+      [RAG_CONTEXT_SOURCE, id, RAG_CONTEXT_SOURCE, id, RAG_TOP_K],
+    );
 
-    // 3. Compute cosine similarity between the source and all others
-    function cosineSimilarity(a: number[], b: number[]): number {
-      const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
-      const normA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
-      const normB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
-      return normA && normB ? dot / (normA * normB) : 0;
-    }
+    const similarProfiles = rows
+      .filter((row) => row.similarity >= RAG_MIN_SIMILARITY)
+      .map((row) => ({
+        source_id: String(row.startup_id),
+        similarity: row.similarity,
+        metadata: { title: row.title, sourceType: row.source_type },
+      }));
 
-    const similarities = allEmbeddings.map(e => ({
-      embedding: e,
-      similarity: cosineSimilarity(sourceEmbedding.embedding, e.embedding),
-    }));
+    // Report low confidence whenever nothing cleared the floor, including when
+    // this startup has no vector of its own — a caller that cannot distinguish
+    // "no matches" from "not indexed" would present an ungrounded generation
+    // as a grounded one.
+    const lowConfidence = similarProfiles.length === 0;
 
-    // 4. Sort by similarity and take top N (e.g., 5)
-    const topN = similarities.sort((a, b) => b.similarity - a.similarity).slice(0, 5);
-    const similarProfiles = topN.map(item => ({
-      source_id: item.embedding.source_id,
-      similarity: item.similarity,
-      metadata: item.embedding.metadata,
-    }));
-
-    // 5. Log the retrieval
     await this.logRetrieval(
       startupId,
       similarProfiles.length,
-      topN.length > 0 && topN[0].similarity > 0.7 ? 'high' : 'low',
-      topN.length === 0 || (topN[0].similarity < 0.7),
-      similarProfiles.map(p => Number(p.source_id)),
+      lowConfidence ? 'low' : 'high',
+      lowConfidence,
+      similarProfiles.map((profile) => Number(profile.source_id)),
     );
 
-    // 6. Return context (verifiedFrameworks/businessModels can be filled in as needed)
     return {
-      verifiedFrameworks: [], // TODO: fill with actual data if available
-      businessModels: [],     // TODO: fill with actual data if available
+      verifiedFrameworks: [],
+      businessModels: [],
       similarProfiles,
-      lowConfidence: topN.length === 0 || (topN[0].similarity < 0.7),
+      lowConfidence,
     };
   }
 
-  async logRetrieval(startupId: string, resultCount: number, confidenceLevel: string, lowConfidenceFlagged: boolean, retrievedProfileIds: number[]): Promise<void> {
+  async logRetrieval(
+    startupId: string,
+    resultCount: number,
+    confidenceLevel: string,
+    lowConfidenceFlagged: boolean,
+    retrievedProfileIds: number[],
+  ): Promise<void> {
     const log = this.em.create(RagRetrievalLog, {
       startup: this.em.getReference(Startup, Number(startupId)),
       result_count: resultCount,
