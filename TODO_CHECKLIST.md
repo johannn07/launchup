@@ -314,6 +314,14 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
   **Verified** on a genuinely cold DB (throwaway `launchup_seedtest` on the same Neon instance, created with pgvector, booted, asserted, dropped): both startups took the create branch, owners are the two `Startup`-role founders, both have `mentor@launchup.local` in `startups_mentors`, and all three assertions — non-`Startup` owners, self-mentoring, mentorless startups — returned 0.
   *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached — that shortcut is what left the startups mentorless in the first place.*
 
+- [ ] 🧹 **DEBT · S · `ai_generation_runs` cannot see thinking-token cost**
+  The table records `prompt_tokens` and `completion_tokens` but has no column for **thinking tokens**, which on `gemini-3.6-flash` are ~780 per call — more than twice the visible output. Since the default moved to a reasoning tier, the provenance table now systematically under-reports the true cost of every run, which matters for any "was the enhanced pipeline worth it?" comparison.
+  **Fix:** add a `thinking_tokens` column and populate it from `usageMetadata.thoughtsTokenCount`, which the SDK already returns. Cheap now; expensive to backfill once a study's worth of rows exists without it.
+
+- [ ] 🧹 **DEBT · S · `pnpm lint` is unusable because of a CRLF-vs-prettier conflict**
+  There is **no `.gitattributes`** and `core.autocrlf=true`, so files check out CRLF on Windows, while prettier (no `endOfLine` setting, therefore `"lf"`) flags **every line of every file** as `Delete ␍`. `ai-config.service.ts` + its spec alone account for 205 errors, and the repo-wide total is 727 — almost all of it this one rule. Real findings are buried, and `pnpm lint` runs `eslint --fix`, so anyone who runs it casually rewrites the entire `src/` tree.
+  **Fix:** add `.gitattributes` with `* text=auto eol=lf`, or set `"endOfLine": "auto"` in `.prettierrc`. Either drops the error count by roughly an order of magnitude and makes the linter worth running. Consider also splitting `lint` (check) from `lint:fix` so `--fix` is opt-in.
+
 - [ ] 🐞 **BUG · S · Two unit tests fail on `master` — the suite is red before anyone starts**
   `pnpm test` is **74 passed / 2 failed** on a clean `master` checkout (verified 2026-07-27 by checking out `master` and re-running, so this is not from any feature branch). Both look like stale expectations rather than product defects, but a red baseline means nobody can tell a real regression from the noise.
   - `src/ai/ai.service.spec.ts` › *"passes valid task responses through unchanged"* — the test's own context sets `scoreNormalization: true` and mocks `normalizeScore` to return `{ scaled: 5, z: 0 }`, so the service correctly emits `target_level_normalized: 5` plus `target_level_z: 0`. The assertion still expects `target_level_normalized: 3` and no `_z` field. **The expectation is wrong, not the code** — note the hand-edited comment on the line, which suggests it was patched without being run.
@@ -397,14 +405,30 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
 
 - [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
   **Partially addressed:** the model is no longer a hardcoded literal — `AiConfigService` (`backend/src/ai/ai-config.service.ts`) now resolves `model` and `temperature` from `GEMINI_MODEL` / `AI_TEMPERATURE` env vars (see `backend/.env.example`), and every call site in `ai.service.ts` reads `this.aiConfig.defaults.model` / `.temperature` instead of a literal, so switching models is now an env change, not a code change. `temperature` is also now applied consistently across call sites (defaulting to `0`), which resolves the "pin `temperature: 0` on all scoring calls" ask two paragraphs down.
-  **Still not done:** the *default* remains the same weak `gemini-2.5-flash-lite` tier for every call, and there is still only one model for every task — the per-task tiering recommendation below (Pro for scoring/bias, Flash for generation, a real embedding model for RAG) requires an actual env/config value change plus verifying vision quality, not just code.
+  **Default raised to `gemini-3.6-flash` (2026-07-27)** — `DEFAULT_MODEL` in `ai-config.service.ts` and `GEMINI_MODEL` in both `.env` and `.env.example`.
   **Why it matters for *this* project specifically:** Objectives 1 and 4 are about hallucination and leniency bias, and the lite tier is the most susceptible to both — weakest instruction-following, weakest reasoning, most sycophantic. Objective 3 needs handwriting and sketch understanding, which is exactly where a lite vision model is weakest. A weak model doesn't just degrade UX here; it **biases your research results against your own hypothesis**.
-  **Recommendation — tier by task rather than one model everywhere:**
-  - Scoring, bias review, adversarial re-prompting (Obj. 1 + 4) → **Gemini 2.5 Pro**, low temperature, thinking enabled
-  - RNA/RNS generation and refinement chat → **Gemini 2.5 Flash**
-  - Handwriting / sketch vision (Obj. 3) → **Gemini 2.5 Flash or Pro**
-  - RAG embeddings → **`gemini-embedding-001`** — currently missing entirely (see §0)
-  Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast.
+
+  ⚠️ **The earlier recommendation in this section was wrong, and measuring it is what caught that.** It named Gemini 2.5 Pro / 2.5 Flash. Measured against the project's own API key on 2026-07-27:
+
+  | Model | Latency | Output tok | **Thinking tok** | Total | JSON |
+  |---|---|---|---|---|---|
+  | `gemini-2.5-flash-lite` *(was default)* | 2.3s | 326 | **0** | 448 | fenced |
+  | `gemini-3.1-flash-lite` | 2.1s | 266 | 0 | 388 | clean |
+  | `gemini-3.5-flash-lite` | 1.9s | 280 | 0 | 402 | clean |
+  | **`gemini-3.6-flash`** *(new default)* | 6.5s | 343 | **779** | 1244 | clean |
+  | `gemini-3.5-flash` | 12.1s | 362 | 965 | 1449 | clean |
+  | `gemini-2.5-flash` | — | — | — | — | **404 "no longer available to new users"** |
+  | `gemini-2.5-pro`, `gemini-3-pro-preview`, `gemini-3.1-pro-preview` | — | — | — | — | **429 — not on the free tier** |
+
+  - **`gemini-2.5-flash` is gone.** Wiring the old recommendation would have 404'd every AI call.
+  - **No Pro-tier model is reachable on the free key.** All three 429 with 20s spacing, so it is tier exclusion, not a rate limit. **Any plan that puts Pro on scoring/bias requires paid billing.**
+  - **The lite tiers spend zero tokens reasoning.** Asked for *Technology* readiness, `2.5-flash-lite` answered about revenue and product-market fit — the wrong dimension. Every 3.x model stayed on-topic. That is the leniency-bias objective visible in one sample.
+  - **Cost:** ~2.8× tokens and ~3× latency versus the old default. If free-tier quota bites, `gemini-3.5-flash-lite` is the escape hatch — still better than `2.5-flash-lite` on every measured axis, but no reasoning.
+  - `gemini-embedding-2` (8192 input) and `gemini-embedding-001` (2048) are both reachable for the §0 RAG work.
+
+  **Verified live:** RNA generation for AgroLink returned 6 rows in 14s, citing specifics from the capsule proposal ("18 cooperative interviews", "1 provisional buyer agreement", "SMS fallback") rather than generic filler. `ai_generation_runs` id=5 records `model: gemini-3.6-flash` with the full resolved config.
+  **Still open — per-task tiering:** deferred, not dropped. There is no seam between scoring and generation today (both read `ctx.config.model`), and with Pro unreachable there is no stronger model to point a seam at. Revisit only if billing changes or bias measurements stay lenient on 3.6-flash.
+  Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast — as this section demonstrates.
   **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement. **Note this is a real behaviour change, not a no-op.** That one call site passed `temperature` at the *top level* of the request, where the SDK dropped it exactly as it dropped `maxOutputTokens` — so every Gemini call in this codebase previously ran at the API default temperature, never at `0`. Baseline-arm results gathered before this change are therefore not sampling-comparable with results gathered after it.
 
 - [ ] ❓ **SCOPE · M · Decide whether Gemini calls should have output caps at all, and pick values per call site**

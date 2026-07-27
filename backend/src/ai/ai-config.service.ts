@@ -2,7 +2,27 @@ import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/com
 import { ConfigService } from '@nestjs/config';
 import { AiPipelineConfig, aiEnvSchema, aiOverrideSchema } from './ai-config.types';
 
-const DEFAULT_MODEL = 'gemini-2.5-flash-lite';
+/**
+ * Fallback when GEMINI_MODEL is unset.
+ *
+ * `gemini-3.6-flash`, not a lite tier, because Objectives 1 and 4 (hallucination
+ * and leniency bias) depend on the model actually reasoning. Measured against
+ * this key on 2026-07-27 with a real RNA prompt: every `*-flash-lite` tier
+ * spends **0** thinking tokens and 2.5-flash-lite answered a Technology
+ * readiness question in terms of revenue and product-market fit — the wrong
+ * dimension. 3.6-flash spends ~780 thinking tokens and stays on-topic.
+ *
+ * Not a Pro tier because no Pro model is reachable on the free API tier —
+ * gemini-2.5-pro, gemini-3-pro-preview and gemini-3.1-pro-preview all return
+ * 429 (verified with 20s spacing, so not a per-minute limit). Not
+ * `gemini-2.5-flash`, which now 404s with "no longer available to new users".
+ *
+ * Costs roughly 2.8x the tokens and 3x the latency of 2.5-flash-lite. If free
+ * tier quota becomes the binding constraint, `gemini-3.5-flash-lite` is the
+ * escape hatch — it still beats 2.5-flash-lite on speed, tokens and output
+ * quality, but does no reasoning.
+ */
+const DEFAULT_MODEL = 'gemini-3.6-flash';
 
 @Injectable()
 export class AiConfigService {

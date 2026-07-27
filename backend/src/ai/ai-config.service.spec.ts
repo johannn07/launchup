@@ -34,7 +34,9 @@ describe('AiConfigService', () => {
     const service = new AiConfigService(configFrom({}));
 
     expect(service.defaults).toEqual({
-      model: 'gemini-2.5-flash-lite',
+      // A reasoning tier, deliberately. See DEFAULT_MODEL in
+      // ai-config.service.ts for why it is not a lite tier and not Pro.
+      model: 'gemini-3.6-flash',
       temperature: 0,
       grounding: true,
       rag: true,
@@ -78,7 +80,7 @@ describe('AiConfigService.resolve', () => {
 
   it('returns defaults when no override is supplied', () => {
     expect(permissive().resolve(undefined, true)).toEqual({
-      model: 'gemini-2.5-flash-lite',
+      model: 'gemini-3.6-flash',
       temperature: 0,
       grounding: true,
       rag: true,
