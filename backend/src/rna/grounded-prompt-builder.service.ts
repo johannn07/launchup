@@ -29,9 +29,9 @@ export class GroundedPromptBuilderService {
       prompt += '\n--- Contextually Similar Profiles ---\n';
       context.similarProfiles.forEach((p, i) => {
         prompt += `Profile ${i + 1}:\n`;
-        prompt += `  ID: ${p.source_id}\n`;
-        prompt += `  Similarity: ${p.similarity.toFixed(3)}\n`;
-        if (p.metadata) prompt += `  Metadata: ${JSON.stringify(p.metadata)}\n`;
+        prompt += `  Startup ID: ${p.startupId}\n`;
+        prompt += `  Similarity: ${p.similarity !== undefined ? p.similarity.toFixed(3) : 'n/a'}\n`;
+        prompt += `  Title: ${p.title}\n`;
       });
     }
 
