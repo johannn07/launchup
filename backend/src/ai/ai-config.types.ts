@@ -16,6 +16,8 @@ export interface AiPipelineConfig {
   grounding: boolean;
   rag: boolean;
   ragStrategy: RagStrategy;
+  ragCorpus: boolean;
+  rubricMode: RubricMode;
   biasReview: boolean;
   scoreNormalization: boolean;
 }
@@ -35,6 +37,22 @@ export interface AiPipelineConfig {
  */
 export const RAG_STRATEGIES = ['keyword', 'semantic'] as const;
 export type RagStrategy = (typeof RAG_STRATEGIES)[number];
+
+/**
+ * How the readiness-rubric channel finds its rows.
+ *
+ * Two modes rather than one because SDD §3.2 specifies that the RAG Query
+ * Service "queries the vector database using the startup's profile data as the
+ * search embedding" for all three channels, while measurement favours an exact
+ * lookup. Keeping both means the SDD's mechanism genuinely exists in the running
+ * code and the deviation is defended with a number rather than an opinion.
+ *
+ *   deterministic - exact (readinessType, level) key lookup. Default.
+ *   semantic      - the SDD's mechanism: pgvector nearest neighbours over
+ *                   rubric rows, gated by RAG_MIN_SIMILARITY.
+ */
+export const RUBRIC_MODES = ['deterministic', 'semantic'] as const;
+export type RubricMode = (typeof RUBRIC_MODES)[number];
 
 /** Accepts 'true'/'false'/'1'/'0'; anything else fails validation. */
 const envBoolean = (defaultValue: boolean) =>
@@ -65,6 +83,8 @@ export const aiEnvSchema = z.object({
   // Defaults to semantic: keyword matching is the thing being replaced, and a
   // default that silently kept it would make the enhanced arm opt-in.
   AI_RAG_STRATEGY: z.enum(RAG_STRATEGIES).optional().default('semantic'),
+  AI_RAG_CORPUS_ENABLED: envBoolean(true),
+  AI_RAG_RUBRIC_MODE: z.enum(RUBRIC_MODES).optional().default('deterministic'),
   AI_BIAS_REVIEW_ENABLED: envBoolean(true),
   AI_SCORE_NORMALIZATION_ENABLED: envBoolean(true),
   AI_ALLOW_REQUEST_OVERRIDE: envBoolean(false),
@@ -78,6 +98,8 @@ export const aiOverrideSchema = z
     grounding: z.boolean(),
     rag: z.boolean(),
     ragStrategy: z.enum(RAG_STRATEGIES),
+    ragCorpus: z.boolean(),
+    rubricMode: z.enum(RUBRIC_MODES),
     biasReview: z.boolean(),
     scoreNormalization: z.boolean(),
   })
