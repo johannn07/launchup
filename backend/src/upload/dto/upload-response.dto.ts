@@ -1,9 +1,11 @@
 import { IsString, IsNumber, IsDate } from 'class-validator';
 
 export class UploadResponseDto {
+  /** Stable identifier for the object — this is what callers persist. */
   @IsString()
   key: string;
 
+  /** Signed GET URL. Expires, so never store it; re-resolve from `key`. */
   @IsString()
   url: string;
 
