@@ -5,10 +5,13 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtGuard } from 'src/auth/guard';
 import { ElevateService } from './elevate.service';
 import { ElevateStartupDto } from './dto';
 
+@UseGuards(JwtGuard)
 @Controller('elevate')
 export class ElevateController {
   constructor(private elevateService: ElevateService) {}

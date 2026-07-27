@@ -22,6 +22,7 @@ import {
 import { AiRunService } from '../ai/ai-run.service';
 import { Role } from '../entities/enums/role.enum';
 
+@UseGuards(JwtGuard)
 @Controller('roadblocks')
 export class RoadblockController {
   constructor(
@@ -48,7 +49,6 @@ export class RoadblockController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtGuard)
   async delete(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<{ message: string }> {

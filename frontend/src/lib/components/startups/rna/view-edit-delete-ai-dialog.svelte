@@ -102,6 +102,11 @@
     try {
       const response = await fetch(`${PUBLIC_API_URL}/rna/${rna.id}/refine`, {
         method: 'POST',
+        // Raw fetch, not the shared axios instance, so it does not inherit
+        // withCredentials. Without this the httpOnly Access cookie is not sent
+        // — fetch defaults to same-origin, and :5173 -> :3000 is cross-origin —
+        // and this route now requires authentication.
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json'

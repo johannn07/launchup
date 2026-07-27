@@ -1,8 +1,12 @@
-import { Controller, Get, Param, ParseIntPipe } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { JwtGuard } from 'src/auth/guard';
 import { ChatHistoryService } from './chat-history.service';
 
+// These return full AI conversation transcripts, which contain the startup's
+// business details. The guard was commented out; there is no reason it should
+// be, so it is back on.
+@UseGuards(JwtGuard)
 @Controller('chat-history')
-// @UseGuards(JwtGuard)
 export class ChatHistoryController {
   constructor(private chatHistoryService: ChatHistoryService) {}
 
