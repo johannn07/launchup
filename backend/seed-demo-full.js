@@ -150,6 +150,20 @@ const MEDISYNC_RNAS = {
     'Operations are funded by founder capital and modest recurring revenue. There is no runway model, no external investment, and no articulated path from current revenue to sustainable operation at province scale.',
 };
 
+// Assessment questions. The table is empty after a wipe, so the assessment
+// page renders nothing at all — including the File field, which is the only
+// place uploads are exercised from the UI. `answerType` is the numeric
+// AssessmentAnswerType (1 ShortAnswer, 2 LongAnswer, 3 File); the API
+// reverse-maps it to the name before the frontend sees it.
+const ASSESSMENTS = [
+  { type: 'Technology', answerType: 2, name: 'Describe the current state of your core technology', description: 'What is built, what is deployed, and what remains prototype?' },
+  { type: 'Technology', answerType: 3, name: 'Upload your system architecture diagram', description: 'PDF or image. Handwritten sketches are acceptable.' },
+  { type: 'Market', answerType: 2, name: 'Who is your target customer, and how did you validate that?', description: 'Cite interviews, pilots, or letters of intent.' },
+  { type: 'Market', answerType: 3, name: 'Upload supporting market evidence', description: 'Survey results, signed LOIs, or pilot reports.' },
+  { type: 'Organizational', answerType: 1, name: 'How many people work on this full-time?' },
+  { type: 'Investment', answerType: 2, name: 'How are operations funded today?', description: 'Founder capital, grants, revenue, or external investment.' },
+];
+
 async function run() {
   const { User } = req('entities/user.entity');
   const { Startup } = req('entities/startup.entity');
@@ -157,12 +171,14 @@ async function run() {
   const { ReadinessLevel } = req('entities/readiness-level.entity');
   const { StartupReadinessLevel } = req('entities/startup-readiness-level.entity');
   const { StartupRNA } = req('entities/rna.entity');
+  const { Assessment } = req('entities/assessment.entity');
+  const { StartupAssessment } = req('entities/startup-assessment.entity');
   const { QualificationStatus } = req('entities/enums/qualification-status.enum');
   const { ReadinessType } = req('entities/enums/readiness-type.enum');
   const { Role } = req('entities/enums/role.enum');
 
   const cfg = Object.assign({}, ormConfig, {
-    entities: [User, Startup, CapsuleProposal, ReadinessLevel, StartupReadinessLevel, StartupRNA],
+    entities: [User, Startup, CapsuleProposal, ReadinessLevel, StartupReadinessLevel, StartupRNA, Assessment, StartupAssessment],
   });
   const orm = await MikroORM.init(cfg);
   const em = orm.em.fork();
@@ -288,6 +304,41 @@ async function run() {
     await em.flush();
     console.log(`  MediSync Cebu: +${createdRnas} RNAs`);
   }
+
+  // 5. Assessment questions, applied to both startups. Without these the
+  //    assessment page is blank and the File-upload field never renders.
+  let createdAssessments = 0;
+  const allStartups = await em.find(Startup, {});
+  for (const spec of ASSESSMENTS) {
+    let assessment = await em.findOne(Assessment, { name: spec.name });
+    if (!assessment) {
+      assessment = em.create(Assessment, {
+        assessmentType: spec.type,
+        name: spec.name,
+        description: spec.description,
+        answerType: spec.answerType,
+      });
+      em.persist(assessment);
+      await em.flush();
+      createdAssessments++;
+    }
+
+    for (const startup of allStartups) {
+      const existing = await em.findOne(StartupAssessment, {
+        startup,
+        assessment,
+      });
+      if (!existing) {
+        em.persist(
+          em.create(StartupAssessment, { startup, assessment, isApplicable: true }),
+        );
+      }
+    }
+  }
+  await em.flush();
+  console.log(
+    `  assessments: +${createdAssessments} (${ASSESSMENTS.filter((a) => a.answerType === 3).length} File-type), applied to ${allStartups.length} startups`,
+  );
 
   const summary = await em.find(Startup, {}, { populate: ['capsuleProposal', 'user', 'mentors'] });
   console.log('\n=== startups ===');

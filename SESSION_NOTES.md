@@ -113,9 +113,20 @@ What changed:
 
 Also hit a dependency trap: `pnpm add @aws-sdk/s3-request-presigner` resolved to 3.1095.0 against `client-s3` 3.901.0, pulling two copies of `@smithy/types` and breaking the build with a wall of structural-mismatch errors. Pin the presigner to the client's exact version.
 
-**Verified:** 14 unit tests pass (signing is a local HMAC, so the presigned URLs are genuinely SDK-produced, no account needed). Live probe against a running backend: 401 on all three routes unauthenticated, 400 on an oversize request (DTO-level, before storage is consulted), 503 when `S3_*` is unset instead of a crash. **Not yet verified end to end against a live bucket** — that needs credentials.
+**Verified — end to end against the live bucket.** Credentials went into `backend/.env`; `test-connection` reports `connected`.
 
-**Blocked on John:** create the Supabase bucket (keep it **private**), set its max-file-size limit, and fill the five `S3_*` vars in `backend/.env`. A presigned PUT cannot enforce length, so the bucket limit is the real backstop.
+- 14 unit tests pass (signing is a local HMAC, so the presigned URLs are genuinely SDK-produced).
+- Auth/degradation probe: 401 on all three routes unauthenticated, 400 on an oversize request (DTO-level, before storage is consulted), 503 when `S3_*` is unset instead of a crash.
+- API round trip: presign → PUT (200) → signed GET (200), **byte-identical** file back. An **unsigned** GET on the same object returned **403** — the bucket really is private, not merely assumed to be.
+- Through the UI as `founder.agrolink@launchup.local` (Startup role, not staff): attached a PNG, submitted, Technology moved 2 Pending → 1 Pending / 1 Done, and Preview resolved a fresh signed URL that rendered the image (10×10, `image/png`). No console errors.
+- Stored `answerValue` is `{"files":[{"key":"assessments/…png","fileName":"…"}]}` — a **key, no URL**, as designed.
+
+Two things surfaced during that verification:
+
+1. **The assessment tables were empty after the wipe**, so the assessment page rendered nothing and the File field was unreachable. `seed-demo-full.js` now seeds 6 assessments (2 File-type) applied to both startups. Worth knowing that the wipe took out more than the seeders replaced.
+2. **Removing a file orphans the object.** "Remove file" only rewrites `answerValue`; `deleteFile()` exists but its route is commented out, so removed attachments stay in the bucket forever with nothing in the app pointing at them. Logged in §2.
+
+Also note PowerShell 5.1 could not complete the HTTPS PUT to Supabase at all (its TLS defaults) — the same request from Node succeeded immediately. Use Node for storage probes, not `Invoke-WebRequest`.
 
 **Next:** model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 
