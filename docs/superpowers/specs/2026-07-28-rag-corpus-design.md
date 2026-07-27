@@ -41,10 +41,21 @@ Seeding `rag_contexts` alone would therefore reach initiatives, roadblocks and t
 
 The five dimensions in the proposal, SRS and SDD — TRL, MRL, RRL, ARL, ORL — are the **Balanced Readiness Level assessment (BRLa)** framework, published in *Technological Forecasting and Social Change* (2021), which supplements TRL with market, regulatory, acceptance and organisational readiness and visualises the five as a pentagon. The spec adopted a published framework rather than inventing dimensions.
 
-Two consequences:
+Consequence: the corpus can cite a real framework rather than assert authority.
 
-- The corpus can cite a real framework rather than assert authority.
-- `TODO_CHECKLIST.md` §0's claim that the code "scores Investment, which is not in the spec" is **wrong**. `docs/SDD.md:14` names all six: "TRL, MRL, ARL, ORL, RRL, IRL". The genuine defect is narrower — the scorer omits **Regulatory**. That correction belongs in the checklist.
+**Verified against the source documents (2026-07-28).** An earlier draft of this spec claimed `docs/SDD.md:14` showed the specification included Investment, and that `TODO_CHECKLIST.md` §0 was therefore wrong. That was incorrect. The authoritative documents specify **five** dimensions and never mention IRL:
+
+- SDD §3.3 — "Receives all **five** bias-corrected dimensions (TRL, MRL, RRL, ARL, ORL)"
+- SDD data design — `dimension varchar — One of: TRL, MRL, RRL, ARL, ORL`
+- SDD URAT rating panel and bias-correction dashboard — the same five
+- Proposal Part 4 — "five readiness dimensions (TRL, MRL, RRL, ARL, and ORL)"
+- SRS §1.1 — the same five
+
+`TODO_CHECKLIST.md` §0 was right: the scorer both omits **Regulatory** (specified) and scores **Investment** (not specified).
+
+**`docs/SRS.md` and `docs/SDD.md` in the repo are unreliable.** They are 19- and 18-line summaries that contradict the source PDFs on this exact point. They should be replaced with accurate excerpts or deleted; leaving them is a trap for anyone who reads them as authoritative.
+
+**Terminology:** both source documents define **ARL as "Adoption Readiness Level"**. The code's `ReadinessType.A` is `'Acceptance'` (`readiness-type.enum.ts:5`). Cosmetic, but it is a label a panel can read off the screen.
 
 **The BRLa paper is paywalled.** The dimension set and the general shape of its nine-level scales are confirmed from open sources; verbatim level-by-level descriptors for MRL/RRL/ARL/ORL are not available. TRL 1–9 is fully public (NASA, ISO 16290, Horizon Europe Annex G).
 
@@ -60,7 +71,11 @@ Per-row provenance is not bookkeeping. SRS §2.2 requires "a confidence/validity
 
 ### Dimension and level coverage
 
-All **six** dimensions (`ReadinessType`: Technology, Market, Acceptance, Organizational, Regulatory, Investment) × **nine** levels = **54 rubric rows**. Six rather than BRLa's five because `ReadinessType`, the 54 seeded `readiness_levels` rows, `createBasePrompt` and `docs/SDD.md:14` all already carry six, and generation already emits IRL. Seeding six is a superset that costs one extra authoring pass and does not pre-empt §0's scoring decision.
+All **six** dimensions (`ReadinessType`: Technology, Market, Acceptance, Organizational, Regulatory, Investment) × **nine** levels = **54 rubric rows**.
+
+Six rather than the specified five as a deliberate hedge, not because the specification asks for six. The code carries six today: `ReadinessType` has six values, `seed-demo-full.js` seeds 6 × 9 = 54 `readiness_levels` rows, and `createBasePrompt` emits an IRL line. Until §0's dimension alignment is resolved, generation **will** request an Investment rubric, and a missing row would return nothing for that dimension with no error.
+
+The nine IRL rows are tagged `provenance: authored` with no citation, and become obsolete if §0 aligns the code to the specified five. Nine short rows is a cheap hedge against a decision that has not been made yet.
 
 ---
 
@@ -74,7 +89,21 @@ Rubrics are reference data keyed by dimension and level. Peer profiles and busin
 | Business & strategy frameworks | `business_framework` | **Semantic** over this subset | `businessModels` | 10 |
 | Peer startup profiles | `capsule_proposal` | **Semantic**, existing path, 0.78 floor | `similarProfiles` | grows with startups |
 
-The three map exactly onto `RAGContext`'s three declared fields. The interface has described this design since it was written; this implements it.
+### Traceability to the SDD
+
+The three channels are not invented here. SDD §3.2's **RAG Query Service** specifies them verbatim:
+
+> "Queries the vector database using the startup's profile data as the search embedding. Retrieves **verified startup frameworks, business model references, and contextually similar prior validated profiles**. Falls back to profile-only prompting and logs a low-confidence flag if no relevant results are found."
+
+| SDD term | `RAGContext` field | Channel |
+|---|---|---|
+| verified startup frameworks | `verifiedFrameworks` | 1 — readiness rubrics |
+| business model references | `businessModels` | 2 — business frameworks |
+| contextually similar prior validated profiles | `similarProfiles` | 3 — peer profiles |
+
+`RAGContext` has been a faithful stub of this design since it was written; only the third channel was ever implemented. This fills in the other two.
+
+The SRS agrees on the fallback rule, which is what §4.5's guard redesign implements: *"If the vector database returns no relevant results, the system falls back to profile-only prompting and logs a low-confidence flag on all generated outputs"* (SRS §2.2, System Interaction).
 
 ### Why the rubric channel is deterministic
 
@@ -86,6 +115,25 @@ When generating an RNA for Technology at level 3, the correct context is the TRL
 - **Measurement validity** — this is the decisive one. `RAG_MIN_SIMILARITY = 0.78` was calibrated on startup-vs-startup pairs, and the calibration record notes the same-domain and cross-domain distributions **overlap** (0.7295 to 0.8036). Rubric prose is a different genre. If it lands below the floor, the Objective 1 measurement returns "grounding did not help" for a retrieval reason, and nothing in the result distinguishes that from "grounding does not help."
 
 The rubric channel is still retrieval-augmented generation. It uses an exact-match retriever because the query key is known.
+
+### But the SDD specifies the other mechanism, so build both
+
+SDD §3.2 says the RAG Query Service "queries the vector database using the startup's profile data as the search embedding" — one semantic query for all three channels. The deterministic rubric lookup is a **deviation from the published design**, and an undocumented gap between an SDD and the running code is the thing a panel actually penalises.
+
+So the rubric channel gets **two modes**, selected by `AI_RAG_RUBRIC_MODE`:
+
+| Mode | Mechanism | Status |
+|---|---|---|
+| `deterministic` | Exact `(readinessType, level)` and `(readinessType, level+1)` lookup | **Default** |
+| `semantic` | Vector query over `sourceType = 'readiness_rubric'`, floor-gated, top 2 | SDD's specified mechanism |
+
+Three reasons this is worth the small extra cost rather than picking one:
+
+1. **Traceability holds.** The SDD's mechanism genuinely exists in the running code and can be demonstrated, not just described.
+2. **The deviation is defended with a number, not an opinion.** "We measured both and defaulted to the one that retrieved the correct rubric more often" is a materially stronger answer than "we thought exact lookup was better."
+3. **It is data for Research Question 1** — "to what extent can prompt engineering strategies and RAG reduce the occurrence of hallucinated RNA and RNS recommendations." A mechanism comparison sits inside that question rather than beside it.
+
+Cost is genuinely small: the semantic path already exists and is already tested, so `semantic` mode is a `sourceType` filter on a query that is written. Following the `AI_RAG_STRATEGY` precedent, an unrecognised value is rejected at boot rather than defaulted — a typo must never silently mislabel which mechanism produced a batch of generations.
 
 ### Retrieval window
 
@@ -119,16 +167,18 @@ Follows `seed-demo-full.js`'s conventions (standalone Node, resolves `dist/src`,
 - Writes `metadata`: `{ key, readinessType?, level?, provenance, citation, sourceUrl? }`.
 - Embeds through `EmbeddingIndexService` so vectors are written the same way as every other row, in one batch.
 
-Rubric rows are embedded even though channel 1 does not rank by similarity — so that the boot-time backfill stays consistent, and so channel 2's semantic search can be widened later without a re-index.
+Rubric rows are embedded even though channel 1's default mode does not rank by similarity — `semantic` mode requires those vectors, the boot-time backfill stays consistent, and channel 2's search can be widened later without a re-index.
 
 ### 4.3 Retrieval — `rna/rag-query.service.ts`
 
 `queryVectorDatabase(startupId, opts?)` gains an optional `{ readinessTypes: ReadinessType[], levels: Record<ReadinessType, number> }`:
 
-- **`verifiedFrameworks`** — `em.find(RagContext, { sourceType: 'readiness_rubric' })`, then match the requested `(type, level)` and `(type, level+1)` pairs against `metadata.key` in JavaScript. The whole rubric set is 54 short rows; filtering in memory avoids a Postgres-specific JSON query for no measurable gain. No vectors, no similarity.
+- **`verifiedFrameworks`** — mechanism depends on `AI_RAG_RUBRIC_MODE`:
+  - `deterministic` (default) — `em.find(RagContext, { sourceType: 'readiness_rubric' })`, then match the requested `(type, level)` and `(type, level+1)` pairs against `metadata.key` in JavaScript. The whole rubric set is 54 short rows; filtering in memory avoids a Postgres-specific JSON query for no measurable gain. No vectors, no similarity.
+  - `semantic` — the SDD's mechanism: the existing `<=>` query scoped to `sourceType = 'readiness_rubric'`, floor-gated at `RAG_MIN_SIMILARITY`, top 2. Deliberately reuses the same floor rather than a rubric-specific one, because whether that floor is even appropriate for rubric prose is one of the things being measured.
 - **`businessModels`** — semantic search restricted to `sourceType = 'business_framework'`, top 2, reusing the existing `<=>` ordering.
 - **`similarProfiles`** — unchanged, including the `rc.startup_id is not null` filter, which becomes *correct* rather than accidental: peers are exactly the startup-owned rows.
-- **`lowConfidence`** — must be redefined. Today it means "no peer cleared the floor." Once rubrics are guaranteed present, a generation with rubrics but no peers is not low-confidence. New rule: `lowConfidence = verifiedFrameworks.length === 0`. Emitting a low-confidence warning while verified rubrics sit in the prompt would train users to ignore the indicator.
+- **`lowConfidence`** — must be redefined. Today it means "no peer cleared the floor", so a generation grounded in verified rubrics but lacking a peer would still be flagged low-confidence, which would train users to ignore the indicator. New rule: **all three channels empty**, matching the SRS wording ("if the vector database returns no relevant results"). This is exactly the negation of §4.5's guard, so the two cannot drift apart.
 - Rows returned to callers carry `content`, not only metadata.
 
 `logRetrieval` records per-channel counts so `rag_retrieval_logs` can distinguish "no rubric" from "no peer."
@@ -146,8 +196,7 @@ Both services choose between the grounded builder and a legacy fallback prompt, 
 - `rna.service.ts:151` — `if (ragContext)` is always true, because `queryVectorDatabase` never returns `null`. The fallback beneath it (`:160-194`) is dead code.
 - `rns.service.ts:282` — `!ragContext.lowConfidence && ragContext.similarProfiles?.length > 0` requires a **peer** before it will use the grounded builder. With rubrics retrieved but no peer clearing the 0.78 floor, RNS would discard the verified rubrics and fall back to the ungrounded prompt. Given two seeded startups, that is the common case, not the edge case.
 
-Both become the same condition: use the grounded builder when **any** channel returned something —
-`verifiedFrameworks.length > 0 || businessModels.length > 0 || similarProfiles.length > 0`.
+Both become the same condition: use the grounded builder when **any** channel returned something — i.e. `!ragContext.lowConfidence`, under the redefinition in §4.3. Expressing the guard as the negation of the flag rather than as its own boolean expression is deliberate: two independent conditions describing the same idea is how RNS's guard drifted out of step in the first place.
 
 With the corpus enabled this is effectively always true, which is the intent; with `AI_RAG_CORPUS_ENABLED=false` and no peers it correctly falls through to the legacy prompt, preserving a clean baseline arm. Delete RNA's dead fallback; keep RNS's, since its guard can still legitimately fail.
 
@@ -155,27 +204,44 @@ Both services pass the dimension and level they are generating for, so the rubri
 
 ### 4.6 Path 1 — `ai.service.ts`
 
-`createBasePrompt` gains the same deterministic rubric block, independent of `ragStrategy`, so initiatives, roadblocks and refine are grounded identically.
+`createBasePrompt` gains the same rubric block, honouring `AI_RAG_RUBRIC_MODE` but independent of `ragStrategy`, so initiatives, roadblocks and refine are grounded identically to RNA and RNS. Keeping the rubric mechanism separate from `ragStrategy` matters: `ragStrategy` selects how *peers* are found (keyword vs semantic) and its existing measured comparison must not be perturbed by a rubric change.
 
 `getRelevantRagContexts` is scoped to `capsule_proposal` and `business_framework` rows only. Rubrics must not enter the keyword/semantic arm pool: they share generic readiness vocabulary with every query and would dominate the keyword arm's token-overlap score, silently invalidating the existing keyword-vs-semantic comparison.
 
 ### 4.7 Configuration
 
-New flag `AI_RAG_CORPUS_ENABLED` (default `true`) on `AiPipelineConfig`, `aiEnvSchema` and `aiOverrideSchema`, gating channels 1 and 2 only.
+Two new settings on `AiPipelineConfig`, `aiEnvSchema`, `aiOverrideSchema` and `.env.example`:
 
-This exists so the measurement can run corpus-on vs corpus-off **without deleting rows**, and so the arm is recorded in each `ai_generation_runs` config snapshot. Following the existing precedent that an unrecognised `AI_RAG_STRATEGY` is rejected at boot rather than defaulted, a run must never be mislabelled as to which arm produced it.
+| Setting | Values | Default | Gates |
+|---|---|---|---|
+| `AI_RAG_CORPUS_ENABLED` | boolean | `true` | Channels 1 and 2 |
+| `AI_RAG_RUBRIC_MODE` | `deterministic` \| `semantic` | `deterministic` | Channel 1's mechanism |
+
+`AI_RAG_CORPUS_ENABLED` exists so the measurement can run corpus-on vs corpus-off **without deleting rows**. `AI_RAG_RUBRIC_MODE` carries the SDD-mechanism comparison.
+
+Both land in each `ai_generation_runs` config snapshot, so every generated row remains attributable to the exact arm that produced it — which is the whole point of the provenance work already done. Following the `AI_RAG_STRATEGY` precedent, an unrecognised `AI_RAG_RUBRIC_MODE` is rejected at boot rather than defaulted.
 
 ---
 
 ## 5. Measurement — `backend/measurement/measure-grounding.js`
 
-Two arms (`corpus on` / `corpus off`), both seeded startups, six dimensions, 3 repetitions, `temperature: 0`, production prompt assembly.
+**Three arms**, both seeded startups, six dimensions, 3 repetitions, `temperature: 0`, production prompt assembly:
+
+| Arm | `AI_RAG_CORPUS_ENABLED` | `AI_RAG_RUBRIC_MODE` | Answers |
+|---|---|---|---|
+| baseline | `false` | — | Does a verified corpus help at all? |
+| SDD mechanism | `true` | `semantic` | Does the specified design deliver the rubric? |
+| deviation | `true` | `deterministic` | Is the deviation justified? |
+
+**The mechanism comparison runs first and costs no quota.** Whether each mode retrieves the *correct* dimension's rubric is a pure retrieval question — feed each startup's profile and each dimension through both modes and check what comes back against the known key. No Gemini call, fully deterministic, reproducible on re-run. If `semantic` mode turns out to retrieve the wrong dimension or fall below the floor, that result alone settles the SDD deviation, and the expensive generation arms only need to run for baseline vs corpus.
 
 Three metrics, chosen because each is mechanical and reproducible — no LLM-as-judge, given this project's own finding that model leniency is the thing under investigation:
 
 1. **Rubric-term grounding rate** — proportion of generated RNAs containing `keyTerms` from the rubric level actually retrieved (§4.1). The term list is authored with the corpus content, not derived from generated output, so the metric cannot be fitted to its own results. Directly measures whether retrieval reached the output.
 2. **Unsupported-claim rate** — reuses `measure-models.js`'s absent-field probe: fields deliberately not present in the document. Inventing a value is a measurable grounding failure. This is the Objective 1 headline number.
 3. **Differentiation gap** — reuses `measure-differentiation.js`'s early-vs-mid gap (currently +2.28 on `gemini-3.6-flash`). If rubrics anchor level assignment, the gap should widen or hold; a collapse would mean rubric text is displacing document evidence, which is a failure worth catching.
+
+4. **Rubric-retrieval accuracy** — per mechanism, the proportion of `(startup, dimension)` queries that return the correct dimension's rubric, plus how often `semantic` mode returns nothing at all because the 0.78 floor rejected it. Quota-free, so this runs first and at full N.
 
 `measurement/README.md` gains a section following the existing caveat conventions: small N, no expert ground truth, corpus authored rather than sampled, and gap direction being the trustworthy signal rather than absolute values.
 
@@ -187,6 +253,8 @@ Three metrics, chosen because each is mechanical and reproducible — no LLM-as-
 
 **Unit** (`pnpm test`):
 - Rubric lookup returns the right rows for `(type, level)` and clamps `level+1` at 9.
+- `semantic` rubric mode queries only `sourceType = 'readiness_rubric'` and honours the floor; an unrecognised `AI_RAG_RUBRIC_MODE` is rejected at boot.
+- Both modes are reachable through config, and the resolved mode appears in the `ai_generation_runs` config snapshot.
 - Empty rubric set ⇒ `lowConfidence: true`; rubrics present but no peers ⇒ `lowConfidence: false`.
 - `buildGroundedPrompt` emits profile `content`, and framework provenance and citation.
 - `getRelevantRagContexts` excludes `readiness_rubric` rows under both strategies.
@@ -226,10 +294,11 @@ Three metrics, chosen because each is mechanical and reproducible — no LLM-as-
 1. `backend/data/rag-corpus/readiness-rubrics.json` — 54 rows with provenance
 2. `backend/data/rag-corpus/business-frameworks.json` — 10 rows
 3. `backend/seed-rag-corpus.js` — idempotent, change-aware embedding
-4. `rag-query.service.ts` — three channels, redefined `lowConfidence`, content in results
+4. `rag-query.service.ts` — three channels, dual-mode rubric retrieval, redefined `lowConfidence`, content in results
 5. `grounded-prompt-builder.service.ts` — emit content, prose rendering, authority ordering
 6. `rna.service.ts` / `rns.service.ts` — pass dimension and level; replace both grounded-path guards with the any-channel condition; delete RNA's dead fallback
 7. `ai.service.ts` — rubric block in `createBasePrompt`; scope `getRelevantRagContexts`
-8. `AI_RAG_CORPUS_ENABLED` through config, env schema, override schema and `.env.example`
-9. `backend/measurement/measure-grounding.js` + README section
-10. Doc updates: `TODO_CHECKLIST.md` (§0 1b, and the §0 dimension-mismatch correction), `SESSION_NOTES.md`, `CLAUDE.md`'s "there is no RAG pipeline" note
+8. `AI_RAG_CORPUS_ENABLED` and `AI_RAG_RUBRIC_MODE` through config, env schema, override schema and `.env.example`
+9. `backend/measurement/measure-grounding.js` (three arms, four metrics) + README section
+10. Doc updates: `TODO_CHECKLIST.md` (§0 1b), `SESSION_NOTES.md`, `CLAUDE.md`'s "there is no RAG pipeline" note
+11. Replace or delete `docs/SRS.md` and `docs/SDD.md` — they contradict the source PDFs on the dimension set (§2)
