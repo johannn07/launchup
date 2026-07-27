@@ -25,6 +25,17 @@ export interface SeedResult {
    */
   reindexed: number;
   embedded: number;
+  /**
+   * A row was queued for embedding but `indexRagContext` itself rejected —
+   * a DB error in its vector-write path (find/remove/create/flush on
+   * VectorEmbedding), not the "no embedding produced" case it already
+   * reports by returning `false` (that's counted by embedded being lower
+   * than created+updated+reindexed, not here). Isolated per-row so one
+   * failure can't abort the whole batch before `seed()` ever returns — the
+   * same failure mode, one level deeper, that produced the original 54
+   * unvectored rows this task had to repair.
+   */
+  failed: number;
 }
 
 export interface CorpusFileRow extends CorpusRowMetadata {
@@ -80,10 +91,12 @@ export class RagCorpusSeederService {
       unchanged: a.unchanged + b.unchanged,
       reindexed: a.reindexed + b.reindexed,
       embedded: a.embedded + b.embedded,
+      failed: a.failed + b.failed,
     };
     this.logger.log(
       `Corpus seeded: ${total.created} created, ${total.updated} updated, ` +
-        `${total.unchanged} unchanged, ${total.reindexed} reindexed, ${total.embedded} embedded`,
+        `${total.unchanged} unchanged, ${total.reindexed} reindexed, ${total.embedded} embedded, ` +
+        `${total.failed} failed`,
     );
     return total;
   }
@@ -116,6 +129,7 @@ export class RagCorpusSeederService {
       unchanged: 0,
       reindexed: 0,
       embedded: 0,
+      failed: 0,
     };
     const toIndex: RagContext[] = [];
 
@@ -165,8 +179,20 @@ export class RagCorpusSeederService {
     await this.em.flush();
 
     for (const context of toIndex) {
-      if (await this.embeddingIndex.indexRagContext(context)) {
-        result.embedded += 1;
+      // One row's DB write failing inside indexRagContext must not abort the
+      // rest of the batch or the caller never sees `result` at all — that
+      // would be the same silent-partial-failure shape this task exists to
+      // repair, just moved one level deeper into the embed loop itself.
+      try {
+        if (await this.embeddingIndex.indexRagContext(context)) {
+          result.embedded += 1;
+        }
+      } catch (error) {
+        result.failed += 1;
+        this.logger.error(
+          `Failed to index rag_context ${context.id} ("${context.title}"): ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
 

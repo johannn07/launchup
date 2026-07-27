@@ -162,4 +162,25 @@ describe('RagCorpusSeederService', () => {
 
     expect(result).toMatchObject({ created: 1, embedded: 0 });
   });
+
+  it('isolates a per-row indexing failure so the batch result still reports what succeeded', async () => {
+    // indexRagContext's store() path does uncaught DB writes (find / remove /
+    // create / flush on VectorEmbedding). One row rejecting there must not
+    // abort the whole loop before seed() can ever return `result` to the
+    // runner — that would reproduce, one level deeper, the exact
+    // silent-partial-failure this task exists to repair.
+    const { em } = emDouble([]);
+    const index = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error('db write failed'));
+
+    const result = await build(em, index).seedRows(RUBRIC_SOURCE_TYPE, [
+      row({ key: 'trl-1' }),
+      row({ key: 'trl-2', title: 'TRL 2' }),
+    ]);
+
+    expect(index).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ created: 2, embedded: 1, failed: 1 });
+  });
 });

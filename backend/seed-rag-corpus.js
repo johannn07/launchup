@@ -38,12 +38,19 @@ const { RagCorpusSeederService } = req('ai/rag-corpus-seeder.service');
       app.get(RagCorpusSeederService).seed(),
     );
     console.log(result);
-    if (result.embedded === 0 && result.created + result.updated + result.reindexed > 0) {
-      // Rows landed (or were flagged as needing a vector) but nothing was
-      // indexed means GEMINI_API_KEY is missing or the embedding call failed.
-      // Retrieval will not see this corpus at all, so say so loudly rather
-      // than reporting success.
-      console.error('WARNING: rows were written but none were embedded — semantic retrieval will not see them');
+    const needingVectors = result.created + result.updated + result.reindexed;
+    if (result.embedded < needingVectors) {
+      // Checking for a *partial* shortfall, not just embedded === 0: if 60 of
+      // 64 rows embed and 4 come back null (embedBatch converts a transient
+      // API error, a rate limit, or a dimension mismatch to null rather than
+      // throwing), embedded > 0 but this run still leaves rows unvectored —
+      // the exact state this task exists to repair, just with a clean exit
+      // code that would otherwise be indistinguishable from full success.
+      console.error(
+        `WARNING: ${needingVectors - result.embedded} of ${needingVectors} rows that needed a ` +
+          'vector did not get one (missing GEMINI_API_KEY, embedding failure, or a DB error — ' +
+          `see result.failed = ${result.failed}) — semantic retrieval will not see them`,
+      );
       process.exitCode = 1;
     }
   } finally {
