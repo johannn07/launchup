@@ -10,6 +10,7 @@ do not need the server running, but they **do consume quota**.
 ```bash
 node measurement/measure-models.js
 node measurement/measure-differentiation.js
+node measurement/calibrate-similarity.js
 ```
 
 ## What each one measures
@@ -27,6 +28,17 @@ assessment against an early-stage document (AgroLink: paper prototype, zero
 revenue) and a mid-stage one (MediSync: six paying facilities, PHP 5k MRR),
 and reports the **gap** between them. A model that cannot separate those two
 cannot support Objective 2 no matter how the weights are tuned.
+
+**`calibrate-similarity.js`** — picks the retrieval similarity floor
+(`RAG_MIN_SIMILARITY` in `ai.service.ts`). Embeds nine startup descriptions
+across three domains, compares all 36 pairs, and reports what each candidate
+threshold keeps and leaks. Needed because embeddings score same-register prose
+high across the board: the same-domain and cross-domain distributions
+**overlap**, so the floor is a trade-off rather than a boundary. The first
+guess of 0.70 let 78% of cross-domain pairs through.
+
+This is the only one of the three that decides a value used in production, so
+re-run it if the embedding model changes.
 
 ## Reading the output
 

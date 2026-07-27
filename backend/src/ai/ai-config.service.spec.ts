@@ -13,6 +13,7 @@ describe('AiConfigService', () => {
         AI_TEMPERATURE: '0.4',
         AI_GROUNDING_ENABLED: 'false',
         AI_RAG_ENABLED: 'false',
+        AI_RAG_STRATEGY: 'keyword',
         AI_BIAS_REVIEW_ENABLED: 'false',
         AI_SCORE_NORMALIZATION_ENABLED: 'false',
         AI_ALLOW_REQUEST_OVERRIDE: 'true',
@@ -24,6 +25,7 @@ describe('AiConfigService', () => {
       temperature: 0.4,
       grounding: false,
       rag: false,
+      ragStrategy: 'keyword',
       biasReview: false,
       scoreNormalization: false,
     });
@@ -40,6 +42,9 @@ describe('AiConfigService', () => {
       temperature: 0,
       grounding: true,
       rag: true,
+      // Semantic by default: keyword matching is what this replaces, so
+      // defaulting to it would make the enhanced arm opt-in.
+      ragStrategy: 'semantic',
       biasReview: true,
       scoreNormalization: true,
     });
@@ -67,6 +72,25 @@ describe('AiConfigService', () => {
     ).toThrow(/AI_TEMPERATURE/);
   });
 
+  it('rejects an unknown retrieval strategy instead of falling back', () => {
+    // A typo'd strategy that silently defaulted would mislabel which arm a
+    // batch of generations actually ran under.
+    expect(
+      () => new AiConfigService(configFrom({ AI_RAG_STRATEGY: 'vector' })),
+    ).toThrow(/AI_RAG_STRATEGY/);
+  });
+
+  it('keeps rag and ragStrategy independent', () => {
+    // rag=false is "no retrieval at all"; the strategy still resolves so the
+    // three arms stay distinguishable in ai_generation_runs.
+    const service = new AiConfigService(
+      configFrom({ AI_RAG_ENABLED: 'false', AI_RAG_STRATEGY: 'semantic' }),
+    );
+
+    expect(service.defaults.rag).toBe(false);
+    expect(service.defaults.ragStrategy).toBe('semantic');
+  });
+
   it('throws when the model is blank', () => {
     expect(() => new AiConfigService(configFrom({ GEMINI_MODEL: '' }))).toThrow(
       /GEMINI_MODEL/,
@@ -84,6 +108,9 @@ describe('AiConfigService.resolve', () => {
       temperature: 0,
       grounding: true,
       rag: true,
+      // Semantic by default: keyword matching is what this replaces, so
+      // defaulting to it would make the enhanced arm opt-in.
+      ragStrategy: 'semantic',
       biasReview: true,
       scoreNormalization: true,
     });

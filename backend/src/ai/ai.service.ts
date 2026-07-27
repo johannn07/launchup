@@ -14,7 +14,53 @@ import { RagContext } from 'src/entities/rag-context.entity';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
-import { EmbeddingIndexService } from './embedding-index.service';
+import { EmbeddingIndexService, RAG_CONTEXT_SOURCE } from './embedding-index.service';
+import { EmbeddingService } from './embedding.service';
+import { RagStrategy } from './ai-config.types';
+
+/** How many context rows reach the prompt. Matches the previous keyword slice. */
+export const RAG_TOP_K = 3;
+
+/**
+ * Cosine-similarity floor for a semantically retrieved context.
+ *
+ * A floor is not optional here. Nearest-neighbour search always returns its top
+ * K, so without one every generation gets three "verified contexts" no matter
+ * how unrelated they are — and feeding irrelevant text to a grounded prompt as
+ * corroboration is a way to *cause* the hallucination Objective 1 is meant to
+ * reduce. The keyword arm has the same guard as `score > 0`.
+ *
+ * Calibrated, not guessed — see measurement/calibrate-similarity.js, run
+ * 2026-07-27 over nine startup descriptions in three domains (36 pairs):
+ *
+ *   threshold   same-domain kept   cross-domain leaked
+ *     0.70            9/9                21/27  (78%)
+ *     0.76            8/9                 9/27  (33%)
+ *     0.78            8/9                 3/27  (11%)   <- chosen
+ *     0.80            6/9                 1/27   (4%)
+ *     0.82            4/9                 0/27   (0%)
+ *
+ * The two distributions overlap — same-domain runs as low as 0.7295 and
+ * cross-domain as high as 0.8036 — so no threshold separates them cleanly and
+ * this is a trade-off, not a boundary. 0.78 keeps 8 of 9 true neighbours while
+ * cutting the leak to 11%; 0.80 buys little and loses a third of real matches.
+ *
+ * An earlier value of 0.70 was fitted to one hand-picked pair and let an
+ * agriculture startup through at 0.765 as context for a health platform.
+ *
+ * Embeddings score same-register prose high across the board, which is why the
+ * usable band is this narrow and this high. Re-run the calibration if the
+ * embedding model or the shape of stored context changes.
+ */
+export const RAG_MIN_SIMILARITY = 0.78;
+
+/** Shape returned by both retrieval arms, so the prompt builder sees one type. */
+export interface RetrievedContext {
+  sourceType: string;
+  title: string;
+  content: string;
+  confidence: number;
+}
 
 const AI_GROUNDING_INSTRUCTION =
   'Only use facts explicitly present in the user-provided input. Never invent names, numbers, dates, or organizations. If you are uncertain about a field, return null instead of guessing.';
@@ -67,6 +113,7 @@ export class AiService {
     private readonly em: EntityManager,
     private readonly aiConfig: AiConfigService,
     private readonly embeddingIndex: EmbeddingIndexService,
+    private readonly embeddings: EmbeddingService,
   ) {
     this.ai = new GoogleGenAI({
       apiKey: this.config.get<string>('GEMINI_API_KEY'),
@@ -278,9 +325,9 @@ export class AiService {
     return overlap / Math.max(queryTokens.size, candidateTokens.size);
   }
 
-  async getRelevantRagContexts(startup: Startup, em: EntityManager) {
-    const contexts = await em.find(RagContext, {}, { orderBy: { createdAt: 'DESC' } });
-    const query = [
+  /** The startup's own text, used as the retrieval query under either strategy. */
+  private buildRetrievalQuery(startup: Startup) {
+    return [
       startup.name,
       startup.links ?? '',
       startup.groupName ?? '',
@@ -295,6 +342,36 @@ export class AiService {
     ]
       .join(' ')
       .trim();
+  }
+
+  /**
+   * Retrieve context to put in front of the model.
+   *
+   * @param strategy Which retrieval arm to run. Defaults to keyword so that a
+   *   caller that has not been updated keeps the pre-existing behaviour rather
+   *   than silently switching to embeddings.
+   */
+  async getRelevantRagContexts(
+    startup: Startup,
+    em: EntityManager,
+    strategy: RagStrategy = 'keyword',
+  ): Promise<RetrievedContext[]> {
+    const query = this.buildRetrievalQuery(startup);
+    if (!query) {
+      return [];
+    }
+
+    if (strategy === 'semantic') {
+      return this.retrieveSemantic(startup, em, query);
+    }
+    return this.retrieveByKeyword(em, query);
+  }
+
+  private async retrieveByKeyword(
+    em: EntityManager,
+    query: string,
+  ): Promise<RetrievedContext[]> {
+    const contexts = await em.find(RagContext, {}, { orderBy: { createdAt: 'DESC' } });
 
     return contexts
       .map((context) => ({
@@ -303,12 +380,71 @@ export class AiService {
       }))
       .filter(({ score }) => score > 0)
       .sort((left, right) => right.score - left.score)
-      .slice(0, 3)
+      .slice(0, RAG_TOP_K)
       .map(({ context, score }) => ({
         sourceType: context.sourceType,
         title: context.title,
         content: context.content,
         confidence: context.confidence ?? score,
+      }));
+  }
+
+  /**
+   * Nearest neighbours by embedding distance, computed in Postgres.
+   *
+   * The ordering is done by pgvector's `<=>` rather than by pulling every
+   * vector into Node and sorting there — at 768 float4 per row that is ~3KB of
+   * transfer per candidate for a result set of three.
+   */
+  private async retrieveSemantic(
+    startup: Startup,
+    em: EntityManager,
+    query: string,
+  ): Promise<RetrievedContext[]> {
+    const vector = await this.embeddings.embed(query);
+    if (!vector) {
+      // No vector, no ranking. Falling back to keyword here would quietly
+      // report a semantic run that never happened, which is exactly the kind
+      // of contamination the arm comparison cannot tolerate.
+      return [];
+    }
+
+    const rows = await em.getConnection().execute<
+      {
+        source_type: string;
+        title: string;
+        content: string;
+        confidence: number | null;
+        similarity: number;
+      }[]
+    >(
+      `select rc.source_type, rc.title, rc.content, rc.confidence,
+              1 - (ve.embedding <=> ?::vector) as similarity
+         from vector_embeddings ve
+         join rag_contexts rc on rc.id = ve.source_id::int
+        where ve.source_type = ?
+          and rc.startup_id is distinct from ?
+        order by ve.embedding <=> ?::vector
+        limit ?`,
+      [
+        `[${vector.join(',')}]`,
+        RAG_CONTEXT_SOURCE,
+        // Exclude the startup's own context. Retrieving your own capsule
+        // proposal back as a "verified prior profile" is circular: the model
+        // would read its own input as independent corroboration.
+        startup.id,
+        `[${vector.join(',')}]`,
+        RAG_TOP_K,
+      ],
+    );
+
+    return rows
+      .filter((row) => row.similarity >= RAG_MIN_SIMILARITY)
+      .map((row) => ({
+        sourceType: row.source_type,
+        title: row.title,
+        content: row.content,
+        confidence: row.confidence ?? row.similarity,
       }));
   }
 
@@ -736,7 +872,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
     const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
     const ragContexts = ctx.config.rag
-      ? await this.getRelevantRagContexts(startup, em)
+      ? await this.getRelevantRagContexts(startup, em, ctx.config.ragStrategy)
       : [];
     const ragBlock = ragContexts.length
       ? `\nVerified context retrieved from similar startup records:\n${ragContexts

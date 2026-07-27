@@ -35,6 +35,7 @@ export class AiConfigService {
       AI_TEMPERATURE: this.config.get<string>('AI_TEMPERATURE'),
       AI_GROUNDING_ENABLED: this.config.get<string>('AI_GROUNDING_ENABLED'),
       AI_RAG_ENABLED: this.config.get<string>('AI_RAG_ENABLED'),
+      AI_RAG_STRATEGY: this.config.get<string>('AI_RAG_STRATEGY'),
       AI_BIAS_REVIEW_ENABLED: this.config.get<string>('AI_BIAS_REVIEW_ENABLED'),
       AI_SCORE_NORMALIZATION_ENABLED: this.config.get<string>(
         'AI_SCORE_NORMALIZATION_ENABLED',
@@ -60,6 +61,7 @@ export class AiConfigService {
       temperature: env.AI_TEMPERATURE,
       grounding: env.AI_GROUNDING_ENABLED,
       rag: env.AI_RAG_ENABLED,
+      ragStrategy: env.AI_RAG_STRATEGY,
       biasReview: env.AI_BIAS_REVIEW_ENABLED,
       scoreNormalization: env.AI_SCORE_NORMALIZATION_ENABLED,
     });

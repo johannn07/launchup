@@ -51,6 +51,8 @@ describe('AiService', () => {
       // recordRagContext indexes the row it just wrote; nothing under test here
       // reaches that path, so a stub is enough.
       { indexRagContext: jest.fn().mockResolvedValue(true) } as any,
+      // Only used by the semantic retrieval arm, which these tests do not take.
+      { embed: jest.fn().mockResolvedValue(null) } as any,
     );
 
     (service as unknown as { ai: { models: { generateContent: jest.Mock } } }).ai = {

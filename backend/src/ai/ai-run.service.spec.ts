@@ -6,6 +6,7 @@ import { AiService } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { EmbeddingIndexService } from './embedding-index.service';
+import { EmbeddingService } from './embedding.service';
 
 const configService = () =>
   new AiConfigService({ get: () => undefined } as unknown as ConfigService);
@@ -287,6 +288,7 @@ describe('AiRunService token accounting', () => {
       configService(),
       // Only reached via recordRagContext, which token accounting never calls.
       { indexRagContext: jest.fn() } as unknown as EmbeddingIndexService,
+      { embed: jest.fn() } as unknown as EmbeddingService,
     );
     (service as unknown as { ai: unknown }).ai = { models: { generateContent } };
     return service;
