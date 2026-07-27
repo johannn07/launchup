@@ -5,6 +5,7 @@ import { AiMetricsController } from './ai-metrics.controller';
 import { BaselineService } from './baseline.service';
 import { AiConfigService } from './ai-config.service';
 import { AiRunService } from './ai-run.service';
+import { EmbeddingService } from './embedding.service';
 
 @Module({
   providers: [
@@ -13,6 +14,7 @@ import { AiRunService } from './ai-run.service';
     BaselineService,
     AiConfigService,
     AiRunService,
+    EmbeddingService,
   ],
   controllers: [AiMetricsController],
   exports: [
@@ -21,6 +23,7 @@ import { AiRunService } from './ai-run.service';
     BaselineService,
     AiConfigService,
     AiRunService,
+    EmbeddingService,
   ],
 })
 export class AiModule {}
