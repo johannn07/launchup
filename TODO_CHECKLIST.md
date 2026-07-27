@@ -60,6 +60,15 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   - **Three arms, not two.** `AI_RAG_STRATEGY=keyword|semantic` sits alongside `AI_RAG_ENABLED`, so the comparison can separate "does retrieval help at all" from "does *semantic* retrieval beat the token matching that was already here". An unknown value is rejected at boot rather than defaulted, so a typo cannot mislabel an arm.
   - **A startup can no longer retrieve itself.** Its own capsule proposal was previously eligible as a "verified prior profile" — the model reading its own input back as independent corroboration.
 
+  **The arm comparison, measured** (`measurement/measure-retrieval.js`, 2026-07-27) — nine documents, three domains, each used as the query against the other eight, production scoring functions on both sides:
+
+  | arm | returned | correct | precision | top hit correct | same-domain recall |
+  |---|---|---|---|---|---|
+  | keyword | 27 | 15 | 56% | 7/9 | 15/18 (83%) |
+  | semantic | 21 | 16 | **76%** | 8/9 | 16/18 (89%) |
+
+  Semantic returned **fewer** documents and still surfaced **more** correct ones — precision was not bought with recall. Keyword's `score > 0` floor admits anything sharing one token, so it returns a full top-3 for every query no matter how unrelated. Caveats are real and written up in `measurement/README.md`: the documents are composed rather than sampled, ground truth is domain membership rather than human relevance judgement, and N is 9. Enough to justify the default; not enough to publish as an effect size.
+
   **Similarity floor is calibrated, and the calibration matters.** `RAG_MIN_SIMILARITY = 0.78`, from `measurement/calibrate-similarity.js` (nine startups, three domains, 36 pairs). The distributions **overlap** — same-domain similarity runs as low as 0.7295, cross-domain as high as 0.8036 — so this is a trade-off, not a boundary: 0.78 keeps 8/9 true neighbours and leaks 11% of cross-domain pairs. A first guess of 0.70 leaked **78%** and let an agriculture startup through at 0.765 as context for a health platform. Re-run the calibration if the embedding model changes.
 
 - [ ] 🔴 **OBJECTIVE · M · The corpus is still self-referential — this is now the real Objective 1b gap**

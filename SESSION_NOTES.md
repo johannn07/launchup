@@ -171,6 +171,29 @@ Limits worth repeating before anyone cites these numbers: N is small (3 reps × 
 
 **Next:** RAG pipeline (§0) — `gemini-embedding-2` is reachable. Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 
+### RAG pipeline (§0) — built and measured
+
+Branch `feat/model-tiering`, four commits (`4708a2e`, `5c390de`, `8abba71`, + docs). Nothing pushed.
+
+Objective 1b now has an actual retrieval-augmented pipeline. Before this, `vector_embeddings` had never held a single row since the table was created, and `RagQueryService` searched `source_type = 'startup'` — which nothing has ever written — so it returned `lowConfidence: true` on *every* call and the RNA/RNS prompts were "grounded" in nothing at all.
+
+**What was built.** `EmbeddingService` (`gemini-embedding-2`, 768 dims) + `EmbeddingIndexService` writing `vector_embeddings` on every `recordRagContext`, plus an idempotent boot-time backfill. Both retrieval paths now rank with pgvector `<=>` in SQL instead of loading every vector into Node. `AI_RAG_STRATEGY=keyword|semantic` sits alongside `AI_RAG_ENABLED` so the comparison has three arms, and an unrecognised value is rejected at boot rather than defaulted — a typo must not silently mislabel which arm a batch of generations ran under. A startup can also no longer retrieve its own capsule proposal as a "verified prior profile"; it previously could, letting the model read its own input back as corroboration.
+
+**Four things were measured rather than assumed, and three of them changed the design:**
+
+1. **`gemini-embedding-2` over `-001`.** Wider relevant/irrelevant separation, and it stays unit-normalised when truncated to 768 where `-001` drops to norm 0.59. It also ignores `taskType` entirely — DOCUMENT and QUERY return bit-identical vectors — so there is no asymmetric encoding to get wrong.
+2. **768 dimensions, not the native 3072.** pgvector refuses to build hnsw or ivfflat above 2000 dimensions. At 3072 the column could only ever be sequentially scanned. The column was also a *dimensionless* `vector`, which pgvector cannot index at all.
+3. **The similarity floor.** A first guess of 0.70 was fitted to one hand-picked pair and leaked **78%** of cross-domain pairs — an agriculture startup scored 0.765 against a health-referral query. Calibrated properly (`measurement/calibrate-similarity.js`, 9 documents / 36 pairs) the answer is **0.78**: keeps 8/9 true neighbours, leaks 11%. The distributions *overlap* (same-domain down to 0.7295, cross-domain up to 0.8036), so this is a trade-off and not a boundary.
+4. **The arm comparison** (`measurement/measure-retrieval.js`): keyword 56% precision / 15 of 18 same-domain surfaced; semantic **76%** / 16 of 18. Semantic returned **fewer** documents (21 vs 27) and still surfaced **more** correct ones, so precision was not bought with recall. Keyword's `score > 0` floor admits anything sharing one token.
+
+**What live verification caught that tests could not.** The backfill used the injected global `EntityManager` and failed on every boot with *"Using global EntityManager instance methods for context specific actions is disallowed"* — invisible to unit tests whose EM is a mock. It now forks, and the test double grew a `fork()` so the regression is catchable. Separately, the retrieval SQL was exercised against Neon in a rolled-back transaction with real embeddings (it correctly ranked a health context above an agriculture one), and then both retrieval methods were called through the real DI graph — because raw `pg` would not have covered MikroORM's own `?`→`$n` placeholder rewriting.
+
+**Operational note:** do not run `pnpm build` while `pnpm dev` is watching. Both write `dist/`, and the race left the running server unable to resolve its own modules until restarted.
+
+**The remaining Objective 1b gap is the corpus, not the pipeline.** `rag_contexts` only ever holds other startups' capsule proposals (written solely from `startup.service.ts:158`), so this retrieves peer text, not verified knowledge — and peer text is itself AI-parsed, so errors can propagate. `verifiedFrameworks` and `businessModels` are still hardcoded `[]`. Seeding a real corpus of readiness-level rubrics and business-framework documents needs no code change: they are `rag_contexts` rows with a distinct `sourceType`, and the embedding + retrieval path covers them automatically. **Do that before claiming any Objective 1 result.**
+
+Also still true: the only row in `rag_contexts` is titled "PROVENANCE PROBE - delete me" from an earlier session. Left in place — deleting it is John's call.
+
 ---
 
 ## What we did
