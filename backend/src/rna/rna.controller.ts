@@ -10,12 +10,15 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtGuard } from 'src/auth/guard';
 import { RnaService } from './rna.service';
 import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { AiRunService } from '../ai/ai-run.service';
 import { Role } from '../entities/enums/role.enum';
 
+@UseGuards(JwtGuard)
 @Controller('rna')
 export class RnaController {
   constructor(

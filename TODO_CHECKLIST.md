@@ -102,23 +102,21 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
 ### P0 — do these first
 
-- [ ] 🔒 **SEC · S · Remove the hardcoded JWT secret fallback**
-  `backend/src/auth/auth.module.ts:18` and `backend/src/auth/strategy/jwt.strategy.ts:19` both do `config.get('JWT_SECRET') || 'launchup-dev-secret'`.
-  **Why it matters:** if `JWT_SECRET` is unset in a deployed environment, every token is signed with a string that is committed to a public repo — anyone can forge an Admin token. The `||` fallback means this fails *silently*, with no boot error.
-  **Fix:** throw on startup if `JWT_SECRET` is missing. Also decide whether `frontend/src/hooks.server.ts:45` should keep its matching fallback (it must not, for the same reason).
-  *No dependencies. Do this one first — it's ten minutes.*
+- [x] 🔒 **SEC · S · Remove the hardcoded JWT secret fallback** — *fixed 2026-07-27, branch `fix/auth-guards`*
+  Both call sites now go through `requireJwtSecret()` (`backend/src/auth/jwt-secret.ts`), which throws at boot. The frontend's matching fallback in `hooks.server.ts` is gone too, checked at **module scope** — putting the throw at the point of verification would have been useless, because that code sits inside a `try` whose `catch` redirects to `/login`, so a misconfigured deployment would have presented as "your password is wrong".
+  **Also caught:** the old `||` treated a whitespace-only secret as valid and signed tokens with it. `requireJwtSecret` trims. Verified against all four cases (unset / empty / whitespace / real).
 
-- [ ] 🔒 **SEC · M · Add `JwtGuard` to the entire coaching core — currently 100% public**
-  `backend/src/rna/rna.controller.ts`, `backend/src/rns/rns.controller.ts`, `backend/src/initiative/initiative.controller.ts` have **no `@UseGuards` and no guard import anywhere in the file**. That is 21 routes — full CRUD plus all the AI-generation endpoints.
-  `backend/src/roadblock/roadblock.controller.ts` is nearly as bad: only `@Delete(':id')` is guarded (`:43-44`), leaving 5 of 6 routes open.
-  **Why it matters:** an unauthenticated request can read, create, edit, and delete every startup's RNA, next steps, initiatives, and roadblocks. It can also trigger `POST /rns/generate-tasks` etc., which spend your Gemini quota. This is the single largest hole in the app.
-  **Fix:** class-level `@UseGuards(JwtGuard)` on all four controllers.
-  *Blocks the ownership work below — add guards before adding ownership checks.*
+- [x] 🔒 **SEC · M · Guard the coaching core** — *fixed 2026-07-27, branch `fix/auth-guards`*
+  Class-level `@UseGuards(JwtGuard)` on `rna`, `rns`, `initiative`, `roadblock`, `chat-history`, `readiness`, `progress`, `elevate`, `ocr`. `ai/metrics` and `ai/baseline` got `JwtGuard + AdminGuard` instead — `POST /ai/baseline/update` rewrites the distribution that score normalization (4c) measures against, so an ordinary user could have silently moved every normalized score in the study.
+  **The scope was wider than this item recorded.** It named 4 controllers; 11 were unguarded, including `readiness`, `progress`, `elevate`, `ocr` and both `ai/*` surfaces.
+  **Verified live:** all 11 return 401 with no credentials and authenticate with both a Bearer header and an `Access` cookie. `GET /` and `POST /auth/signin` still work unauthenticated.
 
-- [ ] 🔒 **SEC · S · Un-comment the guard on chat history**
-  `backend/src/chat_history/chat-history.controller.ts:5` — `// @UseGuards(JwtGuard)`.
-  **Why it matters:** all four endpoints expose full AI conversation transcripts for any RNA/RNS/initiative/roadblock id, unauthenticated. These transcripts contain the startup's business details.
-  *Same change as the item above; do them together.*
+- [x] 🔒 **SEC · S · Un-comment the guard on chat history** — *fixed 2026-07-27* (same commit as above)
+
+- [ ] 🔒 **SEC · S · Decide the production cookie policy before deploying**
+  Guarding the controllers required the backend to accept the `Access` cookie, because it is `httpOnly` and the shared axios instance was sending **no credentials at all** — see the DEBT item below. That works locally: `localhost:5173` and `localhost:3000` are the *same site* (cookie "site" ignores the port), so `sameSite: 'strict'` permits it.
+  **It will not work deployed.** `launchup.vercel.app` → `launchup.onrender.com` are different sites, and the browser will not attach a `sameSite: 'strict'` cookie. The client-side calls will all 401.
+  **Decision needed:** either set `sameSite: 'none'; secure: true` on the login cookie (`routes/(auth)/login/+page.server.ts:50`) and accept the CSRF exposure that opens, or proxy client-side calls through SvelteKit server routes so they are same-origin. Not changed unilaterally — it is a real trade-off.
 
 - [x] 🔒 **SEC · S · Guard the file-upload endpoints** — *fixed 2026-07-27*
   `backend/src/upload/upload.controller.ts` had no guard on `POST /upload/single` or `POST /upload/multiple`. `@UseGuards(JwtGuard)` now sits on the controller, so it covers the new presign routes too. **Verified live:** `/upload/presign`, `/upload/signed-url`, and `/upload/test-connection` all return 401 unauthenticated. `test-connection` no longer echoes the raw SDK error, which named the bucket and endpoint.
@@ -312,9 +310,18 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 
 ## 4. Cleanup / tech debt
 
+- [ ] 🧹 **DEBT · S · Three components carry a hardcoded, expired JWT from the previous team's app**
+  `frontend/src/lib/components/admin/PendingTab.svelte:19`, `AcceptedTab.svelte:19`, `RatedTab.svelte` each declare `const access = 'eyJ...'` — a literal token string, and they send it as `Authorization: Bearer`. Decoded, it is a **Django SimpleJWT** token (`token_type`, `jti`, `user_id`, `user_type: "M"`) that **expired 2024-09-06**. This backend issues a different payload shape entirely (`sub`/`email`/`role`), so it could never have authenticated here.
+  **Why it matters:** it looks like working auth and is not, which is how the "the frontend already sends Bearer tokens" assumption survived. Anyone reading these files will draw the wrong conclusion about how the app authenticates. A committed token literal is also just bad practice, even a dead one.
+  *These three components are also unimported (see below), so deleting them resolves both.*
+
 - [ ] 🧹 **DEBT · S · Delete three orphaned admin Tab components**
   `frontend/src/lib/components/admin/PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — **none are imported anywhere** (verified). `RatedTab.svelte` also calls `/readinesslevel/:id/calculator-final-scores/`, which doesn't exist (the real route is `/startups/:id/calculator-final-scores`).
   *Coupled to the "rate applicant" scope decision — resolve that first.*
+
+- [ ] 🧹 **DEBT · S · `GET /ocr/parse` reads an arbitrary server-side path**
+  `backend/src/ocr/ocr.controller.ts` takes a `file` query parameter and passes it straight to `parseImageFile`, with no confinement to an upload directory. It is now behind `JwtGuard`, which limits *who* can do it, but any authenticated user can still read files the server process can read.
+  Its own comment calls it a "Quick test endpoint". **Deleting it is probably the right fix**; otherwise resolve the path against a fixed root and reject anything that escapes.
 
 - [ ] 🧹 **DEBT · S · Delete `ReadinessCard.svelte`**
   `frontend/src/lib/components/dashboard/ReadinessCard.svelte` — orphaned (verified). Note `ReadinessDashboard.svelte`, which it wraps, *is* used in three places, so delete only the card.

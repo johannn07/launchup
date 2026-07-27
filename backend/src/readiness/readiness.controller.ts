@@ -1,6 +1,16 @@
-import { Body, Controller, Get, ParseIntPipe, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  ParseIntPipe,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
+import { JwtGuard } from 'src/auth/guard';
 import { ReadinessService } from './readiness.service';
 
+@UseGuards(JwtGuard)
 @Controller('readiness')
 export class ReadinessController {
   constructor(private readonly readinessService: ReadinessService) {}

@@ -10,7 +10,9 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtGuard } from 'src/auth/guard';
 import { InitiativeService } from './initiative.service';
 import {
   CreateInitiativeDto,
@@ -20,6 +22,7 @@ import {
 import { AiRunService } from '../ai/ai-run.service';
 import { Role } from '../entities/enums/role.enum';
 
+@UseGuards(JwtGuard)
 @Controller('initiatives')
 export class InitiativeController {
   constructor(

@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { requireJwtSecret } from './jwt-secret';
 
 @Module({
   controllers: [AuthController],
@@ -13,7 +14,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') || 'launchup-dev-secret',
+        secret: requireJwtSecret(config),
         signOptions: {
           expiresIn: '24h',
         },
