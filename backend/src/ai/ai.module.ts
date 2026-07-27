@@ -7,6 +7,7 @@ import { AiConfigService } from './ai-config.service';
 import { AiRunService } from './ai-run.service';
 import { EmbeddingService } from './embedding.service';
 import { EmbeddingIndexService } from './embedding-index.service';
+import { RagCorpusSeederService } from './rag-corpus-seeder.service';
 
 @Module({
   providers: [
@@ -17,6 +18,7 @@ import { EmbeddingIndexService } from './embedding-index.service';
     AiRunService,
     EmbeddingService,
     EmbeddingIndexService,
+    RagCorpusSeederService,
   ],
   controllers: [AiMetricsController],
   exports: [
@@ -27,6 +29,7 @@ import { EmbeddingIndexService } from './embedding-index.service';
     AiRunService,
     EmbeddingService,
     EmbeddingIndexService,
+    RagCorpusSeederService,
   ],
 })
 export class AiModule {}
