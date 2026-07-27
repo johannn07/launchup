@@ -128,7 +128,27 @@ Two things surfaced during that verification:
 
 Also note **PowerShell 5.1's `Invoke-WebRequest` reported the HTTPS PUT to Supabase as failed with no status code** — but a later bucket listing showed the object *had* been created, so the request reached storage and only the client-side completion or response read failed. Treat a PS failure against Supabase as unreliable in both directions: it may report failure on success, and it cannot be trusted to tell you why. The same request from Node worked and reported correctly. **Use Node for storage probes.**
 
-**Next:** model tiering → RAG pipeline (see `TODO_CHECKLIST.md` §0/§5). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
+### Model tiering (§5) — steps 0–2
+
+**Step 0 — measure before choosing.** Queried the project's own key rather than trusting the docs, and it overturned the plan twice: **`gemini-2.5-flash`, the model this checklist recommended, now 404s** ("no longer available to new users"), and **no Pro-tier model is reachable on the free tier** (`gemini-2.5-pro`, `gemini-3-pro-preview`, `gemini-3.1-pro-preview` all 429 with 20s spacing, so tier exclusion rather than a rate limit). Per-task tiering with Pro on scoring is therefore impossible without paid billing.
+
+**Step 1 — default raised to `gemini-3.6-flash`.** The deciding measurement was thinking tokens: every `*-flash-lite` tier spends **0**, and 2.5-flash-lite answered a *Technology* readiness question in terms of revenue and product-market fit — the wrong dimension. 3.6-flash spends ~780 and stays on-topic. Picked over 3.5-flash on latency (6.5s vs 12.1s) and thinking cost (779 vs 965). Costs ~2.8× tokens and ~3× latency; `gemini-3.5-flash-lite` documented as the escape hatch (still beats 2.5-flash-lite on every axis). `gemini-embedding-2` is reachable for the §0 RAG work.
+
+**Step 2 — the three untracked calls now open runs.** `getCapsuleProposalInfo`, `getCapsuleProposalInfoFromImage`, and `generateStartupAnalysisSummary` read `AiConfigService.defaults` directly and left no `ai_generation_runs` row, so they ignored `X-Ai-Pipeline-Config` and were invisible to the comparison study — including the whole Objective 3 handwriting path. They now take an `AiRunContext` under two new operations, `capsule_extract` and `analysis_summary`. Both open with a null `startupId`; `analysis_summary` backfills via `AiRunService.attribute()` once the startup is persisted.
+
+Verified live against real routes, not just unit tests:
+
+| Operation | Model | Latency | Tokens | Attributed |
+|---|---|---|---|---|
+| `capsule_extract` (1400×1000 image) | gemini-3.6-flash | 26.5s | 1605 / 251 | n/a — no startup yet |
+| `analysis_summary` | gemini-3.6-flash | 9.1s | 324 / 106 | ✅ startup_id backfilled |
+
+Notes for whoever picks this up:
+- **The capsule route has a legibility gate** (`OcrService.checkLegibility`) requiring **≥1200×900 and tail entropy ≥4.2**. Below that it returns early and never calls the model, so a small test image silently proves nothing. No image in `frontend/static/` is large enough.
+- **My Step 1 commit left `ai-run.service.spec` red** — I ran only the `ai-config` spec then, not the full suite. Its `configService()` builds a real `AiConfigService` with no env, so it asserts `DEFAULT_MODEL`. Fixed in the Step 2 commit. Run the whole suite after touching a default.
+- The `deleteRule: 'set null'` on `ai_generation_runs.startup` means deleting a startup silently detaches its runs — worth knowing before reading attribution counts.
+
+**Next:** Step 3 (measure old vs new model on the same input), then the RAG pipeline (§0). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 
 ---
 

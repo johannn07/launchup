@@ -40,12 +40,13 @@ describe('AiRunService', () => {
     const ctx = await service.begin(7, 'rns');
 
     expect(ctx.runId).toBe(42);
-    expect(ctx.config.model).toBe('gemini-2.5-flash-lite');
+    // configService() has no env set, so this is DEFAULT_MODEL.
+    expect(ctx.config.model).toBe('gemini-3.6-flash');
     expect(em.create).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
         operation: 'rns',
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-3.6-flash',
         status: 'running',
         config: expect.objectContaining({ rag: true, grounding: true }),
       }),

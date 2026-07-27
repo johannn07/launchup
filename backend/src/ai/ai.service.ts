@@ -308,21 +308,21 @@ export class AiService {
   }
 
   /**
-   * Chokepoint for tracked, ctx-driven Gemini calls — i.e. the four
-   * AiRunOperation generation types that open an AiRunContext and get an
-   * ai_generation_runs row. Sampling parameters go inside `config` — passing
-   * them at the top level silently does nothing.
+   * Chokepoint for prompt-shaped, ctx-driven Gemini calls. Sampling parameters
+   * go inside `config` — passing them at the top level silently does nothing.
    *
    * No `maxOutputTokens` is sent: none of these calls was ever actually
    * capped (the pre-existing top-level value was silently dropped by the
    * SDK), and picking one now would be a guess that can truncate long
    * extractions. See TODO_CHECKLIST §5.
    *
-   * Not used by the three untracked capsule-parsing methods
-   * (getCapsuleProposalInfo, generateStartupAnalysisSummary,
-   * getCapsuleProposalInfoFromImage), which aren't generation runs and have
-   * no AiRunContext to drive from — they read this.aiConfig.defaults
-   * directly instead.
+   * The capsule-parsing methods (getCapsuleProposalInfo,
+   * getCapsuleProposalInfoFromImage, generateStartupAnalysisSummary) are
+   * tracked and ctx-driven too, but call the SDK directly rather than through
+   * here: the image variant sends a parts array instead of a string prompt and
+   * skips grounding, and the other two need the raw response rather than this
+   * method's return shape. They call accumulateTokenUsage themselves, so their
+   * spend still lands on the run.
    */
   private async generate(
     ctx: AiRunContext,
@@ -432,7 +432,7 @@ export class AiService {
     return fallback;
   }
 
-  async getCapsuleProposalInfo(text: string) {
+  async getCapsuleProposalInfo(ctx: AiRunContext, text: string) {
     const prompt = `Based on the text ${text},
         Task: extract the text for:
         -Acceleration Proposal Title ( can be found above the Duration: 3 months, etc.)
@@ -453,12 +453,15 @@ export class AiService {
     // document, and a cap here truncates the JSON mid-object, which the
     // caller's JSON.parse turns into a blank extraction review screen.
     const res = await this.ai.models.generateContent({
-      model: this.aiConfig.defaults.model,
-      contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
+      model: ctx.config.model,
+      contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
-        temperature: this.aiConfig.defaults.temperature,
+        temperature: ctx.config.temperature,
       },
     });
+
+    this.accumulateTokenUsage(ctx, res?.usageMetadata);
+
     return res.text;
   }
 
@@ -466,22 +469,26 @@ export class AiService {
    * Send an image directly to Gemini's vision model for OCR + field extraction.
    * This bypasses Tesseract entirely and gives far better results for handwritten documents.
    *
-   * Untracked (no AiRunContext, no ai_generation_runs row) — reads
-   * this.aiConfig.defaults directly, same as getCapsuleProposalInfo and
-   * generateStartupAnalysisSummary. Deliberately does not apply the
-   * groundPrompt() wrapper: contents here is an image array (inlineData +
-   * instruction text), not a string prompt, so the text-oriented grounding
-   * instruction doesn't apply cleanly.
+   * Tracked under the `capsule_extract` operation, so the model and pipeline
+   * config behind Objective 3's handwriting path are attributable like every
+   * other run. Deliberately does not apply the groundPrompt() wrapper:
+   * contents here is an image array (inlineData + instruction text), not a
+   * string prompt, so the text-oriented grounding instruction doesn't apply
+   * cleanly — hence no ctx.config.grounding branch below.
    */
-  async getCapsuleProposalInfoFromImage(imageBuffer: Buffer, mimeType: string) {
+  async getCapsuleProposalInfoFromImage(
+    ctx: AiRunContext,
+    imageBuffer: Buffer,
+    mimeType: string,
+  ) {
     const base64Image = imageBuffer.toString('base64');
     const res = await this.ai.models.generateContent({
-      model: this.aiConfig.defaults.model,
+      model: ctx.config.model,
       // No maxOutputTokens: the response carries a raw_transcription field
       // (the full document text) on top of the 8 extracted proposal fields,
       // so any fixed cap risks truncating the JSON.
       config: {
-        temperature: this.aiConfig.defaults.temperature,
+        temperature: ctx.config.temperature,
       },
       contents: [
         {
@@ -522,10 +529,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
         },
       ],
     });
+
+    this.accumulateTokenUsage(ctx, res?.usageMetadata);
+
     return res.text;
   }
 
   async generateStartupAnalysisSummary(
+    ctx: AiRunContext,
     dto: StartupApplicationDto,
   ): Promise<string> {
     const prompt = `Please provide a comprehensive analysis of the following startup proposal:
@@ -564,12 +575,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       - Keep output concise while covering essential points`;
 
     const res = await this.ai.models.generateContent({
-      model: this.aiConfig.defaults.model,
-      contents: this.aiConfig.defaults.grounding ? this.groundPrompt(prompt) : prompt,
+      model: ctx.config.model,
+      contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
-        temperature: this.aiConfig.defaults.temperature,
+        temperature: ctx.config.temperature,
       },
     });
+
+    this.accumulateTokenUsage(ctx, res?.usageMetadata);
 
     if (!res.text) {
       throw new Error('AI response did not contain any text');
