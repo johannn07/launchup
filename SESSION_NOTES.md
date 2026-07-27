@@ -148,7 +148,28 @@ Notes for whoever picks this up:
 - **My Step 1 commit left `ai-run.service.spec` red** — I ran only the `ai-config` spec then, not the full suite. Its `configService()` builds a real `AiConfigService` with no env, so it asserts `DEFAULT_MODEL`. Fixed in the Step 2 commit. Run the whole suite after touching a default.
 - The `deleteRule: 'set null'` on `ai_generation_runs.startup` means deleting a startup silently detaches its runs — worth knowing before reading attribution counts.
 
-**Next:** Step 3 (measure old vs new model on the same input), then the RAG pipeline (§0). Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
+**Step 3 — measured old vs new, and it overturned the section's premise.**
+
+Same input, production grounding instruction, `temperature: 0`, 3 reps, two documents (AgroLink = paper prototype, zero revenue; MediSync = 6 paying facilities, PHP 5k MRR). Only the model varied.
+
+| | `gemini-2.5-flash-lite` | `gemini-3.6-flash` |
+|---|---|---|
+| AgroLink mean level | 1.67 | 2.33 |
+| MediSync mean level | 1.50 | 4.61 |
+| **Gap** | **−0.17** | **+2.28** |
+| Invented values for absent fields | 0/9 | 0/9 |
+| Total tokens (6 calls) | 3,135 | 14,978 |
+
+Four findings, one of which contradicts what the checklist had assumed:
+
+1. **The old model ranked the two startups backwards.** A −0.17 gap means the venture with paying customers scored slightly *lower* than the paper-prototype one, and 5 of 6 dimensions returned identical scores for both. On 3.6-flash every dimension moves correctly (Technology 3→6, Investment 1→4).
+2. **"The lite tier is sycophantic / lenient" was wrong.** It was not lenient — it was floor-bound and blind, collapsing everything to 1–3 regardless of evidence. The real defect was **differentiation (Objective 2)**, not leniency (Objective 4).
+3. **This reframes Objective 2b.** `TierConfig.weights` going unread is still a bug, but weighting near-identical inputs could never have produced differentiation. The model was the binding constraint, not the formula — worth knowing before anyone invests in the weighted-scoring work expecting it to fix differentiation.
+4. **Grounding did not improve.** Both models refused all 9 absent fields and recalled all 9 present ones — `groundPrompt()` is doing that work and there was no headroom, so **no Objective 1 gain can be claimed from the model change.**
+
+Limits worth repeating before anyone cites these numbers: N is small (3 reps × 6 dimensions × 2 docs), there is no expert ground truth so the trustworthy signal is the *gap and its direction* rather than absolute levels, the prompt mirrors production shape but is not `createBasePrompt` with RAG attached, and 1 of 3 AgroLink reps on 3.6-flash produced unparseable output (n=12 not 18 for that cell).
+
+**Next:** RAG pipeline (§0) — `gemini-embedding-2` is reachable. Still open: the legacy-row backfill question is now moot (the wipe cleared those 46 rows).
 
 ---
 

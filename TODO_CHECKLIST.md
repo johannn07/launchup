@@ -41,7 +41,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **1b** RAG pipeline grounding calls in retrieved context | 🔴 **Not implemented** | See below — no embeddings exist. `AI_RAG_ENABLED` gates the **keyword-overlap** retrieval standing in for it, so toggling that flag measures lexical matching, not semantic search — do not report it as a RAG result |
 | **1c** Output validation layer flagging inconsistent recs | 🔴 **Stub** | `output-validator.service.ts` — `validateEach()` returns `isValid: true` for everything with `// TODO`; `flagInconsistencies()` and `markUnverifiable()` have empty bodies |
 | **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
-| **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. |
+| **2b** Weighted composite scoring **by sector / business model** | 🔴 Not implemented | Weights are hardcoded constants (`readiness.service.ts:12-28`). `TierConfig.weights` exists as a column but **the scorer never reads it** — the admin UI edits a field with no effect. Nothing is sector-aware. **But see §5:** measurement on 2026-07-27 showed the *model* was the binding constraint on differentiation — `gemini-2.5-flash-lite` scored an early-stage and a mid-stage startup identically on 5 of 6 dimensions, so no weighting scheme applied to those inputs could have separated them. Raising the model moved the gap from −0.17 to +2.28. Fix the weights, but do not expect them to be the differentiation win. |
 | **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
 | **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
@@ -432,7 +432,31 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
   - `analysis_summary` — `POST /startups/apply`, also opened with a null `startupId` and then backfilled via `AiRunService.attribute()` once `create()` has persisted the startup.
   Both now honour `X-Ai-Pipeline-Config` (they silently ignored it before) and contribute their token spend to the run. The vision call and its Tesseract-text fallback accumulate into **one** run rather than being counted separately.
   **Verified live:** `capsule_extract` recorded `model: gemini-3.6-flash`, 26.5s, 1605 prompt / 251 completion tokens on a 1400×1000 image; `analysis_summary` recorded 9.1s, 324/106, attributed to the startup it created.
-  **Still open — per-task tiering:** deferred, not dropped. There is no seam between scoring and generation today (both read `ctx.config.model`), and with Pro unreachable there is no stronger model to point a seam at. Revisit only if billing changes or bias measurements stay lenient on 3.6-flash.
+  ### Measured old vs new (2026-07-27) — and the premise of this section was wrong
+
+  Same input, same production grounding instruction, `temperature: 0`, 3 repetitions, two documents (AgroLink = paper prototype and zero revenue; MediSync = 6 paying facilities and PHP 5k MRR). Only the model varied.
+
+  | | `gemini-2.5-flash-lite` | `gemini-3.6-flash` |
+  |---|---|---|
+  | AgroLink (early) mean level | 1.67 | 2.33 |
+  | MediSync (mid) mean level | 1.50 | 4.61 |
+  | **Gap between them** | **−0.17** | **+2.28** |
+  | Distinct levels used across both | 3 | 5 |
+  | Invented values for absent fields | 0 / 9 | 0 / 9 |
+  | Recalled facts present in the doc | 9 / 9 | 9 / 9 |
+  | Total tokens (6 calls) | 3,135 | 14,978 |
+
+  **1. The old model could not tell the two startups apart — it ranked them backwards.** A gap of −0.17 means the mid-stage venture with paying customers scored *marginally lower* than the one with a paper prototype. Per-dimension, **5 of 6 dimensions returned identical scores for both companies**. Every dimension moves the right way on 3.6-flash (Technology 3→6, Investment 1→4, Regulatory 1→3).
+
+  **2. This section's stated premise — that the lite tier is "most sycophantic", most prone to leniency — is not supported.** The lite model was not lenient; it was floor-bound and blind, collapsing everything to 1–3 regardless of evidence. The real defect was **differentiation, i.e. Objective 2**, not leniency (Objective 4).
+
+  **3. That reframes Objective 2b.** `TierConfig.weights` being unread by the scorer is still a real bug, but fixing weighted scoring alone would **not** have produced differentiation: the per-dimension inputs being weighted were nearly identical for both startups. The model was the binding constraint, not the formula.
+
+  **4. The model change did *not* measurably improve grounding.** Both models refused all 9 absent fields and recalled all 9 present ones. `groundPrompt()` is doing that work, and this test found no headroom — so **Objective 1 gains cannot be attributed to the model upgrade**. A harder probe (longer documents, adversarial distractors) is needed to find where grounding actually breaks.
+
+  **Limits, stated honestly:** N is small (3 reps × 6 dimensions × 2 documents); there is no expert ground truth, so the reliable signal is the *gap and its direction*, not the absolute levels; the prompt mirrors production shape but is not `createBasePrompt` with RAG attached; and 1 of 3 AgroLink reps on 3.6-flash returned output that did not parse into levels (n=12 rather than 18 for that cell), which is a small robustness caveat.
+
+  **Still open — per-task tiering:** deferred, not dropped. There is no seam between scoring and generation today (both read `ctx.config.model`), and with Pro unreachable there is no stronger model to point a seam at. The measurement above also weakens the case for one: the large differentiation win is already banked on 3.6-flash, and no leniency problem was observed that a stronger model would fix.
   Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast — as this section demonstrates.
   **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement. **Note this is a real behaviour change, not a no-op.** That one call site passed `temperature` at the *top level* of the request, where the SDK dropped it exactly as it dropped `maxOutputTokens` — so every Gemini call in this codebase previously ran at the API default temperature, never at `0`. Baseline-arm results gathered before this change are therefore not sampling-comparable with results gathered after it.
 
