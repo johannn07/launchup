@@ -9,10 +9,11 @@ import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.enti
 // RecommendationStorageService) matches what the brief assumed, so no
 // correction was needed there. What the brief did NOT cover is that
 // `generateRNA` queries `ragQueryService.queryVectorDatabase` unconditionally
-// and only calls `groundedPromptBuilderService.buildGroundedPrompt` when that
-// call returns a truthy context — a falsy/no-context result routes the
-// method through its inline legacy-prompt fallback instead, which is what
-// these tests exercise so `groundedPromptBuilderService` can stay `{} as any`.
+// and only calls `groundedPromptBuilderService.buildGroundedPrompt` when
+// `!ragContext.lowConfidence` — a low-confidence context (all three
+// retrieval channels empty) routes the method through
+// `aiService.createBasePrompt` instead, which is what this test exercises so
+// `groundedPromptBuilderService` can stay `{} as any`.
 
 // A *real* AiRunService over a stub EntityManager, so these tests exercise
 // the actual durable-attribution write rather than a mock that only mutates
@@ -70,18 +71,28 @@ describe('RnaService.generateRNA provenance', () => {
     };
 
     const aiService = {
-      generateRNAsFromPrompt: jest
-        .fn()
-        .mockResolvedValue([
-          { readiness_level_type: 'Technology', rna: 'Validate demand with 10 customer interviews.' },
-        ]),
+      generateRNAsFromPrompt: jest.fn().mockResolvedValue([
+        {
+          readiness_level_type: 'Technology',
+          rna: 'Validate demand with 10 customer interviews.',
+        },
+      ]),
       recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      // Exercised by the fallback branch below (createBasePrompt is what
+      // generateRNA calls when the RAG context is low-confidence).
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
     };
 
     const ragQueryService = {
-      // Falsy result routes generateRNA through its inline fallback prompt
-      // builder rather than GroundedPromptBuilderService.
-      queryVectorDatabase: jest.fn().mockResolvedValue(null),
+      // Low-confidence result routes generateRNA through its fallback prompt
+      // builder (aiService.createBasePrompt) rather than
+      // GroundedPromptBuilderService.
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
     };
 
     const ctx = {
@@ -109,7 +120,10 @@ describe('RnaService.generateRNA provenance', () => {
 
     await service.generateRNA(1, ctx);
 
-    expect(aiService.generateRNAsFromPrompt).toHaveBeenCalledWith(ctx, expect.any(String));
+    expect(aiService.generateRNAsFromPrompt).toHaveBeenCalledWith(
+      ctx,
+      expect.any(String),
+    );
     expect(persisted.some((row) => row.generationRun === ctx.run)).toBe(true);
 
     // `generationRun?` is optional on the recordAiRecommendation input type,

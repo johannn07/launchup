@@ -208,7 +208,13 @@ async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
     })),
   };
 
-  const ragContext = await this.ragQueryService.queryVectorDatabase(dto.startup_id.toString());
+  const ragContext = await this.ragQueryService.queryVectorDatabase(dto.startup_id.toString(), {
+    config: ctx.config,
+    dimensions: rnasToGenerateFrom.map((rna) => ({
+      readinessType: rna.readinessLevel.readinessType,
+      level: rna.readinessLevel.level,
+    })),
+  });
 
   const createdRns: Rns[] = [];
   let currentPriorityNumber = dto.startPriorityNumber || 1;
@@ -279,7 +285,11 @@ Requirements:
 `;
 
     let prompt: string;
-    if (ragContext && !ragContext.lowConfidence && ragContext.similarProfiles?.length > 0) {
+    // Was `!lowConfidence && similarProfiles?.length > 0`, which required a peer
+    // before it would use the grounded builder — so retrieved rubrics would be
+    // discarded whenever no peer cleared the 0.78 floor. With two seeded
+    // startups that is the common case.
+    if (!ragContext.lowConfidence) {
       prompt = this.groundedPromptBuilderService.buildGroundedPrompt(
         ragContext,
         startupProfile,
