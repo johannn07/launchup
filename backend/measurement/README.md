@@ -12,6 +12,8 @@ node measurement/measure-models.js
 node measurement/measure-differentiation.js
 node measurement/calibrate-similarity.js
 node measurement/measure-retrieval.js
+node measurement/measure-grounding.js                  # full harness
+node measurement/measure-grounding.js --retrieval-only  # Step A only, no generation quota spent
 ```
 
 ## What each one measures
@@ -61,6 +63,72 @@ Both arms miss the same case (ClassKit Iloilo retrieves TeleKonsulta Leyte —
 both are rural low-connectivity public services, so the confusion is at least
 reasonable).
 
+**`measure-grounding.js`** — does the verified corpus (54 readiness rubrics,
+10 business frameworks, built in tasks 1-8) actually reduce hallucination and
+improve differentiation? Three arms:
+
+| arm | `ragCorpus` | `rubricMode` | question |
+|---|---|---|---|
+| baseline | `false` | — | does a verified corpus help at all? |
+| sdd-semantic | `true` | `semantic` | does the SDD §3.2's specified mechanism deliver the rubric? |
+| deviation-deterministic | `true` | `deterministic` | is the shipped deviation justified? |
+
+Two steps, run in that order because quota is the binding constraint:
+
+**Step A — rubric-retrieval accuracy (quota-free of the generation endpoint,
+full N, reproduces exactly).** For each of the 2 seeded startups × 6
+dimensions (12 queries), both rubric modes retrieve against the 54-row
+corpus and are checked against `rubricKey(type, level)` as ground truth —
+whether the returned rubric's `readinessType` matches the dimension actually
+asked for. Result, 2026-07-28:
+
+| mode | queries | correct dimension | wrong dimension | empty |
+|---|---|---|---|---|
+| deterministic | 12 | 12 | 0 | 0 |
+| semantic | 12 | 0 | 0 | **12** |
+
+Deterministic is 12/12 by construction — it is an exact `(type, level)` key
+lookup, it cannot retrieve the wrong dimension. **Semantic returned nothing
+for every single query.** `RagQueryService.retrieveRubrics`'s semantic path
+embeds only the bare dimension name (`dimensions.map(d => d.readinessType)
+.join(' ')` — for a single missing dimension that degenerates to the string
+`"Technology"`, `"Regulatory"`, etc.) and compares it against corpus rows
+whose title and content use the SDD's abbreviations (`TRL 3 —
+…`, `RRL 1 — …`) rather than the enum's human-readable names. Every one of
+the 12 top-2 nearest-neighbour scores fell below the 0.78 floor. **This
+settles the SDD deviation before any generation quota was spent**: the
+SDD-specified mechanism does not deliver the rubric it was designed to
+retrieve, for this corpus and this query shape — not "retrieves a worse
+rubric," but "retrieves nothing, every time."
+
+**Step B — the three generation arms (metrics 1-3): blocked, n=0.** The
+harness attempted 2 startups × 6 dimensions × 3 reps × 3 arms (up to 54
+`gemini-3.6-flash` calls — RNA text, a 1-9 level assessment, and the
+absent-field hallucination probe, per cell) and is built to stop cleanly on a
+429 and report whatever completed. What actually stopped it, on every
+attempt on 2026-07-28, was `generativelanguage.googleapis.com
+/generate_content_free_tier_requests`, quota ID
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **limit 20 requests per
+day** for `gemini-3.6-flash` — a hard daily cap, confirmed from the 429
+response body, not a per-minute rate limit that re-pacing works around. One
+run got 7 calls in before hitting it; two subsequent attempts (including one
+with the delay widened to 9s) 429'd on the very first call, because the
+day's 20-request budget was already exhausted by then. **Metrics 1-3 were
+not measured** — every cell is n=0. This is reported as a real result, not
+elided: the differentiation baseline (+2.28 on `gemini-3.6-flash`,
+`measure-differentiation.js`) was itself measured on a different day's
+quota, and 54 calls to this specific model is not achievable inside one
+free-tier day. Re-run when a fresh daily window is available — ideally
+spread across more than one day, or with `REPS` lowered — before treating
+metrics 1-3 as answered either way.
+
+**Do not read Step A's semantic failure as "therefore deterministic
+improves grounding."** It only establishes that the SDD's specified
+mechanism cannot be what delivers a headline result, if the shipped
+deviation ever produces one. Whether the deviation itself moves the
+unsupported-claim rate or the differentiation gap is exactly what Step B
+was for, and Step B did not run.
+
 ## Reading the output
 
 The trustworthy signal is the **gap and its direction**, not the absolute
@@ -103,3 +171,47 @@ If you re-run these for the paper, raise `REPS`, record the date and the model
 IDs actually returned by the API that day, and re-check the model list first —
 `gemini-2.5-flash` disappeared between the checklist being written and the
 measurement being taken.
+
+`measure-grounding.js`:
+
+- **Step A is quota-free of the generation endpoint, not quota-free
+  outright.** It still calls `embedContent`, which has its own free-tier
+  ceiling (`embed_content_free_tier_requests`) — hit once during this
+  measurement, independent of any `generateContent` usage, and recovered on
+  its own within a minute. Embeddings are deterministic, so a re-run
+  reproduces the 12/12 vs 0/12 result exactly; it is not a small-N number
+  that needs more repetitions.
+- **Step B's blocker is a hard daily cap, not underpowered N.** `n=0` across
+  every cell in metrics 1-3 is not "ran out of time" or "hit a transient rate
+  limit" — it is `GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20`
+  for `gemini-3.6-flash`, confirmed from the 429 body. No `DELAY_MS` value
+  fixes this; only a fresh day's quota (or a paid tier) does.
+- **Metric 1 (rubric-term grounding) measures whether retrieval reached the
+  output, not whether the output is correct.** A generated RNA can contain a
+  `keyTerm` while still describing the wrong readiness level, or omit every
+  `keyTerm` while being an accurate paraphrase. It is a grounding-traceability
+  signal, not a correctness score — by design, so it can't be gamed by
+  fluent paraphrase.
+- **`keyTerms` are exact-substring matched, case-insensitive.** A model that
+  paraphrases a rubric concept instead of reusing its wording (e.g. "no
+  working prototype" for `keyTerms: ["no prototype"]`) is not credited. That
+  under-counts grounding rather than over-counting it, which is the safer
+  direction for a metric meant to catch fabrication.
+- **The two seeded startups' per-dimension levels are real, not
+  approximated** — `main.ts`'s `seedDemoStartups` (AgroLink: T2/M2/A1/O2/R1/I1;
+  MediSync: T5/M4/A3/O4/R3/I3), not a uniform guess per startup. The
+  documents themselves are `measure-differentiation.js`'s verbatim early/mid
+  pair.
+- **The `semantic` rubric mode's Step B query is startup-invariant.** When
+  every dimension is missing (`RnaService.generateRNA`'s normal case for a
+  fresh startup), `retrieveRubrics`'s semantic query is
+  `dimensions.map(d => d.readinessType).join(' ')` — the same six-word string
+  regardless of which startup or what level it's actually at. AgroLink
+  (early) and MediSync (mid) would therefore receive an *identical* retrieved
+  rubric set in that arm, a structural property of the production code being
+  measured, not an artifact of this harness — and a second, independent way
+  the semantic mechanism cannot deliver a level-appropriate rubric, beyond
+  Step A's per-dimension accuracy finding.
+- **N is 2 startups.** Same ceiling every other script in this directory
+  states plainly: enough to check direction, not enough to publish an effect
+  size.
