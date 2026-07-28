@@ -55,6 +55,12 @@ of discarding it.
 | `backend/measurement/README.md` | document the new metrics, the confounds, the lexicon's authored provenance |
 | `backend/package.json` | add `test:measurement` only |
 
+**Note on the test command:** it must be `node --test measurement/tests/*.test.js`,
+not the bare directory. Verified on this box (Windows, Node 22.19): passing the
+directory fails, because Node resolves a bare path argument as a module rather
+than a directory to search. Node expands the glob itself, so this does not
+depend on the shell.
+
 ---
 
 ### Task 1: Make the harness requirable and testable
@@ -193,7 +199,7 @@ module.exports = {
 In `backend/package.json`, add one entry to `scripts`. **Leave `"test"` exactly as it is** — it is jest over `src/**/*.spec.ts` and its 167/2 baseline is a documented invariant.
 
 ```json
-"test:measurement": "node --test measurement/tests/"
+"test:measurement": "node --test measurement/tests/*.test.js"
 ```
 
 - [ ] **Step 5: Run the tests to verify they pass**
