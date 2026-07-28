@@ -22,9 +22,18 @@ node measurement/measure-grounding.js --merge measurement/results/*.json
 
 `--merge` re-runs the report functions over the concatenated raw per-call
 records, so N days of one rep is arithmetically identical to one N-rep run.
-It refuses to merge files whose model, embedding model, corpus size or
-similarity floor differ, rather than silently averaging two different
-experiments.
+It refuses to merge files whose model, embedding model, corpus size,
+similarity floor **or probe design** differ, rather than silently averaging
+two different experiments.
+
+The probe check matters because metrics 1 and 2 are both expected to be
+rewritten (see (c) and (d) below) — a model-and-corpus check alone would
+happily pool "how often did it invent a field under the old probe" with the
+same question under a new one. `probeFingerprint` hashes the three prompt
+builders, the grounding instruction, the dimension list and each startup's
+present/absent field sets. `--fingerprint` prints what a run today would
+stamp, so you can check an existing file is still mergeable without spending
+a call.
 
 ## What each one measures
 

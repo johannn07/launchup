@@ -748,6 +748,31 @@ function reportMetric3(results) {
  * identical to one 3-rep run - provided the corpus and model didn't move
  * underneath, which is why both are recorded and checked.
  */
+/**
+ * Fingerprints everything that decides what the three probes actually ask, so
+ * a merge cannot combine results gathered under different probe designs.
+ *
+ * This is not hypothetical: the 2026-07-29 run showed metric 2's absent-field
+ * probe is saturated (0/15 invented on every arm) and metric 1's exact-substring
+ * keyTerm match measures vocabulary reuse rather than grounding, so both are
+ * expected to be rewritten. Model and corpus identity - the only things the
+ * guard checked before - would not have caught that, and the symptom would be a
+ * silently pooled rate across two different questions.
+ */
+function probeFingerprint() {
+  const material = JSON.stringify({
+    rna: rnaPrompt.toString(),
+    levels: levelsPrompt.toString(),
+    halluc: hallucinationPrompt.toString(),
+    grounding: GROUNDING,
+    dimensions: DIMENSIONS,
+    fields: Object.fromEntries(
+      Object.entries(STARTUPS).map(([k, v]) => [k, { present: v.present, absent: v.absent, levels: v.levels }]),
+    ),
+  });
+  return require('crypto').createHash('sha256').update(material).digest('hex').slice(0, 12);
+}
+
 function writeResults(file, results) {
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -756,6 +781,7 @@ function writeResults(file, results) {
     reps: REPS,
     corpusRows: RUBRICS.length,
     floor: FLOOR,
+    probeFingerprint: probeFingerprint(),
     results,
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
@@ -768,10 +794,15 @@ function runMerge(files) {
   // A merge across a model or corpus change would silently average two
   // different experiments into one table, which is the exact failure mode
   // these files exist to prevent. Refuse rather than warn.
-  const key = (d) => `${d.data.genModel}|${d.data.embedModel}|${d.data.corpusRows}|${d.data.floor}`;
+  // Files written before probeFingerprint existed report `pre-fingerprint`,
+  // which compares unequal to every real hash - so they can be merged with each
+  // other but never silently pooled with a post-rewrite run.
+  const key = (d) =>
+    `${d.data.genModel}|${d.data.embedModel}|${d.data.corpusRows}|${d.data.floor}|${d.data.probeFingerprint ?? 'pre-fingerprint'}`;
   const distinct = [...new Set(days.map(key))];
   if (distinct.length > 1) {
     console.error('Refusing to merge: these runs are not comparable.');
+    console.error('(fields are genModel|embedModel|corpusRows|floor|probeFingerprint)');
     for (const d of days) console.error(`  ${d.file}: ${key(d)}`);
     process.exit(1);
   }
@@ -819,6 +850,13 @@ function runMerge(files) {
 }
 
 (async () => {
+  // Answers "would a run today still merge with the files I already have?"
+  // without spending a call.
+  if (process.argv.includes('--fingerprint')) {
+    console.log(probeFingerprint());
+    return;
+  }
+
   if (MERGE_FILES.length) {
     runMerge(MERGE_FILES);
     return;
