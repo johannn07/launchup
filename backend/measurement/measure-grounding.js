@@ -459,8 +459,46 @@ async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
     .map((x) => x.r);
 }
 
-function rnaPrompt(doc, rubricBlock) {
-  return `${doc}${rubricBlock}
+/**
+ * Verbatim in shape from ai.service.ts:937-943. Production emits this for EVERY
+ * arm - only rubricBlock varies with ragCorpus - so omitting it here made the
+ * harness measure "told its levels" against "not told its levels", which is a
+ * contrast production never presents and not a retrieval effect.
+ *
+ * The abbreviation order is production's and must not be re-sorted: a reviewer
+ * comparing the two prompts should see the same block.
+ */
+function readinessLevelBlock(levels) {
+  return `
+Initial Readiness Level:
+TRL ${levels.Technology}
+MRL ${levels.Market}
+ARL ${levels.Acceptance}
+ORL ${levels.Organizational}
+RRL ${levels.Regulatory}
+IRL ${levels.Investment}`;
+}
+
+/**
+ * The nine-rung ladder for every dimension, for the LEVELS probe only.
+ *
+ * Deterministic retrieval keys on (readinessType, level) using the startup's
+ * actual level. Handing that to a probe that asks the model to assess the level
+ * shows it the answer, so any differentiation advantage for that arm is leakage
+ * rather than grounding - and no number of reps fixes it.
+ *
+ * The RNA probe deliberately keeps the (L, L+1) lookup, because that is what
+ * production ships. These are different instruments and the asymmetry is
+ * intentional: do not "tidy" them into agreement.
+ */
+function fullLadderRubrics() {
+  return RUBRICS.slice().sort(
+    (a, b) => a.readinessType.localeCompare(b.readinessType) || a.level - b.level,
+  );
+}
+
+function rnaPrompt(doc, rubricBlock, levels) {
+  return `${doc}${rubricBlock}${readinessLevelBlock(levels)}
 --- Task ---
 Generate a Readiness and Needs Assessment (RNA) for these readiness types: ${DIMENSIONS.join(', ')}.
 Respond ONLY with a JSON array: [{"readiness_level_type": (string), "rna": (string, max 500 characters)}]
@@ -513,11 +551,22 @@ async function runGenerationArms(ai, corpusVecs) {
   // once for every (arm, startup) pair BEFORE the rep loop opens. Under the
   // old arm-major ordering this fell out naturally; with reps outermost it has
   // to be hoisted deliberately, or `semantic` would re-embed once per rep.
-  const rubricBlocks = new Map(); // `${arm}|${startup}` -> rendered block
+  // Two rubric blocks per (arm, startup), not one. The RNA probe mirrors
+  // production's (L, L+1) lookup; the levels probe gets the full ladder so it
+  // is not handed the quantity it is being asked to predict. See
+  // fullLadderRubrics for why the asymmetry is deliberate.
+  const rnaBlocks = new Map();    // `${arm}|${startup}` -> block for the RNA probe
+  const levelBlocks = new Map();  // `${arm}|${startup}` -> block for the levels probe
   for (const arm of ARMS) {
     for (const [startupName, startup] of Object.entries(STARTUPS)) {
       const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
-      rubricBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
+      rnaBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
+      // Only a corpus arm gets a rubric at all. `semantic` retrieves nothing
+      // against this corpus (Step A: 0/12), which is what makes it a
+      // null-condition replicate of baseline - preserved deliberately as a
+      // noise control, not a third condition.
+      const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
+      levelBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(ladder));
       results[arm.name].startups[startupName] = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
     }
   }
@@ -528,12 +577,13 @@ async function runGenerationArms(ai, corpusVecs) {
   repLoop: for (let rep = 0; rep < REPS; rep++) {
     for (const arm of ARMS) {
       for (const [startupName, startup] of Object.entries(STARTUPS)) {
-        const rubricBlock = rubricBlocks.get(`${arm.name}|${startupName}`);
+        const rnaBlock = rnaBlocks.get(`${arm.name}|${startupName}`);
+        const levelBlock = levelBlocks.get(`${arm.name}|${startupName}`);
         const cell = results[arm.name].startups[startupName];
 
         // --- RNA generation (metric 1) ---
         try {
-          const out = await call(ai, rnaPrompt(startup.doc, rubricBlock));
+          const out = await call(ai, rnaPrompt(startup.doc, rnaBlock, startup.levels));
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
           if (Array.isArray(parsed)) {
@@ -563,7 +613,7 @@ async function runGenerationArms(ai, corpusVecs) {
 
         // --- Levels (metric 3) ---
         try {
-          const out = await call(ai, levelsPrompt(startup.doc, rubricBlock));
+          const out = await call(ai, levelsPrompt(startup.doc, levelBlock));
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
           if (Array.isArray(parsed)) {
@@ -587,7 +637,7 @@ async function runGenerationArms(ai, corpusVecs) {
 
         // --- Hallucination probe (metric 2) ---
         try {
-          const out = await call(ai, hallucinationPrompt(startup.doc, rubricBlock, startup.present, startup.absent));
+          const out = await call(ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent));
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -897,6 +947,8 @@ module.exports = {
   TYPE_PREFIX,
   rubricKey,
   renderRubricBlock,
+  readinessLevelBlock,
+  fullLadderRubrics,
   rnaPrompt,
   levelsPrompt,
   hallucinationPrompt,
