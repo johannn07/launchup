@@ -46,10 +46,6 @@ const FLOOR = 0.78; // RAG_MIN_SIMILARITY, ai.service.ts
 const RUBRIC_LIMIT = 2; // searchCorpus's default limit, rag-query.service.ts
 const MAX_READINESS_LEVEL = 9;
 
-const GEN_MODEL = 'gemini-3.6-flash'; // the model the +2.28 differentiation baseline was measured on
-const REPS = 3;
-const DELAY_MS = 4000; // matches measure-models.js/measure-differentiation.js's pacing
-
 /**
  * gemini-3.6-flash's free-tier ceiling for generateContent is
  * GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20/day (confirmed via
@@ -58,6 +54,9 @@ const DELAY_MS = 4000; // matches measure-models.js/measure-differentiation.js's
  * possible on this tier for this model. Re-run on a day with fresh quota, or
  * split the three arms across multiple days.
  */
+const GEN_MODEL = 'gemini-3.6-flash'; // the model the +2.28 differentiation baseline was measured on
+const REPS = 3;
+const DELAY_MS = 4000; // matches measure-models.js/measure-differentiation.js's pacing
 
 // Verbatim from ai.service.ts:72-73.
 const GROUNDING =

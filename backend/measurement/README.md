@@ -197,6 +197,12 @@ measurement being taken.
   working prototype" for `keyTerms: ["no prototype"]`) is not credited. That
   under-counts grounding rather than over-counting it, which is the safer
   direction for a metric meant to catch fabrication.
+- **Metric 1's denominator excludes a dimension the model dropped entirely.**
+  If an RNA-generation response omits a `readiness_level_type` the prompt
+  asked for, that dimension is skipped rather than scored as a grounding
+  failure — a missing field is a schema-compliance problem, not evidence the
+  model ignored the rubric it was given. Schema compliance is not measured
+  by this script; check `n=` for a low denominator as a sign it's happening.
 - **The two seeded startups' per-dimension levels are real, not
   approximated** — `main.ts`'s `seedDemoStartups` (AgroLink: T2/M2/A1/O2/R1/I1;
   MediSync: T5/M4/A3/O4/R3/I3), not a uniform guess per startup. The
