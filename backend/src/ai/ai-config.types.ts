@@ -44,12 +44,23 @@ export type RagStrategy = (typeof RAG_STRATEGIES)[number];
  * Two modes rather than one because SDD §3.2 specifies that the RAG Query
  * Service "queries the vector database using the startup's profile data as the
  * search embedding" for all three channels, while measurement favours an exact
- * lookup. Keeping both means the SDD's mechanism genuinely exists in the running
- * code and the deviation is defended with a number rather than an opinion.
+ * lookup. `semantic` below is NOT that mechanism: rag-query.service.ts's
+ * retrieveRubrics embeds the bare readinessType name (e.g. "Technology"), not
+ * the startup's profile data, so it is the code's own substitute for SDD
+ * §3.2's approach rather than an implementation of it. Both were measured
+ * (measurement/measure-grounding.js, 2026-07-28) to retrieve nothing against
+ * this corpus — the code's substitute scored 0/12 correct-dimension, and the
+ * SDD's actual mechanism, tested separately by embedding whole startup
+ * profiles, scored 0/2. Kept as a mode anyway so the comparison stays
+ * reproducible and the deviation from the SDD is defended with those numbers
+ * rather than an opinion.
  *
  *   deterministic - exact (readinessType, level) key lookup. Default.
- *   semantic      - the SDD's mechanism: pgvector nearest neighbours over
- *                   rubric rows, gated by RAG_MIN_SIMILARITY.
+ *   semantic      - the code's substitute for the SDD's mechanism: pgvector
+ *                   nearest neighbours over rubric rows using the bare
+ *                   dimension name as the query, gated by RAG_MIN_SIMILARITY.
+ *                   Measured at 0/12 correct-dimension; see
+ *                   measurement/README.md before treating it as equivalent.
  */
 export const RUBRIC_MODES = ['deterministic', 'semantic'] as const;
 export type RubricMode = (typeof RUBRIC_MODES)[number];

@@ -42,6 +42,7 @@ const emDouble = (opts: { ormRows?: unknown[]; sqlRows?: unknown[] } = {}) => {
     execute,
     find,
     findOne,
+    persistAndFlush,
   };
 };
 
@@ -173,5 +174,109 @@ describe('RagQueryService — lowConfidence', () => {
     const result = await build(em).queryVectorDatabase('1', { config: config(), dimensions: dims });
 
     expect(result.lowConfidence).toBe(true);
+  });
+});
+
+const peerSqlRow = (startupId: number, similarity = 0.9) => ({
+  startup_id: startupId,
+  title: 'peer title',
+  content: 'peer content',
+  source_type: 'capsule_proposal',
+  similarity,
+});
+
+describe('RagQueryService — AI_RAG_ENABLED gating (peer channel)', () => {
+  // AI_RAG_ENABLED's whole purpose is producing the "no retrieval" baseline
+  // arm. Before this fix, queryVectorDatabase read only config.ragCorpus and
+  // always ran retrievePeers unconditionally, so this flag never actually
+  // reached RNA/RNS generation.
+  it('does not query peers when rag is disabled', async () => {
+    const { em, execute } = emDouble({ sqlRows: [peerSqlRow(2)] });
+
+    const result = await build(em).queryVectorDatabase('1', {
+      config: config({ rag: false, ragCorpus: false }),
+      dimensions: dims,
+    });
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.similarProfiles).toEqual([]);
+  });
+
+  it('still queries peers when rag is enabled, independent of the corpus flag', async () => {
+    const { em, execute } = emDouble({ sqlRows: [peerSqlRow(2)] });
+
+    const result = await build(em).queryVectorDatabase('1', {
+      config: config({ rag: true, ragCorpus: false }),
+      dimensions: dims,
+    });
+
+    expect(execute).toHaveBeenCalled();
+    expect(result.similarProfiles).toHaveLength(1);
+    expect(result.similarProfiles[0].startupId).toBe(2);
+  });
+
+  it('leaves the rubric and framework channels gated on ragCorpus, not rag', async () => {
+    const { em, find } = emDouble({ ormRows: [rubricRow('trl-3', ReadinessType.T, 3)] });
+
+    const result = await build(em).queryVectorDatabase('1', {
+      config: config({ rag: false, ragCorpus: true }),
+      dimensions: dims,
+    });
+
+    expect(find).toHaveBeenCalledWith(expect.anything(), { sourceType: RUBRIC_SOURCE_TYPE });
+    expect(result.verifiedFrameworks).toHaveLength(1);
+  });
+});
+
+describe('RagQueryService — readinessType on RetrievedDoc', () => {
+  // RNS generates one dimension's tasks per RNA in a loop but fetches the
+  // rubric channel once for every dimension being generated across the whole
+  // call; without a way to tell which dimension a retrieved rubric row
+  // belongs to, the per-RNA loop cannot filter out other dimensions' rubrics.
+  it('carries readinessType through the deterministic exact-key path', async () => {
+    const { em } = emDouble({ ormRows: [rubricRow('trl-3', ReadinessType.T, 3)] });
+
+    const result = await build(em).queryVectorDatabase('1', { config: config(), dimensions: dims });
+
+    expect(result.verifiedFrameworks[0].readinessType).toBe(ReadinessType.T);
+  });
+
+  it('carries readinessType through the semantic vector path', async () => {
+    const embed = jest.fn().mockResolvedValue([0.1, 0.2]);
+    const { em } = emDouble({
+      sqlRows: [
+        {
+          source_type: RUBRIC_SOURCE_TYPE,
+          title: 'trl-3 title',
+          content: 'trl-3 content',
+          metadata: { provenance: 'standard', citation: 'a source', readinessType: ReadinessType.T },
+          similarity: 0.9,
+        },
+      ],
+    });
+
+    const result = await build(em, embed).queryVectorDatabase('1', {
+      config: config({ rubricMode: 'semantic' }),
+      dimensions: dims,
+    });
+
+    expect(result.verifiedFrameworks[0].readinessType).toBe(ReadinessType.T);
+  });
+});
+
+describe('RagQueryService — channel_counts persistence', () => {
+  it('reaches persistAndFlush on the log row', async () => {
+    const { em, persistAndFlush } = emDouble({
+      ormRows: [rubricRow('trl-3', ReadinessType.T, 3), rubricRow('trl-4', ReadinessType.T, 4)],
+      sqlRows: [peerSqlRow(2)],
+    });
+
+    await build(em).queryVectorDatabase('1', { config: config(), dimensions: dims });
+
+    expect(persistAndFlush).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel_counts: { rubrics: 2, frameworks: 0, peers: 1 },
+      }),
+    );
   });
 });

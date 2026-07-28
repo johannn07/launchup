@@ -165,7 +165,13 @@ export class RnaService {
         missingTypes,
       );
     } else {
-      const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em);
+      // Pass rubricMode through so a low-confidence *semantic*-arm result
+      // doesn't silently pick up createBasePrompt's deterministic rubric
+      // lookup instead — that would relabel a deterministic result as
+      // belonging to the semantic arm. See createBasePrompt's opts JSDoc.
+      const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em, {
+        rubricMode: ctx.config.rubricMode,
+      });
       if (!basePrompt) {
         throw new BadRequestException('No capsule proposal found for this startup');
       }

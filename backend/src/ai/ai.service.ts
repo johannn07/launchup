@@ -5,7 +5,6 @@ import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { ConfigService } from '@nestjs/config';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
-import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupApplicationDto } from 'src/startup/dto/startup.dto';
 import { z } from 'zod';
@@ -17,13 +16,14 @@ import { AiConfigService } from './ai-config.service';
 import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
 import { EmbeddingIndexService, RAG_CONTEXT_SOURCE } from './embedding-index.service';
 import { EmbeddingService } from './embedding.service';
-import { RagStrategy } from './ai-config.types';
+import { RagStrategy, RubricMode } from './ai-config.types';
 import {
   CorpusRowMetadata,
   MAX_READINESS_LEVEL,
   RUBRIC_SOURCE_TYPE,
   rubricKey,
 } from './rag-corpus.types';
+import { readinessLevelsByType } from '../common/readiness-levels.util';
 
 /** How many context rows reach the prompt. Matches the previous keyword slice. */
 export const RAG_TOP_K = 3;
@@ -864,6 +864,19 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     ctx: AiRunContext,
     startup: Startup,
     em: EntityManager,
+    opts?: {
+      /**
+       * Set only by the RNA-generation fallback (rna.service.ts) after it has
+       * already run RagQueryService.queryVectorDatabase under this mode and
+       * gotten an empty/low-confidence result. When that mode is 'semantic',
+       * buildRubricBlock's own deterministic lookup is suppressed rather than
+       * silently substituted — see the rubricMode note on buildRubricBlock
+       * for why this can't just read ctx.config.rubricMode itself. Every other
+       * caller (initiatives, roadblocks, RNA/RNS refine) omits this and keeps
+       * the fixed deterministic mechanism unconditionally.
+       */
+      rubricMode?: RubricMode;
+    },
   ): Promise<string | null> {
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo) return null;
@@ -878,22 +891,8 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       },
     );
 
-    // Keyed by ReadinessType rather than array position: the query above has
-    // no orderBy, so rows can come back in any order (insertion order, which
-    // differs between the live DB and a freshly-seeded one). A positional read
-    // would silently mislabel dimensions — e.g. Acceptance data printed as
-    // "TRL" — whenever insertion order doesn't match declaration order. A
-    // keyed lookup cannot regress that way even if ordering changes again.
-    const levelByType = new Map<ReadinessType, number>();
-    for (const srl of startupReadinessLevels) {
-      levelByType.set(srl.readinessLevel.readinessType, srl.readinessLevel.level);
-    }
-    const trl = levelByType.get(ReadinessType.T) ?? 0;
-    const mrl = levelByType.get(ReadinessType.M) ?? 0;
-    const arl = levelByType.get(ReadinessType.A) ?? 0;
-    const orl = levelByType.get(ReadinessType.O) ?? 0;
-    const rrl = levelByType.get(ReadinessType.R) ?? 0;
-    const irl = levelByType.get(ReadinessType.I) ?? 0;
+    const { T: trl, M: mrl, A: arl, O: orl, R: rrl, I: irl } =
+      readinessLevelsByType(startupReadinessLevels);
     const ragContexts = ctx.config.rag
       ? await this.getRelevantRagContexts(startup, em, ctx.config.ragStrategy)
       : [];
@@ -905,10 +904,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     // Rubrics come from the dimension keys, not from similarity, and are
     // deliberately independent of ctx.config.ragStrategy: that setting selects
     // how *peers* are found and its measured comparison must not be perturbed
-    // by a rubric change.
-    const rubricBlock = ctx.config.ragCorpus
-      ? await this.buildRubricBlock(em, startupReadinessLevels)
-      : '';
+    // by a rubric change. The one exception is opts.rubricMode === 'semantic',
+    // which suppresses the block entirely rather than mislabelling a
+    // deterministic result as belonging to the semantic arm — see the opts
+    // JSDoc above.
+    const rubricBlock =
+      ctx.config.ragCorpus && opts?.rubricMode !== 'semantic'
+        ? await this.buildRubricBlock(em, startupReadinessLevels)
+        : '';
 
     return `
       Given these data:
@@ -951,11 +954,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     em: EntityManager,
     levels: StartupReadinessLevel[],
   ): Promise<string> {
-    // Deliberately does not read ctx.config.rubricMode. That setting exists to
-    // compare two mechanisms on the RNA/RNS channel SDD §3.2 describes; letting
-    // it also swing the initiative and roadblock paths would change two things
-    // at once during a measurement run, which is a confound rather than a
-    // control. Path 1 always uses the exact lookup.
+    // Deliberately does not read ctx.config.rubricMode itself. That setting
+    // exists to compare two mechanisms on the RNA/RNS channel SDD §3.2
+    // describes; letting this method also swing the initiative and roadblock
+    // paths would change two things at once during a measurement run, which is
+    // a confound rather than a control. This always does the exact lookup —
+    // callers that need to suppress it under a semantic-mode fallback (see
+    // createBasePrompt's opts.rubricMode) do so by not calling it at all,
+    // rather than by asking it to branch on the mode.
     const wanted = new Set<string>();
     for (const srl of levels) {
       const type = srl.readinessLevel.readinessType;

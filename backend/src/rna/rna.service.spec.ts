@@ -135,6 +135,92 @@ describe('RnaService.generateRNA provenance', () => {
   });
 });
 
+describe('RnaService.generateRNA rubric-mode fallback (Finding 1)', () => {
+  it('passes ctx.config.rubricMode through to createBasePrompt on the low-confidence fallback path', async () => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+
+    const readinessLevel = { id: 100, readinessType: 'Technology', level: 3 };
+    const startupReadinessLevel = { id: 200, readinessLevel };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([]);
+        if (entity === StartupReadinessLevel) return Promise.resolve([startupReadinessLevel]);
+        return Promise.resolve([]);
+      }),
+      persist: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const aiService = {
+      generateRNAsFromPrompt: jest.fn().mockResolvedValue([]),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+    };
+
+    // A semantic-mode run whose retrieval genuinely came back empty (measured:
+    // 0/12 against this corpus) — the fallback must tell createBasePrompt to
+    // suppress its own deterministic rubric lookup rather than silently
+    // relabelling a deterministic result as belonging to the semantic arm.
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        ragCorpus: true,
+        rubricMode: 'semantic',
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnaService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      buildAiRunService().aiRunService,
+    );
+
+    await service.generateRNA(1, ctx);
+
+    expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, startup, em, {
+      rubricMode: 'semantic',
+    });
+  });
+});
+
 describe('RnaService.refineRna provenance', () => {
   it('threads ctx into the AI calls and attributes the run to the RNA startup', async () => {
     const startup = {

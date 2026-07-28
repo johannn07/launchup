@@ -24,6 +24,8 @@ export interface RetrievedDoc {
   citation?: string;
   similarity?: number;
   startupId?: number;
+  /** Rubric rows only — the dimension this row's rubric text describes. */
+  readinessType?: ReadinessType;
 }
 
 /**
@@ -77,10 +79,16 @@ export class RagQueryService {
     }
 
     const corpusOn = opts?.config?.ragCorpus ?? false;
+    // AI_RAG_ENABLED's entire purpose is producing the "no retrieval" baseline
+    // arm (see AiPipelineConfig.rag's doc). Path 1 (ai.service.ts) already
+    // honours it; this channel didn't, so ragCorpus's rubric/framework gate
+    // was the only thing narrowing retrieval here, and disabling AI_RAG_ENABLED
+    // left RNA/RNS fully retrieval-augmented via peers regardless.
+    const ragOn = opts?.config?.rag ?? false;
 
     const verifiedFrameworks = corpusOn ? await this.retrieveRubrics(opts!) : [];
     const businessModels = corpusOn ? await this.retrieveFrameworks(id) : [];
-    const similarProfiles = await this.retrievePeers(id);
+    const similarProfiles = ragOn ? await this.retrievePeers(id) : [];
 
     // "If the vector database returns no relevant results, the system falls back
     // to profile-only prompting and logs a low-confidence flag" (SRS §2.2). All
@@ -113,8 +121,15 @@ export class RagQueryService {
    *
    * Deterministic by default: the correct context for a Technology assessment at
    * level 3 is the TRL 3 and TRL 4 rubric, regardless of that text's cosine
-   * distance to the capsule proposal. Semantic mode exists because SDD §3.2
-   * specifies it, so the comparison is measurable rather than asserted.
+   * distance to the capsule proposal. `semantic` mode below embeds the bare
+   * readinessType name (e.g. "Technology") — it is the code's own substitute
+   * for SDD §3.2's specified mechanism ("the startup's profile data as the
+   * search embedding"), not an implementation of it, and was measured
+   * (measurement/measure-grounding.js) to retrieve nothing: 0/12
+   * correct-dimension against this corpus. The SDD's actual mechanism, tested
+   * separately by embedding whole startup profiles, also came back empty
+   * (0/2). Both are kept so the deviation is measured rather than asserted;
+   * see measurement/README.md.
    */
   private async retrieveRubrics(opts: RagQueryOptions): Promise<RetrievedDoc[]> {
     const dimensions = opts.dimensions ?? [];
@@ -194,6 +209,7 @@ export class RagQueryService {
         provenance: row.metadata?.provenance,
         citation: row.metadata?.citation ?? undefined,
         similarity: row.similarity,
+        readinessType: row.metadata?.readinessType,
       }));
   }
 
@@ -248,6 +264,7 @@ export class RagQueryService {
       content: row.content,
       provenance: metadata?.provenance,
       citation: metadata?.citation ?? undefined,
+      readinessType: metadata?.readinessType,
     };
   }
 
