@@ -362,7 +362,11 @@ Checked before handing over the runbook, all green:
 2. `cd backend && node seed-rag-corpus.js` — **run it twice**; the second run must report all-unchanged. That is the idempotency test, and it exercises Neon + Gemini embeddings for real.
 3. `node measurement/measure-grounding.js --retrieval-only` — **spends zero generation quota** and reproduces the 12/12-vs-0 mechanism result. The single most informative check per unit of cost.
 4. Two VS Code terminals (`pnpm dev` in each; backend first, let its schema sync finish), then `http://localhost:5173`, log in `demo@launchup.local` / `password123`, and generate on `/startups/<id>/rna` or `/rns`.
-5. **The toggle test, which is the one that actually proves wiring:** set `AI_RAG_CORPUS_ENABLED=false`, restart, generate again, and confirm `rag_retrieval_log.channel_counts` drops `rubrics`/`frameworks` to 0 while `peers` is unaffected.
+5. **The toggle test, which is the one that actually proves wiring:** set `AI_RAG_CORPUS_ENABLED=false`, restart, generate again, and confirm `rag_retrieval_logs.channel_counts` drops `rubrics`/`frameworks` to 0 while `peers` is unaffected.
+
+Between rungs 3 and 4, `node inspect-prompt.js <startupId> [--dimension T]` prints the assembled prompt (see below).
+
+**Two corrections to ad-hoc DB queries used earlier in this work:** `pg` is **not resolvable** from `backend/` (it is pnpm-isolated under `@mikro-orm/postgresql`, never a direct dependency), so one-off `require('pg')` scripts fail with MODULE_NOT_FOUND. Go through `MikroORM.init(require('./dist/src/mikro-orm.config').default)` and `orm.em.getConnection().execute(sql)` instead. And the tables are **pluralised** — `startups`, `startups_readiness_level`, `rag_retrieval_logs`, `rag_contexts` — not the singular entity names.
 
 **Why the ladder rather than "run the tests":** the defect this branch fixed — retrieved text never reaching the prompt — passed every unit test for its entire lifetime. Tests prove the parts, `channel_counts` proves the wiring, and only the toggle proves the feature reaches the model. Generated output that merely *looks* plausible is exactly what the broken build produced.
 
@@ -374,4 +378,17 @@ Checked before handing over the runbook, all green:
 - **The three generation arms remain unmeasured** (unchanged from Task 10; still the headline gap for Objective 1b).
 - **`backup/rag-corpus-preflight`** should be deleted after integration.
 - **`.superpowers/sdd/2026-07-28-rag-corpus/`** (gitignored) was deliberately *not* deleted despite the process prescribing it — it holds the ten task reports with TDD evidence, which is the debugging record while John tests. Remove after merge.
-- **Offered but not built:** a `backend/inspect-prompt.js` that dumps a real assembled RNA prompt (showing the `--- Verified Readiness Rubrics (authoritative) ---` block) at zero Gemini quota cost. Task 10's equivalent check was an ad-hoc temporary debug log that was reverted, so there is currently **no standing way to eyeball the assembled prompt**.
+### `backend/inspect-prompt.js` — added 2026-07-28, verified live
+
+Replaces Task 10's ad-hoc temporary debug log (which was reverted, leaving no standing way to eyeball an assembled prompt). Boots the app context, runs the real `RagQueryService` + `GroundedPromptBuilderService` pair, prints the resolved config, the per-channel counts, and the assembled prompt — then **stops before `sendToGemini`, so it spends no generation quota.** Dimensions come from `StartupReadinessLevel` rather than from existing RNAs, which is what lets it run on any startup regardless of generation history; Task 10 hit exactly that wall when AgroLink's completed RNA set short-circuited before the RAG pipeline.
+
+Verified against live Neon:
+
+- `node inspect-prompt.js 1 --dimension T` → AgroLink PH, `{rubrics: 12, frameworks: 0, peers: 0, lowConfidence: false}`, prompt contains **TRL 2 and TRL 3** verbatim with full `[standard — European Commission, Horizon Europe…]` attribution. TRL 2 is AgroLink's actual level; TRL 3 is the level above.
+- `node inspect-prompt.js 2` → MediSync Cebu, all six dimensions, **each scoped to its own rubric** (Acceptance 3 → Acceptance rows, Technology 5 → Technology rows, and so on). This is direct evidence the per-dimension filter in `rns.service.ts` behaves as intended.
+- Bad startup id and unknown `--dimension` both exit 1.
+
+Two things it surfaced that are worth knowing:
+
+- **The framework channel returns 0 rows in practice.** `frameworks: 0` on both startups — the business-framework channel is always semantic, and its top-2 never clears the 0.78 floor. Consistent with every other semantic result measured in this work; it means the 10 framework rows are seeded and embedded but **are not currently reaching any prompt**. The rubric channel carries the whole grounding contribution. Not a regression — it has never been otherwise — but it narrows what "the corpus is live" actually means.
+- `mikro-orm.config.ts` hard-codes `debug: true`, which echoes the full 768-float pgvector literal twice per semantic query. The script calls `orm.config.set('debug', false)` after boot; the two lines printed before that point are unavoidable without changing shared config.
