@@ -7,6 +7,7 @@ import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { EmbeddingIndexService } from './embedding-index.service';
 import { EmbeddingService } from './embedding.service';
+import { RUBRIC_SOURCE_TYPE } from './rag-corpus.types';
 
 jest.mock('@google/genai', () => ({
   GoogleGenAI: jest.fn().mockImplementation(() => ({ models: {} })),
@@ -164,5 +165,31 @@ describe('getRelevantRagContexts', () => {
       expect(find).not.toHaveBeenCalled();
       expect(execute).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('corpus scoping', () => {
+  it('excludes rubric rows from the peer arm pool under both strategies', async () => {
+    // Rubrics share generic readiness vocabulary with every query, so leaving
+    // them in the keyword arm's token-overlap pool would let them dominate it
+    // and silently invalidate the measured keyword-vs-semantic comparison.
+    const { em, find } = emDouble([], []);
+
+    await build(jest.fn()).getRelevantRagContexts(startup(), em, 'keyword');
+
+    expect(find).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ sourceType: { $ne: RUBRIC_SOURCE_TYPE } }),
+      expect.anything(),
+    );
+  });
+
+  it('excludes rubric rows from the semantic peer query too', async () => {
+    const embed = jest.fn().mockResolvedValue([0.1]);
+    const { em, execute } = emDouble([], []);
+
+    await build(embed).getRelevantRagContexts(startup(), em, 'semantic');
+
+    expect(execute.mock.calls[0][1]).toContain(RUBRIC_SOURCE_TYPE);
   });
 });

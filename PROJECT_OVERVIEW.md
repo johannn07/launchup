@@ -742,7 +742,7 @@ This is the most serious category. Full per-controller audit is in §5.4.
 - **`RnsStatus` vs `Status`** — the same seven-state workflow defined twice, once integer-backed and once string-backed.
 - **README says `DISQUALIFIED`** is a qualification status; the enum has no such value — it has `COMPLETED` instead.
 - **Regulatory readiness is collected but never scored** (§6.3).
-- **Readiness scores clamp to 0–5 while levels run 1–9** (`readiness.service.ts:129`), so a level-9 startup scores identically to a level-5 one — which undercuts the "readiness differentiation" objective in `docs/SRS.md`.
+- **Readiness scores clamp to 0–5 while levels run 1–9** (`readiness.service.ts:129`), so a level-9 startup scores identically to a level-5 one — which undermines readiness differentiation.
 - **`GET /readiness/:startupId` writes on read**, adding 6+ rows per page view and growing `readiness_evaluations` unboundedly.
 
 ### 7.5 Unfinished / orphaned UI
@@ -795,14 +795,14 @@ The four general objectives come from `Team_07_LaunchUpEnhanced_Software Proposa
 
 | Objective | Status |
 |---|---|
-| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🔴 RAG not implemented; validator is a stub |
+| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🟡 RAG implemented (corpus seeded, deterministic rubric lookup working); validator is a stub |
 | 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟡 Tiers + gap analysis built; sector-aware weights not |
 | 3. Multimodal intake (handwriting OCR, sketch recognition) | 🟡 OCR partial; canvas-section recognition minimal |
 | 4. Leniency bias correction (adversarial prompting, normalization) | 🟡 Normalization + audit trail built; prompting is post-hoc review, not adversarial |
 
 Three findings deserve emphasis because the scaffolding hides them:
 
-- **There is no RAG pipeline.** No embedding model is called anywhere in `backend/src`; `vector_embeddings` is read but never written, so `RagQueryService.queryVectorDatabase()` always returns empty with `lowConfidence: true`. The retrieval actually wired into generation (`ai.service.ts:688` → `getRelevantRagContexts`) is **token-overlap keyword matching** (`scoreRagMatch`, `:247`), not semantic search. pgvector is installed but unused.
+- **RAG is implemented with a verified-knowledge corpus.** `EmbeddingService` calls `gemini-embedding-2` (768 dims) and `EmbeddingIndexService` writes `vector_embeddings` on every `recordRagContext` plus a boot-time backfill. `RagQueryService.queryVectorDatabase()` returns three populated channels: readiness rubrics (via deterministic `(readinessType, level)` key lookup, or semantic pgvector search if `AI_RAG_RUBRIC_MODE=semantic`), business frameworks, and peer capsule profiles. The corpus is **54 readiness-rubric rows + 10 business-framework rows**, seeded idempotently by `backend/seed-rag-corpus.js`. Gated by `AI_RAG_CORPUS_ENABLED` (default true) and `AI_RAG_RUBRIC_MODE` (deterministic default). **Provenance caveat:** only the 9 Technology rows are transcribed from a public standard (EU Horizon Europe TRL / ISO 16290:2013); 36 rows (Market/Acceptance/Organizational/Regulatory) are authored against BRLa's published dimension framework; the remaining 9 (Investment/IRL) are authored outright with no external source. **Not measured:** whether the corpus actually reduces hallucination — the `gemini-3.6-flash` free tier (20 generation requests/day) has prevented completing the three-arm measurement (~54 requests needed).
 - **`OutputValidatorService` and `RecommendationStorageService` are stubs** — every method body is a `// TODO`. `validateEach()` returns `isValid: true` unconditionally; `saveRecommendations()` does nothing.
 - **The scored dimensions don't match the specification.** All three documents specify TRL, MRL, **RRL**, ARL, ORL. The code scores Technology, Market, Acceptance, Organizational, and **Investment** — omitting Regulatory, adding Investment (`readiness.service.ts:38-73`).
 

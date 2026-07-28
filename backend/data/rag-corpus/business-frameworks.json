@@ -1,0 +1,85 @@
+[
+  {
+    "key": "bmc",
+    "title": "Business Model Canvas",
+    "content": "The Business Model Canvas describes a venture across nine blocks: customer segments, value propositions, channels, customer relationships, revenue streams, key resources, key activities, key partnerships, and cost structure. It is a description tool, not a validation tool — a fully populated canvas asserts hypotheses and does not evidence them. When assessing a startup against it, look for which blocks are supported by observed evidence (signed agreements, measured usage, actual invoices) versus which are still assumptions, because a confident canvas with no evidence behind its revenue streams is a common source of overstated readiness.",
+    "keyTerms": ["customer segments", "value proposition", "revenue streams", "cost structure", "key partnerships", "channels"],
+    "provenance": "framework-derived",
+    "citation": "Osterwalder & Pigneur, Business Model Generation (2010)",
+    "sourceUrl": "https://www.strategyzer.com/library/the-business-model-canvas"
+  },
+  {
+    "key": "lean-canvas",
+    "title": "Lean Canvas",
+    "content": "Lean Canvas adapts the Business Model Canvas for early-stage startups, replacing key partnerships and key activities with problem, solution, key metrics, and unfair advantage, and foregrounding customer segments as the starting block. Its purpose is to surface the riskiest assumptions — the problem being real, the solution addressing it, and the metrics that would prove traction — so they can be tested before resources are committed. A completed Lean Canvas is still a hypothesis sheet: a 'problem' block naming a pain point is a claim, while documented interview evidence, existing paid workarounds, or measured churn tied to that pain point is what turns it into a validated fact. Key metrics are especially prone to this gap — a target metric stated in the canvas is not the same as a tracked, historical value for that metric.",
+    "keyTerms": ["problem-solution fit", "unfair advantage", "key metrics", "unique value proposition", "customer segments", "riskiest assumptions"],
+    "provenance": "framework-derived",
+    "citation": "Maurya, Running Lean (2012)"
+  },
+  {
+    "key": "market-sizing",
+    "title": "TAM / SAM / SOM market sizing",
+    "content": "TAM (total addressable market) is the total revenue opportunity if a product captured 100% of demand across an entire category; SAM (serviceable addressable market) narrows that to the segment reachable given the startup's specific business model, geography, and channel; SOM (serviceable obtainable market) is the realistic share capturable within a defined period given competition and go-to-market capacity. A frequent hallucination pattern is citing a generic industry-report TAM figure and presenting it as if it were derived bottom-up from the startup's own target customers — it was not, and it says nothing about SAM or SOM. Evidence that separates a claim from a fact: a bottom-up calculation (unit price times an identified, countable number of target accounts or users) or an actual sales pipeline with real conversion rates outranks a top-down percentage-of-market estimate, which should be treated as a weak, unverified claim.",
+    "keyTerms": ["TAM", "SAM", "SOM", "bottom-up sizing", "top-down estimate", "addressable market"],
+    "provenance": "authored",
+    "citation": null
+  },
+  {
+    "key": "unit-economics",
+    "title": "Unit economics: CAC, LTV and payback",
+    "content": "Customer acquisition cost (CAC) is the fully loaded cost — including sales and marketing spend, tooling, and attributable headcount — to acquire one paying customer; lifetime value (LTV) is the gross margin a customer generates over its retained lifespan; payback period is CAC divided by monthly gross margin per customer. These figures are only meaningful when computed from actual spend and observed cohort retention, not from a founder's target ratio. A startup asserting 'LTV:CAC of 3:1' with no cohort behind it is stating a goal, not a result; the fact requires a dated cohort table showing real acquisition spend against real retained revenue over multiple periods. LTV models built on retention assumed years beyond any observed cohort are a particularly common source of inflated unit economics claims and should be discounted accordingly.",
+    "keyTerms": ["CAC", "LTV", "payback period", "gross margin", "cohort retention", "unit economics"],
+    "provenance": "authored",
+    "citation": null,
+    "sourceUrl": "https://a16z.com/16-startup-metrics/"
+  },
+  {
+    "key": "customer-discovery",
+    "title": "Customer discovery and problem interviews",
+    "content": "Customer discovery is the structured practice of testing problem and solution hypotheses through direct interviews with prospective customers before committing to build, popularized as 'getting out of the building.' The discipline distinguishes behavioral evidence — that a prospect already spends time, money, or workaround effort on the problem — from opinion, such as a prospect saying a proposed solution 'would be great.' Stated interest is a weak, socially biased signal; a founder conducting interviews tends to hear agreement regardless of the product's merit. What separates a claim from a fact here is documentation: interview counts, direct quotes describing an existing workaround or cost of the problem, and evidence of prior spend on alternatives outweigh a summary assertion like 'customers love the idea,' which is unfalsifiable and should be treated as unvalidated.",
+    "keyTerms": ["customer discovery", "problem interviews", "behavioral evidence", "get out of the building", "solution hypothesis", "existing workaround"],
+    "provenance": "framework-derived",
+    "citation": "Blank, The Four Steps to the Epiphany (2005)",
+    "sourceUrl": "https://steveblank.com/books/"
+  },
+  {
+    "key": "go-to-market",
+    "title": "Go-to-market motions",
+    "content": "A go-to-market motion describes how a startup actually reaches and converts buyers: product-led growth (self-serve signup and in-product conversion), sales-led (a human sales cycle, typically for higher-ACV or complex-buyer products), channel or partner-led (distribution through resellers or integrations), and community-led (organic advocacy and referral). The right motion depends on average contract value, sales-cycle length, and buyer complexity, and startups frequently claim a motion they have not actually executed. A claim like 'we will grow through word of mouth' needs a measured referral or viral coefficient behind it, not an intention; a claim of 'a sales pipeline' needs a named list of accounts with stage-by-stage conversion history, not a wishlist of prospects a founder hopes to contact. Absent that evidence, the stated motion is a plan, not a demonstrated capability.",
+    "keyTerms": ["product-led growth", "sales-led motion", "channel partnerships", "viral coefficient", "sales pipeline", "go-to-market"],
+    "provenance": "authored",
+    "citation": null
+  },
+  {
+    "key": "ph-regulatory",
+    "title": "Philippine startup regulatory pathway",
+    "content": "A Philippine startup's regulatory footprint typically spans several independent registrations, and a claim of 'compliance' means nothing without naming which of them apply and evidencing each. Entity registration is either with the SEC (for a corporation or one-person corporation) or the DTI (for a sole proprietorship's business name) — the assessor should look for an actual SEC registration or DTI Certificate of Business Name Registration number, not just a stated intent to incorporate. Tax registration with the BIR follows, producing a TIN and a BIR Certificate of Registration (Form 2303) that fixes the required books, invoices or official receipts, and applicable tax type (VAT or percentage tax). Operating locally requires a Mayor's/business permit and barangay clearance, renewed annually. Sector-specific regulators layer on top: the FDA for any health product, food supplement, cosmetic, or medical device, and the DOH for health facilities or clinics — a health-adjacent startup with no FDA License to Operate or product registration should be scored as unregistered in that dimension regardless of other claims. Finally, any startup processing personal data must consider the Data Privacy Act (RA 10173): registering with the National Privacy Commission if it crosses the sensitive-data or headcount thresholds, publishing a privacy notice, and obtaining documented consent for data collection and sharing. The evidentiary bar throughout is the same: a specific registration or permit number and an issuing body outrank a general assertion of compliance, which is the claim this row exists to catch.",
+    "keyTerms": ["SEC registration", "DTI registration", "BIR Certificate of Registration", "Mayor's permit", "FDA License to Operate", "Data Privacy Act", "National Privacy Commission"],
+    "provenance": "authored",
+    "citation": null
+  },
+  {
+    "key": "ip-basics",
+    "title": "Intellectual property basics (IPOPHL)",
+    "content": "In the Philippines, the Intellectual Property Office (IPOPHL) administers trademarks, patents, industrial designs, and utility models, while copyright protection is automatic on creation and needs no registration to exist, though registration still creates a public, dated record useful as evidence. A founder's statement that a startup 'has IP protection' is a claim, not a fact, until it names the specific right and its status: a filed trademark or patent application has an application number and a filing date; a granted right has a registration certificate; neither exists merely because the founder considers the brand or invention original. Trade secrets are the one category with no registry at all — protecting them depends entirely on demonstrated practice, such as signed NDAs, restricted access controls, and internal confidentiality policies, so an assessor should look for those artifacts rather than accepting an assertion of secrecy on its own. Absent a filing number, certificate, or documented confidentiality practice, an IP claim should be treated as unvalidated.",
+    "keyTerms": ["IPOPHL", "trademark application", "patent filing", "copyright", "trade secret", "NDA"],
+    "provenance": "authored",
+    "citation": null
+  },
+  {
+    "key": "evidence-standards",
+    "title": "Pilot and letter-of-intent evidence standards",
+    "content": "Startups routinely present customer traction along a spectrum that ranges from an unrecorded conversation to a paying, renewing customer, and the words used to describe that traction are easy to inflate. A letter of intent (LOI) is a non-binding expression of interest — it commits the signer to nothing and is frequently produced from a boilerplate template with no negotiated terms attached to a specific counterparty. A pilot agreement is materially stronger only when it specifies a counterparty, a scope of work, a timeframe, and ideally a payment or in-kind commitment; an unpaid, open-ended 'pilot' with no defined terms is closer to an LOI than to a customer relationship. The evidentiary hierarchy an assessor should apply, weakest to strongest, is: verbal interest, a generic LOI, a signed pilot agreement with specific terms, a paying customer, and a renewed or expanded contract. When a startup's proposal calls a signed LOI a 'customer' or a free trial a 'signed contract,' that mismatch between the label and the underlying document is itself evidence of overstatement and should be flagged rather than taken at face value.",
+    "keyTerms": ["letter of intent", "pilot agreement", "paying customer", "evidence hierarchy", "traction claim", "signed contract"],
+    "provenance": "authored",
+    "citation": null
+  },
+  {
+    "key": "org-design",
+    "title": "Founding team and organisational design",
+    "content": "A founding team claim rests on the same distinction as any other part of a readiness assessment: a stated capability versus a demonstrated one. 'We have a strong team' names nothing verifiable; a founder's prior startup, a technical co-founder's specific shipped systems, or a domain expert's named prior role at a relevant company are checkable facts. Equity and vesting arrangements show the same gap — an informal understanding among co-founders that shares will vest is not equivalent to a documented vesting schedule (commonly four years with a one-year cliff) in a cap table or founders' agreement, and the absence of the latter is a real organisational risk even when founders describe themselves as aligned. Org design also covers accountable ownership: a stated org chart with named roles and reporting lines is evidence of structure, while a team of generalists with overlapping, undefined responsibilities and no chart is evidence that the organisation has not yet been designed, regardless of how the founders describe their working relationship.",
+    "keyTerms": ["founding team", "vesting schedule", "cap table", "domain expertise", "org chart", "accountable ownership"],
+    "provenance": "authored",
+    "citation": null
+  }
+]

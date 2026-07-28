@@ -16,6 +16,8 @@ export interface AiPipelineConfig {
   grounding: boolean;
   rag: boolean;
   ragStrategy: RagStrategy;
+  ragCorpus: boolean;
+  rubricMode: RubricMode;
   biasReview: boolean;
   scoreNormalization: boolean;
 }
@@ -35,6 +37,33 @@ export interface AiPipelineConfig {
  */
 export const RAG_STRATEGIES = ['keyword', 'semantic'] as const;
 export type RagStrategy = (typeof RAG_STRATEGIES)[number];
+
+/**
+ * How the readiness-rubric channel finds its rows.
+ *
+ * Two modes rather than one because SDD §3.2 specifies that the RAG Query
+ * Service "queries the vector database using the startup's profile data as the
+ * search embedding" for all three channels, while measurement favours an exact
+ * lookup. `semantic` below is NOT that mechanism: rag-query.service.ts's
+ * retrieveRubrics embeds the bare readinessType name (e.g. "Technology"), not
+ * the startup's profile data, so it is the code's own substitute for SDD
+ * §3.2's approach rather than an implementation of it. Both were measured
+ * (measurement/measure-grounding.js, 2026-07-28) to retrieve nothing against
+ * this corpus — the code's substitute scored 0/12 correct-dimension, and the
+ * SDD's actual mechanism, tested separately by embedding whole startup
+ * profiles, scored 0/2. Kept as a mode anyway so the comparison stays
+ * reproducible and the deviation from the SDD is defended with those numbers
+ * rather than an opinion.
+ *
+ *   deterministic - exact (readinessType, level) key lookup. Default.
+ *   semantic      - the code's substitute for the SDD's mechanism: pgvector
+ *                   nearest neighbours over rubric rows using the bare
+ *                   dimension name as the query, gated by RAG_MIN_SIMILARITY.
+ *                   Measured at 0/12 correct-dimension; see
+ *                   measurement/README.md before treating it as equivalent.
+ */
+export const RUBRIC_MODES = ['deterministic', 'semantic'] as const;
+export type RubricMode = (typeof RUBRIC_MODES)[number];
 
 /** Accepts 'true'/'false'/'1'/'0'; anything else fails validation. */
 const envBoolean = (defaultValue: boolean) =>
@@ -65,6 +94,8 @@ export const aiEnvSchema = z.object({
   // Defaults to semantic: keyword matching is the thing being replaced, and a
   // default that silently kept it would make the enhanced arm opt-in.
   AI_RAG_STRATEGY: z.enum(RAG_STRATEGIES).optional().default('semantic'),
+  AI_RAG_CORPUS_ENABLED: envBoolean(true),
+  AI_RAG_RUBRIC_MODE: z.enum(RUBRIC_MODES).optional().default('deterministic'),
   AI_BIAS_REVIEW_ENABLED: envBoolean(true),
   AI_SCORE_NORMALIZATION_ENABLED: envBoolean(true),
   AI_ALLOW_REQUEST_OVERRIDE: envBoolean(false),
@@ -78,6 +109,8 @@ export const aiOverrideSchema = z
     grounding: z.boolean(),
     rag: z.boolean(),
     ragStrategy: z.enum(RAG_STRATEGIES),
+    ragCorpus: z.boolean(),
+    rubricMode: z.enum(RUBRIC_MODES),
     biasReview: z.boolean(),
     scoreNormalization: z.boolean(),
   })

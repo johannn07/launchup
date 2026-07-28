@@ -36,6 +36,8 @@ export class AiConfigService {
       AI_GROUNDING_ENABLED: this.config.get<string>('AI_GROUNDING_ENABLED'),
       AI_RAG_ENABLED: this.config.get<string>('AI_RAG_ENABLED'),
       AI_RAG_STRATEGY: this.config.get<string>('AI_RAG_STRATEGY'),
+      AI_RAG_CORPUS_ENABLED: this.config.get<string>('AI_RAG_CORPUS_ENABLED'),
+      AI_RAG_RUBRIC_MODE: this.config.get<string>('AI_RAG_RUBRIC_MODE'),
       AI_BIAS_REVIEW_ENABLED: this.config.get<string>('AI_BIAS_REVIEW_ENABLED'),
       AI_SCORE_NORMALIZATION_ENABLED: this.config.get<string>(
         'AI_SCORE_NORMALIZATION_ENABLED',
@@ -62,6 +64,8 @@ export class AiConfigService {
       grounding: env.AI_GROUNDING_ENABLED,
       rag: env.AI_RAG_ENABLED,
       ragStrategy: env.AI_RAG_STRATEGY,
+      ragCorpus: env.AI_RAG_CORPUS_ENABLED,
+      rubricMode: env.AI_RAG_RUBRIC_MODE,
       biasReview: env.AI_BIAS_REVIEW_ENABLED,
       scoreNormalization: env.AI_SCORE_NORMALIZATION_ENABLED,
     });

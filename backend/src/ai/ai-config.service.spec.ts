@@ -26,6 +26,8 @@ describe('AiConfigService', () => {
       grounding: false,
       rag: false,
       ragStrategy: 'keyword',
+      ragCorpus: true,
+      rubricMode: 'deterministic',
       biasReview: false,
       scoreNormalization: false,
     });
@@ -45,6 +47,8 @@ describe('AiConfigService', () => {
       // Semantic by default: keyword matching is what this replaces, so
       // defaulting to it would make the enhanced arm opt-in.
       ragStrategy: 'semantic',
+      ragCorpus: true,
+      rubricMode: 'deterministic',
       biasReview: true,
       scoreNormalization: true,
     });
@@ -111,6 +115,8 @@ describe('AiConfigService.resolve', () => {
       // Semantic by default: keyword matching is what this replaces, so
       // defaulting to it would make the enhanced arm opt-in.
       ragStrategy: 'semantic',
+      ragCorpus: true,
+      rubricMode: 'deterministic',
       biasReview: true,
       scoreNormalization: true,
     });
@@ -148,5 +154,37 @@ describe('AiConfigService.resolve', () => {
 
   it('rejects an out-of-range temperature override', () => {
     expect(() => permissive().resolve('{"temperature":9}', true)).toThrow(BadRequestException);
+  });
+});
+
+describe('corpus configuration', () => {
+  const svc = (env: Record<string, string | undefined>) =>
+    new AiConfigService({
+      get: (key: string) => env[key],
+    } as unknown as ConfigService);
+
+  it('enables the corpus by default', () => {
+    expect(svc({}).defaults.ragCorpus).toBe(true);
+  });
+
+  it('defaults the rubric mode to deterministic', () => {
+    expect(svc({}).defaults.rubricMode).toBe('deterministic');
+  });
+
+  it('reads both from the environment', () => {
+    const config = svc({
+      AI_RAG_CORPUS_ENABLED: 'false',
+      AI_RAG_RUBRIC_MODE: 'semantic',
+    }).defaults;
+    expect(config.ragCorpus).toBe(false);
+    expect(config.rubricMode).toBe('semantic');
+  });
+
+  it('rejects an unrecognised rubric mode at boot rather than defaulting', () => {
+    // A typo must not silently mislabel which mechanism produced a batch of
+    // generations — that would make the arm comparison unattributable.
+    expect(() => svc({ AI_RAG_RUBRIC_MODE: 'determinstic' })).toThrow(
+      /Invalid AI pipeline configuration/,
+    );
   });
 });

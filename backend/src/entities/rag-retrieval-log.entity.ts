@@ -26,6 +26,15 @@ export class RagRetrievalLog {
   @Property({ type: 'jsonb' })
   retrieved_profile_ids!: number[]; // or object, depending on your data
 
+  /**
+   * Per-channel result counts: { rubrics, frameworks, peers }.
+   *
+   * Nullable because rows written before the corpus existed have no breakdown,
+   * and backfilling a guess would be worse than an honest null.
+   */
+  @Property({ type: 'jsonb', nullable: true })
+  channel_counts?: { rubrics: number; frameworks: number; peers: number } | null;
+
   @Property({ type: 'timestamp' })
   retrieved_at: Date = new Date();
 }

@@ -235,6 +235,160 @@ describe('AiService', () => {
     });
   });
 
+  describe('createBasePrompt dimension labels', () => {
+    const startup = {
+      id: 2,
+      name: 'ScrambleCo',
+      capsuleProposal: { title: 'ScrambleCo', description: 'd', problemStatement: 'p' },
+    } as any;
+
+    const srl = (readinessType: string, level: number) => ({
+      readinessLevel: { readinessType, level },
+    });
+
+    // The query in createBasePrompt has no orderBy, so rows can come back in
+    // any order. main.ts's boot seeder inserts in a different order than the
+    // live DB happens to have today, so a positional read ([0] -> TRL, [1] ->
+    // MRL, ...) would silently mislabel dimensions on a fresh Neon branch. This
+    // scrambles every dimension away from its array-index position.
+    const emWithScrambledLevels = () =>
+      ({
+        find: jest.fn(async (entity: any) => {
+          if (entity?.name === 'StartupReadinessLevel') {
+            return [
+              srl('Investment', 6),
+              srl('Acceptance', 2),
+              srl('Technology', 9),
+              srl('Regulatory', 4),
+              srl('Market', 1),
+              srl('Organizational', 7),
+            ];
+          }
+          return [];
+        }),
+      }) as any;
+
+    it('labels each dimension by its ReadinessType, not by array position', async () => {
+      const prompt = await service.createBasePrompt(
+        ctxWith({ rag: false }),
+        startup,
+        emWithScrambledLevels(),
+      );
+
+      expect(prompt).toContain('TRL 9');
+      expect(prompt).toContain('MRL 1');
+      expect(prompt).toContain('ARL 2');
+      expect(prompt).toContain('ORL 7');
+      expect(prompt).toContain('RRL 4');
+      expect(prompt).toContain('IRL 6');
+    });
+  });
+
+  describe('createBasePrompt rubric gating (Finding 1 — semantic-mode fallback)', () => {
+    const startup = {
+      id: 3,
+      name: 'RubricCo',
+      capsuleProposal: { title: 'RubricCo', description: 'd', problemStatement: 'p' },
+    } as any;
+
+    const srl = (readinessType: string, level: number) => ({ readinessLevel: { readinessType, level } });
+
+    // Two matching rubric rows (current level + next rung), same shape
+    // buildRubricBlock's own em.find(RagContext, ...) call would receive.
+    const emWithRubricRow = () =>
+      ({
+        find: jest.fn(async (entity: any) => {
+          if (entity?.name === 'StartupReadinessLevel') {
+            return [srl('Technology', 3)];
+          }
+          if (entity?.name === 'RagContext') {
+            return [
+              {
+                title: 'TRL 3',
+                content: 'TRL 3 rubric text',
+                metadata: {
+                  key: 'trl-3',
+                  readinessType: 'Technology',
+                  level: 3,
+                  provenance: 'standard',
+                  citation: 'x',
+                },
+              },
+              {
+                title: 'TRL 4',
+                content: 'TRL 4 rubric text',
+                metadata: {
+                  key: 'trl-4',
+                  readinessType: 'Technology',
+                  level: 4,
+                  provenance: 'standard',
+                  citation: 'x',
+                },
+              },
+            ];
+          }
+          return [];
+        }),
+      }) as any;
+
+    // The gap this closes: buildRubricBlock had zero coverage in either
+    // direction before this fix — nothing proved matching rows ever actually
+    // reached the returned prompt.
+    it('includes rubric text when ragCorpus is enabled and matching rows exist (positive path)', async () => {
+      const prompt = await service.createBasePrompt(
+        ctxWith({ ragCorpus: true, rubricMode: 'deterministic', rag: false }),
+        startup,
+        emWithRubricRow(),
+      );
+
+      expect(prompt).toContain('Verified readiness rubrics (authoritative)');
+      expect(prompt).toContain('TRL 3 rubric text');
+      expect(prompt).toContain('TRL 4 rubric text');
+    });
+
+    // The actual Finding 1 defect: a fallback prompt built after a
+    // rubricMode: 'semantic' retrieval came back empty must not silently pick
+    // up createBasePrompt's own deterministic rubric lookup — that would
+    // relabel a deterministic result as belonging to the semantic arm.
+    it('suppresses the rubric block when opts.rubricMode is semantic, even with matching rows and ragCorpus enabled', async () => {
+      const prompt = await service.createBasePrompt(
+        ctxWith({ ragCorpus: true, rag: false }),
+        startup,
+        emWithRubricRow(),
+        { rubricMode: 'semantic' },
+      );
+
+      expect(prompt).not.toContain('Verified readiness rubrics');
+      expect(prompt).not.toContain('TRL 3 rubric text');
+    });
+
+    it('still builds the rubric block when the caller explicitly passes rubricMode: deterministic', async () => {
+      const prompt = await service.createBasePrompt(
+        ctxWith({ ragCorpus: true, rag: false }),
+        startup,
+        emWithRubricRow(),
+        { rubricMode: 'deterministic' },
+      );
+
+      expect(prompt).toContain('Verified readiness rubrics (authoritative)');
+    });
+
+    // Preserves the documented constraint: initiative/roadblock/refine callers
+    // never pass opts at all, so they must keep the fixed deterministic
+    // mechanism regardless of ctx.config.rubricMode — letting rubricMode leak
+    // into those paths would change two things at once during a measurement
+    // run.
+    it('ignores ctx.config.rubricMode entirely when the caller passes no opts', async () => {
+      const prompt = await service.createBasePrompt(
+        ctxWith({ ragCorpus: true, rubricMode: 'semantic', rag: false }),
+        startup,
+        emWithRubricRow(),
+      );
+
+      expect(prompt).toContain('Verified readiness rubrics (authoritative)');
+    });
+  });
+
   describe('reviewBiasScore flag gating', () => {
     const input = { dimensionKey: 'market', rawScore: 8, maxScore: 9, context: 'ctx' };
 

@@ -225,3 +225,282 @@ describe('RnsService.refineRnsDescription provenance', () => {
     expect(result.refinedDescription).toBe('New, punchier description');
   });
 });
+
+describe('RnsService dimension-level lookup (Finding 3 — keyed, not positional)', () => {
+  const srl = (readinessType: string, level: number) => ({ readinessLevel: { readinessType, level } });
+
+  // Mirrors ai.service.spec.ts's scrambled-order test for createBasePrompt:
+  // both em.find(StartupReadinessLevel, ...) call sites in this file had no
+  // orderBy, so a positional read ([0] -> TRL, [1] -> MRL, ...) could silently
+  // mislabel dimensions whenever insertion order didn't match declaration
+  // order. This scrambles every dimension away from its array-index position.
+  const scrambledLevels = [
+    srl('Investment', 6),
+    srl('Acceptance', 2),
+    srl('Technology', 9),
+    srl('Regulatory', 4),
+    srl('Market', 1),
+    srl('Organizational', 7),
+  ];
+
+  it('generateTasks labels each dimension by its ReadinessType in the fallback prompt, not by array position', async () => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      user: { id: 7 },
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+    const rna = { id: 10, rna: 'RNA text', readinessLevel: { readinessType: 'Technology', level: 3 } };
+    const targetLevel = { id: 42, readinessType: 'Technology', level: 4 };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        if (entity === ReadinessLevel) return Promise.resolve(targetLevel);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([rna]);
+        if (entity === StartupReadinessLevel) return Promise.resolve(scrambledLevels);
+        if (entity === Rns) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+      create: jest.fn((_e, data) => data),
+      persist: jest.fn(),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+      flush: jest.fn().mockResolvedValue(undefined),
+      getReference: jest.fn((_e, id) => ({ id })),
+    };
+
+    const aiService = {
+      generateTasksFromPrompt: jest.fn().mockResolvedValue([{ target_level: 4, description: 'x' }]),
+      reviewBiasScore: jest
+        .fn()
+        .mockResolvedValue({ correctedScore: 4, biasFlagged: false, justification: '' }),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      recordBiasAudit: jest.fn().mockResolvedValue(undefined),
+    };
+
+    // lowConfidence: true routes generateTasks through the hand-built
+    // fallback template that embeds trl/mrl/arl/orl/rrl/irl directly — the
+    // template these two call sites feed.
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue({ lowConfidence: true }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any,
+      buildAiRunService().aiRunService,
+    );
+
+    await service.generateTasks(
+      { startup_id: 1, rnaIds: [10], no_of_tasks_to_create: 1 } as any,
+      ctx,
+    );
+
+    const prompt = aiService.generateTasksFromPrompt.mock.calls[0][1];
+    expect(prompt).toContain('TRL 9');
+    expect(prompt).toContain('MRL 1');
+    expect(prompt).toContain('ARL 2');
+    expect(prompt).toContain('ORL 7');
+    expect(prompt).toContain('RRL 4');
+    expect(prompt).toContain('IRL 6');
+  });
+
+  it('refineRnsDescription labels each dimension by its ReadinessType, not by array position', async () => {
+    const startup = {
+      id: 5,
+      name: 'AgroLink',
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+    const rns = { id: 20, description: 'Old description', startup };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Rns) return Promise.resolve(rns);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupReadinessLevel) return Promise.resolve(scrambledLevels);
+        return Promise.resolve([]);
+      }),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const aiService = {
+      refineRnsDescription: jest
+        .fn()
+        .mockResolvedValue({ refinedDescription: 'new', aiCommentary: 'ok' }),
+    };
+
+    const ctx = {
+      runId: 55,
+      run: { id: 55, startup: undefined } as any,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const { aiRunService } = buildAiRunService();
+    const service = new RnsService(em as any, aiService as any, {} as any, {} as any, aiRunService);
+
+    await service.refineRnsDescription(20, [], 'Make it punchier', ctx);
+
+    const prompt = aiService.refineRnsDescription.mock.calls[0][1];
+    expect(prompt).toContain('TRL 9');
+    expect(prompt).toContain('MRL 1');
+    expect(prompt).toContain('ARL 2');
+    expect(prompt).toContain('ORL 7');
+    expect(prompt).toContain('RRL 4');
+    expect(prompt).toContain('IRL 6');
+  });
+});
+
+describe('RnsService.generateTasks per-dimension rubric scoping (Finding 6)', () => {
+  it('filters verifiedFrameworks to the current dimension before each per-RNA grounded prompt', async () => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      user: { id: 7 },
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+
+    const rnaTech = { id: 10, rna: 'Tech RNA', readinessLevel: { readinessType: 'Technology', level: 3 } };
+    const rnaMarket = { id: 11, rna: 'Market RNA', readinessLevel: { readinessType: 'Market', level: 2 } };
+    const targetLevel = { id: 42, readinessType: 'Technology', level: 4 };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        if (entity === ReadinessLevel) return Promise.resolve(targetLevel);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([rnaTech, rnaMarket]);
+        if (entity === StartupReadinessLevel) return Promise.resolve([]);
+        if (entity === Rns) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+      create: jest.fn((_e, data) => data),
+      persist: jest.fn(),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+      flush: jest.fn().mockResolvedValue(undefined),
+      getReference: jest.fn((_e, id) => ({ id })),
+    };
+
+    const aiService = {
+      generateTasksFromPrompt: jest.fn().mockResolvedValue([{ target_level: 4, description: 'do a thing' }]),
+      reviewBiasScore: jest
+        .fn()
+        .mockResolvedValue({ correctedScore: 4, biasFlagged: false, justification: '' }),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      recordBiasAudit: jest.fn().mockResolvedValue(undefined),
+    };
+
+    // One queryVectorDatabase call for the whole batch (both dimensions), the
+    // way the real code does it — this is exactly the shape that used to leak
+    // into every per-RNA prompt unfiltered.
+    const ragContext = {
+      lowConfidence: false,
+      verifiedFrameworks: [
+        { title: 'TRL 3', content: 'trl text', readinessType: 'Technology' },
+        { title: 'MRL 2', content: 'mrl text', readinessType: 'Market' },
+      ],
+      businessModels: [],
+      similarProfiles: [],
+    };
+
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue(ragContext),
+    };
+
+    const groundedPromptBuilderService = {
+      buildGroundedPrompt: jest.fn().mockReturnValue('grounded prompt'),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      groundedPromptBuilderService as any,
+      buildAiRunService().aiRunService,
+    );
+
+    await service.generateTasks(
+      { startup_id: 1, rnaIds: [10, 11], no_of_tasks_to_create: 1 } as any,
+      ctx,
+    );
+
+    expect(groundedPromptBuilderService.buildGroundedPrompt).toHaveBeenCalledTimes(2);
+
+    const [techCall, marketCall] = groundedPromptBuilderService.buildGroundedPrompt.mock.calls;
+    expect(techCall[0].verifiedFrameworks).toEqual([
+      expect.objectContaining({ readinessType: 'Technology' }),
+    ]);
+    expect(marketCall[0].verifiedFrameworks).toEqual([
+      expect.objectContaining({ readinessType: 'Market' }),
+    ]);
+  });
+});

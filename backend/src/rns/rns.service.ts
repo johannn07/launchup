@@ -19,6 +19,7 @@ import { RnsChatHistory } from 'src/entities/rns-chat-history.entity';
 import { RagQueryService } from '../rna/rag-query.service';
 import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { readinessLevelsByType } from '../common/readiness-levels.util';
 
 @Injectable()
 export class RnsService {
@@ -190,12 +191,8 @@ async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
     { populate: ['readinessLevel'] },
   );
 
-  const trl = startupReadinessLevels[0]?.readinessLevel.level || 0;
-  const mrl = startupReadinessLevels[1]?.readinessLevel.level || 0;
-  const arl = startupReadinessLevels[2]?.readinessLevel.level || 0;
-  const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
-  const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
-  const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
+  const { T: trl, M: mrl, A: arl, O: orl, R: rrl, I: irl } =
+    readinessLevelsByType(startupReadinessLevels);
 
   const startupProfile = {
     title: capsuleProposalInfo.title,
@@ -208,7 +205,13 @@ async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
     })),
   };
 
-  const ragContext = await this.ragQueryService.queryVectorDatabase(dto.startup_id.toString());
+  const ragContext = await this.ragQueryService.queryVectorDatabase(dto.startup_id.toString(), {
+    config: ctx.config,
+    dimensions: rnasToGenerateFrom.map((rna) => ({
+      readinessType: rna.readinessLevel.readinessType,
+      level: rna.readinessLevel.level,
+    })),
+  });
 
   const createdRns: Rns[] = [];
   let currentPriorityNumber = dto.startPriorityNumber || 1;
@@ -279,9 +282,27 @@ Requirements:
 `;
 
     let prompt: string;
-    if (ragContext && !ragContext.lowConfidence && ragContext.similarProfiles?.length > 0) {
+    // Was `!lowConfidence && similarProfiles?.length > 0`, which required a peer
+    // before it would use the grounded builder — so retrieved rubrics would be
+    // discarded whenever no peer cleared the 0.78 floor. With two seeded
+    // startups that is the common case.
+    if (!ragContext.lowConfidence) {
+      // ragContext was fetched once for every RNA in rnasToGenerateFrom, so
+      // verifiedFrameworks can hold rubric rows for dimensions other than the
+      // one this single-dimension task block is generating for (e.g. a Market
+      // rubric row riding along into a Technology task prompt). Filter to the
+      // current readinessType per iteration rather than shipping every
+      // dimension's rubric into every task prompt — the wrong direction for a
+      // hallucination-reduction objective, and it multiplies prompt length for
+      // no benefit.
+      const dimensionScopedContext = {
+        ...ragContext,
+        verifiedFrameworks: ragContext.verifiedFrameworks.filter(
+          (doc) => doc.readinessType === readinessType,
+        ),
+      };
       prompt = this.groundedPromptBuilderService.buildGroundedPrompt(
-        ragContext,
+        dimensionScopedContext,
         startupProfile,
         [readinessType],
         rnsTaskBlock,
@@ -444,12 +465,8 @@ Requirement note:
       { startup: startup },
       { populate: ['readinessLevel'] },
     );
-    const trl = startupReadinessLevels[0]?.readinessLevel.level || 0;
-    const mrl = startupReadinessLevels[1]?.readinessLevel.level || 0;
-    const arl = startupReadinessLevels[2]?.readinessLevel.level || 0;
-    const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
-    const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
-    const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
+    const { T: trl, M: mrl, A: arl, O: orl, R: rrl, I: irl } =
+      readinessLevelsByType(startupReadinessLevels);
 
     let prompt = `Given these data:
       Acceleration Proposal Title: ${capsuleProposalInfo.title}
