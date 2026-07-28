@@ -39,6 +39,10 @@ Database: **Neon (hosted Postgres), not Docker.** `backend/.env` points `DB_HOST
 
 Both apps read DB/JWT config from their own `.env` (see `backend/.env.example`, `frontend/.env.example`). **`JWT_SECRET` must be identical in both `.env` files** — the frontend verifies the JWT itself rather than calling the backend (see Auth below).
 
+## Git commit conventions
+
+Do not include a `Co-Authored-By` line in commit messages.
+
 ## Architecture
 
 ### Backend (NestJS + MikroORM)
