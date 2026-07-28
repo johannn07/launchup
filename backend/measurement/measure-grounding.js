@@ -490,6 +490,12 @@ async function runGenerationArms(ai, corpusVecs) {
             quotaHit = true;
             results[arm.name].quotaHit = true;
             break armLoop;
+          } else {
+            // Anything else (parse failure, network blip, schema error) must
+            // not vanish silently: this harness is meant to run unattended
+            // across a 20-request daily cap, and the only symptom of a
+            // swallowed non-429 error is a lower n= with no explanation.
+            console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna]`, e.message);
           }
         }
         await sleep(DELAY_MS);
@@ -512,6 +518,8 @@ async function runGenerationArms(ai, corpusVecs) {
             quotaHit = true;
             results[arm.name].quotaHit = true;
             break armLoop;
+          } else {
+            console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / levels]`, e.message);
           }
         }
         await sleep(DELAY_MS);
@@ -543,6 +551,8 @@ async function runGenerationArms(ai, corpusVecs) {
             quotaHit = true;
             results[arm.name].quotaHit = true;
             break armLoop;
+          } else {
+            console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`, e.message);
           }
         }
         await sleep(DELAY_MS);
@@ -667,7 +677,7 @@ function reportMetric3(results) {
 (async () => {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const { tally, corpusVecs } = await runRetrievalOnly(ai);
+  const { corpusVecs } = await runRetrievalOnly(ai);
 
   if (RETRIEVAL_ONLY) {
     console.log('\n--retrieval-only: stopping before generation arms.');

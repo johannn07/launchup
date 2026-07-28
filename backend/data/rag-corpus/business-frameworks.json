@@ -21,16 +21,16 @@
     "title": "TAM / SAM / SOM market sizing",
     "content": "TAM (total addressable market) is the total revenue opportunity if a product captured 100% of demand across an entire category; SAM (serviceable addressable market) narrows that to the segment reachable given the startup's specific business model, geography, and channel; SOM (serviceable obtainable market) is the realistic share capturable within a defined period given competition and go-to-market capacity. A frequent hallucination pattern is citing a generic industry-report TAM figure and presenting it as if it were derived bottom-up from the startup's own target customers — it was not, and it says nothing about SAM or SOM. Evidence that separates a claim from a fact: a bottom-up calculation (unit price times an identified, countable number of target accounts or users) or an actual sales pipeline with real conversion rates outranks a top-down percentage-of-market estimate, which should be treated as a weak, unverified claim.",
     "keyTerms": ["TAM", "SAM", "SOM", "bottom-up sizing", "top-down estimate", "addressable market"],
-    "provenance": "framework-derived",
-    "citation": "Standard venture market-sizing practice"
+    "provenance": "authored",
+    "citation": null
   },
   {
     "key": "unit-economics",
     "title": "Unit economics: CAC, LTV and payback",
     "content": "Customer acquisition cost (CAC) is the fully loaded cost — including sales and marketing spend, tooling, and attributable headcount — to acquire one paying customer; lifetime value (LTV) is the gross margin a customer generates over its retained lifespan; payback period is CAC divided by monthly gross margin per customer. These figures are only meaningful when computed from actual spend and observed cohort retention, not from a founder's target ratio. A startup asserting 'LTV:CAC of 3:1' with no cohort behind it is stating a goal, not a result; the fact requires a dated cohort table showing real acquisition spend against real retained revenue over multiple periods. LTV models built on retention assumed years beyond any observed cohort are a particularly common source of inflated unit economics claims and should be discounted accordingly.",
     "keyTerms": ["CAC", "LTV", "payback period", "gross margin", "cohort retention", "unit economics"],
-    "provenance": "framework-derived",
-    "citation": "Standard venture finance practice",
+    "provenance": "authored",
+    "citation": null,
     "sourceUrl": "https://a16z.com/16-startup-metrics/"
   },
   {
