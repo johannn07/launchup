@@ -1,0 +1,28 @@
+{
+  "provenance": "authored",
+  "note": "No external source. Authored for measure-grounding.js metric 2. Held deliberately disjoint from data/rag-corpus/readiness-rubrics.json keyTerms so a corpus arm cannot score well by echoing retrieved text. See docs/superpowers/specs/2026-07-29-grounding-probes-design.md.",
+  "rejected": [
+    "mass production - collides with keyTerm 'production' (trl-9)",
+    "term sheet - collides with keyTerm 'term sheet negotiation' (irl-7)",
+    "pilot deployment - verbatim keyTerm (trl-6)",
+    "regulatory submission - verbatim keyTerm (rrl-5)"
+  ],
+  "markers": [
+    { "phrase": "ipo", "minLevel": 9, "dimensions": null },
+    { "phrase": "volume manufacturing", "minLevel": 8, "dimensions": null },
+    { "phrase": "international expansion", "minLevel": 8, "dimensions": null },
+    { "phrase": "franchise", "minLevel": 8, "dimensions": null },
+    { "phrase": "series a", "minLevel": 7, "dimensions": null },
+    { "phrase": "commercialization", "minLevel": 7, "dimensions": null },
+    { "phrase": "national rollout", "minLevel": 7, "dimensions": null },
+    { "phrase": "scale nationally", "minLevel": 7, "dimensions": null },
+    { "phrase": "full market launch", "minLevel": 7, "dimensions": null },
+    { "phrase": "clinical validation", "minLevel": 6, "dimensions": ["Technology", "Regulatory"] },
+    { "phrase": "certification granted", "minLevel": 6, "dimensions": ["Regulatory"] },
+    { "phrase": "recurring revenue", "minLevel": 5, "dimensions": ["Market", "Investment"] },
+    { "phrase": "paying customers", "minLevel": 5, "dimensions": ["Market", "Acceptance"] },
+    { "phrase": "lead investor secured", "minLevel": 5, "dimensions": ["Investment"] },
+    { "phrase": "deploy to live users", "minLevel": 4, "dimensions": null },
+    { "phrase": "filed for approval", "minLevel": 4, "dimensions": ["Regulatory"] }
+  ]
+}
