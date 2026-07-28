@@ -84,7 +84,10 @@ const HARNESS = path.resolve(__dirname, '../measure-grounding.js');
 test('requiring the harness does not execute it', () => {
   // If the IIFE still runs on require, this throws or hangs on a network call.
   const m = require(HARNESS);
-  assert.ok(m, 'module should export an object');
+  // Assert a real export surface, not merely truthiness: `module.exports` is
+  // {} by default, so `assert.ok(m)` would pass on an unmodified file and this
+  // test would be vacuous.
+  assert.ok(Object.keys(m).length > 0, 'the harness must export its helpers');
 });
 
 test('exposes the constants later tasks depend on', () => {
@@ -1621,14 +1624,17 @@ In the CLI block, after `runRetrievalOnly` and the `RETRIEVAL_ONLY` early return
 
 - [ ] **Step 2: Run the dry run and check both confound fixes by eye**
 
-Run: `cd backend && node measurement/measure-grounding.js --dry-run > /tmp/dry.txt 2>&1; grep -c "Initial Readiness Level:" /tmp/dry.txt`
+Use the session scratchpad, not `/tmp` — this environment reserves
+`C:\TEMP\claude\...\scratchpad` for temporary files. Set `DRY=<scratchpad>/dry.txt`.
+
+Run: `cd backend && node measurement/measure-grounding.js --dry-run > "$DRY" 2>&1; grep -c "Initial Readiness Level:" "$DRY"`
 
 Expected: **6** — one per (arm, startup) RNA prompt, and none in any levels prompt.
 
-Run: `cd backend && awk '/----- LEVELS PROMPT -----/,/^={70,}/' /tmp/dry.txt | grep -c "Initial Readiness Level:"`
+Run: `cd backend && awk '/----- LEVELS PROMPT -----/,/^={70,}/' "$DRY" | grep -c "Initial Readiness Level:"`
 Expected: **0**. The levels probe must never leak the answer.
 
-Run: `cd backend && grep -A2 "retrieved for RNA probe" /tmp/dry.txt`
+Run: `cd backend && grep -A2 "retrieved for RNA probe" "$DRY"`
 Expected: `deviation-deterministic` shows `12 rows` for the RNA probe and `54 rows` for the levels probe; `baseline` and `sdd-semantic` show `0` and `0`.
 
 - [ ] **Step 3: Update the README**
