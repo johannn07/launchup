@@ -12,9 +12,19 @@ node measurement/measure-models.js
 node measurement/measure-differentiation.js
 node measurement/calibrate-similarity.js
 node measurement/measure-retrieval.js
-node measurement/measure-grounding.js                  # full harness
+node measurement/measure-grounding.js                  # full harness (1 rep = 18 calls)
 node measurement/measure-grounding.js --retrieval-only  # Step A only, no generation quota spent
+
+# One rep is what a free-tier day buys. Accumulate across days:
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-07-30-rep2.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
 ```
+
+`--merge` re-runs the report functions over the concatenated raw per-call
+records, so N days of one rep is arithmetically identical to one N-rep run.
+It refuses to merge files whose model, embedding model, corpus size or
+similarity floor differ, rather than silently averaging two different
+experiments.
 
 ## What each one measures
 
@@ -139,34 +149,105 @@ the result that actually settles the SDD deviation question — measured
 against the mechanism SDD §3.2 describes, not a proxy for it — and it costs
 embedding calls only, not the exhausted generation quota.
 
-**Step B — the three generation arms (metrics 1-3): blocked, n=0.** The
-harness attempted 2 startups × 6 dimensions × 3 reps × 3 arms (up to 54
-`gemini-3.6-flash` calls — RNA text, a 1-9 level assessment, and the
-absent-field hallucination probe, per cell) and is built to stop cleanly on a
-429 and report whatever completed. What actually stopped it, on every
-attempt on 2026-07-28, was `generativelanguage.googleapis.com
-/generate_content_free_tier_requests`, quota ID
-`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **limit 20 requests per
-day** for `gemini-3.6-flash` — a hard daily cap, confirmed from the 429
-response body, not a per-minute rate limit that re-pacing works around. One
-run got 7 calls in before hitting it; two subsequent attempts (including one
-with the delay widened to 9s) 429'd on the very first call, because the
-day's 20-request budget was already exhausted by then. **Metrics 1-3 were
-not measured** — every cell is n=0. This is reported as a real result, not
-elided: the differentiation baseline (+2.28 on `gemini-3.6-flash`,
-`measure-differentiation.js`) was itself measured on a different day's
-quota, and 54 calls to this specific model is not achievable inside one
-free-tier day. Re-run when a fresh daily window is available — ideally
-spread across more than one day, or with `REPS` lowered — before treating
-metrics 1-3 as answered either way.
+**Step B — the three generation arms (metrics 1-3): first run 2026-07-29,
+n=1, 16 of 18 calls completed.**
+
+The 2026-07-28 attempts produced n=0 in every cell. The cause was a hard
+daily cap — `generativelanguage.googleapis.com/generate_content_free_tier_requests`,
+quota ID `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **20 requests
+per day** for `gemini-3.6-flash`, confirmed from the 429 body, not a
+per-minute limit that re-pacing works around — combined with a loop order
+that spent the entire budget inside the first arm. **Both were fixed:**
+`REPS` now defaults to 1 (one rep = 18 calls = what a day actually buys),
+reps are the **outermost** loop so a 429 costs precision rather than the
+comparison itself, and `--out` / `--merge` accumulate raw per-call records
+across days. See the header comment in `measure-grounding.js`.
+
+Result, 2026-07-29 (`measurement/results/2026-07-29-rep1.json`), n=1 per
+cell, quota exhausted on call 17 of 18:
+
+| metric | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — rubric-term grounding | n/a (no rubric) | n/a (nothing retrieved) | **1/12 (8%)** |
+| 2 — invented absent fields | 0/6 (0%) | 0/6 (0%) | 0/3 (0%) |
+| 3 — differentiation gap | **+1.50** | **+2.50** | incomplete (n=0 MediSync) |
+
+**Read these with the four caveats below before quoting any of them.**
+
+**(a) `sdd-semantic` is not a distinct condition — it is a null-condition
+replicate of `baseline`.** Semantic rubric retrieval returned **0 rows** for
+both startups (`retrieved: []` in the results file), exactly as Step A
+predicted, so `renderRubricBlock([])` produced an empty string — and
+`baseline`, which retrieves nothing by construction, produced the same empty
+string. **The two arms sent byte-identical prompts.** This is a direct
+consequence of Step A's 0/12 finding and it means the harness currently runs
+*two* conditions (corpus off / deterministic corpus) plus one accidental
+control, not three conditions.
+
+**(b) That control measured the noise floor, which is large.** Same prompt,
+same `temperature: 0`, two independent samples: **8 of the 12 per-dimension
+levels differed**, and the differentiation gap moved **+1.50 → +2.50**.
+
+| | baseline | sdd-semantic (identical prompt) |
+|---|---|---|
+| AgroLink | T3 M3 A3 O3 R1 I1 | T2 M3 A2 O2 R1 I1 |
+| MediSync | T5 M4 A5 O4 R2 I3 | T6 M5 A6 O4 R2 I3 |
+
+So **±1.0 gap points is run-to-run variance at n=1** on this model.
+`gemini-3.6-flash` is thinking-enabled and does not sample deterministically
+at `temperature: 0` (already noted under Caveats, now quantified). **No
+corpus effect smaller than about one gap point is detectable at this N** —
+which is the strongest single reason to keep accumulating reps rather than
+acting on the table above.
+
+**(c) Metric 2 is saturated and cannot move.** 0 invented across every arm
+and every call (0/15 absent fields), with 15/15 present fields recalled.
+This reproduces the 2026-07-27 model comparison exactly, which also found
+0/9 and 9/9 on both models. `groundPrompt()`'s "return null if uncertain"
+instruction already handles this probe completely, so **there is no headroom
+for the corpus to demonstrate an improvement.** A null result here is
+evidence about the probe, not about the corpus. A harder probe — longer
+documents, plausible-looking distractors, fields that are *partially*
+supported — is needed before Objective 1's headline claim can be tested at
+all.
+
+**(d) Metric 1's 8% is mostly a measurement artifact, and inspection says
+so.** Of AgroLink's 6 dimensions under `deviation-deterministic`, all 6
+missed — yet the generated text is substantively on-target. For Technology,
+with `TRL 2`/`TRL 3` verbatim in the prompt and `keyTerms: ["concept
+formulated", "speculative application", "architecture sketch", "no
+experimental proof"]`, the model wrote:
+
+> "Tested a paper prototype of the lot-aggregation flow with 3 cooperatives
+> in September 2025. Needs to move beyond paper testing to build and
+> physically…"
+
+That is a correct TRL-2/3 characterization that reuses none of the rubric's
+vocabulary. The RNA prompt explicitly demands "Be specific and grounded
+strictly in the provided data", which **structurally conflicts** with
+echoing abstract rubric phrasing. The exact-substring caveat below was
+already stated as a risk; this run shows it is the *dominant* case, not an
+edge case. **Metric 1 measures vocabulary reuse, and on this corpus
+vocabulary reuse is near zero even when the rubric is verbatim in the
+prompt.** Treat it as a traceability signal that is currently failing to
+trace, not as a grounding score.
+
+**Still missing: `deviation-deterministic` / MediSync (levels +
+hallucination probe), 2 calls.** That is why metric 3's headline arm reads
+`n/a`. Next quota window, run another full rep and merge:
+
+```bash
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/<date>-rep2.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
 
 **Do not read Step A's failures as "therefore deterministic improves
 grounding."** Step A establishes that neither the code's substitute nor
-SDD §3.2's actual mechanism can retrieve this rubric corpus — it says
-nothing about whether the shipped deviation (deterministic mode) itself
-moves the unsupported-claim rate or the differentiation gap once its rubric
-text reaches a generation prompt. That is exactly what Step B was for, and
-Step B did not run.
+SDD §3.2's actual mechanism can retrieve this rubric corpus. Step B has now
+run once, and it does **not** yet show the shipped deviation moving either
+the unsupported-claim rate (saturated, (c)) or the differentiation gap
+(incomplete, and below the noise floor measured in (b)). Objective 1's
+headline claim remains untested in both directions.
 
 ## Reading the output
 
@@ -220,11 +301,19 @@ measurement being taken.
   its own within a minute. Embeddings are deterministic, so a re-run
   reproduces the 12/12 vs 0/12 result exactly; it is not a small-N number
   that needs more repetitions.
-- **Step B's blocker is a hard daily cap, not underpowered N.** `n=0` across
-  every cell in metrics 1-3 is not "ran out of time" or "hit a transient rate
-  limit" — it is `GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20`
-  for `gemini-3.6-flash`, confirmed from the 429 body. No `DELAY_MS` value
-  fixes this; only a fresh day's quota (or a paid tier) does.
+- **Step B's ceiling is a hard daily cap, not `DELAY_MS`.** It is
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20` for
+  `gemini-3.6-flash`, confirmed from the 429 body. No pacing value works
+  around it; only a fresh day's quota (or a paid tier) does. The window
+  resets at **midnight US Pacific**, which is **15:00 Philippine time** — so
+  a run started in the PH morning is drawing on the *previous* window and may
+  find it already spent. The 2026-07-29 run got 16 calls, not 18, for exactly
+  this reason.
+- **N is the binding constraint on every Step B conclusion, and the noise
+  floor is now measured rather than assumed** — ±1.0 differentiation-gap
+  points between two byte-identical prompts (see Step B above). Accumulate at
+  least three reps with `--merge` before treating any between-arm difference
+  in metric 3 as real.
 - **Metric 1 (rubric-term grounding) measures whether retrieval reached the
   output, not whether the output is correct.** A generated RNA can contain a
   `keyTerm` while still describing the wrong readiness level, or omit every

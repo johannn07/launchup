@@ -398,3 +398,48 @@ Two things it surfaced that are worth knowing:
 - **The business-framework channel retrieves nothing** (see the `inspect-prompt.js` section above). Three plausible fixes — lower the floor for that channel alone, make it deterministic the way rubrics are, or drop the channel and the 10 rows. Not a merge blocker; it has never worked differently. Worth deciding before anyone describes the corpus as "64 rows grounding the model," because in practice 54 are.
 - **`backup/rag-corpus-preflight` still exists** (tip `99fbcda`) and holds the pre-rewrite history including the 13.7 MB of PDF blobs. The merge is done, so it is now safe to delete — and worth doing, since it is the only remaining reference keeping those blobs alive locally.
 - **`.superpowers/sdd/2026-07-28-rag-corpus/`** (gitignored) was deliberately *not* deleted despite the process prescribing it — it holds the ten task reports with TDD evidence, which is the debugging record while John tests. Remove after merge.
+
+---
+
+## Grounding measurement — Step B finally ran — 2026-07-29
+
+Branch `measure/grounding-arms`, off `master` (which now carries the merged corpus work, PRs #13/#14/#15). Nothing pushed.
+
+The top open item was Step B of `measure-grounding.js` — the three generation arms, n=0 since 2026-07-28. **It ran.** 16 of 18 calls landed before the daily cap; raw per-call records are committed at `backend/measurement/results/2026-07-29-rep1.json`.
+
+### The blocker was two problems, and only one of them was quota
+
+The 20/day cap on `gemini-3.6-flash` was real, but the harness made it fatal rather than merely limiting. It iterated `arm → startup → rep` at `REPS = 3`, so 9 calls went into the first (arm, startup) cell and the whole 20-call budget was consumed **inside the baseline arm**. Every metric in the file is a *between-arm* contrast, so that partial run had nothing to compare and reported n=0 across the board.
+
+Three changes, verified before spending any quota:
+
+- **`REPS` defaults to 1**, overridable with `--reps=N`. One rep is 18 calls — what a free-tier day actually buys.
+- **Reps are the outermost loop.** Each completed rep is now a full three-arm comparison, so a 429 costs precision instead of the comparison itself. Retrieval is hoisted above the rep loop so `semantic` still embeds only once.
+- **`--out` / `--merge`** persist and recombine the raw per-call records. The report functions are pure over the concatenated calls, so N days of one rep equals one N-rep run. `--merge` **refuses** files whose model, embedding model, corpus size or floor differ rather than averaging two experiments together.
+
+The merge path and the refusal path were both exercised against synthetic fixtures first — no quota spent proving the plumbing.
+
+### What the numbers say, and mostly what they don't
+
+| metric | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — rubric-term grounding | n/a | n/a (nothing retrieved) | 1/12 (8%) |
+| 2 — invented absent fields | 0/6 | 0/6 | 0/3 |
+| 3 — differentiation gap | +1.50 | +2.50 | incomplete |
+
+**Four findings, and the most valuable one is not in the table.**
+
+1. **`sdd-semantic` is not a distinct arm — it is a null-condition replicate of `baseline`.** Semantic rubric retrieval returned 0 rows for both startups (confirmed in the results file, exactly as Step A predicted), so its rubric block is the empty string — and baseline's is too. **The two arms sent byte-identical prompts.** The study is really two conditions plus one accidental control.
+2. **That control measured the noise floor, and it is large.** Same prompt, `temperature: 0`, two samples: **8 of 12 per-dimension levels differed**, gap +1.50 → +2.50. AgroLink came back `T3 M3 A3 O3 R1 I1` once and `T2 M3 A2 O2 R1 I1` the other time. So **±1.0 gap points is run-to-run variance at n=1**, and no corpus effect below that is detectable. This is the single most useful number the run produced, and it was free.
+3. **Metric 2 is saturated and cannot move.** 0/15 invented, 15/15 present recalled, every arm — reproducing 2026-07-27's 0/9 and 9/9 across two different models. `groundPrompt()` already handles this probe completely. A null result here is **evidence about the probe, not the corpus**; Objective 1's claim cannot be tested until the probe is harder (longer documents, plausible distractors, partially-supported fields).
+4. **Metric 1's 8% is largely an artifact, and inspecting the misses proves it.** With `TRL 2`/`TRL 3` verbatim in the prompt, the model wrote *"Tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025"* — a correct TRL-2/3 characterization that shares no wording with `keyTerms: ["concept formulated", "speculative application", …]`. The RNA prompt demands specificity to the source document, which structurally conflicts with echoing abstract rubric phrasing. Metric 1 measures **vocabulary reuse**, which is near zero here even where retrieval demonstrably worked. The README had flagged exact-substring matching as a risk; this run shows it is the dominant case.
+
+### Operational note worth keeping
+
+**The free-tier daily window resets at midnight US Pacific = 15:00 Philippine time.** A run started in the PH morning draws on the *previous* window. That is why this run got 16 calls rather than 18 — some of 2026-07-28's evening attempts had already spent from the same window.
+
+### What's owed
+
+- **Two calls**: `deviation-deterministic` / MediSync (levels + hallucination probe). That gap is why metric 3's headline arm reads `n/a`.
+- **At least two more reps**, one per quota window, then `--merge`. Three reps is the minimum for metric 3 to clear the ±1.0 noise floor.
+- **Two probe redesigns** — now indicated by measurement rather than speculation: metric 2 needs headroom, metric 1 needs to stop rewarding verbatim echo.
