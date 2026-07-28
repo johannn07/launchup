@@ -70,36 +70,74 @@ improve differentiation? Three arms:
 | arm | `ragCorpus` | `rubricMode` | question |
 |---|---|---|---|
 | baseline | `false` | — | does a verified corpus help at all? |
-| sdd-semantic | `true` | `semantic` | does the SDD §3.2's specified mechanism deliver the rubric? |
+| sdd-semantic | `true` | `semantic` | does the *code's* semantic-mode substitute deliver the rubric? |
 | deviation-deterministic | `true` | `deterministic` | is the shipped deviation justified? |
 
 Two steps, run in that order because quota is the binding constraint:
 
 **Step A — rubric-retrieval accuracy (quota-free of the generation endpoint,
-full N, reproduces exactly).** For each of the 2 seeded startups × 6
-dimensions (12 queries), both rubric modes retrieve against the 54-row
-corpus and are checked against `rubricKey(type, level)` as ground truth —
-whether the returned rubric's `readinessType` matches the dimension actually
-asked for. Result, 2026-07-28:
+full N, reproduces exactly).** Two separate questions, and they are **not
+the same mechanism** — worth stating plainly, because an earlier draft of
+this write-up conflated them:
+
+1. **The code's current `semantic` substitute.** For each of the 2 seeded
+   startups × 6 dimensions (12 queries), embed the bare dimension name
+   (`"Technology"`, `"Regulatory"`, …) — what
+   `dimensions.map(d => d.readinessType).join(' ')` degenerates to for a
+   single missing dimension — and check the returned rubric's
+   `readinessType` against `rubricKey(type, level)` as ground truth. This is
+   **not** what SDD §3.2 specifies; it is the stand-in `rag-query.service
+   .ts:126` actually runs.
+2. **SDD §3.2 as written**: *"queries the vector database using the
+   startup's profile data as the search embedding."* This is tested
+   separately below by embedding each startup's own profile text
+   (`STARTUPS[name].doc`) whole and checking the result against the union of
+   all 12 valid `(dimension, current-or-next-level)` keys for that startup —
+   the code never actually does this for the rubric channel, so this query
+   exists only in this measurement, to test the specified mechanism on its
+   own terms.
+
+Result, 2026-07-28:
 
 | mode | queries | correct dimension | wrong dimension | empty |
 |---|---|---|---|---|
 | deterministic | 12 | 12 | 0 | 0 |
-| semantic | 12 | 0 | 0 | **12** |
+| code's dimension-name substitute | 12 | 0 | 0 | **12** |
 
 Deterministic is 12/12 by construction — it is an exact `(type, level)` key
-lookup, it cannot retrieve the wrong dimension. **Semantic returned nothing
-for every single query.** `RagQueryService.retrieveRubrics`'s semantic path
-embeds only the bare dimension name (`dimensions.map(d => d.readinessType)
-.join(' ')` — for a single missing dimension that degenerates to the string
-`"Technology"`, `"Regulatory"`, etc.) and compares it against corpus rows
-whose title and content use the SDD's abbreviations (`TRL 3 —
-…`, `RRL 1 — …`) rather than the enum's human-readable names. Every one of
-the 12 top-2 nearest-neighbour scores fell below the 0.78 floor. **This
-settles the SDD deviation before any generation quota was spent**: the
-SDD-specified mechanism does not deliver the rubric it was designed to
-retrieve, for this corpus and this query shape — not "retrieves a worse
-rubric," but "retrieves nothing, every time."
+lookup, it cannot retrieve the wrong dimension. **The code's substitute
+returned nothing for every single query.** It embeds only the bare dimension
+name and compares it against corpus rows whose title and content use the
+SDD's abbreviations (`TRL 3 — …`, `RRL 1 — …`) rather than the enum's
+human-readable names. Every one of the 12 top-2 nearest-neighbour scores
+fell below the 0.78 floor. **This settles the narrower claim it can
+settle**: the code's current stand-in for semantic retrieval does not
+deliver the rubric it's trying to retrieve, for this corpus and this query
+shape — not "retrieves a worse rubric," but "retrieves nothing, every
+time." **It does not, by itself, say anything about whether SDD §3.2's
+actual mechanism works** — that is a different query, tested next.
+
+**SDD §3.2 as specified — profile-data query.** Both startups' full profile
+text, embedded whole, against the same 54-row corpus:
+
+| query | queries | correct (any of the 6 dimensions) | wrong | empty |
+|---|---|---|---|---|
+| profile-data (SDD §3.2) | 2 | 0 | 0 | **2** |
+
+**Also empty, for both startups.** So the specified mechanism does not fare
+better than the code's substitute here — but for a plausibly different
+reason: a profile is several sentences of narrative business prose, and the
+rubric rows are short, abbreviation-heavy definitional text (`TRL 3 —
+Experimental proof of concept: …`). The two have little shared vocabulary
+or register, so **a low score here is a structural property of comparing a
+startup's narrative profile against short definitional rubric text**, not
+an artifact of a badly-chosen query string the way the bare dimension name
+arguably was. Taken together: **neither the mechanism SDD §3.2 specifies
+nor the code's actual substitute for it can retrieve this rubric corpus**,
+for reasons that look different but land on the same 0.78 floor. This is
+the result that actually settles the SDD deviation question — measured
+against the mechanism SDD §3.2 describes, not a proxy for it — and it costs
+embedding calls only, not the exhausted generation quota.
 
 **Step B — the three generation arms (metrics 1-3): blocked, n=0.** The
 harness attempted 2 startups × 6 dimensions × 3 reps × 3 arms (up to 54
@@ -122,12 +160,13 @@ free-tier day. Re-run when a fresh daily window is available — ideally
 spread across more than one day, or with `REPS` lowered — before treating
 metrics 1-3 as answered either way.
 
-**Do not read Step A's semantic failure as "therefore deterministic
-improves grounding."** It only establishes that the SDD's specified
-mechanism cannot be what delivers a headline result, if the shipped
-deviation ever produces one. Whether the deviation itself moves the
-unsupported-claim rate or the differentiation gap is exactly what Step B
-was for, and Step B did not run.
+**Do not read Step A's failures as "therefore deterministic improves
+grounding."** Step A establishes that neither the code's substitute nor
+SDD §3.2's actual mechanism can retrieve this rubric corpus — it says
+nothing about whether the shipped deviation (deterministic mode) itself
+moves the unsupported-claim rate or the differentiation gap once its rubric
+text reaches a generation prompt. That is exactly what Step B was for, and
+Step B did not run.
 
 ## Reading the output
 
@@ -208,16 +247,24 @@ measurement being taken.
   MediSync: T5/M4/A3/O4/R3/I3), not a uniform guess per startup. The
   documents themselves are `measure-differentiation.js`'s verbatim early/mid
   pair.
-- **The `semantic` rubric mode's Step B query is startup-invariant.** When
-  every dimension is missing (`RnaService.generateRNA`'s normal case for a
-  fresh startup), `retrieveRubrics`'s semantic query is
+- **The code's `semantic` rubric mode's Step B query is startup-invariant.**
+  When every dimension is missing (`RnaService.generateRNA`'s normal case for
+  a fresh startup), `retrieveRubrics`'s semantic query is
   `dimensions.map(d => d.readinessType).join(' ')` — the same six-word string
   regardless of which startup or what level it's actually at. AgroLink
   (early) and MediSync (mid) would therefore receive an *identical* retrieved
   rubric set in that arm, a structural property of the production code being
   measured, not an artifact of this harness — and a second, independent way
-  the semantic mechanism cannot deliver a level-appropriate rubric, beyond
-  Step A's per-dimension accuracy finding.
-- **N is 2 startups.** Same ceiling every other script in this directory
-  states plainly: enough to check direction, not enough to publish an effect
-  size.
+  this substitute cannot deliver a level-appropriate rubric, beyond Step A's
+  per-dimension accuracy finding. This is still the code's substitute, not
+  SDD §3.2's mechanism — see the profile-data query below for that.
+- **The profile-data query's ground truth is deliberately loose.** "Correct"
+  means every returned row's key is among the startup's 12 valid
+  `(dimension, current-or-next-level)` pairs across *all six* dimensions, not
+  one targeted dimension — a whole-profile query per SDD §3.2 isn't aimed at
+  a single dimension the way a per-dimension query is. That makes "correct"
+  easier to satisfy than Step A's per-dimension check, not harder, so the 0/2
+  empty result is not an artifact of an unfairly strict bar.
+- **N is 2 startups** for the profile-data query, same as the differentiation
+  arms — enough to check whether the mechanism clears the floor at all, not
+  enough to characterize a partial-hit rate.

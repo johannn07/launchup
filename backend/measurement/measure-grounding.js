@@ -178,6 +178,17 @@ async function embedAll(ai, texts) {
   return res.embeddings.map((e) => e.values);
 }
 
+/** All 12 (current + next level) keys across all six dimensions for one startup. */
+function allWantedKeysForStartup(startup) {
+  const wanted = new Set();
+  for (const dim of DIMENSIONS) {
+    const level = startup.levels[dim];
+    wanted.add(rubricKey(dim, level));
+    wanted.add(rubricKey(dim, Math.min(level + 1, MAX_READINESS_LEVEL)));
+  }
+  return wanted;
+}
+
 /**
  * "Quota-free" in the brief means "does not touch the rate-limited generation
  * endpoint" - it still calls embedContent, which turned out to have its own
@@ -192,6 +203,7 @@ async function runRetrievalOnly(ai) {
 
   let corpusVecs;
   let dimVecs;
+  let profileVecs;
   try {
     // Text embedded verbatim as production does: `${title}\n\n${content}`
     // (embedding-index.service.ts textFor). One batched call for all 54 rows.
@@ -203,7 +215,19 @@ async function runRetrievalOnly(ai) {
     // Per-dimension query used when RagQueryService.retrieveRubrics is called
     // with exactly one missing dimension (dimensions.map(d=>d.readinessType)
     // .join(' ') degenerates to the bare readinessType string in that case).
+    // NOTE: this is the CODE's dimension-name substitute, not SDD §3.2's
+    // mechanism - see the profile-embedding query below for that.
     dimVecs = await embedAll(ai, DIMENSIONS);
+
+    // SDD §3.2, as written: "queries the vector database using the startup's
+    // profile data as the search embedding." rag-query.service.ts:126 does not
+    // do this for the rubric channel - it embeds the bare readinessType name
+    // instead - so this is the one query in this script that tests the SDD's
+    // actual specified mechanism rather than the code's substitute for it.
+    profileVecs = await embedAll(
+      ai,
+      Object.values(STARTUPS).map((s) => s.doc),
+    );
   } catch (e) {
     console.log(`[QUOTA HIT on embed_content] ${e.message}`);
     console.log('Step A could not run this time. Re-run once the embed quota resets; the result is deterministic and reproduces exactly.');
@@ -255,7 +279,7 @@ async function runRetrievalOnly(ai) {
     }
   }
 
-  console.log('per-query detail:');
+  console.log('per-query detail (deterministic vs the CODE\'s dimension-name substitute for semantic mode):');
   console.table(rows);
 
   console.log('\nsummary (mode | queries | correct dimension | wrong dimension | empty):');
@@ -269,18 +293,61 @@ async function runRetrievalOnly(ai) {
     })),
   );
 
-  const semanticSettled = tally.semantic.correct < tally.semantic.queries;
+  const codeSubSettled = tally.semantic.correct < tally.semantic.queries;
   console.log(
-    semanticSettled
-      ? `\nsemantic scored ${tally.semantic.correct}/${tally.semantic.queries} correct-dimension - below deterministic's ` +
-          `${tally.deterministic.correct}/${tally.deterministic.queries}. This settles the SDD deviation before any ` +
-          `generation quota is spent: the SDD's specified mechanism (semantic) does not reliably deliver the correct ` +
-          `dimension's rubric for this corpus and query shape.`
-      : `\nsemantic matched deterministic at ${tally.semantic.correct}/${tally.semantic.queries} - the SDD mechanism ` +
-          `delivers the rubric as specified; the deviation would need to be justified on other grounds.`,
+    codeSubSettled
+      ? `\nthe code's dimension-name substitute for semantic mode scored ${tally.semantic.correct}/${tally.semantic.queries} ` +
+          `correct-dimension - below deterministic's ${tally.deterministic.correct}/${tally.deterministic.queries}. This is ` +
+          `NOT a test of SDD §3.2's specified mechanism (see below for that) - rag-query.service.ts:126 embeds the bare ` +
+          `readinessType name ("Technology", "Regulatory", ...), not "the startup's profile data as the search embedding" ` +
+          `SDD §3.2 calls for. What this settles is narrower: the CODE's current substitute does not reliably deliver the ` +
+          `correct dimension's rubric for this corpus and query shape.`
+      : `\nthe code's dimension-name substitute matched deterministic at ${tally.semantic.correct}/${tally.semantic.queries}. ` +
+          `Still not a test of SDD §3.2 itself - see the profile-embedding query below for that.`,
   );
 
-  return { tally, rows, corpusVecs };
+  // --- SDD §3.2 as actually written: "the startup's profile data as the
+  // search embedding." One query per startup (not per dimension - a whole
+  // profile isn't aimed at one dimension), checked against the union of all
+  // 12 (dimension, current-or-next-level) keys for that startup: does the
+  // profile, embedded whole, surface ANY rubric row that's actually relevant
+  // to where this startup currently sits, across all six dimensions?
+  const profileRows = [];
+  const profileTally = { queries: 0, correct: 0, wrong: 0, empty: 0 };
+  const startupNames = Object.keys(STARTUPS);
+  for (let s = 0; s < startupNames.length; s++) {
+    const startupName = startupNames[s];
+    const startup = STARTUPS[startupName];
+    const wantedAnyDim = allWantedKeysForStartup(startup);
+
+    const scored = RUBRICS.map((r, i) => ({ r, score: cos(profileVecs[s], corpusVecs[i]) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, RUBRIC_LIMIT)
+      .filter((x) => x.score >= FLOOR);
+    const cls = scored.length === 0 ? 'empty' : scored.every((x) => wantedAnyDim.has(x.r.key)) ? 'correct' : 'wrong';
+
+    profileTally.queries++;
+    profileTally[cls]++;
+    profileRows.push({
+      startup: startupName,
+      top: scored.length ? scored.map((x) => `${x.r.key} (${x.score.toFixed(3)})`).join(', ') : '-',
+      result: cls,
+    });
+  }
+
+  console.log('\n--- SDD §3.2 as specified: profile-data query (the mechanism the code does NOT use for rubrics) ---');
+  console.log(
+    'Ground truth: "correct" means every returned row\'s key is one of this startup\'s 12 valid (dimension, current-or-\n' +
+      'next-level) keys across all six dimensions - a profile query is not aimed at one dimension, so any relevant rubric counts.\n' +
+      'A profile embedding contains no dimension name at all, so a low score here would be a STRUCTURAL property of the\n' +
+      'mechanism (whole-document prose vs a short abbreviation-heavy rubric row), not an artifact of a bad query string.\n',
+  );
+  console.table(profileRows);
+  console.log(
+    `profile query: ${profileTally.correct}/${profileTally.queries} correct, ${profileTally.empty}/${profileTally.queries} empty.`,
+  );
+
+  return { tally, profileTally, rows, corpusVecs };
 }
 
 // --------------------------------------------------------------------------
