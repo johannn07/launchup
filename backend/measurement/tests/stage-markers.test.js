@@ -95,43 +95,26 @@ test('the same marker still fires as a whole word', () => {
 });
 
 test('no marker matches a seeded document only as a sub-word', () => {
-  // Guard: Seeded docs should not trigger any markers when using whole-word
-  // matching. If a marker appears as a bare substring in a seeded doc,
-  // confirm that whole-word matching correctly rejects it (e.g., "ipo" inside
-  // "IPOPHL"). This verifies the fix prevents false positives.
-  const docs = {
-    'AgroLink PH': `Title: AgroLink PH: Cooperative Market Access Platform
-Description: Connects smallholder farmer cooperatives in Central Luzon directly to institutional buyers.
-Problem Statement: Smallholder farmers sell through a chain of traders and capture only a fraction of the final market price.
-Target Market: Rice and vegetable cooperatives in Nueva Ecija and Tarlac (roughly 400 cooperatives).
-Solution: A mobile-first platform where cooperative officers register expected harvest volumes and buyers post standing demand. Includes SMS fallback.
-Timeline: 2025-06 field interviews with 18 cooperatives. 2025-09 paper prototype of the lot-aggregation flow tested with 3 cooperatives. 2026-01 two founders committed full-time; provisional agreement with one buyer.
-Revenue: None to date.
-IP Status: No patents filed. The "AgroLink PH" wordmark has not been registered with IPOPHL.
-Team: Rafael Domingo (6 years agricultural extension officer), Ana Beltran (4 years backend engineer).`,
-    'MediSync Cebu': `Title: MediSync Cebu: Referral Coordination for Provincial Clinics
-Description: Links rural health units across Cebu province with district and tertiary hospitals, replacing a paper-and-phone referral process.
-Problem Statement: Referrals move by handwritten form and phone call; clinical history is frequently lost in transit.
-Target Market: The 44 rural health units in Cebu province, 8 district hospitals, and 3 tertiary referral centres.
-Solution: A web-based form (with SMS and paper-form fallback) captures referring provider, patient condition (by ICD code), and urgency.
-Timeline: 2025-02 three pilot clinics actively use the system. 2025-05 feasibility study across all rural health units. Awaiting approval from provincial health office.
-Revenue: None to date.
-IP Status: No patents. Trademark application filed with IPOPHL, pending.
-Team: Dr. Marian Santos (8 years public health), Giancarlo Rossi (3 years fullstack engineer).`
-  };
-
+  // Guard: any marker that offendingMarkers actually returns must be a whole-word
+  // match, not a sub-word match like "ipo" in "IPOPHL". This verifies the
+  // word-boundary fix prevents false positives. Uses real STARTUPS data and
+  // calls the actual production functions.
   const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const wordBoundary = (phrase) => new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i');
 
-  const falsePositives = [];
-  for (const [name, text] of Object.entries(docs)) {
-    for (const m of MARKERS) {
-      const wholeMatch = wordBoundary(m.phrase).test(text);
-      if (wholeMatch) {
-        falsePositives.push(`${m.phrase} in ${name}`);
+  const issues = [];
+  for (const [name, startup] of Object.entries(STARTUPS)) {
+    const text = startup.doc;
+    for (const dim of DIMENSIONS) {
+      const level = startup.levels[dim];
+      const fired = offendingMarkers(text, dim, level);
+      for (const m of fired) {
+        if (!wordBoundary(m.phrase).test(text)) {
+          issues.push(`${m.phrase} in ${name}/${dim} (sub-word match)`);
+        }
       }
     }
   }
 
-  assert.deepEqual(falsePositives, [], `markers incorrectly matched in seeded docs: ${falsePositives.join(', ')}`);
+  assert.deepEqual(issues, [], `offendingMarkers returned sub-word-only matches: ${issues.join(', ')}`);
 });
