@@ -19,10 +19,10 @@
  *   not the rate-limited generation endpoint, so it reproduces at full N on
  *   every run and costs none of the generation budget.
  *
- *   Step B - the three generation arms. Expensive: up to 3 calls (RNA text,
- *   1-9 levels, hallucination probe) x 2 startups x 3 arms x 3 reps = 54
- *   calls. Stops cleanly on a 429 and reports partial results with n= counts
- *   per cell rather than padding or dropping them silently.
+ *   Step B - the three generation arms. Expensive: 3 calls (RNA text, 1-9
+ *   levels, hallucination probe) x 2 startups x 3 arms = 18 calls PER REP.
+ *   Stops cleanly on a 429 and reports partial results with n= counts per
+ *   cell rather than padding or dropping them silently.
  *
  * Metrics are mechanical, not LLM-judged - model leniency is one of the things
  * under investigation, so grading the output with a model would fold the
@@ -30,6 +30,27 @@
  *
  *   node measurement/measure-grounding.js                  (full harness)
  *   node measurement/measure-grounding.js --retrieval-only  (Step A only, free)
+ *   node measurement/measure-grounding.js --reps=1 --out=day1.json
+ *   node measurement/measure-grounding.js --merge day1.json day2.json day3.json
+ *
+ * ## Why one rep per day, accumulated
+ *
+ * gemini-3.6-flash's free tier allows 20 generateContent calls per day and a
+ * full rep costs 18, so a day buys exactly one rep. Two consequences are
+ * designed for here rather than discovered at runtime:
+ *
+ *   1. Reps are the OUTERMOST loop, not the innermost. Arm-major ordering
+ *      (the original) spends the whole daily budget inside the first arm, so
+ *      a partial run yields one fully-powered arm and nothing to compare it
+ *      against - which is worthless, since every metric here is a BETWEEN-arm
+ *      contrast. Rep-major ordering means each completed rep is a full
+ *      three-arm comparison, and a 429 costs precision rather than the
+ *      comparison itself.
+ *   2. --out persists the raw per-call records so separate days can be
+ *      combined with --merge, which re-runs the report functions over the
+ *      concatenated calls. Retrieval is deterministic, so merging days is
+ *      sound as long as the corpus and the model are unchanged - both are
+ *      recorded in the file and checked on merge.
  */
 const path = require('path');
 const BACKEND = path.resolve(__dirname, '..');
@@ -38,7 +59,21 @@ require(path.join(BACKEND, 'node_modules/dotenv')).config({
 });
 const { GoogleGenAI } = require(path.join(BACKEND, 'node_modules/@google/genai'));
 
+const fs = require('fs');
+
 const RETRIEVAL_ONLY = process.argv.includes('--retrieval-only');
+
+const flagValue = (name) => {
+  const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
+  return hit ? hit.slice(name.length + 3) : null;
+};
+
+const OUT_FILE = flagValue('out');
+// --merge takes every following non-flag argument, so the shell can glob:
+//   node measurement/measure-grounding.js --merge results/day*.json
+const MERGE_FILES = process.argv.includes('--merge')
+  ? process.argv.slice(process.argv.indexOf('--merge') + 1).filter((a) => !a.startsWith('--'))
+  : [];
 
 const EMBED_MODEL = 'gemini-embedding-2';
 const DIMS = 768;
@@ -55,8 +90,17 @@ const MAX_READINESS_LEVEL = 9;
  * split the three arms across multiple days.
  */
 const GEN_MODEL = 'gemini-3.6-flash'; // the model the +2.28 differentiation baseline was measured on
-const REPS = 3;
+// One rep costs 18 of the 20 daily calls, so the default is what a single day
+// can actually buy. Raise it only against a paid key; --reps=3 on the free
+// tier reproduces exactly the 2026-07-28 failure (arm 1 completes, nothing to
+// compare it to).
+const REPS = Number(flagValue('reps') ?? 1);
 const DELAY_MS = 4000; // matches measure-models.js/measure-differentiation.js's pacing
+
+if (!Number.isInteger(REPS) || REPS < 1) {
+  console.error(`--reps must be a positive integer, got "${flagValue('reps')}"`);
+  process.exit(1);
+}
 
 // Verbatim from ai.service.ts:72-73.
 const GROUNDING =
@@ -449,7 +493,11 @@ Grounding instruction: ${GROUNDING}`;
 }
 
 async function runGenerationArms(ai, corpusVecs) {
-  console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===\n');
+  console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
+  console.log(
+    `reps=${REPS}, ${ARMS.length * Object.keys(STARTUPS).length * 3} calls per rep ` +
+      `(${REPS * ARMS.length * Object.keys(STARTUPS).length * 3} total) against a 20/day free-tier cap on ${GEN_MODEL}\n`,
+  );
 
   const embedState = {}; // memoizes the one embed call `semantic` needs, see retrieveRubricsForArm
   const results = {};
@@ -461,15 +509,28 @@ async function runGenerationArms(ai, corpusVecs) {
   }
   let quotaHit = false;
 
-  armLoop: for (const arm of ARMS) {
+  // Retrieval is deterministic and independent of the rep, so it is resolved
+  // once for every (arm, startup) pair BEFORE the rep loop opens. Under the
+  // old arm-major ordering this fell out naturally; with reps outermost it has
+  // to be hoisted deliberately, or `semantic` would re-embed once per rep.
+  const rubricBlocks = new Map(); // `${arm}|${startup}` -> rendered block
+  for (const arm of ARMS) {
     for (const [startupName, startup] of Object.entries(STARTUPS)) {
       const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
-      const rubricBlock = renderRubricBlock(retrieved);
+      rubricBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
+      results[arm.name].startups[startupName] = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
+    }
+  }
 
-      const cell = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
-      results[arm.name].startups[startupName] = cell;
+  // Reps outermost: a 429 partway through costs precision, not the comparison.
+  // See the header - every metric in this file is a between-arm contrast, so a
+  // run that completes one arm and abandons the others measures nothing.
+  repLoop: for (let rep = 0; rep < REPS; rep++) {
+    for (const arm of ARMS) {
+      for (const [startupName, startup] of Object.entries(STARTUPS)) {
+        const rubricBlock = rubricBlocks.get(`${arm.name}|${startupName}`);
+        const cell = results[arm.name].startups[startupName];
 
-      for (let rep = 0; rep < REPS; rep++) {
         // --- RNA generation (metric 1) ---
         try {
           const out = await call(ai, rnaPrompt(startup.doc, rubricBlock));
@@ -489,7 +550,7 @@ async function runGenerationArms(ai, corpusVecs) {
             console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna]`);
             quotaHit = true;
             results[arm.name].quotaHit = true;
-            break armLoop;
+            break repLoop;
           } else {
             // Anything else (parse failure, network blip, schema error) must
             // not vanish silently: this harness is meant to run unattended
@@ -517,7 +578,7 @@ async function runGenerationArms(ai, corpusVecs) {
             console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / levels]`);
             quotaHit = true;
             results[arm.name].quotaHit = true;
-            break armLoop;
+            break repLoop;
           } else {
             console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / levels]`, e.message);
           }
@@ -550,17 +611,18 @@ async function runGenerationArms(ai, corpusVecs) {
             console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`);
             quotaHit = true;
             results[arm.name].quotaHit = true;
-            break armLoop;
+            break repLoop;
           } else {
             console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`, e.message);
           }
         }
         await sleep(DELAY_MS);
-      }
 
-      console.log(
-        `${arm.name} / ${startupName}: rna n=${cell.rnaCalls.length} levels n=${cell.levelCalls.length} halluc n=${cell.hallucCalls.length}`,
-      );
+        console.log(
+          `rep ${rep} / ${arm.name} / ${startupName}: rna n=${cell.rnaCalls.length} ` +
+            `levels n=${cell.levelCalls.length} halluc n=${cell.hallucCalls.length} (cumulative)`,
+        );
+      }
     }
   }
 
@@ -674,7 +736,94 @@ function reportMetric3(results) {
   console.table(rows);
 }
 
+// --------------------------------------------------------------------------
+// Cross-day accumulation
+// --------------------------------------------------------------------------
+
+/**
+ * A day buys one rep, so the reps that answer metrics 1-3 at any useful
+ * precision necessarily span days. Persisting the raw per-call records (not
+ * the computed rates) is what makes that sound: the report functions are pure
+ * over the concatenated calls, so merging three days is arithmetically
+ * identical to one 3-rep run - provided the corpus and model didn't move
+ * underneath, which is why both are recorded and checked.
+ */
+function writeResults(file, results) {
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    genModel: GEN_MODEL,
+    embedModel: EMBED_MODEL,
+    reps: REPS,
+    corpusRows: RUBRICS.length,
+    floor: FLOOR,
+    results,
+  };
+  fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+  console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
+}
+
+function runMerge(files) {
+  const days = files.map((f) => ({ file: f, data: JSON.parse(fs.readFileSync(f, 'utf8')) }));
+
+  // A merge across a model or corpus change would silently average two
+  // different experiments into one table, which is the exact failure mode
+  // these files exist to prevent. Refuse rather than warn.
+  const key = (d) => `${d.data.genModel}|${d.data.embedModel}|${d.data.corpusRows}|${d.data.floor}`;
+  const distinct = [...new Set(days.map(key))];
+  if (distinct.length > 1) {
+    console.error('Refusing to merge: these runs are not comparable.');
+    for (const d of days) console.error(`  ${d.file}: ${key(d)}`);
+    process.exit(1);
+  }
+
+  const merged = {};
+  for (const arm of ARMS) merged[arm.name] = { startups: {}, quotaHit: false };
+
+  for (const { data } of days) {
+    for (const arm of ARMS) {
+      const src = data.results[arm.name];
+      if (!src) continue;
+      merged[arm.name].quotaHit = merged[arm.name].quotaHit || src.quotaHit;
+      for (const [startupName, cell] of Object.entries(src.startups)) {
+        const dst =
+          merged[arm.name].startups[startupName] ||
+          (merged[arm.name].startups[startupName] = {
+            // Retrieval is deterministic given the same corpus and floor, both
+            // asserted equal above, so the first day's rows stand for all.
+            retrieved: cell.retrieved,
+            rnaCalls: [],
+            levelCalls: [],
+            hallucCalls: [],
+          });
+        dst.rnaCalls.push(...cell.rnaCalls);
+        dst.levelCalls.push(...cell.levelCalls);
+        dst.hallucCalls.push(...cell.hallucCalls);
+      }
+    }
+  }
+
+  console.log(`=== Merged ${days.length} run(s) ===`);
+  console.table(
+    days.map((d) => ({
+      file: path.basename(d.file),
+      generatedAt: d.data.generatedAt,
+      reps: d.data.reps,
+      model: d.data.genModel,
+    })),
+  );
+
+  reportMetric1(merged);
+  reportMetric2(merged);
+  reportMetric3(merged);
+  return merged;
+}
+
 (async () => {
+  if (MERGE_FILES.length) {
+    runMerge(MERGE_FILES);
+    return;
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   const { corpusVecs } = await runRetrievalOnly(ai);
@@ -684,7 +833,8 @@ function reportMetric3(results) {
     return;
   }
 
-  await runGenerationArms(ai, corpusVecs);
+  const results = await runGenerationArms(ai, corpusVecs);
+  if (OUT_FILE) writeResults(OUT_FILE, results);
 })().catch((e) => {
   console.error('FAILED:', e.message);
   process.exit(1);
