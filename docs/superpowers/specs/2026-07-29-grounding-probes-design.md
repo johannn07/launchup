@@ -120,8 +120,17 @@ of entries shaped:
 ```
 
 `dimensions: null` means the marker applies to every dimension; an array scopes it
-(e.g. a regulatory-approval marker to Regulatory). Matching is case-insensitive
-substring on the RNA text, consistent with the harness's existing convention.
+(e.g. a regulatory-approval marker to Regulatory).
+
+**Matching is whole-word and case-insensitive, not bare substring.** This
+correction came out of implementation review: `ipo` is a substring of `IPOPHL`,
+the Philippine Intellectual Property Office, which appears verbatim in **both**
+seeded startup documents. Under substring matching an RNA recommending a
+trademark filing — stage-appropriate at RRL 1 — would trip the `minLevel 9`
+marker and score as the most severe stage-inappropriate recommendation there is.
+The cost is recall on inflected forms (`franchise` no longer matches
+`franchisee`), which is the safer direction: under-counting a failure beats
+inventing one.
 
 Both startups must be able to fail, or the metric is degenerate. Worked example:
 AgroLink Technology L=2 → threshold 4, so `"pilot deployment"` (minLevel 4)

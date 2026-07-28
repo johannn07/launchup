@@ -334,6 +334,44 @@ test('offendingMarkers reports which phrase fired', () => {
 test('non-string input is not scored as a failure', () => {
   assert.equal(isStageInappropriate(undefined, 'Market', 1), false);
 });
+
+// Regression: "ipo" is a substring of "IPOPHL" (the Philippine Intellectual
+// Property Office), which appears verbatim in BOTH seeded startup documents.
+// Under bare-substring matching, an RNA recommending a trademark filing - a
+// stage-appropriate action at RRL 1 - tripped the minLevel 9 marker and scored
+// as the most severe stage-inappropriate recommendation possible.
+test('a marker does not match inside a longer word', () => {
+  assert.equal(
+    isStageInappropriate('Register the wordmark with IPOPHL.', 'Regulatory', 1),
+    false,
+    'IPOPHL must not trip the ipo marker',
+  );
+  assert.equal(
+    isStageInappropriate('Trademark application filed with IPOPHL, pending.', 'Regulatory', 1),
+    false,
+  );
+});
+
+test('the same marker still fires as a whole word', () => {
+  assert.equal(isStageInappropriate('Prepare for an IPO next year.', 'Regulatory', 1), true);
+});
+
+// Generalises the regression above: no marker may fire on a seeded document by
+// matching inside a longer word. A whole-word match on a document is fine -
+// MediSync genuinely has "recurring revenue" - so this asserts the sub-word
+// case specifically, by comparing bare-substring hits against whole-word hits.
+test('no marker matches a seeded document only as a sub-word', () => {
+  const { STARTUPS } = require(path.resolve(__dirname, '../measure-grounding.js'));
+  const subWordOnly = [];
+  for (const [name, s] of Object.entries(STARTUPS)) {
+    for (const m of MARKERS) {
+      const bareHit = s.doc.toLowerCase().includes(m.phrase.toLowerCase());
+      const wholeWordHit = new RegExp(`\\b${m.phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(s.doc);
+      if (bareHit && !wholeWordHit) subWordOnly.push(`${name}: "${m.phrase}"`);
+    }
+  }
+  assert.deepEqual(subWordOnly, [], `markers matching inside a longer word: ${subWordOnly.join(', ')}`);
+});
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -412,13 +450,31 @@ function markersFor(dimension) {
   return MARKERS.filter((m) => m.dimensions === null || m.dimensions.includes(dimension));
 }
 
+/**
+ * Matching is whole-word, case-insensitive - NOT bare substring.
+ *
+ * Bare `includes` is what the first draft used, and it is wrong on this
+ * corpus: "ipo" is a substring of "IPOPHL", the Philippine Intellectual
+ * Property Office, which appears verbatim in BOTH seeded startup documents
+ * ("...has not been registered with IPOPHL", "Trademark application filed with
+ * IPOPHL, pending"). An RNA recommending a trademark filing - entirely
+ * stage-appropriate at RRL 1 - would have tripped the minLevel 9 marker and
+ * been scored as the most severe stage-inappropriate recommendation there is.
+ *
+ * The cost is recall on inflected forms: "franchise" no longer matches
+ * "franchisee". That is the safer direction for this metric, and the same
+ * direction the README already accepts for its other exact-match measures -
+ * under-counting a failure is better than inventing one.
+ */
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wordBoundary = (phrase) => new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i');
+
 /** Which markers in `text` are above the horizon for this (dimension, level). */
 function offendingMarkers(text, dimension, level) {
   if (typeof text !== 'string') return [];
-  const lower = text.toLowerCase();
   return markersFor(dimension)
     .filter((m) => m.minLevel > level + HORIZON)
-    .filter((m) => lower.includes(m.phrase));
+    .filter((m) => wordBoundary(m.phrase).test(text));
 }
 
 function isStageInappropriate(text, dimension, level) {
