@@ -849,31 +849,58 @@ function runMerge(files) {
   return merged;
 }
 
-(async () => {
-  // Answers "would a run today still merge with the files I already have?"
-  // without spending a call.
-  if (process.argv.includes('--fingerprint')) {
-    console.log(probeFingerprint());
-    return;
-  }
+/**
+ * Guarded so the module can be required by tests without executing anything.
+ * Every scorer and prompt builder below is a pure function; the tests exercise
+ * them directly rather than through a model call, which is what keeps the whole
+ * suite free of the 20/day generation budget.
+ */
+if (require.main === module) {
+  (async () => {
+    if (process.argv.includes('--fingerprint')) {
+      console.log(probeFingerprint());
+      return;
+    }
 
-  if (MERGE_FILES.length) {
-    runMerge(MERGE_FILES);
-    return;
-  }
+    if (MERGE_FILES.length) {
+      runMerge(MERGE_FILES);
+      return;
+    }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-  const { corpusVecs } = await runRetrievalOnly(ai);
+    const { corpusVecs } = await runRetrievalOnly(ai);
 
-  if (RETRIEVAL_ONLY) {
-    console.log('\n--retrieval-only: stopping before generation arms.');
-    return;
-  }
+    if (RETRIEVAL_ONLY) {
+      console.log('\n--retrieval-only: stopping before generation arms.');
+      return;
+    }
 
-  const results = await runGenerationArms(ai, corpusVecs);
-  if (OUT_FILE) writeResults(OUT_FILE, results);
-})().catch((e) => {
-  console.error('FAILED:', e.message);
-  process.exit(1);
-});
+    const results = await runGenerationArms(ai, corpusVecs);
+    if (OUT_FILE) writeResults(OUT_FILE, results);
+  })().catch((e) => {
+    console.error('FAILED:', e.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  DIMENSIONS,
+  STARTUPS,
+  ARMS,
+  RUBRICS,
+  MAX_READINESS_LEVEL,
+  GEN_MODEL,
+  EMBED_MODEL,
+  FLOOR,
+  GROUNDING,
+  TYPE_PREFIX,
+  rubricKey,
+  renderRubricBlock,
+  rnaPrompt,
+  levelsPrompt,
+  hallucinationPrompt,
+  extractJsonPayload,
+  isAbsentAnswer,
+  mean,
+};
