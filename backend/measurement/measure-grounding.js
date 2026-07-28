@@ -63,6 +63,18 @@ const fs = require('fs');
 
 const RETRIEVAL_ONLY = process.argv.includes('--retrieval-only');
 
+/**
+ * The absent-field probe is saturated - 0/15 invented on every arm, 2026-07-29,
+ * reproducing the 2026-07-27 model comparison's 0/9 on two different models.
+ * groundPrompt() already handles it completely, so it discriminates nothing.
+ *
+ * It is kept rather than deleted because 0/15 with 15/15 recalled is a PASSING
+ * result against SRS 2.2's "return null for unverifiable fields" criterion, and
+ * that evidence is worth having. Running it once per series is enough. Skipping
+ * it by default takes a rep from 18 calls to 12, against a 20/day cap.
+ */
+const WITH_FABRICATION = process.argv.includes('--with-fabrication-probe');
+
 const flagValue = (name) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : null;
@@ -121,6 +133,11 @@ const TYPE_PREFIX = {
 const rubricKey = (type, level) => `${TYPE_PREFIX[type]}-${level}`;
 
 const RUBRICS = require(path.join(BACKEND, 'data/rag-corpus/readiness-rubrics.json'));
+
+const { levelPlacement, stageAppropriateness, differentiationGap } = require(
+  path.join(__dirname, 'lib/metrics.js'),
+);
+const { isStageInappropriate } = require(path.join(__dirname, 'lib/stage-markers.js'));
 
 // The two seeded startups. Documents are measure-differentiation.js's verbatim
 // text (same early/mid pair already validated for this purpose); levels are
@@ -532,9 +549,12 @@ Grounding instruction: ${GROUNDING}`;
 
 async function runGenerationArms(ai, corpusVecs) {
   console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
+  const callsPerCell = WITH_FABRICATION ? 3 : 2;
+  const perRep = ARMS.length * Object.keys(STARTUPS).length * callsPerCell;
   console.log(
-    `reps=${REPS}, ${ARMS.length * Object.keys(STARTUPS).length * 3} calls per rep ` +
-      `(${REPS * ARMS.length * Object.keys(STARTUPS).length * 3} total) against a 20/day free-tier cap on ${GEN_MODEL}\n`,
+    `reps=${REPS}, ${perRep} calls per rep (${REPS * perRep} total) ` +
+      `against a 20/day free-tier cap on ${GEN_MODEL}` +
+      (WITH_FABRICATION ? ' [+ fabrication probe]' : '') + '\n',
   );
 
   const embedState = {}; // memoizes the one embed call `semantic` needs, see retrieveRubricsForArm
@@ -636,37 +656,39 @@ async function runGenerationArms(ai, corpusVecs) {
         await sleep(DELAY_MS);
 
         // --- Hallucination probe (metric 2) ---
-        try {
-          const out = await call(ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent));
-          const payload = extractJsonPayload(out.text);
-          const parsed = payload ? JSON.parse(payload) : null;
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            let inventedAbsent = 0;
-            for (const k of startup.absent) {
-              if (!isAbsentAnswer(parsed[k])) inventedAbsent++;
+        if (WITH_FABRICATION) {
+          try {
+            const out = await call(ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent));
+            const payload = extractJsonPayload(out.text);
+            const parsed = payload ? JSON.parse(payload) : null;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              let inventedAbsent = 0;
+              for (const k of startup.absent) {
+                if (!isAbsentAnswer(parsed[k])) inventedAbsent++;
+              }
+              let presentCorrect = 0;
+              for (const k of startup.present) {
+                if (!isAbsentAnswer(parsed[k])) presentCorrect++;
+              }
+              cell.hallucCalls.push({
+                inventedAbsent,
+                absentChecked: startup.absent.length,
+                presentCorrect,
+                presentChecked: startup.present.length,
+              });
             }
-            let presentCorrect = 0;
-            for (const k of startup.present) {
-              if (!isAbsentAnswer(parsed[k])) presentCorrect++;
+          } catch (e) {
+            if (is429(e)) {
+              console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`);
+              quotaHit = true;
+              results[arm.name].quotaHit = true;
+              break repLoop;
+            } else {
+              console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`, e.message);
             }
-            cell.hallucCalls.push({
-              inventedAbsent,
-              absentChecked: startup.absent.length,
-              presentCorrect,
-              presentChecked: startup.present.length,
-            });
           }
-        } catch (e) {
-          if (is429(e)) {
-            console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`);
-            quotaHit = true;
-            results[arm.name].quotaHit = true;
-            break repLoop;
-          } else {
-            console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`, e.message);
-          }
+          await sleep(DELAY_MS);
         }
-        await sleep(DELAY_MS);
 
         console.log(
           `rep ${rep} / ${arm.name} / ${startupName}: rna n=${cell.rnaCalls.length} ` +
@@ -676,9 +698,7 @@ async function runGenerationArms(ai, corpusVecs) {
     }
   }
 
-  reportMetric1(results);
-  reportMetric2(results);
-  reportMetric3(results);
+  printReports(results);
 
   if (quotaHit) {
     console.log('\n[QUOTA HIT] Stopped cleanly; the tables above and below reflect only what completed. Check n= before comparing cells.');
@@ -687,103 +707,120 @@ async function runGenerationArms(ai, corpusVecs) {
   return results;
 }
 
-/** Metric 1: rubric-term grounding rate. */
-function reportMetric1(results) {
-  console.log('\n--- Metric 1: rubric-term grounding rate ---');
-  console.log('(proportion of generated RNA text containing a keyTerm from the rubric level actually retrieved for that dimension)\n');
+/**
+ * Pure over the results object so it can be tested without a model call, and
+ * so --merge and a live run share exactly one scoring path. Every arm always
+ * gets a row, including one a 429 stopped us from reaching - an absent row and
+ * a zero row mean different things and the tables must not conflate them.
+ */
+function summarizeResults(results) {
+  const metric1 = [];
+  const metric2 = [];
+  const metric3 = [];
+  const metric4 = [];
 
-  const rows = [];
   for (const arm of ARMS) {
-    const armResult = results[arm.name];
-    if (!arm.ragCorpus) {
-      rows.push({ arm: arm.name, hits: 'n/a', checked: 'n/a', rate: 'n/a (no rubric ever retrieved)' });
-      continue;
-    }
-    let hits = 0;
-    let checked = 0;
-    for (const [, cell] of Object.entries(armResult.startups)) {
-      const retrievedByDim = new Map();
-      for (const r of cell.retrieved) {
-        if (!retrievedByDim.has(r.readinessType)) retrievedByDim.set(r.readinessType, []);
-        retrievedByDim.get(r.readinessType).push(r);
-      }
-      for (const rnaCall of cell.rnaCalls) {
-        for (const dim of DIMENSIONS) {
-          const rows2 = retrievedByDim.get(dim);
-          const rnaText = rnaCall.byDim[dim];
-          if (!rows2 || !rows2.length || typeof rnaText !== 'string') continue; // no rubric retrieved for this dimension -> not counted
-          checked++;
-          const terms = rows2.flatMap((r) => r.keyTerms).map((t) => t.toLowerCase());
-          const lower = rnaText.toLowerCase();
-          if (terms.some((t) => lower.includes(t))) hits++;
-        }
+    const armResult = results[arm.name] || { startups: {} };
+
+    // --- Metric 1: level-placement accuracy vs seeded ground truth ---
+    let n = 0, exact = 0, within1 = 0, errSum = 0;
+    for (const [startupName, cell] of Object.entries(armResult.startups)) {
+      const truth = STARTUPS[startupName].levels;
+      for (const lc of cell.levelCalls) {
+        const p = levelPlacement(lc.byDim, truth, DIMENSIONS);
+        if (!p.n) continue;
+        n += p.n;
+        exact += p.exact;
+        within1 += p.within1;
+        errSum += p.mae * p.n;
       }
     }
-    rows.push({
+    metric1.push({
       arm: arm.name,
-      hits,
-      checked,
-      rate: checked ? `${((hits / checked) * 100).toFixed(0)}%` : 'n/a (nothing retrieved)',
+      n,
+      mae: n ? (errSum / n).toFixed(2) : 'n/a',
+      exact,
+      within1,
+      'exact %': n ? `${((exact / n) * 100).toFixed(0)}%` : 'n/a',
     });
-  }
-  console.table(rows);
-}
 
-/** Metric 2: unsupported-claim rate (absent-field probe, measure-models.js design). */
-function reportMetric2(results) {
-  console.log('\n--- Metric 2: unsupported-claim rate (absent-field probe) ---');
-  console.log('(a value invented for a field deliberately absent from the document is a grounding failure)\n');
+    // --- Metric 2: stage-inappropriate recommendation rate ---
+    let flagged = 0, checked = 0;
+    for (const [startupName, cell] of Object.entries(armResult.startups)) {
+      const truth = STARTUPS[startupName].levels;
+      for (const rc of cell.rnaCalls) {
+        const s = stageAppropriateness(rc.byDim, truth, DIMENSIONS, isStageInappropriate);
+        flagged += s.flagged;
+        checked += s.checked;
+      }
+    }
+    metric2.push({
+      arm: arm.name,
+      flagged,
+      checked,
+      rate: checked ? `${((flagged / checked) * 100).toFixed(0)}%` : 'n/a',
+    });
 
-  const rows = [];
-  for (const arm of ARMS) {
-    const armResult = results[arm.name];
-    let inventedAbsent = 0;
-    let absentChecked = 0;
-    let presentCorrect = 0;
-    let presentChecked = 0;
+    // --- Metric 3: differentiation gap ---
+    const agro = armResult.startups['AgroLink PH'];
+    const medi = armResult.startups['MediSync Cebu'];
+    const g = differentiationGap(
+      agro ? agro.levelCalls.flatMap((c) => Object.values(c.byDim)) : [],
+      medi ? medi.levelCalls.flatMap((c) => Object.values(c.byDim)) : [],
+    );
+    metric3.push({
+      arm: arm.name,
+      'AgroLink mean': Number.isNaN(g.earlyMean) ? 'n/a' : g.earlyMean.toFixed(2),
+      'AgroLink n': g.earlyN,
+      'MediSync mean': Number.isNaN(g.midMean) ? 'n/a' : g.midMean.toFixed(2),
+      'MediSync n': g.midN,
+      GAP: Number.isNaN(g.gap) ? 'n/a' : g.gap.toFixed(2),
+    });
+
+    // --- Metric 4: absent-field probe (only when --with-fabrication-probe) ---
+    let invented = 0, absentChecked = 0, presentCorrect = 0, presentChecked = 0, reps = 0;
     for (const [, cell] of Object.entries(armResult.startups)) {
       for (const h of cell.hallucCalls) {
-        inventedAbsent += h.inventedAbsent;
+        invented += h.inventedAbsent;
         absentChecked += h.absentChecked;
         presentCorrect += h.presentCorrect;
         presentChecked += h.presentChecked;
+        reps++;
       }
     }
-    rows.push({
+    metric4.push({
       arm: arm.name,
-      invented: `${inventedAbsent}/${absentChecked}`,
-      'invented rate': absentChecked ? `${((inventedAbsent / absentChecked) * 100).toFixed(0)}%` : 'n/a',
+      invented: `${invented}/${absentChecked}`,
+      'invented rate': absentChecked ? `${((invented / absentChecked) * 100).toFixed(0)}%` : 'n/a',
       'present recalled': `${presentCorrect}/${presentChecked}`,
-      'n reps': Object.values(armResult.startups).reduce((s, c) => s + c.hallucCalls.length, 0),
+      'n reps': reps,
     });
   }
-  console.table(rows);
+
+  return { metric1, metric2, metric3, metric4 };
 }
 
-/** Metric 3: differentiation gap (early vs mid mean level), measure-differentiation.js design. */
-function reportMetric3(results) {
-  console.log('\n--- Metric 3: differentiation gap (early vs mid) ---');
-  console.log('Baseline to hold or beat: +2.28 on gemini-3.6-flash (measure-differentiation.js, 2026-07-27)\n');
+function printReports(results) {
+  const s = summarizeResults(results);
 
-  const rows = [];
-  for (const arm of ARMS) {
-    const armResult = results[arm.name];
-    const agro = armResult.startups['AgroLink PH'];
-    const medi = armResult.startups['MediSync Cebu'];
-    const agroLevels = agro ? agro.levelCalls.flatMap((c) => Object.values(c.byDim)) : [];
-    const mediLevels = medi ? medi.levelCalls.flatMap((c) => Object.values(c.byDim)) : [];
-    const agroMean = mean(agroLevels);
-    const mediMean = mean(mediLevels);
-    rows.push({
-      arm: arm.name,
-      'AgroLink mean': Number.isNaN(agroMean) ? 'n/a' : agroMean.toFixed(2),
-      'AgroLink n': agroLevels.length,
-      'MediSync mean': Number.isNaN(mediMean) ? 'n/a' : mediMean.toFixed(2),
-      'MediSync n': mediLevels.length,
-      GAP: Number.isNaN(agroMean) || Number.isNaN(mediMean) ? 'n/a' : (mediMean - agroMean).toFixed(2),
-    });
+  console.log('\n--- Metric 1: level-placement accuracy (vs seeded ground truth) ---');
+  console.log('(mean absolute error between the assigned level and the startup\'s actual level; lower is better)\n');
+  console.table(s.metric1);
+
+  console.log('\n--- Metric 2: stage-inappropriate recommendation rate ---');
+  console.log('(share of generated RNAs recommending actions from more than two rungs above the startup\'s level - SO 1.3\'s example; lower is better)\n');
+  console.table(s.metric2);
+
+  console.log('\n--- Metric 3: differentiation gap (early vs mid) ---');
+  console.log('Baseline to hold or beat: +2.28 on gemini-3.6-flash (measure-differentiation.js, 2026-07-27)');
+  console.log('Measured noise floor: +/-1.0 gap points between byte-identical prompts (2026-07-29)\n');
+  console.table(s.metric3);
+
+  if (WITH_FABRICATION) {
+    console.log('\n--- Metric 4: absent-field probe (regression check) ---');
+    console.log('(saturated at 0/15 on 2026-07-29 across every arm; kept as evidence for SRS 2.2, not as a discriminator)\n');
+    console.table(s.metric4);
   }
-  console.table(rows);
 }
 
 // --------------------------------------------------------------------------
@@ -893,9 +930,7 @@ function runMerge(files) {
     })),
   );
 
-  reportMetric1(merged);
-  reportMetric2(merged);
-  reportMetric3(merged);
+  printReports(merged);
   return merged;
 }
 
@@ -955,4 +990,5 @@ module.exports = {
   extractJsonPayload,
   isAbsentAnswer,
   mean,
+  summarizeResults,
 };
