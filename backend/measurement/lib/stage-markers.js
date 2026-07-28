@@ -30,12 +30,21 @@ function markersFor(dimension) {
 }
 
 /** Which markers in `text` are above the horizon for this (dimension, level). */
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wordBoundary = (phrase) => new RegExp(`\\b${escapeRegex(phrase)}\\b`, 'i');
+
 function offendingMarkers(text, dimension, level) {
   if (typeof text !== 'string') return [];
-  const lower = text.toLowerCase();
+  // Use word-boundary matching instead of substring matching. A bare `includes`
+  // test matches "ipo" inside "IPOPHL" (Philippine Intellectual Property Office)
+  // in seeded documents, falsely flagging perfectly stage-appropriate trademark
+  // registration advice as a level-9 hallucination. Word boundaries prevent that
+  // false positive while still catching the intended cases. Trade-off: no inflected
+  // forms ("franchise" won't match "franchisee"), which is acceptable — under-count
+  // is safer than fabricating a failure.
   return markersFor(dimension)
     .filter((m) => m.minLevel > level + HORIZON)
-    .filter((m) => lower.includes(m.phrase));
+    .filter((m) => wordBoundary(m.phrase).test(text));
 }
 
 function isStageInappropriate(text, dimension, level) {
