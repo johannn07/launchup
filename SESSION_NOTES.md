@@ -372,12 +372,6 @@ Between rungs 3 and 4, `node inspect-prompt.js <startupId> [--dimension T]` prin
 
 ⚠️ **Quota is the binding constraint on browser testing.** `GEMINI_MODEL=gemini-3.6-flash` is on the 20-request/day free tier, and one generation fans out into several calls (grounding + bias review + normalization all enabled) — budget **3–5 full generations per day**, not 20. 429s surface in the backend terminal, not the browser UI. Dropping to `gemini-2.5-flash-lite` restores a working UI for layout/flow testing but not for judging output quality.
 
-### Open at end of session
-
-- **Integration decision on `feat/rag-corpus`** — John's call, not yet made.
-- **The three generation arms remain unmeasured** (unchanged from Task 10; still the headline gap for Objective 1b).
-- **`backup/rag-corpus-preflight`** should be deleted after integration.
-- **`.superpowers/sdd/2026-07-28-rag-corpus/`** (gitignored) was deliberately *not* deleted despite the process prescribing it — it holds the ten task reports with TDD evidence, which is the debugging record while John tests. Remove after merge.
 ### `backend/inspect-prompt.js` — added 2026-07-28, verified live
 
 Replaces Task 10's ad-hoc temporary debug log (which was reverted, leaving no standing way to eyeball an assembled prompt). Boots the app context, runs the real `RagQueryService` + `GroundedPromptBuilderService` pair, prints the resolved config, the per-channel counts, and the assembled prompt — then **stops before `sendToGemini`, so it spends no generation quota.** Dimensions come from `StartupReadinessLevel` rather than from existing RNAs, which is what lets it run on any startup regardless of generation history; Task 10 hit exactly that wall when AgroLink's completed RNA set short-circuited before the RAG pipeline.
@@ -392,3 +386,15 @@ Two things it surfaced that are worth knowing:
 
 - **The framework channel returns 0 rows in practice.** `frameworks: 0` on both startups — the business-framework channel is always semantic, and its top-2 never clears the 0.78 floor. Consistent with every other semantic result measured in this work; it means the 10 framework rows are seeded and embedded but **are not currently reaching any prompt**. The rubric channel carries the whole grounding contribution. Not a regression — it has never been otherwise — but it narrows what "the corpus is live" actually means.
 - `mikro-orm.config.ts` hard-codes `debug: true`, which echoes the full 768-float pgvector literal twice per semantic query. The script calls `orm.config.set('debug', false)` after boot; the two lines printed before that point are unavoidable without changing shared config.
+
+### Commit convention change — 2026-07-28
+
+`Co-Authored-By` trailers are no longer added to commit messages. Enforced two ways because they cover different paths: `.claude/settings.json` (**tracked, not gitignored** — applies to anyone who clones, unlike `settings.local.json`) sets `includeCoAuthoredBy: false` so the harness suppresses the trailer mechanically, and a `## Git commit conventions` section in `CLAUDE.md` covers message paths the setting does not reach — subagents, `git commit -F` heredocs, other tooling. Commit `b7f7790` is the first without the trailer.
+
+### Open at end of session
+
+- **`feat/rag-corpus` is merged.** John pushed it and merged **PR #13** into `master` (merge commit `c1b978d`), so the 22-commit corpus work is on `master` as of 2026-07-28. The branch still carries **4 later commits not in `master`** — everything in this session after the merge: `07eaae3` (close-out notes), `322cb63` (`inspect-prompt.js`), `b7f7790` (commit convention), `2b7fd67` (these notes). Three are on `origin/feat/rag-corpus`; `2b7fd67` is local only. **These need a second PR or a fast-forward** — they are not on `master` yet, and `inspect-prompt.js` in particular is a tool, not just docs.
+- **The three generation arms remain unmeasured** (unchanged from Task 10; still the headline gap for Objective 1b). Needs days with fresh `gemini-3.6-flash` quota, not more code.
+- **The business-framework channel retrieves nothing** (see the `inspect-prompt.js` section above). Three plausible fixes — lower the floor for that channel alone, make it deterministic the way rubrics are, or drop the channel and the 10 rows. Not a merge blocker; it has never worked differently. Worth deciding before anyone describes the corpus as "64 rows grounding the model," because in practice 54 are.
+- **`backup/rag-corpus-preflight` still exists** (tip `99fbcda`) and holds the pre-rewrite history including the 13.7 MB of PDF blobs. The merge is done, so it is now safe to delete — and worth doing, since it is the only remaining reference keeping those blobs alive locally.
+- **`.superpowers/sdd/2026-07-28-rag-corpus/`** (gitignored) was deliberately *not* deleted despite the process prescribing it — it holds the ten task reports with TDD evidence, which is the debugging record while John tests. Remove after merge.
