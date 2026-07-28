@@ -5,6 +5,7 @@ import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { ConfigService } from '@nestjs/config';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
+import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupApplicationDto } from 'src/startup/dto/startup.dto';
 import { z } from 'zod';
@@ -17,6 +18,12 @@ import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
 import { EmbeddingIndexService, RAG_CONTEXT_SOURCE } from './embedding-index.service';
 import { EmbeddingService } from './embedding.service';
 import { RagStrategy } from './ai-config.types';
+import {
+  CorpusRowMetadata,
+  MAX_READINESS_LEVEL,
+  RUBRIC_SOURCE_TYPE,
+  rubricKey,
+} from './rag-corpus.types';
 
 /** How many context rows reach the prompt. Matches the previous keyword slice. */
 export const RAG_TOP_K = 3;
@@ -371,7 +378,11 @@ export class AiService {
     em: EntityManager,
     query: string,
   ): Promise<RetrievedContext[]> {
-    const contexts = await em.find(RagContext, {}, { orderBy: { createdAt: 'DESC' } });
+    const contexts = await em.find(
+      RagContext,
+      { sourceType: { $ne: RUBRIC_SOURCE_TYPE } },
+      { orderBy: { createdAt: 'DESC' } },
+    );
 
     return contexts
       .map((context) => ({
@@ -424,6 +435,7 @@ export class AiService {
          join rag_contexts rc on rc.id = ve.source_id::int
         where ve.source_type = ?
           and rc.startup_id is distinct from ?
+          and rc.source_type <> ?
         order by ve.embedding <=> ?::vector
         limit ?`,
       [
@@ -433,6 +445,7 @@ export class AiService {
         // proposal back as a "verified prior profile" is circular: the model
         // would read its own input as independent corroboration.
         startup.id,
+        RUBRIC_SOURCE_TYPE,
         `[${vector.join(',')}]`,
         RAG_TOP_K,
       ],
@@ -865,12 +878,22 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       },
     );
 
-    const trl = startupReadinessLevels[0]?.readinessLevel.level || 0;
-    const mrl = startupReadinessLevels[1]?.readinessLevel.level || 0;
-    const arl = startupReadinessLevels[2]?.readinessLevel.level || 0;
-    const orl = startupReadinessLevels[3]?.readinessLevel.level || 0;
-    const rrl = startupReadinessLevels[4]?.readinessLevel.level || 0;
-    const irl = startupReadinessLevels[5]?.readinessLevel.level || 0;
+    // Keyed by ReadinessType rather than array position: the query above has
+    // no orderBy, so rows can come back in any order (insertion order, which
+    // differs between the live DB and a freshly-seeded one). A positional read
+    // would silently mislabel dimensions — e.g. Acceptance data printed as
+    // "TRL" — whenever insertion order doesn't match declaration order. A
+    // keyed lookup cannot regress that way even if ordering changes again.
+    const levelByType = new Map<ReadinessType, number>();
+    for (const srl of startupReadinessLevels) {
+      levelByType.set(srl.readinessLevel.readinessType, srl.readinessLevel.level);
+    }
+    const trl = levelByType.get(ReadinessType.T) ?? 0;
+    const mrl = levelByType.get(ReadinessType.M) ?? 0;
+    const arl = levelByType.get(ReadinessType.A) ?? 0;
+    const orl = levelByType.get(ReadinessType.O) ?? 0;
+    const rrl = levelByType.get(ReadinessType.R) ?? 0;
+    const irl = levelByType.get(ReadinessType.I) ?? 0;
     const ragContexts = ctx.config.rag
       ? await this.getRelevantRagContexts(startup, em, ctx.config.ragStrategy)
       : [];
@@ -879,6 +902,13 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
           .map((context) => `- [${context.sourceType}] ${context.title}: ${context.content}`)
           .join('\n')}`
       : ctx.config.rag ? '\nVerified context retrieved from similar startup records: none found' : '';
+    // Rubrics come from the dimension keys, not from similarity, and are
+    // deliberately independent of ctx.config.ragStrategy: that setting selects
+    // how *peers* are found and its measured comparison must not be perturbed
+    // by a rubric change.
+    const rubricBlock = ctx.config.ragCorpus
+      ? await this.buildRubricBlock(em, startupReadinessLevels)
+      : '';
 
     return `
       Given these data:
@@ -900,6 +930,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       ${capsuleProposalInfo.scope}
       C. Methodology and Expected Outputs
       ${capsuleProposalInfo.methodology}
+      ${rubricBlock}
       Initial Readiness Level:
       TRL ${trl}
       MRL ${mrl}
@@ -909,6 +940,40 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       IRL ${irl}
         ${ragBlock}
   `;
+  }
+
+  /**
+   * Readiness rubrics for the levels this startup actually sits at, plus the
+   * next rung up — the model needs to know what "better" looks like to produce
+   * a next action rather than a restatement.
+   */
+  private async buildRubricBlock(
+    em: EntityManager,
+    levels: StartupReadinessLevel[],
+  ): Promise<string> {
+    // Deliberately does not read ctx.config.rubricMode. That setting exists to
+    // compare two mechanisms on the RNA/RNS channel SDD §3.2 describes; letting
+    // it also swing the initiative and roadblock paths would change two things
+    // at once during a measurement run, which is a confound rather than a
+    // control. Path 1 always uses the exact lookup.
+    const wanted = new Set<string>();
+    for (const srl of levels) {
+      const type = srl.readinessLevel.readinessType;
+      const level = srl.readinessLevel.level;
+      wanted.add(rubricKey(type, level));
+      wanted.add(rubricKey(type, Math.min(level + 1, MAX_READINESS_LEVEL)));
+    }
+    if (!wanted.size) return '';
+
+    const rows = await em.find(RagContext, { sourceType: RUBRIC_SOURCE_TYPE });
+    const matched = rows.filter((row) =>
+      wanted.has((row.metadata as CorpusRowMetadata | undefined)?.key ?? ''),
+    );
+    if (!matched.length) return '';
+
+    return `\nVerified readiness rubrics (authoritative):\n${matched
+      .map((row) => `- ${row.title}: ${row.content}`)
+      .join('\n')}\n`;
   }
 
   async refineInitiative(
