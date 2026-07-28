@@ -332,3 +332,63 @@ With a temporary debug log on the assembled prompt (added, captured, then revert
 - **Output validation (1c)** is still three stub methods; `recommendation-storage.service.ts` still never persists a validated recommendation.
 - **`docs/SRS.md` and `docs/SDD.md` were deleted this task** (`git rm`), not corrected. Both were short (18-19 line) in-repo summaries that disagreed with the actual source PDFs — `docs/SDD.md` listed six scored dimensions including Investment/IRL, where the real source documents specify five (TRL, MRL, RRL, ARL, ORL, no IRL). A short summary that quietly disagrees with its own source on the one fact most likely to be checked is worse than no summary. `TODO_CHECKLIST.md` §0's dimension-mismatch item now cites the real source PDFs, not the deleted file.
 - **`CLAUDE.md`'s "there is no RAG pipeline" note was false as of this task** and has been replaced with an accurate description, including the provenance split above and the two new env vars (`AI_RAG_CORPUS_ENABLED`, `AI_RAG_RUBRIC_MODE`).
+
+---
+
+## Branch close-out and local-test handoff — 2026-07-28 (same day, later)
+
+`feat/rag-corpus` is **finished and awaiting John's integration decision**. 22 commits ahead of `master` (merge-base `c57d115`), HEAD `c88413a`, working tree clean, **nothing pushed**.
+
+### What happened after Task 10
+
+- **Whole-branch review + fix wave.** Two fix commits landed: `48af3c6` (RNA/RNS retrieval fallbacks were ignoring `rubricMode` and `AI_RAG_ENABLED`) and `c52e2fe` (retagged the unearned framework citations described in the Provenance section above, and removed comments that still conflated the code's semantic substitute with SDD §3.2's mechanism). A scoped re-review verdicted every finding ADDRESSED with no new breakage.
+- **13.7 MB of capstone PDFs were committed by accident** in `dbffae5` — a one-line plan edit made with `git add -A` swept in the three source PDFs. Removed from branch history with `git filter-branch` over `master..HEAD`; `c88413a` gitignores them going forward. **Backup branch `backup/rag-corpus-preflight` still holds the pre-rewrite history including those blobs** — delete it once the branch is integrated, or the objects stay in the local store.
+- **Test baseline moved to 167 passing / 2 failing** (was 153/2 at Task 10 — the fix wave added tests). The 2 failures are the same documented pre-existing pair that also fails on a clean `master` checkout: `ReadinessService › returns a weighted score…` and `AiService › passes valid task responses through unchanged`. A *third* failure would be a real regression. `pnpm build` clean.
+- **`finishing-a-development-branch` Steps 1–3 complete**, normal repo (no worktree), base `master`. The Step 4 menu was presented; **John has not yet chosen** merge-locally / push-and-PR / keep-as-is. Per the standing "no push without asking" rule, option 2 needs explicit confirmation.
+
+### Local-run config, verified 2026-07-28
+
+Checked before handing over the runbook, all green:
+
+- `JWT_SECRET` **matches** between `backend/.env` and `frontend/.env` (compared by hash, not printed) — this is the failure that silently breaks every login, since the frontend verifies the JWT itself rather than calling the backend.
+- `PUBLIC_API_URL=http://localhost:3000` matches backend `PORT=3000`.
+- `.claude/launch.json` already defines both `backend` (3000) and `frontend` (5173).
+- **No dependency changes on the branch** (`package.json`/lockfiles untouched) — no reinstall needed to test it.
+- `backend/.env` **does not set `AI_RAG_CORPUS_ENABLED` or `AI_RAG_RUBRIC_MODE`.** Harmless — they default to `true`/`deterministic` — but they must be added explicitly to run the corpus-off arm.
+
+### The local test ladder (cheapest first)
+
+1. `cd backend && pnpm test` — expect 167/2 as above.
+2. `cd backend && node seed-rag-corpus.js` — **run it twice**; the second run must report all-unchanged. That is the idempotency test, and it exercises Neon + Gemini embeddings for real.
+3. `node measurement/measure-grounding.js --retrieval-only` — **spends zero generation quota** and reproduces the 12/12-vs-0 mechanism result. The single most informative check per unit of cost.
+4. Two VS Code terminals (`pnpm dev` in each; backend first, let its schema sync finish), then `http://localhost:5173`, log in `demo@launchup.local` / `password123`, and generate on `/startups/<id>/rna` or `/rns`.
+5. **The toggle test, which is the one that actually proves wiring:** set `AI_RAG_CORPUS_ENABLED=false`, restart, generate again, and confirm `rag_retrieval_logs.channel_counts` drops `rubrics`/`frameworks` to 0 while `peers` is unaffected.
+
+Between rungs 3 and 4, `node inspect-prompt.js <startupId> [--dimension T]` prints the assembled prompt (see below).
+
+**Two corrections to ad-hoc DB queries used earlier in this work:** `pg` is **not resolvable** from `backend/` (it is pnpm-isolated under `@mikro-orm/postgresql`, never a direct dependency), so one-off `require('pg')` scripts fail with MODULE_NOT_FOUND. Go through `MikroORM.init(require('./dist/src/mikro-orm.config').default)` and `orm.em.getConnection().execute(sql)` instead. And the tables are **pluralised** — `startups`, `startups_readiness_level`, `rag_retrieval_logs`, `rag_contexts` — not the singular entity names.
+
+**Why the ladder rather than "run the tests":** the defect this branch fixed — retrieved text never reaching the prompt — passed every unit test for its entire lifetime. Tests prove the parts, `channel_counts` proves the wiring, and only the toggle proves the feature reaches the model. Generated output that merely *looks* plausible is exactly what the broken build produced.
+
+⚠️ **Quota is the binding constraint on browser testing.** `GEMINI_MODEL=gemini-3.6-flash` is on the 20-request/day free tier, and one generation fans out into several calls (grounding + bias review + normalization all enabled) — budget **3–5 full generations per day**, not 20. 429s surface in the backend terminal, not the browser UI. Dropping to `gemini-2.5-flash-lite` restores a working UI for layout/flow testing but not for judging output quality.
+
+### Open at end of session
+
+- **Integration decision on `feat/rag-corpus`** — John's call, not yet made.
+- **The three generation arms remain unmeasured** (unchanged from Task 10; still the headline gap for Objective 1b).
+- **`backup/rag-corpus-preflight`** should be deleted after integration.
+- **`.superpowers/sdd/2026-07-28-rag-corpus/`** (gitignored) was deliberately *not* deleted despite the process prescribing it — it holds the ten task reports with TDD evidence, which is the debugging record while John tests. Remove after merge.
+### `backend/inspect-prompt.js` — added 2026-07-28, verified live
+
+Replaces Task 10's ad-hoc temporary debug log (which was reverted, leaving no standing way to eyeball an assembled prompt). Boots the app context, runs the real `RagQueryService` + `GroundedPromptBuilderService` pair, prints the resolved config, the per-channel counts, and the assembled prompt — then **stops before `sendToGemini`, so it spends no generation quota.** Dimensions come from `StartupReadinessLevel` rather than from existing RNAs, which is what lets it run on any startup regardless of generation history; Task 10 hit exactly that wall when AgroLink's completed RNA set short-circuited before the RAG pipeline.
+
+Verified against live Neon:
+
+- `node inspect-prompt.js 1 --dimension T` → AgroLink PH, `{rubrics: 12, frameworks: 0, peers: 0, lowConfidence: false}`, prompt contains **TRL 2 and TRL 3** verbatim with full `[standard — European Commission, Horizon Europe…]` attribution. TRL 2 is AgroLink's actual level; TRL 3 is the level above.
+- `node inspect-prompt.js 2` → MediSync Cebu, all six dimensions, **each scoped to its own rubric** (Acceptance 3 → Acceptance rows, Technology 5 → Technology rows, and so on). This is direct evidence the per-dimension filter in `rns.service.ts` behaves as intended.
+- Bad startup id and unknown `--dimension` both exit 1.
+
+Two things it surfaced that are worth knowing:
+
+- **The framework channel returns 0 rows in practice.** `frameworks: 0` on both startups — the business-framework channel is always semantic, and its top-2 never clears the 0.78 floor. Consistent with every other semantic result measured in this work; it means the 10 framework rows are seeded and embedded but **are not currently reaching any prompt**. The rubric channel carries the whole grounding contribution. Not a regression — it has never been otherwise — but it narrows what "the corpus is live" actually means.
+- `mikro-orm.config.ts` hard-codes `debug: true`, which echoes the full 768-float pgvector literal twice per semantic query. The script calls `orm.config.set('debug', false)` after boot; the two lines printed before that point are unavoidable without changing shared config.
