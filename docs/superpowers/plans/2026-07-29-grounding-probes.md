@@ -551,6 +551,22 @@ test('levelPlacement computes MAE, exact and within-1 counts', () => {
   assert.ok(Math.abs(r.mae - 5 / 3) < 1e-9);
 });
 
+// Without Math.abs, an under-estimate and an over-estimate cancel and the
+// model scores a perfect 0. Verified by mutation: with Math.abs removed, every
+// other test in this file still passes, because none of them has a negative
+// delta. This one is the whole reason metric 1 can be trusted.
+test('levelPlacement uses absolute error, so errors do not cancel', () => {
+  const truth =    { Technology: 5, Market: 2, Acceptance: 3 };
+  const assigned = { Technology: 3, Market: 4, Acceptance: 3 };
+  // signed:   -2, +2, 0 -> mean 0      (wrong, looks perfect)
+  // absolute:  2,  2, 0 -> mean 4/3    (right)
+  const r = levelPlacement(assigned, truth, DIMS);
+  assert.equal(r.n, 3);
+  assert.ok(Math.abs(r.mae - 4 / 3) < 1e-9, `mae should be 4/3, got ${r.mae}`);
+  assert.equal(r.exact, 1);
+  assert.equal(r.within1, 1, 'a signed -2 would slip under <= 1 and inflate this');
+});
+
 test('levelPlacement skips a dimension the model dropped', () => {
   // A missing field is a schema-compliance problem, not evidence the model
   // misplaced the level - so it lowers n rather than scoring as a large error.
