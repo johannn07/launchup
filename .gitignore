@@ -28,3 +28,7 @@ AGENTS.md
 
 # Subagent-driven-development scratch workspace (ledger, briefs, review packages)
 .superpowers/
+
+# Capstone source documents — authoritative copies live in the team folder, not here.
+# 13.7MB of binaries were committed accidentally once; git stores these without deltas.
+docs/*.pdf
