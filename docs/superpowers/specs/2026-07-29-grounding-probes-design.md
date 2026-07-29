@@ -252,9 +252,19 @@ matches, reporting per metric which files contributed. Consequence:
 unchanged by this work) while correctly refusing to pool metrics 1 and 2 across
 the redesign.
 
-Files written before per-metric fingerprints report `pre-fingerprint` for every
-metric, which matches nothing real — so old files can pool with each other but
-never silently with post-redesign runs.
+Files written before per-metric fingerprints carry no fingerprint map at all.
+**They pool with nothing — not even with each other.**
+
+An earlier draft of this section said they "can pool with each other". That was
+written before the confound fixes existed. `2026-07-29-rep1.json` is the only
+such file, and it predates both of them, so its numbers came from a different
+experiment in the strict sense — summing two copies of it would produce a
+larger-n version of a result that is not comparable to anything the redesigned
+harness produces. Refusing outright is the safer and more honest behaviour.
+
+This is load-bearing in the implementation: with both sides `undefined`, a
+plain `mine !== ref` test is **false**, so two legacy files would pool silently
+unless the `undefined` cases are checked explicitly.
 
 ## Verification
 
