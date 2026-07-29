@@ -1249,7 +1249,14 @@ Expected: PASS, 34 tests.
 
 Run: `cd backend && node measurement/measure-grounding.js --merge measurement/results/2026-07-29-rep1.json`
 
-Expected: exit 0, four tables print. Metric 1 and metric 2 will show values computed by the **new** scorers over the **old** data — which is exactly why Task 6 must fingerprint them apart. Note the numbers but do not record them anywhere as a result.
+Expected: exit 0, **three** tables print — metrics 1, 2 and 3. Metric 4 appears
+only with `--with-fabrication-probe`, which is the point of Step 4's demotion.
+(An earlier draft of this step said "four tables"; that was written before the
+demotion and is wrong.)
+
+Metric 1 and metric 2 will show values computed by the **new** scorers over the
+**old** data — which is exactly why Task 6 must fingerprint them apart. Note the
+numbers but do not record them anywhere as a result.
 
 - [ ] **Step 8: Commit**
 
