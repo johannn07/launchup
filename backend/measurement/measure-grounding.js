@@ -835,29 +835,28 @@ function printReports(results) {
  * identical to one 3-rep run - provided the corpus and model didn't move
  * underneath, which is why both are recorded and checked.
  */
-/**
- * Fingerprints everything that decides what the three probes actually ask, so
- * a merge cannot combine results gathered under different probe designs.
- *
- * This is not hypothetical: the 2026-07-29 run showed metric 2's absent-field
- * probe is saturated (0/15 invented on every arm) and metric 1's exact-substring
- * keyTerm match measures vocabulary reuse rather than grounding, so both are
- * expected to be rewritten. Model and corpus identity - the only things the
- * guard checked before - would not have caught that, and the symptom would be a
- * silently pooled rate across two different questions.
- */
-function probeFingerprint() {
-  const material = JSON.stringify({
-    rna: rnaPrompt.toString(),
-    levels: levelsPrompt.toString(),
-    halluc: hallucinationPrompt.toString(),
-    grounding: GROUNDING,
-    dimensions: DIMENSIONS,
-    fields: Object.fromEntries(
-      Object.entries(STARTUPS).map(([k, v]) => [k, { present: v.present, absent: v.absent, levels: v.levels }]),
-    ),
+const { fingerprintMap } = require(path.join(__dirname, 'lib/fingerprint.js'));
+const { MARKERS } = require(path.join(__dirname, 'lib/stage-markers.js'));
+
+function currentFingerprints() {
+  return fingerprintMap({
+    common: {
+      grounding: GROUNDING,
+      dimensions: DIMENSIONS,
+      startups: Object.fromEntries(
+        Object.entries(STARTUPS).map(([k, v]) => [k, { doc: v.doc, levels: v.levels, present: v.present, absent: v.absent }]),
+      ),
+    },
+    markers: MARKERS,
+    sources: {
+      rna: rnaPrompt.toString(),
+      levels: levelsPrompt.toString(),
+      fabrication: hallucinationPrompt.toString(),
+    },
+    arms: ARMS,
+    levelsRubricScope: 'full-ladder',
+    rnaRubricScope: 'current-and-next',
   });
-  return require('crypto').createHash('sha256').update(material).digest('hex').slice(0, 12);
 }
 
 function writeResults(file, results) {
@@ -868,70 +867,94 @@ function writeResults(file, results) {
     reps: REPS,
     corpusRows: RUBRICS.length,
     floor: FLOOR,
-    probeFingerprint: probeFingerprint(),
+    fingerprints: currentFingerprints(),
     results,
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
 }
 
-function runMerge(files) {
+/**
+ * Pools per (metric, arm). Throws rather than exiting so it is testable; the
+ * CLI wrapper below catches and exits 1.
+ */
+function mergeRuns(files, arms) {
   const days = files.map((f) => ({ file: f, data: JSON.parse(fs.readFileSync(f, 'utf8')) }));
 
-  // A merge across a model or corpus change would silently average two
-  // different experiments into one table, which is the exact failure mode
-  // these files exist to prevent. Refuse rather than warn.
-  // Files written before probeFingerprint existed report `pre-fingerprint`,
-  // which compares unequal to every real hash - so they can be merged with each
-  // other but never silently pooled with a post-rewrite run.
-  const key = (d) =>
-    `${d.data.genModel}|${d.data.embedModel}|${d.data.corpusRows}|${d.data.floor}|${d.data.probeFingerprint ?? 'pre-fingerprint'}`;
-  const distinct = [...new Set(days.map(key))];
-  if (distinct.length > 1) {
-    console.error('Refusing to merge: these runs are not comparable.');
-    console.error('(fields are genModel|embedModel|corpusRows|floor|probeFingerprint)');
-    for (const d of days) console.error(`  ${d.file}: ${key(d)}`);
-    process.exit(1);
+  const envKey = (d) => `${d.data.genModel}|${d.data.embedModel}|${d.data.corpusRows}|${d.data.floor}`;
+  const distinctEnv = [...new Set(days.map(envKey))];
+  if (distinctEnv.length > 1) {
+    throw new Error(
+      'Refusing to merge: these runs are not comparable.\n' +
+        '(genModel|embedModel|corpusRows|floor)\n' +
+        days.map((d) => `  ${d.file}: ${envKey(d)}`).join('\n'),
+    );
   }
 
+  // The first file establishes the reference fingerprint for each (metric, arm).
+  const reference = days[0].data.fingerprints || {};
   const merged = {};
-  for (const arm of ARMS) merged[arm.name] = { startups: {}, quotaHit: false };
+  for (const arm of arms) merged[arm.name] = { startups: {}, quotaHit: false };
 
-  for (const { data } of days) {
-    for (const arm of ARMS) {
+  const contributions = {};
+  const refusals = [];
+  const FIELD = { levels: 'levelCalls', rna: 'rnaCalls', fabrication: 'hallucCalls' };
+
+  for (const { file, data } of days) {
+    for (const arm of arms) {
       const src = data.results[arm.name];
       if (!src) continue;
       merged[arm.name].quotaHit = merged[arm.name].quotaHit || src.quotaHit;
-      for (const [startupName, cell] of Object.entries(src.startups)) {
-        const dst =
-          merged[arm.name].startups[startupName] ||
-          (merged[arm.name].startups[startupName] = {
-            // Retrieval is deterministic given the same corpus and floor, both
-            // asserted equal above, so the first day's rows stand for all.
-            retrieved: cell.retrieved,
-            rnaCalls: [],
-            levelCalls: [],
-            hallucCalls: [],
-          });
-        dst.rnaCalls.push(...cell.rnaCalls);
-        dst.levelCalls.push(...cell.levelCalls);
-        dst.hallucCalls.push(...cell.hallucCalls);
+
+      for (const [metric, field] of Object.entries(FIELD)) {
+        const key = `${metric}|${arm.name}`;
+        const mine = (data.fingerprints || {})[key];
+        const ref = reference[key];
+        // undefined on either side is a pre-fingerprint file: never pool it
+        // with anything, in either direction.
+        //
+        // Logging a refusal does not depend on whether this cell happens to
+        // hold any calls yet: the mismatch itself is the fact worth surfacing
+        // ("this metric/arm's probe design differs between these files"), not
+        // a consequence of how much data would have been lost. Gating the log
+        // on cell content silently swallowed exactly the case this exists to
+        // catch - a real fingerprint mismatch on a metric/arm whose data
+        // hadn't accumulated anywhere yet.
+        if (mine === undefined || ref === undefined || mine !== ref) {
+          refusals.push(`${key} (${path.basename(file)}: ${mine ?? 'pre-fingerprint'} vs ${ref ?? 'pre-fingerprint'})`);
+          continue;
+        }
+
+        for (const [startupName, cell] of Object.entries(src.startups)) {
+          const dst =
+            merged[arm.name].startups[startupName] ||
+            (merged[arm.name].startups[startupName] = {
+              retrieved: cell.retrieved,
+              rnaCalls: [],
+              levelCalls: [],
+              hallucCalls: [],
+            });
+          dst[field].push(...cell[field]);
+        }
+        contributions[key] = (contributions[key] || []).concat(path.basename(file));
       }
     }
   }
 
-  console.log(`=== Merged ${days.length} run(s) ===`);
-  console.table(
-    days.map((d) => ({
-      file: path.basename(d.file),
-      generatedAt: d.data.generatedAt,
-      reps: d.data.reps,
-      model: d.data.genModel,
-    })),
-  );
+  return { merged, contributions, refusals };
+}
 
+function runMergeCli(files) {
+  const { merged, contributions, refusals } = mergeRuns(files, ARMS);
+  console.log(`=== Merged ${files.length} run(s), pooled per (metric, arm) ===`);
+  console.table(
+    Object.entries(contributions).map(([k, v]) => ({ 'metric|arm': k, files: v.join(', ') })),
+  );
+  if (refusals.length) {
+    console.log('\nNot pooled (fingerprint mismatch - different probe design):');
+    for (const r of refusals) console.log(`  ${r}`);
+  }
   printReports(merged);
-  return merged;
 }
 
 /**
@@ -943,12 +966,17 @@ function runMerge(files) {
 if (require.main === module) {
   (async () => {
     if (process.argv.includes('--fingerprint')) {
-      console.log(probeFingerprint());
+      console.log(JSON.stringify(currentFingerprints(), null, 2));
       return;
     }
 
     if (MERGE_FILES.length) {
-      runMerge(MERGE_FILES);
+      try {
+        runMergeCli(MERGE_FILES);
+      } catch (e) {
+        console.error(e.message);
+        process.exit(1);
+      }
       return;
     }
 
@@ -991,4 +1019,6 @@ module.exports = {
   isAbsentAnswer,
   mean,
   summarizeResults,
+  mergeRuns,
+  currentFingerprints,
 };
