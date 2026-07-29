@@ -891,8 +891,22 @@ function mergeRuns(files, arms) {
     );
   }
 
-  // The first file establishes the reference fingerprint for each (metric, arm).
-  const reference = days[0].data.fingerprints || {};
+  // The reference for each (metric, arm) is the first file that actually HAS a
+  // fingerprint for it — NOT blindly days[0].
+  //
+  // days[0] was this plan's original rule and it silently defeats the whole
+  // point of the task. The documented workflow is `--merge results/*.json`,
+  // the shell sorts by name, and the one legacy file's date sorts FIRST. With
+  // a fingerprint-less file as the reference, every key's `ref` is undefined,
+  // so EVERY file is refused for EVERY metric — including two perfectly
+  // compatible post-redesign runs that should pool with each other. Verified:
+  // legacy-first pooled 0 calls where legacy-last pooled 2.
+  const reference = {};
+  for (const { data } of days) {
+    for (const [key, value] of Object.entries(data.fingerprints || {})) {
+      if (reference[key] === undefined) reference[key] = value;
+    }
+  }
   const merged = {};
   for (const arm of arms) merged[arm.name] = { startups: {}, quotaHit: false };
 
