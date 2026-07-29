@@ -69,3 +69,30 @@ test('a file with no fingerprints pools with nothing new', () => {
   const { refusals } = H.mergeRuns([a, legacy], H.ARMS);
   assert.ok(refusals.length > 0, 'a pre-fingerprint file must not silently pool');
 });
+
+test('two pre-fingerprint files do not pool with each other either', () => {
+  // Both sides undefined makes `mine !== ref` false, so without the explicit
+  // undefined checks these pool silently. The one real legacy file predates
+  // both confound fixes, so its numbers came from a different experiment and
+  // must never be summed with anything - including another legacy file.
+  const legacy = (name) => {
+    const f = path.join(TMP, name);
+    const src = writeRun(`src-${name}`, { levelsFp: 'L1', rnaFp: 'R1', agroLevels: { Technology: 2 } });
+    const d = JSON.parse(fs.readFileSync(src, 'utf8'));
+    delete d.fingerprints;
+    fs.writeFileSync(f, JSON.stringify(d));
+    return f;
+  };
+  const a = legacy('legacy-a.json');
+  const b = legacy('legacy-b.json');
+  const { merged, refusals } = H.mergeRuns([a, b], H.ARMS);
+  assert.ok(
+    refusals.some((r) => r.startsWith('levels|baseline')),
+    `expected a levels refusal, got ${JSON.stringify(refusals)}`,
+  );
+  assert.equal(
+    (merged.baseline.startups['AgroLink PH'] || { levelCalls: [] }).levelCalls.length,
+    0,
+    'legacy data must not pool, not even with other legacy data',
+  );
+});
