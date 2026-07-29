@@ -1243,7 +1243,7 @@ Add `summarizeResults,` to `module.exports`.
 - [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `cd backend && pnpm test:measurement`
-Expected: PASS, 34 tests.
+Expected: PASS, 38 tests (34 pre-existing + 4 new).
 
 - [ ] **Step 7: Verify the old results file still summarizes**
 
