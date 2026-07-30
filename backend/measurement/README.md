@@ -189,10 +189,12 @@ daily cap — `generativelanguage.googleapis.com/generate_content_free_tier_requ
 quota ID `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **20 requests
 per day** for `gemini-3.6-flash`, confirmed from the 429 body, not a
 per-minute limit that re-pacing works around — combined with a loop order
-that spent the entire budget inside the first arm. **Both were fixed:**
-reps are the **outermost** loop so a 429 costs precision rather than the
-comparison itself, and `--out` / `--merge` accumulate raw per-call records
-across days. See the header comment in `measure-grounding.js`.
+that spent the entire budget inside the first arm. **Both were addressed:**
+`REPS` defaults to 1 (one rep is what a day's quota buys, whatever a rep
+currently costs — see below), reps are the **outermost** loop so a 429
+costs precision rather than the comparison itself, and `--out` / `--merge`
+accumulate raw per-call records across days. See the header comment in
+`measure-grounding.js`.
 
 The first full run, 2026-07-29, surfaced two further problems that were not
 quota-related — the harness ran cleanly, it just measured the wrong thing.
