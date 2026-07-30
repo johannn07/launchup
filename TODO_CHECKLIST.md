@@ -103,6 +103,22 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   3. **Metric 2 is saturated.** 0/15 invented, 15/15 recalled, across every arm — reproducing the 2026-07-27 result of 0/9 and 9/9 on both models. `groundPrompt()` already fully handles this probe, so the corpus has **no headroom to show an improvement**. This is evidence about the probe, not the corpus; a harder probe (longer documents, plausible distractors, partially-supported fields) is a prerequisite for testing Objective 1 at all.
   4. **Metric 1's 8% is largely an artifact.** Inspection of the misses shows on-target text that paraphrases instead of quoting — e.g. with `TRL 2`/`TRL 3` verbatim in the prompt, the model wrote *"Tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025"*, a correct TRL-2/3 characterization sharing no wording with `keyTerms: ["concept formulated", "speculative application", …]`. The RNA prompt demands specificity to the source document, which structurally conflicts with echoing abstract rubric phrasing. Metric 1 measures **vocabulary reuse**, and that is near zero here even when retrieval demonstrably worked.
 
+  **UPDATE 2026-07-30 — the probes were redesigned and the first clean rep ran.** Both confounds above are fixed (branch `measure/grounding-arms`, 12 commits, 49 measurement tests where there were none). Metrics 1 and 2 were replaced: metric 1 is now level-placement accuracy against the seeded ground truth, metric 2 is SO 1.3's stage-inappropriate recommendation rate. Full detail in `measurement/README.md`.
+
+  First clean rep (`measurement/results/2026-07-30-redesign-rep1.json`, all 12 calls, **n=1**):
+
+  | metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+  |---|---|---|---|
+  | 1 — placement MAE (lower better) | 0.67 | 0.42 | **1.50** |
+  | 2 — stage-inappropriate rate | 0% | 0% | 0% |
+  | 3 — differentiation gap (higher better) | 2.83 | 2.33 | **1.17** |
+
+  **The corpus arm did worse on both scored metrics.** `baseline` and `sdd-semantic` send byte-identical prompts (semantic retrieves nothing), so their spread *is* the noise floor — 0.25 MAE and 0.50 gap points this rep. Deterministic sits +0.83 MAE and −1.66 gap beyond baseline, both outside that. Per-dimension, it overshoots three of MediSync's dimensions and collapses the other three to level 1. **Working hypothesis: the levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement.** That is a property of the harness's confound-2 fix, not of the shipped product.
+
+  **Metric 2 saturated at 0% everywhere, and the probe is verified live** (an injected "full market launch … IPO" recommendation is correctly flagged). Since confound 1's fix gives *all* arms the `Initial Readiness Level` block, the economical reading is that **the levels block, not the corpus, keeps recommendations stage-appropriate** — isolating that needs the reserved `baseline-no-levels` arm.
+
+  **Do not quote any of this as a result yet: n=1.** It does not show the corpus is harmful; it shows the instrument is finally clean and the first clean reading runs against the corpus.
+
   **Work:** run one more rep per quota window (resets **15:00 Philippine time** = midnight US Pacific) and merge — three reps total is the minimum for metric 3 to clear the measured noise floor:
   ```bash
   node measurement/measure-grounding.js --reps=1 --out=measurement/results/<date>-rep2.json

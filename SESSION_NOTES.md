@@ -443,3 +443,57 @@ The merge path and the refusal path were both exercised against synthetic fixtur
 - **Two calls**: `deviation-deterministic` / MediSync (levels + hallucination probe). That gap is why metric 3's headline arm reads `n/a`.
 - **At least two more reps**, one per quota window, then `--merge`. Three reps is the minimum for metric 3 to clear the ±1.0 noise floor.
 - **Two probe redesigns** — now indicated by measurement rather than speculation: metric 2 needs headroom, metric 1 needs to stop rewarding verbatim echo.
+
+---
+
+## Probe redesign executed, and the first clean rep — 2026-07-30
+
+Branch `measure/grounding-arms`, 12 commits past `master`, **nothing pushed**. Spec `docs/superpowers/specs/2026-07-29-grounding-probes-design.md`, plan `docs/superpowers/plans/2026-07-29-grounding-probes.md`, executed as 8 subagent tasks with an independent review after each.
+
+### The two confounds — the actual reason the redesign was necessary
+
+Reading production's `createBasePrompt` (`ai.service.ts:937-943`) showed the harness's arms differed by more than the treatment, which invalidates the comparison at *any* N. More reps would not have helped.
+
+1. **Production emits the startup's readiness levels for every arm**; only the rubric block varies with `ragCorpus`. The harness emitted them for none — so it was measuring *"told its levels" vs "not told"*, a contrast production never presents.
+2. **Deterministic retrieval keys on `(readinessType, level)` using the startup's actual level**, and the levels probe then asked the model to assess that level. The arm was shown the answer.
+
+Fixed: the levels block now goes to all three arms in the RNA prompt; the levels probe receives the full nine-rung ladder instead of the startup's own rung.
+
+### What else changed
+
+Metric 1 became level-placement accuracy against seeded ground truth (the old one scored 1/12 while the text was substantively right — it measured vocabulary reuse). Metric 2 became SO 1.3's own example, the stage-inappropriate recommendation rate, scored with an **authored** lexicon held disjoint from the corpus `keyTerms` by test. The saturated absent-field probe was demoted behind `--with-fabrication-probe`, taking a rep from 18 calls to 12. Fingerprints are keyed **(metric, arm)** so a probe change refuses only what it actually invalidates. `--dry-run` prints every arm's assembled prompts without a generation call.
+
+**49 measurement tests exist where there were none**, run by `pnpm test:measurement` (Node's built-in runner — no new dependency, and jest's 167/2 baseline is untouched).
+
+### First clean rep (`measurement/results/2026-07-30-redesign-rep1.json`, n=1)
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — placement MAE (lower better) | 0.67 | 0.42 | **1.50** |
+| 2 — stage-inappropriate rate | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.83 | 2.33 | **1.17** |
+
+`baseline` and `sdd-semantic` send **byte-identical prompts** (semantic retrieves nothing against this corpus), so their spread is the noise floor, not a comparison: 0.25 MAE and 0.50 gap points this rep. **The corpus arm sits outside it on both metrics** — +0.83 MAE, −1.66 gap.
+
+Per-dimension it is not uniform inflation: on MediSync the deterministic arm overshoots Technology/Market/Acceptance and collapses Organizational, Regulatory and Investment to level 1. **Working hypothesis: the levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement rather than grounding it** — a property of the harness's confound-2 fix, not of the shipped product.
+
+That case also vindicated a fix insisted on during Task 3. MediSync's deterministic deltas are `+2 +2 +2 −3 −2 −2`: signed mean **−0.17**, which would have read as near-perfect, against a true MAE of **2.17**. The suite originally could not distinguish `Math.abs` from a signed difference; a mutation check proved it, and the guard added then is what makes this row honest.
+
+**Metric 2's 0% is real, not a dead metric** — injecting *"Move to full market launch and prepare an IPO."* at AgroLink Technology 2 correctly flags both markers. Since confound 1's fix gives all arms the levels block, the economical reading is that **the levels block, not the corpus, is what keeps recommendations stage-appropriate.** The reserved `baseline-no-levels` arm is how to isolate that.
+
+**n=1. This does not show the corpus is harmful** — the +2.28 differentiation baseline it is measured against was itself 3 reps. It shows the instrument is finally clean and that the first clean reading runs against the corpus. Two more reps, then `--merge`.
+
+### What the review loop actually caught
+
+Seven defects. **Six were in the spec or plan, not in any implementer's work** — the subagents transcribed faithfully and the reviews caught design errors. Five were found by *mutation testing*, not by reading; in each case the suite was green and the guard was decorative. The two that would have cost real money:
+
+- **`ipo` matched `IPOPHL`.** The Philippine IP Office appears verbatim in both seeded documents, so an RNA recommending a trademark filing — correct advice at Regulatory 1 — would have scored as the most severe hallucination the metric can record. Fixed generally with whole-word matching.
+- **`mergeRuns` keyed its comparability reference on `days[0]`.** The documented `--merge results/*.json` sorts the legacy file first; with it as reference, *nothing* pooled. Reproduced: 0 calls pooled where 2 should have been. That would have silently destroyed the multi-day accumulation the redesign exists to enable.
+
+One test had also **fabricated its own fixture** — replacing MediSync's real `Revenue: PHP 5,000 monthly recurring` with `Revenue: None to date`, which was precisely the line that would have failed the assertion.
+
+### Open
+
+- **Two more reps**, one per quota window (resets 15:00 PH), then `--merge measurement/results/*.json`.
+- **The `baseline-no-levels` arm**, if metric 2's saturation is worth isolating. Costs 2 calls per rep.
+- **Nothing pushed; `master` untouched.** John tests before anything merges.

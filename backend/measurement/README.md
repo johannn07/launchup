@@ -266,6 +266,69 @@ the code):
 A rep is now **12 calls** (RNA + levels, × 2 startups × 3 arms), or **18**
 with `--with-fabrication-probe` added back in — against the same 20/day cap.
 
+### Result, 2026-07-30 — the first clean rep
+
+`measurement/results/2026-07-30-redesign-rep1.json`. All 12 calls completed,
+no quota hit. **This is the first rep in which the arms differ only by the
+rubric text** — every prior run compared "told its levels" against "not told".
+n=1 throughout.
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — level-placement MAE (lower better) | 0.67 | 0.42 | **1.50** |
+| 1 — exact placements | 6/12 | 8/12 | 4/12 |
+| 2 — stage-inappropriate rate (lower better) | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.83 | 2.33 | **1.17** |
+
+**Read `baseline` vs `sdd-semantic` as a noise measurement, not a comparison.**
+Semantic retrieval returns nothing against this corpus, so those two arms send
+byte-identical prompts. Their spread is therefore pure run-to-run variance at
+`temperature: 0`, and it calibrates everything else in the table: **0.25 MAE on
+metric 1, 0.50 gap points on metric 3** in this rep.
+
+**The corpus arm did worse on both scored metrics, by more than that noise.**
+Deterministic is +0.83 MAE above baseline (~3× the observed metric-1 noise) and
+−1.66 gap points below it (above the ±1.0 floor measured on 2026-07-29). Two
+independent metrics moving the same direction, each beyond its own
+within-condition noise, at n=1.
+
+The per-dimension assignments show why, and the failure is **not** uniform
+inflation:
+
+| MediSync (truth) | T5 | M4 | A3 | O4 | R3 | I3 |
+|---|---|---|---|---|---|---|
+| baseline | 6 | 5 | 6 | 4 | 3 | 4 |
+| deterministic | 7 | 6 | 5 | **1** | **1** | **1** |
+
+The deterministic arm overshoots on three dimensions and collapses the other
+three to level 1. **Working hypothesis: the levels probe hands corpus arms all
+54 rubric rows, and that volume destabilises placement rather than grounding
+it.** That is a property of the measurement instrument's confound-2 fix, not of
+the shipped product — production's levels never come from this probe.
+
+This also demonstrates why metric 1 uses absolute error. MediSync's
+deterministic deltas are `+2 +2 +2 −3 −2 −2`: a signed mean of **−0.17**, which
+would have read as near-perfect, against a true MAE of **2.17**.
+
+**Metric 2 saturated at 0% on every arm, and that is a finding.** The probe is
+live — injecting `"Move to full market launch and prepare an IPO."` at
+AgroLink's Technology level 2 correctly flags both `ipo` and
+`full market launch` — so 0/12 means the model genuinely made no
+stage-inappropriate recommendations anywhere. Since fixing confound 1 gives
+**all three arms** the `Initial Readiness Level` block, the most economical
+reading is that **the levels block, not the rubric corpus, is what keeps
+recommendations stage-appropriate.** Isolating that needs the
+`baseline-no-levels` fourth arm the spec holds in reserve; it is not
+demonstrated here.
+
+**What this rep does not establish.** n=1. It does not show the corpus is
+harmful — one rep cannot, and the differentiation baseline to beat (+2.28) was
+itself measured across 3 reps. It shows the instrument is now clean and that
+the first clean reading runs against the corpus rather than for it. Accumulate
+two more reps and `--merge` before quoting any of this as a result.
+
+---
+
 **The 2026-07-29 result below is superseded, not merely old.** It was
 produced with both confounds still present, and its own metric 1 and 2
 definitions (rubric-term reuse, invented-absent-fields) no longer exist in
