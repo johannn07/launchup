@@ -19,8 +19,9 @@
  *   not the rate-limited generation endpoint, so it reproduces at full N on
  *   every run and costs none of the generation budget.
  *
- *   Step B - the three generation arms. Expensive: 3 calls (RNA text, 1-9
- *   levels, hallucination probe) x 2 startups x 3 arms = 18 calls PER REP.
+ *   Step B - the three generation arms. Expensive: 2 calls (RNA text, 1-9
+ *   levels) x 2 startups x 3 arms = 12 calls PER REP by default, or 18 with
+ *   --with-fabrication-probe adding the hallucination-probe call back in.
  *   Stops cleanly on a 429 and reports partial results with n= counts per
  *   cell rather than padding or dropping them silently.
  *
@@ -36,8 +37,10 @@
  * ## Why one rep per day, accumulated
  *
  * gemini-3.6-flash's free tier allows 20 generateContent calls per day and a
- * full rep costs 18, so a day buys exactly one rep. Two consequences are
- * designed for here rather than discovered at runtime:
+ * full rep costs 12 by default (18 with --with-fabrication-probe), so a day
+ * buys exactly one rep either way - two reps would need 24, over budget even
+ * at the cheaper default. Two consequences are designed for here rather than
+ * discovered at runtime:
  *
  *   1. Reps are the OUTERMOST loop, not the innermost. Arm-major ordering
  *      (the original) spends the whole daily budget inside the first arm, so
@@ -110,10 +113,11 @@ const MAX_READINESS_LEVEL = 9;
  * split the three arms across multiple days.
  */
 const GEN_MODEL = 'gemini-3.6-flash'; // the model the +2.28 differentiation baseline was measured on
-// One rep costs 18 of the 20 daily calls, so the default is what a single day
-// can actually buy. Raise it only against a paid key; --reps=3 on the free
-// tier reproduces exactly the 2026-07-28 failure (arm 1 completes, nothing to
-// compare it to).
+// One rep costs 12 of the 20 daily calls by default (18 with
+// --with-fabrication-probe), so the default is what a single day can
+// actually buy either way. Raise it only against a paid key; --reps=3 on the
+// free tier reproduces exactly the 2026-07-28 failure (arm 1 completes,
+// nothing to compare it to).
 const REPS = Number(flagValue('reps') ?? 1);
 const DELAY_MS = 4000; // matches measure-models.js/measure-differentiation.js's pacing
 
