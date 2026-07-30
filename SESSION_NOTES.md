@@ -492,8 +492,36 @@ Seven defects. **Six were in the spec or plan, not in any implementer's work** �
 
 One test had also **fabricated its own fixture** — replacing MediSync's real `Revenue: PHP 5,000 monthly recurring` with `Revenue: None to date`, which was precisely the line that would have failed the assertion.
 
-### Open
+### Final whole-branch review — five more findings, all fixed
 
-- **Two more reps**, one per quota window (resets 15:00 PH), then `--merge measurement/results/*.json`.
-- **The `baseline-no-levels` arm**, if metric 2's saturation is worth isolating. Costs 2 calls per rep.
-- **Nothing pushed; `master` untouched.** John tests before anything merges.
+Run on the most capable model over all 28 commits, then one fix wave (`0a493cb` code, `cbd0bd7` docs). Tests went 49 → 64.
+
+1. **The fingerprint covered less than its own documentation claimed.** It hashed `.toString()` of the three top-level prompt builders only — which excludes the bodies of helpers they *call*. So `readinessLevelBlock`, `renderRubricBlock` and `fullLadderRubrics` were invisible to it, meaning **this branch's own confound-1 fix could have been reverted with every fingerprint unchanged.** `envKey` also checked `corpusRows`, a row *count*, so any same-length edit to a rubric row went undetected. Now hashes all three helper sources plus a full content hash of `RUBRICS`, still scoped per arm so a corpus edit never refuses `baseline` data. The stored map in the results file was regenerated at zero quota cost — done now precisely because exactly one fingerprinted file existed.
+2. **`--merge results/*.json` — the documented workflow — did not run on this machine.** Neither PowerShell nor Node expands globs; only a POSIX shell does. Fixed inside the script with `fs.globSync`, so the same command works on any shell, and explicit file lists still bypass expansion.
+3. **A typo could silently spend the day's budget.** A bare `--merge`, `--merge` placed last, or a glob matching nothing all left `MERGE_FILES` empty and **fell through to a full 12-call live run**. `--out foo.json` (space instead of `=`) spent 12 calls and discarded the output. All now hard-error before any model call, with messages naming the likely typo. Highest-value fix on the branch: the others cost a reader's time, this one cost a day of measurement.
+4. **The README overclaimed.** It called metrics 1 and 3 "two independent metrics moving the same direction". They are both computed from the same `levelCalls` array — two readings of one signal, mechanically coupled. Retracted, along with a "~3× the noise" multiplier that rested on a single paired difference.
+5. **`TODO_CHECKLIST.md` contradicted itself** — re-asserted the two completed probe redesigns as open work, carried the same stale "18 calls" figure already corrected elsewhere, left the superseded 2026-07-29 table unmarked, and omitted the stage-marker lexicon's authored provenance.
+
+Scoped re-review: all five ADDRESSED, no new breakage, merge approved. Findings 6-13 were deliberately deferred and confirmed untouched.
+
+### State at end of session
+
+- **Branch `measure/grounding-arms`, 30 commits past `master`** (merge-base `037b4ff`), clean tree, **nothing pushed**.
+- **Touches zero files under `backend/src/` or `frontend/`.** The only non-measurement code change is `backend/package.json` gaining `test:measurement`; `"test"` is untouched. So the 2 Jest failures are provably the documented pre-existing pair, not this branch.
+- **64 measurement tests** (`pnpm test:measurement`, Node's built-in runner, no new dependency) where there were none. Jest 167 passing / 2 failing, unchanged.
+- **The integration decision is still John's** — the finishing-a-development-branch menu was presented and not yet answered.
+
+### Next step
+
+**Two more reps, one per quota window, then merge them.** That is the whole remaining path to a defensible result, and it needs no more code:
+
+```
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/<date>-rep2.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
+
+The window resets at **15:00 Philippine time** (midnight US Pacific). A rep is 12 calls against a 20/day cap, so one rep per day is the ceiling.
+
+Before that, the quota-free ladder worth running locally: `pnpm test:measurement` proves the parts, `--dry-run` shows the real assembled prompts, `--merge` reproduces the result tables. None spends generation quota.
+
+Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
