@@ -448,7 +448,7 @@ The merge path and the refusal path were both exercised against synthetic fixtur
 
 ## Probe redesign executed, and the first clean rep — 2026-07-30
 
-Branch `measure/grounding-arms`, 12 commits past `master`, **nothing pushed**. Spec `docs/superpowers/specs/2026-07-29-grounding-probes-design.md`, plan `docs/superpowers/plans/2026-07-29-grounding-probes.md`, executed as 8 subagent tasks with an independent review after each.
+Branch `measure/grounding-arms`, several commits past `master` at the time of this entry (the branch kept growing after it was written — run `git log master..HEAD --oneline | wc -l` for the current count rather than trusting a number here), **nothing pushed**. Spec `docs/superpowers/specs/2026-07-29-grounding-probes-design.md`, plan `docs/superpowers/plans/2026-07-29-grounding-probes.md`, executed as 8 subagent tasks with an independent review after each.
 
 ### The two confounds — the actual reason the redesign was necessary
 
