@@ -64,6 +64,14 @@ const fs = require('fs');
 const RETRIEVAL_ONLY = process.argv.includes('--retrieval-only');
 
 /**
+ * Assembles and prints every arm's prompts without calling the model. The one
+ * thing unit tests cannot check is whether the assembled prompt LOOKS right -
+ * and this harness has now twice measured a property of the prompt rather
+ * than of the model. Same philosophy as inspect-prompt.js: stop before sendToGemini.
+ */
+const DRY_RUN = process.argv.includes('--dry-run');
+
+/**
  * The absent-field probe is saturated - 0/15 invented on every arm, 2026-07-29,
  * reproducing the 2026-07-27 model comparison's 0/9 on two different models.
  * groundPrompt() already handles it completely, so it discriminates nothing.
@@ -1000,6 +1008,24 @@ if (require.main === module) {
 
     if (RETRIEVAL_ONLY) {
       console.log('\n--retrieval-only: stopping before generation arms.');
+      return;
+    }
+
+    if (DRY_RUN) {
+      const embedState = {};
+      for (const arm of ARMS) {
+        for (const [startupName, startup] of Object.entries(STARTUPS)) {
+          const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
+          const rnaBlock = renderRubricBlock(retrieved);
+          const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
+          const levelBlock = renderRubricBlock(ladder);
+          console.log(`\n${'='.repeat(78)}\n${arm.name} / ${startupName}\n${'='.repeat(78)}`);
+          console.log(`retrieved for RNA probe: ${retrieved.length} rows; levels probe: ${ladder.length} rows`);
+          console.log(`\n----- RNA PROMPT -----\n${rnaPrompt(startup.doc, rnaBlock, startup.levels)}`);
+          console.log(`\n----- LEVELS PROMPT -----\n${levelsPrompt(startup.doc, levelBlock)}`);
+        }
+      }
+      console.log('\n--dry-run: no generation quota spent.');
       return;
     }
 

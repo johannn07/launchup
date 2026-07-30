@@ -12,13 +12,28 @@ node measurement/measure-models.js
 node measurement/measure-differentiation.js
 node measurement/calibrate-similarity.js
 node measurement/measure-retrieval.js
-node measurement/measure-grounding.js                  # full harness (1 rep = 18 calls)
+node measurement/measure-grounding.js                  # full harness (1 rep = 12 calls, 18 with --with-fabrication-probe)
 node measurement/measure-grounding.js --retrieval-only  # Step A only, no generation quota spent
+node measurement/measure-grounding.js --dry-run         # assemble and print every arm's prompts, no model call at all
+node measurement/measure-grounding.js --fingerprint     # print today's comparability fingerprints, no model call at all
 
 # One rep is what a free-tier day buys. Accumulate across days:
 node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-07-30-rep2.json
 node measurement/measure-grounding.js --merge measurement/results/*.json
 ```
+
+`--dry-run` and `--fingerprint` (and `--retrieval-only`, for the generation
+endpoint specifically) are the quota-free paths, alongside `pnpm
+test:measurement` (`node --test measurement/tests/*.test.js`, 49 tests as of
+this writing, no network calls at all — every scorer and prompt builder is
+exercised as a pure function). `--dry-run` exists because unit tests cannot
+tell you whether an assembled prompt *looks* right, and this harness has
+twice now measured a property of the prompt rather than of the model (see
+the two confounds below) — a standing, quota-free eyeball path is the direct
+defence against a third one. It still calls `embedContent` for the
+`sdd-semantic` arm's retrieval (a separate, much higher-ceiling quota than
+generation), which is why it isn't advertised as calling zero endpoints —
+only zero *generation* calls.
 
 `--merge` re-runs the report functions over the concatenated raw per-call
 records, so N days of one rep is arithmetically identical to one N-rep run.
@@ -26,14 +41,23 @@ It refuses to merge files whose model, embedding model, corpus size,
 similarity floor **or probe design** differ, rather than silently averaging
 two different experiments.
 
-The probe check matters because metrics 1 and 2 are both expected to be
-rewritten (see (c) and (d) below) — a model-and-corpus check alone would
-happily pool "how often did it invent a field under the old probe" with the
-same question under a new one. `probeFingerprint` hashes the three prompt
-builders, the grounding instruction, the dimension list and each startup's
-present/absent field sets. `--fingerprint` prints what a run today would
-stamp, so you can check an existing file is still mergeable without spending
-a call.
+The probe-design check matters because both confounds below changed what a
+"rep" actually measures without changing its shape — a model-and-corpus
+check alone would happily pool a pre-fix levels probe (which leaked the
+answer to the deterministic arm) with a post-fix one asking a genuinely
+different question. `lib/fingerprint.js`'s `fingerprintMap` hashes, **per
+(metric, arm)** — not once per metric — each probe's prompt-builder source,
+the grounding instruction, the dimension list, each startup's document/
+levels/field lists, that arm's rubric mode, and the rubric *scope* it
+receives (`'full-ladder'` / `'current-and-next'` / `'none'`); the `rna` key
+additionally folds in the stage-marker lexicon, since metric 2 is scored
+with it. Per-arm granularity matters because a rubric-scope change (like the
+levels-probe fix below) alters what a corpus arm receives while leaving
+`baseline` untouched — a single per-metric hash would discard `baseline`'s
+still-valid data along with the arm that actually changed. `--fingerprint`
+prints what a run today would stamp — currently a 9-entry map (3 probes ×
+3 arms) — so you can check an existing results file is still mergeable
+without spending a call.
 
 ## What each one measures
 
@@ -158,8 +182,7 @@ the result that actually settles the SDD deviation question — measured
 against the mechanism SDD §3.2 describes, not a proxy for it — and it costs
 embedding calls only, not the exhausted generation quota.
 
-**Step B — the three generation arms (metrics 1-3): first run 2026-07-29,
-n=1, 16 of 18 calls completed.**
+**Step B — the three generation arms, redesigned after two confounds.**
 
 The 2026-07-28 attempts produced n=0 in every cell. The cause was a hard
 daily cap — `generativelanguage.googleapis.com/generate_content_free_tier_requests`,
@@ -167,21 +190,100 @@ quota ID `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **20 requests
 per day** for `gemini-3.6-flash`, confirmed from the 429 body, not a
 per-minute limit that re-pacing works around — combined with a loop order
 that spent the entire budget inside the first arm. **Both were fixed:**
-`REPS` now defaults to 1 (one rep = 18 calls = what a day actually buys),
 reps are the **outermost** loop so a 429 costs precision rather than the
 comparison itself, and `--out` / `--merge` accumulate raw per-call records
 across days. See the header comment in `measure-grounding.js`.
 
+The first full run, 2026-07-29, surfaced two further problems that were not
+quota-related — the harness ran cleanly, it just measured the wrong thing.
+Both are fixed now; each is worth stating on its own because neither was
+fixable by running more reps.
+
+**Confound 1 — the levels block was withheld from every arm.**
+`ai.service.ts:937-943` emits the startup's current per-dimension levels
+(`Initial Readiness Level: TRL … MRL … ARL … ORL … RRL … IRL …`) into the
+production RNA prompt for **every** arm; only the rubric block varies with
+`ragCorpus`. The harness omitted that block for every arm, so it was
+contrasting "told its levels" against "not told its levels" — a difference
+production never presents, and not a retrieval effect at all. `rnaPrompt`
+now takes `levels` and emits production's block (`readinessLevelBlock`) for
+every arm, matching what `RnaService.generateRNA` actually sends.
+
+**Confound 2 — the levels probe leaked its own answer to the deterministic
+arm.** Deterministic retrieval keys on `(readinessType, level)` using the
+startup's *actual current level*, so handing that retrieved rubric to a
+probe that then asks the model to assess the level was asking
+`deviation-deterministic` to read back a number it had just been given —
+any differentiation "advantage" for that arm was leakage, not grounding.
+The levels probe now receives the **full nine-rung ladder** for every
+dimension (`fullLadderRubrics()`) instead of the (current, current+1)
+lookup, so the model gets rubric vocabulary without being told which rung
+applies. The RNA probe deliberately keeps the (L, L+1) lookup, because that
+is what production ships for that call — the asymmetry between the two
+probes is intentional, not an oversight.
+
+Fixing these also forced a rewrite of what "metric 1" and "metric 2" mean
+(the terms-reuse and invented-field metrics scored below no longer exist in
+the code):
+
+- **Metric 1 — level-placement accuracy**, mean absolute error between the
+  levels probe's assigned level and the startup's actual seeded level
+  (`lib/metrics.js`'s `levelPlacement`). The metric it replaces —
+  "did the generated RNA reuse the retrieved rubric's exact vocabulary" —
+  scored 1/12 (8%) on the 2026-07-29 run, and inspection showed why that
+  number was mostly artifact, not signal: the model produced a
+  substantively correct TRL-2/3 characterization of AgroLink's technology
+  that reused none of the rubric's wording, because the RNA prompt's own
+  "be specific and grounded in the provided data" instruction structurally
+  discourages echoing abstract rubric phrasing. It measured vocabulary
+  reuse, not grounding, so it is gone.
+- **Metric 2 — stage-inappropriate recommendation rate**, SO 1.3's own
+  worked example of a hallucination ("recommending commercialization steps
+  to a TRL 2 startup") made mechanical (`lib/metrics.js`'s
+  `stageAppropriateness`, scored with `lib/stage-markers.js`'s
+  `isStageInappropriate`). It replaces the absent-field probe, which had
+  saturated at 0/15 invented across every arm and was aimed at something
+  the corpus cannot influence anyway — burn rate and investor name are not
+  readiness rubrics. The lexicon behind it lives in
+  `data/stage-markers.json` and **is authored, with no external source** —
+  say this plainly, the same way the corpus beside it carries a
+  `provenance` field per row. It is held disjoint from every corpus row's
+  `keyTerms` by `tests/stage-markers.test.js`, not by convention, so a
+  corpus arm cannot score well on metric 2 merely by echoing text metric 1
+  used to reward.
+- **Metric 3 — differentiation gap** is unchanged in definition (mid-stage
+  mean minus early-stage mean across the levels probe) but was the metric
+  Confound 2 leaked into: any gap difference favouring
+  `deviation-deterministic` in the 2026-07-29 numbers below cannot be
+  trusted, because that arm's levels probe was seeing its own answer.
+- **Metric 4 — the absent-field probe**, unchanged, now opt-in behind
+  `--with-fabrication-probe` rather than run by default. It stays in the
+  harness as SRS §2.2 evidence ("return null for unverifiable fields")
+  even though it is saturated and discriminates nothing between arms.
+
+A rep is now **12 calls** (RNA + levels, × 2 startups × 3 arms), or **18**
+with `--with-fabrication-probe` added back in — against the same 20/day cap.
+
+**The 2026-07-29 result below is superseded, not merely old.** It was
+produced with both confounds still present, and its own metric 1 and 2
+definitions (rubric-term reuse, invented-absent-fields) no longer exist in
+the code — there is no way to re-express that table in current terms. It is
+kept in this file, and the results file itself
+(`measurement/results/2026-07-29-rep1.json`) is kept on disk, for one
+reason only: caveat (b) below measured the model's own sampling noise at
+`temperature: 0`, which is a fact about `gemini-3.6-flash`, not about
+either confound, and it survives the redesign intact.
+
 Result, 2026-07-29 (`measurement/results/2026-07-29-rep1.json`), n=1 per
-cell, quota exhausted on call 17 of 18:
+cell, quota exhausted on call 17 of 18, **under the old (confounded) probe
+design and the old metric definitions** — do not treat metrics 1 and 2 in
+this table as measuring what the current code measures:
 
 | metric | baseline | sdd-semantic | deviation-deterministic |
 |---|---|---|---|
-| 1 — rubric-term grounding | n/a (no rubric) | n/a (nothing retrieved) | **1/12 (8%)** |
-| 2 — invented absent fields | 0/6 (0%) | 0/6 (0%) | 0/3 (0%) |
+| 1 — rubric-term grounding *(retired)* | n/a (no rubric) | n/a (nothing retrieved) | **1/12 (8%)** |
+| 2 — invented absent fields *(now metric 4)* | 0/6 (0%) | 0/6 (0%) | 0/3 (0%) |
 | 3 — differentiation gap | **+1.50** | **+2.50** | incomplete (n=0 MediSync) |
-
-**Read these with the four caveats below before quoting any of them.**
 
 **(a) `sdd-semantic` is not a distinct condition — it is a null-condition
 replicate of `baseline`.** Semantic rubric retrieval returned **0 rows** for
@@ -191,11 +293,14 @@ predicted, so `renderRubricBlock([])` produced an empty string — and
 string. **The two arms sent byte-identical prompts.** This is a direct
 consequence of Step A's 0/12 finding and it means the harness currently runs
 *two* conditions (corpus off / deterministic corpus) plus one accidental
-control, not three conditions.
+control, not three conditions. This is a property of the corpus and the
+code's semantic substitute, not of either confound, so it still applies
+under the redesigned probes.
 
-**(b) That control measured the noise floor, which is large.** Same prompt,
-same `temperature: 0`, two independent samples: **8 of the 12 per-dimension
-levels differed**, and the differentiation gap moved **+1.50 → +2.50**.
+**(b) That control measured the noise floor, which is large — this finding
+survives the redesign.** Same prompt, same `temperature: 0`, two independent
+samples: **8 of the 12 per-dimension levels differed**, and the
+differentiation gap moved **+1.50 → +2.50**.
 
 | | baseline | sdd-semantic (identical prompt) |
 |---|---|---|
@@ -206,57 +311,30 @@ So **±1.0 gap points is run-to-run variance at n=1** on this model.
 `gemini-3.6-flash` is thinking-enabled and does not sample deterministically
 at `temperature: 0` (already noted under Caveats, now quantified). **No
 corpus effect smaller than about one gap point is detectable at this N** —
-which is the strongest single reason to keep accumulating reps rather than
-acting on the table above.
+which is the strongest single reason to keep accumulating reps once
+generation quota is spent on the redesigned probes, and it is a fact about
+the model's sampling behaviour, not about either confound, so it is not
+invalidated by the rest of this table being superseded.
 
-**(c) Metric 2 is saturated and cannot move.** 0 invented across every arm
-and every call (0/15 absent fields), with 15/15 present fields recalled.
-This reproduces the 2026-07-27 model comparison exactly, which also found
-0/9 and 9/9 on both models. `groundPrompt()`'s "return null if uncertain"
-instruction already handles this probe completely, so **there is no headroom
-for the corpus to demonstrate an improvement.** A null result here is
-evidence about the probe, not about the corpus. A harder probe — longer
-documents, plausible-looking distractors, fields that are *partially*
-supported — is needed before Objective 1's headline claim can be tested at
-all.
-
-**(d) Metric 1's 8% is mostly a measurement artifact, and inspection says
-so.** Of AgroLink's 6 dimensions under `deviation-deterministic`, all 6
-missed — yet the generated text is substantively on-target. For Technology,
-with `TRL 2`/`TRL 3` verbatim in the prompt and `keyTerms: ["concept
-formulated", "speculative application", "architecture sketch", "no
-experimental proof"]`, the model wrote:
-
-> "Tested a paper prototype of the lot-aggregation flow with 3 cooperatives
-> in September 2025. Needs to move beyond paper testing to build and
-> physically…"
-
-That is a correct TRL-2/3 characterization that reuses none of the rubric's
-vocabulary. The RNA prompt explicitly demands "Be specific and grounded
-strictly in the provided data", which **structurally conflicts** with
-echoing abstract rubric phrasing. The exact-substring caveat below was
-already stated as a risk; this run shows it is the *dominant* case, not an
-edge case. **Metric 1 measures vocabulary reuse, and on this corpus
-vocabulary reuse is near zero even when the rubric is verbatim in the
-prompt.** Treat it as a traceability signal that is currently failing to
-trace, not as a grounding score.
-
-**Still missing: `deviation-deterministic` / MediSync (levels +
-hallucination probe), 2 calls.** That is why metric 3's headline arm reads
-`n/a`. Next quota window, run another full rep and merge:
+**Next quota window**, run a full rep under the current (fixed) code and
+merge:
 
 ```bash
 node measurement/measure-grounding.js --reps=1 --out=measurement/results/<date>-rep2.json
 node measurement/measure-grounding.js --merge measurement/results/*.json
 ```
 
+`--merge` will refuse to pool that new file with `2026-07-29-rep1.json` —
+their fingerprints differ, by design, because the probe design changed.
+That refusal is correct, not a bug: metric 1 and metric 2 in the old file
+answer questions the current code no longer asks.
+
 **Do not read Step A's failures as "therefore deterministic improves
 grounding."** Step A establishes that neither the code's substitute nor
-SDD §3.2's actual mechanism can retrieve this rubric corpus. Step B has now
-run once, and it does **not** yet show the shipped deviation moving either
-the unsupported-claim rate (saturated, (c)) or the differentiation gap
-(incomplete, and below the noise floor measured in (b)). Objective 1's
-headline claim remains untested in both directions.
+SDD §3.2's actual mechanism can retrieve this rubric corpus. Objective 1's
+headline claim — does the corpus reduce hallucination and improve
+differentiation — remains untested under the current, confound-free probe
+design; the 2026-07-29 numbers above cannot answer it either way.
 
 ## Reading the output
 
@@ -323,23 +401,37 @@ measurement being taken.
   points between two byte-identical prompts (see Step B above). Accumulate at
   least three reps with `--merge` before treating any between-arm difference
   in metric 3 as real.
-- **Metric 1 (rubric-term grounding) measures whether retrieval reached the
-  output, not whether the output is correct.** A generated RNA can contain a
-  `keyTerm` while still describing the wrong readiness level, or omit every
-  `keyTerm` while being an accurate paraphrase. It is a grounding-traceability
-  signal, not a correctness score — by design, so it can't be gamed by
-  fluent paraphrase.
-- **`keyTerms` are exact-substring matched, case-insensitive.** A model that
-  paraphrases a rubric concept instead of reusing its wording (e.g. "no
-  working prototype" for `keyTerms: ["no prototype"]`) is not credited. That
-  under-counts grounding rather than over-counting it, which is the safer
-  direction for a metric meant to catch fabrication.
-- **Metric 1's denominator excludes a dimension the model dropped entirely.**
-  If an RNA-generation response omits a `readiness_level_type` the prompt
-  asked for, that dimension is skipped rather than scored as a grounding
-  failure — a missing field is a schema-compliance problem, not evidence the
-  model ignored the rubric it was given. Schema compliance is not measured
-  by this script; check `n=` for a low denominator as a sign it's happening.
+- **Metric 1 (level-placement accuracy) replaced the old rubric-term
+  metric because that one measured whether retrieval's exact wording
+  reached the output, not whether the output was correct.** A generated
+  RNA could contain a `keyTerm` while describing the wrong readiness level,
+  or omit every `keyTerm` while being an accurate paraphrase — on the
+  2026-07-29 run it scored 1/12 (8%) even though inspection showed the
+  underlying text was substantively on-target, because the RNA prompt's own
+  "be specific and grounded in the provided data" instruction discourages
+  echoing abstract rubric phrasing. Level-placement MAE is scored against
+  the seeded ground truth instead, which cannot be gamed by fluent
+  paraphrase or defeated by faithful paraphrase either.
+- **Metric 1 and metric 3's denominators exclude a dimension the model
+  dropped entirely.** If a levels-generation response omits a `dimension`
+  the prompt asked for, that dimension is skipped (`levelPlacement`'s
+  `typeof assigned !== 'number'` check) rather than scored as an error — a
+  missing field is a schema-compliance problem, not evidence of a bad
+  placement. Schema compliance is not measured by this script; check `n=`
+  for a low denominator as a sign it's happening.
+- **Metric 2's markers are exact word-boundary matched, case-insensitive,
+  against the RNA text — not against the rubric.** `isStageInappropriate`
+  flags a dimension only when an authored marker phrase for a level well
+  above the startup's actual rung appears in the generated recommendation
+  (`\bphrase\b`, so "ipo" doesn't false-positive inside "IPOPHL"). A model
+  that recommends an advanced action in words the lexicon doesn't contain
+  is not flagged — that under-counts the failure rather than over-counting
+  it, the same safer-direction trade-off the old exact-substring metric
+  made.
+- **Metric 2's denominator excludes a dimension the model dropped from the
+  RNA entirely**, the same convention as metric 1: a missing
+  `readiness_level_type` is a schema-compliance gap (`stageAppropriateness`
+  skips it), not evidence the recommendation was stage-appropriate.
 - **The two seeded startups' per-dimension levels are real, not
   approximated** — `main.ts`'s `seedDemoStartups` (AgroLink: T2/M2/A1/O2/R1/I1;
   MediSync: T5/M4/A3/O4/R3/I3), not a uniform guess per startup. The
