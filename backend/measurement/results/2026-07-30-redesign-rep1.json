@@ -6,14 +6,14 @@
   "corpusRows": 54,
   "floor": 0.78,
   "fingerprints": {
-    "levels|baseline": "3d1dbc37efcf",
-    "rna|baseline": "8884a39a7d25",
+    "levels|baseline": "a9502f4cb258",
+    "rna|baseline": "267997de0a08",
     "fabrication|baseline": "1139754e8b2c",
-    "levels|sdd-semantic": "a019a49100d8",
-    "rna|sdd-semantic": "3e4e984af459",
+    "levels|sdd-semantic": "cf38a1166b86",
+    "rna|sdd-semantic": "d0f7287897a8",
     "fabrication|sdd-semantic": "fe4de6f3f58f",
-    "levels|deviation-deterministic": "7c544a89281e",
-    "rna|deviation-deterministic": "931369660477",
+    "levels|deviation-deterministic": "4102609c8e00",
+    "rna|deviation-deterministic": "b32bf70f8d83",
     "fabrication|deviation-deterministic": "6e83605be117"
   },
   "results": {

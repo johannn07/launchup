@@ -33,6 +33,7 @@
  *   node measurement/measure-grounding.js --retrieval-only  (Step A only, free)
  *   node measurement/measure-grounding.js --reps=1 --out=day1.json
  *   node measurement/measure-grounding.js --merge day1.json day2.json day3.json
+ *   node measurement/measure-grounding.js --merge results/*.json   (glob - see below)
  *
  * ## Why one rep per day, accumulated
  *
@@ -92,11 +93,95 @@ const flagValue = (name) => {
 };
 
 const OUT_FILE = flagValue('out');
-// --merge takes every following non-flag argument, so the shell can glob:
+
+// --merge takes every following non-flag argument:
+//   node measurement/measure-grounding.js --merge results/day1.json results/day2.json
 //   node measurement/measure-grounding.js --merge results/day*.json
-const MERGE_FILES = process.argv.includes('--merge')
-  ? process.argv.slice(process.argv.indexOf('--merge') + 1).filter((a) => !a.startsWith('--'))
-  : [];
+// A bash shell expands the second form itself before this script ever sees
+// it. PowerShell (and a plain Node child_process.spawn) does not glob at
+// all, so without help the second form would silently pass through the
+// literal, un-expanded string "results/day*.json" as a single "file" and
+// fail confusingly. Node 22's fs.globSync closes that gap: any argument that
+// actually contains glob metacharacters is expanded here, so the documented
+// command works the same way regardless of shell. An argument with no glob
+// metacharacters is never touched, even if the file doesn't exist yet - it
+// passes straight through so a genuine typo still surfaces as a plain ENOENT
+// naming exactly what was typed, from mergeRuns' fs.readFileSync, rather than
+// disappearing into a glob that "matched nothing".
+const MERGE_INDEX = process.argv.indexOf('--merge');
+const MERGE_ARGS = MERGE_INDEX === -1
+  ? []
+  : process.argv.slice(MERGE_INDEX + 1).filter((a) => !a.startsWith('--'));
+const GLOB_CHARS = /[*?[\]{}]/;
+const MERGE_FILES = MERGE_ARGS.flatMap((pattern) =>
+  GLOB_CHARS.test(pattern) ? fs.globSync(pattern) : [pattern],
+);
+
+const KNOWN_EXACT_FLAGS = new Set([
+  '--retrieval-only', '--dry-run', '--with-fabrication-probe', '--fingerprint', '--merge',
+]);
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps='];
+
+/**
+ * Pure validation over raw CLI args (process.argv.slice(2)) plus the already
+ * glob-resolved --merge file list. Returns an array of error strings - empty
+ * means the invocation is well-formed. Exported (and called only from the
+ * require.main guard below, never at module load) so tests can exercise it
+ * directly without spawning a subprocess or touching process.exit, and so
+ * requiring this file from `node --test` - where argv[0..] is the test
+ * runner's own arguments, not this script's - never runs it by accident.
+ *
+ * Two failure modes this closes, both of which previously spent the
+ * generation budget silently instead of erroring:
+ *   - `--merge` present but resolving to zero files (missing arguments, a
+ *     bare trailing flag, or a glob matching nothing) used to fall straight
+ *     through to a live 12-call run.
+ *   - `--out foo.json` (a space instead of `=`) used to leave OUT_FILE null
+ *     and "foo.json" ignored as if never typed, so a full run's results were
+ *     computed and then never written anywhere.
+ */
+function validateArgs(argv, mergeFiles) {
+  const errors = [];
+  const mergeIdx = argv.indexOf('--merge');
+  // Everything from --merge onward is file arguments for it - never validated
+  // as a flag or a stray positional here, since MERGE_FILES' own scan already
+  // consumes that entire tail of argv.
+  const toValidate = mergeIdx === -1 ? argv : argv.slice(0, mergeIdx);
+
+  for (let i = 0; i < toValidate.length; i++) {
+    const arg = toValidate[i];
+    if (arg.startsWith('--')) {
+      const known = KNOWN_EXACT_FLAGS.has(arg) || KNOWN_VALUE_FLAG_PREFIXES.some((p) => arg.startsWith(p));
+      if (!known) {
+        errors.push(
+          `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
+            '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, --merge <files...>.',
+        );
+      }
+    } else {
+      // The most common way to land here is `--out foo.json` or `--reps 3`
+      // (a space where "=" belongs) - the preceding bare flag names exactly
+      // what was probably meant, so say so instead of a generic message.
+      const prev = toValidate[i - 1];
+      const hint =
+        prev === '--out' || prev === '--reps'
+          ? ` Did you mean "${prev}=${arg}"? That flag takes "=", not a space.`
+          : '';
+      errors.push(
+        `Unrecognized argument "${arg}" - positional arguments are only accepted after --merge.${hint}`,
+      );
+    }
+  }
+
+  if (mergeIdx !== -1 && mergeFiles.length === 0) {
+    errors.push(
+      '--merge was given no files to pool (missing arguments, a glob that matched nothing, or ' +
+        '--merge placed last with nothing after it). Refusing to fall through to a live generation run.',
+    );
+  }
+
+  return errors;
+}
 
 const EMBED_MODEL = 'gemini-embedding-2';
 const DIMS = 768;
@@ -860,10 +945,16 @@ function currentFingerprints() {
       ),
     },
     markers: MARKERS,
+    rubrics: RUBRICS,
     sources: {
       rna: rnaPrompt.toString(),
       levels: levelsPrompt.toString(),
       fabrication: hallucinationPrompt.toString(),
+      // Called FROM INSIDE rnaPrompt/levelsPrompt, so their bodies are invisible
+      // to the builders' own .toString() above - see lib/fingerprint.js's header.
+      readinessLevelBlock: readinessLevelBlock.toString(),
+      renderRubricBlock: renderRubricBlock.toString(),
+      fullLadderRubrics: fullLadderRubrics.toString(),
     },
     arms: ARMS,
     levelsRubricScope: 'full-ladder',
@@ -908,10 +999,13 @@ function mergeRuns(files, arms) {
   //
   // days[0] was this plan's original rule and it silently defeats the whole
   // point of the task. The documented workflow is `--merge results/*.json`,
-  // the shell sorts by name, and the one legacy file's date sorts FIRST. With
-  // a fingerprint-less file as the reference, every key's `ref` is undefined,
-  // so EVERY file is refused for EVERY metric — including two perfectly
-  // compatible post-redesign runs that should pool with each other. Verified:
+  // and a glob resolved this way - whether by a bash shell before this script
+  // ever runs, or by this script's own fs.globSync on a shell that doesn't
+  // glob (see MERGE_FILES above) - naturally comes back name-sorted, so the
+  // one legacy file's earlier date sorts FIRST. With a fingerprint-less file
+  // as the reference, every key's `ref` is undefined, so EVERY file is
+  // refused for EVERY metric — including two perfectly compatible
+  // post-redesign runs that should pool with each other. Verified:
   // legacy-first pooled 0 calls where legacy-last pooled 2.
   const reference = {};
   for (const { data } of days) {
@@ -991,6 +1085,16 @@ function runMergeCli(files) {
  */
 if (require.main === module) {
   (async () => {
+    // Validated only here, never at module load - process.argv when this file
+    // is `require()`d by `node --test` is the test runner's own argv (e.g. the
+    // test file's path as argv[2]), not a set of flags for this script, and
+    // must never be run through CLI validation.
+    const argErrors = validateArgs(process.argv.slice(2), MERGE_FILES);
+    if (argErrors.length) {
+      for (const e of argErrors) console.error(e);
+      process.exit(1);
+    }
+
     if (process.argv.includes('--fingerprint')) {
       console.log(JSON.stringify(currentFingerprints(), null, 2));
       return;
@@ -1065,4 +1169,5 @@ module.exports = {
   summarizeResults,
   mergeRuns,
   currentFingerprints,
+  validateArgs,
 };

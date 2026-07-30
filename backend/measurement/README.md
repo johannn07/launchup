@@ -24,7 +24,7 @@ node measurement/measure-grounding.js --merge measurement/results/*.json
 
 `--dry-run` and `--fingerprint` (and `--retrieval-only`, for the generation
 endpoint specifically) are the quota-free paths, alongside `pnpm
-test:measurement` (`node --test measurement/tests/*.test.js`, 49 tests as of
+test:measurement` (`node --test measurement/tests/*.test.js`, 64 tests as of
 this writing, no network calls at all — every scorer and prompt builder is
 exercised as a pure function). `--dry-run` exists because unit tests cannot
 tell you whether an assembled prompt *looks* right, and this harness has
@@ -41,23 +41,57 @@ It refuses to merge files whose model, embedding model, corpus size,
 similarity floor **or probe design** differ, rather than silently averaging
 two different experiments.
 
+**The `--merge results/*.json` glob above works on any shell, including
+PowerShell.** PowerShell does not expand globs before handing arguments to a
+program, and neither does a plain `child_process` spawn — only a POSIX shell
+like bash does that on the script's behalf. `measure-grounding.js` no longer
+relies on the shell for this: any `--merge` argument containing glob
+metacharacters (`* ? [ ] { }`) is expanded internally with Node 22's
+`fs.globSync`, so the same command line runs the same way regardless of shell.
+Explicit file lists (`--merge day1.json day2.json`) still work exactly as
+before and are never glob-expanded, even if one of them doesn't exist yet — a
+typo'd explicit path surfaces as a plain "file not found" from the merge step
+itself, rather than being silently reinterpreted as "no matches". A glob that
+matches nothing, or a bare `--merge` with nothing after it, is now a hard
+error (exit 1) rather than falling through to a live 12-call generation run —
+see the CLI-argument tests below.
+
 The probe-design check matters because both confounds below changed what a
 "rep" actually measures without changing its shape — a model-and-corpus
 check alone would happily pool a pre-fix levels probe (which leaked the
 answer to the deterministic arm) with a post-fix one asking a genuinely
 different question. `lib/fingerprint.js`'s `fingerprintMap` hashes, **per
-(metric, arm)** — not once per metric — each probe's prompt-builder source,
-the grounding instruction, the dimension list, each startup's document/
-levels/field lists, that arm's rubric mode, and the rubric *scope* it
-receives (`'full-ladder'` / `'current-and-next'` / `'none'`); the `rna` key
-additionally folds in the stage-marker lexicon, since metric 2 is scored
-with it. Per-arm granularity matters because a rubric-scope change (like the
+(metric, arm)** — not once per metric — the grounding instruction, the
+dimension list, each startup's document/levels/field lists, that arm's rubric
+mode, and the rubric *scope* it receives (`'full-ladder'` / `'current-and-next'`
+/ `'none'`). It does **not** stop at the top-level prompt builder's own source
+text, because `.toString()` on a function does not include the body of
+anything that function *calls* — `rnaPrompt` and `levelsPrompt` both delegate
+rendering to helpers (`readinessLevelBlock`, `renderRubricBlock`,
+`fullLadderRubrics`), and a change to any of those would otherwise move zero
+fingerprints while still changing every affected prompt byte-for-byte. So each
+metric hashes exactly the helpers whose output can reach it:
+
+- **`levels`** — `levelsPrompt`'s own source, `renderRubricBlock`'s source,
+  `fullLadderRubrics`' source, the rubric scope, and — for a corpus arm only —
+  a content hash of the full `RUBRICS` corpus (title/content/keyTerms/key/
+  readinessType/level per row, not merely `corpusRows`' row *count*, which a
+  same-length edit to any row would leave unchanged).
+- **`rna`** — `rnaPrompt`'s own source, `readinessLevelBlock`'s source (every
+  arm gets this block, not only a corpus arm — see confound 1 below),
+  `renderRubricBlock`'s source, the rubric scope, the stage-marker lexicon
+  (metric 2 is scored with it), and the same per-corpus-arm content hash.
+- **`fabrication`** — the hallucination prompt's own source and the field
+  lists, unchanged from before.
+
+Per-arm granularity matters because a rubric-scope change (like the
 levels-probe fix below) alters what a corpus arm receives while leaving
 `baseline` untouched — a single per-metric hash would discard `baseline`'s
-still-valid data along with the arm that actually changed. `--fingerprint`
-prints what a run today would stamp — currently a 9-entry map (3 probes ×
-3 arms) — so you can check an existing results file is still mergeable
-without spending a call.
+still-valid data along with the arm that actually changed; the same logic now
+extends to the corpus-content hash, which is only folded in for an arm whose
+`ragCorpus` flag is `true`. `--fingerprint` prints what a run today would
+stamp — currently a 9-entry map (3 probes × 3 arms) — so you can check an
+existing results file is still mergeable without spending a call.
 
 ## What each one measures
 
@@ -286,11 +320,26 @@ byte-identical prompts. Their spread is therefore pure run-to-run variance at
 `temperature: 0`, and it calibrates everything else in the table: **0.25 MAE on
 metric 1, 0.50 gap points on metric 3** in this rep.
 
-**The corpus arm did worse on both scored metrics, by more than that noise.**
-Deterministic is +0.83 MAE above baseline (~3× the observed metric-1 noise) and
-−1.66 gap points below it (above the ±1.0 floor measured on 2026-07-29). Two
-independent metrics moving the same direction, each beyond its own
-within-condition noise, at n=1.
+**The corpus arm did worse on both scored metrics, and both readings sit
+outside the noise measured above — but metrics 1 and 3 are not independent
+evidence of that, and this rep should not be read as if they were.**
+Deterministic is +0.83 MAE above baseline and −1.66 gap points below it
+(the latter also outside the ±1.0 floor measured on 2026-07-29). Both numbers,
+though, are two different summaries of the *same* twelve `levelCalls` values —
+metric 1 is the mean absolute distance of those assignments from the seeded
+truth, metric 3 is (MediSync's mean of those same assignments) minus
+(AgroLink's). Concretely: this rep's deterministic arm overshoots three of
+MediSync's dimensions and collapses the other three to level 1 (see the table
+below) — those same twelve numbers are mechanically what both raises MAE and
+shrinks the gap. So this is one internally-consistent pattern of unusual
+placements, read two ways, not two separate lines of evidence that happen to
+agree. The "~3×" comparison to the metric-1 noise floor in an earlier version
+of this section also overstated what a single paired difference can say:
+0.25 MAE between two byte-identical-prompt arms is one number, not a
+distribution, and it does not by itself establish how variable that noise
+actually is. At n=1, the honest statement is that the corpus arm's placements
+look unusual in this one rep — not that two independent metrics corroborate
+each other.
 
 The per-dimension assignments show why, and the failure is **not** uniform
 inflation:
