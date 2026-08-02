@@ -1,25 +1,20 @@
 import { ReadinessType } from '../entities/enums/readiness-type.enum';
 
 /**
- * `rag_contexts.sourceType` values. One table, three populations.
- *
- * CAPSULE_SOURCE_TYPE is what startup.service.ts has always written; the other
- * two are the verified-knowledge corpus. Keeping them in one table means the
- * existing embedding path and boot-time backfill cover the corpus with no new
- * indexing code.
+ * `rag_contexts.sourceType` values — one table, three populations. CAPSULE is
+ * what startup.service.ts has always written; the other two are the verified
+ * corpus. Sharing the table lets the existing embedding path and boot-time
+ * backfill cover the corpus with no new indexing code.
  */
 export const RUBRIC_SOURCE_TYPE = 'readiness_rubric';
 export const FRAMEWORK_SOURCE_TYPE = 'business_framework';
 export const CAPSULE_SOURCE_TYPE = 'capsule_proposal';
 
 /**
- * How much external authority a corpus row actually carries.
- *
- * Recorded per row rather than claimed for the corpus as a whole, because it is
- * not uniform: TRL is transcribed from a published standard, the other BRLa
- * dimensions are authored against a paywalled framework's stated criteria, and
- * IRL has no external source at all. SRS §2.2 requires a confidence/validity
- * indicator in API responses — this is what it is derived from.
+ * How much external authority a corpus row carries. Per row, because it is not
+ * uniform: TRL is transcribed from a published standard, other BRLa dimensions
+ * are authored against a paywalled framework's criteria, IRL has no source at
+ * all. SRS §2.2's confidence/validity indicator derives from this.
  */
 export type Provenance = 'standard' | 'framework-derived' | 'authored';
 
@@ -41,9 +36,9 @@ export interface CorpusRowMetadata {
   /** Rubric rows only, 1..MAX_READINESS_LEVEL. */
   level?: number;
   /**
-   * Criteria vocabulary this row introduces. Authored with the content so the
-   * grounding metric has a term list that was not reverse-engineered from the
-   * output it scores.
+   * Criteria vocabulary this row introduces. Authored alongside the content so
+   * the grounding metric's term list isn't reverse-engineered from the output
+   * it scores.
    */
   keyTerms: string[];
 }
@@ -51,8 +46,8 @@ export interface CorpusRowMetadata {
 export const MAX_READINESS_LEVEL = 9;
 
 /**
- * Abbreviation used in the proposal, SRS and SDD. Note ARL is "Adoption
- * Readiness Level" in those documents while the enum value is 'Acceptance'.
+ * Abbreviations from the proposal, SRS and SDD. ARL is "Adoption Readiness
+ * Level" there, while the enum value is 'Acceptance'.
  */
 const RUBRIC_KEY_PREFIX: Record<ReadinessType, string> = {
   [ReadinessType.T]: 'trl',

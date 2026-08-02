@@ -5,21 +5,17 @@ import { VectorEmbedding } from 'src/entities/vector-embeddings.entity';
 import { EmbeddingService } from './embedding.service';
 
 /**
- * Source type for every vector this service writes.
- *
- * There is exactly one corpus: the rows of `rag_contexts`. An earlier design
- * implied a second one — RagQueryService looks for `source_type: 'startup'` —
- * but a startup's retrievable text *is* its capsule proposal, which is already
- * stored as a rag_context. Embedding it twice under two source types would mean
- * two vectors of the same sentence drifting apart as the text is edited.
- * Ownership is carried in metadata.startupId instead.
+ * The only corpus: rows of `rag_contexts`. RagQueryService still looks for a
+ * `source_type: 'startup'` from an earlier design, but a startup's retrievable
+ * text *is* its capsule proposal, already stored as a rag_context — embedding
+ * it under two source types would let two vectors of the same sentence drift
+ * apart. Ownership lives in metadata.startupId instead.
  */
 export const RAG_CONTEXT_SOURCE = 'rag_context';
 
 /**
- * Owns writes to `vector_embeddings`. Kept separate from EmbeddingService so
- * that one stays a pure Gemini client with no database dependency, which is
- * what makes it trivially mockable in the retrieval tests.
+ * Owns writes to `vector_embeddings`. Separate from EmbeddingService so that
+ * one stays a pure Gemini client with no DB dependency, and stays mockable.
  */
 @Injectable()
 export class EmbeddingIndexService {
@@ -31,22 +27,16 @@ export class EmbeddingIndexService {
   ) {}
 
   /**
-   * The text we actually embed for a context row.
-   *
-   * Title is included with the body because titles carry the domain noun
-   * ("referral coordination", "cooperative market access") that the body often
-   * only implies, and retrieval queries are built from startup names.
+   * Title goes in with the body: titles carry the domain noun ("referral
+   * coordination") the body only implies, and queries are built from names.
    */
   private textFor(context: RagContext): string {
     return `${context.title}\n\n${context.content}`.trim();
   }
 
   /**
-   * Embed one context row and store the vector, replacing any vector already
-   * held for it.
-   *
-   * Returns whether a vector was stored. Callers treat false as "retrieval will
-   * not see this row yet", not as an error — see EmbeddingService.embed.
+   * Returns whether a vector was stored. Callers treat false as "retrieval
+   * won't see this row yet", not as an error — see EmbeddingService.embed.
    */
   async indexRagContext(context: RagContext): Promise<boolean> {
     const vector = await this.embeddings.embed(this.textFor(context));
@@ -60,10 +50,9 @@ export class EmbeddingIndexService {
   }
 
   /**
-   * @param em The EntityManager to write through. Passed explicitly because
-   *   indexRagContext runs inside a request and must use the contextual
-   *   instance, while backfill runs at boot and must use a fork — MikroORM
-   *   rejects global-instance writes outside a request context.
+   * @param em Explicit because indexRagContext runs in a request and needs the
+   *   contextual instance, while backfill runs at boot and needs a fork —
+   *   MikroORM rejects global-instance writes outside a request context.
    */
   private async store(
     em: EntityManager,
@@ -98,17 +87,14 @@ export class EmbeddingIndexService {
   }
 
   /**
-   * Embed every context row that has no vector yet.
-   *
-   * Exists because `rag_contexts` has been written since long before anything
-   * embedded it, so on any existing database the corpus starts out entirely
-   * unindexed and semantic retrieval would return nothing at all.
+   * Embed every context row that has no vector yet. `rag_contexts` was written
+   * long before anything embedded it, so on an existing database the corpus
+   * starts fully unindexed and semantic retrieval returns nothing.
    *
    * @param limit Caps one invocation, since each row costs an API call.
    */
   async backfill(limit = 200): Promise<{ indexed: number; skipped: number; total: number }> {
-    // Boot-time call path, so there is no request context and the injected
-    // global EntityManager would be rejected outright.
+    // Boot-time path — no request context, so the injected global EM is rejected.
     const em = this.em.fork();
 
     const indexedIds = (
@@ -129,8 +115,8 @@ export class EmbeddingIndexService {
       return { indexed: 0, skipped: 0, total: 0 };
     }
 
-    // One batched request rather than N, because the per-call latency dominates
-    // and the free-tier quota is counted in requests.
+    // Batched, not N calls: per-call latency dominates and the free-tier quota
+    // counts requests.
     const vectors = await this.embeddings.embedBatch(pending.map((c) => this.textFor(c)));
 
     let indexed = 0;
