@@ -525,3 +525,55 @@ The window resets at **15:00 Philippine time** (midnight US Pacific). A rep is 1
 Before that, the quota-free ladder worth running locally: `pnpm test:measurement` proves the parts, `--dry-run` shows the real assembled prompts, `--merge` reproduces the result tables. None spends generation quota.
 
 Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
+
+---
+
+## Rep 2 — the corpus arm's error is reproducible, not noisy — 2026-08-03
+
+Master already carries all the measurement work (`measure/grounding-arms`, `feat/rag-corpus`, `fix/auth-guards` are all merged; only the disposable `backup/rag-corpus-preflight` is unmerged). So the top open item was the one both files named: **more reps**. Rep 2 ran, all 12 calls, no generation quota hit. Raw records at `backend/measurement/results/2026-08-03-rep2.json`.
+
+### Preflight, all quota-free, all green
+
+64/64 measurement tests; Step A reproduced exactly (deterministic 12/12, the code's semantic substitute 0/12, SDD §3.2's profile query 0/2); `--dry-run` showed `baseline`/`sdd` retrieving 0 rows and the corpus arm 12 for the RNA probe and 54 for the levels probe.
+
+**The `--dry-run` also earned its keep a second way.** Running it twice back-to-back exhausted the *embedding* per-minute quota (`EmbedContentRequestsPerMinutePerUserPerProjectPerModel-FreeTier`, 100/min — a different quota from the 20/day generation cap), so Step A 429'd inside the measured run. That did **not** invalidate anything, and checking why is the point: `deterministic` is an exact `(readinessType, level)` key lookup that touches no embedding endpoint. Confirmed from the results file — the corpus arm retrieved `trl-2,trl-3,…` for AgroLink (actual level 2) and `trl-5,trl-6,…` for MediSync (actual level 5), the correct 12 keys each. Verified rather than assumed, because "the arm silently ran empty" is exactly the failure this harness has hit before.
+
+### n=2 pooled
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — placement MAE (lower better) | 0.71 | 0.38 | **1.42** |
+| 1 — within one rung | 21/24 | 23/24 | **8/24** |
+| 2 — stage-inappropriate rate | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.25 | 2.08 | **1.33** |
+
+**The headline is not the means — it is the reproducibility.** MediSync's per-dimension signed deltas for the corpus arm are `+2 +2 +2 −3 −2 −2` in rep 1 and `+2 +2 +2 −2 −2 −2` in rep 2. Meanwhile `baseline` wobbles more between reps than the corpus arm does (AgroLink `T2 M2 A2` → `T3 M3 A3`).
+
+**That retracts the recorded working hypothesis.** "The levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement" cannot be right — the corpus arm is the *more* stable of the two. It **displaces placement systematically**: up 2 rungs on Technology/Market/Acceptance, down 2 on Organizational/Regulatory/Investment. On AgroLink only the upward half is visible (Market +2.0, Acceptance +2.5, the rest exact) because its bottom three dimensions are already at level 1 and cannot collapse further.
+
+This is a better defect to have found. Instability would be a prompt-volume problem with no clean fix; a reproducible per-dimension displacement points at **the rubric text's own calibration** — the O/R/I rungs appear to demand more evidence than the model's unaided prior, the T/M/A rungs less — which is measurable per dimension and correctable in the corpus rows. Hypothesis, not demonstrated cause.
+
+`within one rung` is the sharpest number: baseline 21/24, corpus 8/24 — and the corpus arm's *exact* count is also 8, so **every non-exact corpus placement is off by more than one rung.** Large-grained displacement, not drift.
+
+### Three things checked rather than assumed
+
+1. **`baseline` and `sdd-semantic` really are byte-identical.** `sdd` beat `baseline` on metric 1 in *both* reps, which looked like a signal. Diffed the two assembled prompts out of `--dry-run`: identical, same md5. So it is a coin flip landing the same way twice — and a useful calibration of how little a consistent direction proves at n=2.
+2. **Every arm overshoots Acceptance** (+1.0 to +2.5 pooled, both startups), *including* the two arms that receive no rubric text. So it is not a corpus effect — it points at the seeded Acceptance ground truth or at the seeded documents carrying more adoption evidence than their assigned ARL rung implies. Inflates all three MAEs about equally, so it does not bias the between-arm contrast. Worth checking against `seed-demo-full.js`.
+3. **`--merge results/*.json` works on this machine.** The final review's `fs.globSync` fix is confirmed on Windows/Git Bash, and the fingerprint guard refuses the superseded `2026-07-29-rep1.json` with an explicit per-group "Not pooled" list rather than silently averaging two probe designs together. Pooled numbers identical to the explicit file list.
+
+### What is and isn't established
+
+Metrics 1 and 3 are still **one finding read two ways** — both come off the same `levelCalls` array, and the displacement pattern mechanically raises MAE *and* compresses the early-vs-mid gap. Not corroboration.
+
+Not established: **whether the corpus helps or harms in production.** Every number here comes from the levels probe, which hands corpus arms all 54 rubric rows; production's RNA path retrieves 12 (current rung + next). And metric 3's per-arm rep-to-rep swing (baseline 2.83 → 1.67) is still comparable to the effect being measured.
+
+### Next step
+
+**Rep 3, after 15:00 PH today.** 8 of the current window's 20 calls remain and a rep costs 12. A partial run now would spend all 8 inside `baseline`+`sdd` and add nothing to the corpus arm, biasing the pool toward the controls — worth *not* doing. Note rep 2 ran at 01:15 on 08-03 and therefore drew on the **08-02** window; the reset is 15:00 PH.
+
+```
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-08-03-rep3.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
+
+Then, newly indicated by this rep rather than by speculation: **a per-dimension calibration pass over the rubric text**, targeting the O/R/I rungs that read stricter than the model's prior and the T/M/A rungs that read looser. That is a corpus-content change, and it is the first time the measurement has pointed at one.

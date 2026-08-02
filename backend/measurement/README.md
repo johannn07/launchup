@@ -292,7 +292,92 @@ the code):
 A rep is now **12 calls** (RNA + levels, × 2 startups × 3 arms), or **18**
 with `--with-fabrication-probe` added back in — against the same 20/day cap.
 
+### Result, 2026-08-03 — second rep, n=2 pooled
+
+`measurement/results/2026-08-03-rep2.json`, all 12 calls, no quota hit on the
+generation endpoint. Pooled with the 2026-07-30 rep below via
+`--merge`; all nine (metric, arm) fingerprint groups matched, so both reps
+pool. **n=2.**
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — level-placement MAE (lower better) | 0.71 | 0.38 | **1.42** |
+| 1 — exact placements | 11/24 | 16/24 | 8/24 |
+| 1 — within one rung | 21/24 | 23/24 | **8/24** |
+| 2 — stage-inappropriate rate (lower better) | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.25 | 2.08 | **1.33** |
+
+**The headline change is not the pooled means — it is that the corpus arm's
+error turned out to be reproducible.** Per-dimension signed deltas against
+seeded truth, both reps:
+
+| MediSync (truth) | T5 | M4 | A3 | O4 | R3 | I3 |
+|---|---|---|---|---|---|---|
+| deterministic, rep 1 | +2 | +2 | +2 | −3 | −2 | −2 |
+| deterministic, rep 2 | +2 | +2 | +2 | −2 | −2 | −2 |
+| baseline, rep 1 | +1 | +1 | +3 | 0 | 0 | +1 |
+| baseline, rep 2 | 0 | 0 | +2 | 0 | −1 | +1 |
+
+The corpus arm returns nearly the same wrong placement twice; `baseline` moves
+around more between reps than the corpus arm does. **So the working hypothesis
+recorded below — that 54 rubric rows *destabilise* placement — is not what the
+data shows, and is retracted.** The corpus arm is, if anything, the *more*
+stable of the two. What it does is **displace placement systematically**:
+on the mid-stage startup, +2 on Technology/Market/Acceptance and −2 on
+Organizational/Regulatory/Investment, in both reps. On AgroLink the same upward
+push appears on Market (+2.0) and Acceptance (+2.5) while the other four sit
+exact — the bottom three are already at level 1 and cannot collapse further, so
+the downward half of the pattern is only observable on MediSync.
+
+That distinction matters because the two defects have different fixes.
+Instability would be a prompt-volume problem. A reproducible per-dimension
+displacement points at the **rubric text's own calibration**: the rungs for
+O/R/I appear to demand more evidence than the model's unaided prior, and those
+for T/M/A less. That is measurable per dimension and correctable in the corpus
+rows, and it is a live hypothesis rather than a demonstrated cause.
+
+**The `within one rung` row is the sharpest single number here.** Baseline
+lands within one rung 21/24 times; the corpus arm 8/24 — and its exact count is
+also 8, so **every non-exact corpus placement is off by more than one rung.**
+The error is large-grained, not a drift.
+
+**Separate finding, not a corpus effect: every arm overshoots Acceptance.**
+Pooled mean signed delta on Acceptance is +1.0 to +2.5 for *all three* arms on
+*both* startups — including the two that receive no rubric text at all. Since it
+is present in the controls it cannot be attributed to the corpus, and because it
+lands on every arm roughly equally it inflates all three MAEs without biasing
+the between-arm contrast. The likeliest explanations are the seeded Acceptance
+ground truth being set too low, or the seeded documents carrying more adoption
+evidence than their assigned ARL rung implies. Worth checking against
+`seed-demo-full.js` before the Acceptance ground truth is used for anything
+else.
+
+**Metrics 1 and 3 are still one finding read two ways, not two.** Both derive
+from the same `levelCalls` array; the displacement pattern above mechanically
+raises MAE *and* compresses the early-vs-mid gap (it lifts AgroLink's Market and
+Acceptance while lowering MediSync's O/R/I). Do not present them as
+corroborating each other.
+
+**Noise floor at n=2.** `baseline` vs `sdd-semantic` remains the control — the
+two send byte-identical prompts, re-verified this rep by diffing the assembled
+prompts from `--dry-run` (identical, same md5). Their pooled spread is 0.33 MAE
+and 0.17 gap points. Note this is still a single paired difference of two means,
+not a variance estimate; it does not license an "N× the noise" multiplier. Note
+also that `sdd-semantic` scored better than `baseline` on metric 1 in *both*
+reps — with byte-identical prompts that is a coin flip landing the same way
+twice, and it is a useful reminder of how little a consistent direction proves
+at n=2.
+
+**Still not established.** Whether the corpus helps or harms *in production*.
+Every number here comes from the levels probe, which hands corpus arms all 54
+rubric rows; production's RNA path retrieves 12 (current rung + next). The
+displacement is a property of the corpus text as read under the probe's
+conditions. A third rep is still worth running for metric 3, whose per-arm
+rep-to-rep swing (baseline 2.83 → 1.67) remains comparable to the effect.
+
 ### Result, 2026-07-30 — the first clean rep
+
+*Pooled into the n=2 result above; kept for the per-rep detail.*
 
 `measurement/results/2026-07-30-redesign-rep1.json`. All 12 calls completed,
 no quota hit. **This is the first rep in which the arms differ only by the
@@ -342,10 +427,13 @@ inflation:
 | deterministic | 7 | 6 | 5 | **1** | **1** | **1** |
 
 The deterministic arm overshoots on three dimensions and collapses the other
-three to level 1. **Working hypothesis: the levels probe hands corpus arms all
+three to level 1. ~~Working hypothesis: the levels probe hands corpus arms all
 54 rubric rows, and that volume destabilises placement rather than grounding
-it.** That is a property of the measurement instrument's confound-2 fix, not of
-the shipped product — production's levels never come from this probe.
+it.~~ **Retracted by the second rep** — the corpus arm reproduced this pattern
+almost exactly, and reproducibility is the opposite of destabilisation. See the
+n=2 section above. The probe-vs-production caveat still stands: this is a
+property of the measurement instrument's confound-2 fix, and production's levels
+never come from this probe.
 
 This also demonstrates why metric 1 uses absolute error. MediSync's
 deterministic deltas are `+2 +2 +2 −3 −2 −2`: a signed mean of **−0.17**, which
