@@ -42,14 +42,13 @@
   let readinessLevel = $state('1');
   let isLoadingReadinessLevel = $state(false);
 
-  // Initialize form data with existing answer
   $effect(() => {
     if (assessment?.response) {
       answerValue = assessment.response.answerValue || '';
     }
   });
 
-  // Fetch current readiness level when component loads (for mentor view)
+  // Mentor view only — founders don't see the current level.
   $effect(() => {
     if (isMentor && assessment?.assessment?.assessmentType && startupId) {
       fetchCurrentReadinessLevel();
@@ -68,7 +67,6 @@
         }
       );
 
-      // Find the readiness level for this assessment's type
       const currentLevel = response.data.find(
         (rl: any) =>
           rl.readinessLevel.readinessType === assessment.assessment.assessmentType

@@ -3,9 +3,8 @@ import { AiRunService } from 'src/ai/ai-run.service';
 import { Initiative } from 'src/entities/initiative.entity';
 import { Rns } from 'src/entities/rns.entity';
 
-// A *real* AiRunService over a stub EntityManager, so these tests exercise
-// the actual durable-attribution write rather than a mock that only mutates
-// ctx.run in memory.
+// A *real* AiRunService over a stub EntityManager, so these tests exercise the
+// durable-attribution write rather than a mock that only mutates ctx.run.
 function buildAiRunService() {
   const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
   const service = new AiRunService(
@@ -15,14 +14,10 @@ function buildAiRunService() {
   return { aiRunService: service, forkedEm };
 }
 
-// InitiativeService's real constructor arity (EntityManager, AiService)
-// matches what the brief assumed, so no correction was needed there.
-// GenerateInitiativeDto, however, carries no startup id at all (only
-// rnsId/rnsIds/no_of_initiatives_to_create/debug) — the brief's claim that
-// the generate-initiatives endpoint "takes dto.startup_id" does not match
-// the DTO or the frontend caller. generateInitiatives instead resolves the
-// startup from the Rns entity it loads, so these tests assert ctx.run.startup
-// is set from that loaded Rns rather than from a DTO field.
+// GenerateInitiativeDto carries no startup id (only rnsId/rnsIds/
+// no_of_initiatives_to_create/debug), so generateInitiatives resolves the
+// startup from the Rns it loads — hence the assertions below check
+// ctx.run.startup against that Rns, not a DTO field.
 describe('InitiativeService.generateInitiatives provenance', () => {
   const buildRns = (overrides: Record<string, any> = {}) =>
     ({
@@ -41,9 +36,9 @@ describe('InitiativeService.generateInitiatives provenance', () => {
       ...overrides,
     }) as any;
 
-  // rnsById maps an Rns id to either the entity to resolve with, or an Error
-  // to reject with — lets tests simulate a bad id partway through a
-  // multi-rnsId batch (findOneOrFail is keyed on `where.id`, not call order).
+  // Maps an Rns id to the entity to resolve with, or an Error to reject with,
+  // so a test can plant a bad id partway through a batch. Keyed on `where.id`,
+  // not call order.
   function buildEm(rnsById: Record<number, any>, created: any[]) {
     return {
       find: jest.fn((entity: any) => {
@@ -109,15 +104,13 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, rns.startup, em);
     expect(aiService.generateInitiativesFromPrompt).toHaveBeenCalledWith(ctx, expect.any(String));
 
-    // generationRun? is optional on Initiative, so an unasserted stamping
-    // would compile clean and pass silently if the line were reverted.
+    // generationRun? is optional on Initiative, so reverting the stamping
+    // would compile clean and pass without this assertion.
     expect(created.some((row) => row.generationRun === ctx.run)).toBe(true);
     expect(result.some((row: any) => row.generationRun === ctx.run)).toBe(true);
 
-    // generate-initiatives has no startup id in its DTO, so the run must be
-    // attributed here, from the Rns entity the service already loaded — and
-    // the attribution has to reach the database, not just ctx.run, because
-    // `finish`'s payload never carries `startup`.
+    // No startup id in the DTO, so the run is attributed from the loaded Rns —
+    // and must reach the database, since `finish`'s payload omits `startup`.
     expect(ctx.run.startup).toBe(rns.startup);
     expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
       expect.anything(),
@@ -188,17 +181,13 @@ describe('InitiativeService.generateInitiatives provenance', () => {
       ),
     ).rejects.toThrow('Rns with id 11 not found');
 
-    // The Rns lookup for id 11 must fail before the renumbering loop (which
-    // reads existing Initiative rows via em.find) ever runs — otherwise a
-    // routine bad-id error would leave stray persistAndFlush side effects
-    // from that loop despite the whole call failing.
+    // The lookup for id 11 must fail before the renumbering loop runs, or a
+    // routine bad-id error leaves stray persistAndFlush side effects behind.
     expect(em.find).not.toHaveBeenCalled();
 
-    // The run must still be attributed to the startup that *was*
-    // successfully resolved (id 10), not left with startup: undefined,
-    // even though the overall call rejected. This is the failure path where
-    // nothing ever flushes the request-context EM, so the in-memory
-    // assertion alone is not evidence — the durable write is.
+    // Still attributed to the startup that did resolve (id 10), despite the
+    // call rejecting. Nothing flushes the request EM on this path, so only the
+    // durable write is evidence.
     expect(ctx.run.startup).toBe(firstRns.startup);
     expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
       expect.anything(),
@@ -237,9 +226,8 @@ describe('InitiativeService.generateInitiatives provenance', () => {
       ctx,
     );
 
-    // Both Initiative rows generated (one per Rns) must still carry the
-    // single ai_generation_runs row via ctx.run, but the run's own startup
-    // must be the *first* Rns's startup, not the last one processed.
+    // Both rows carry the single run, but the run's startup is the *first*
+    // Rns's, not the last one processed.
     expect(ctx.run.startup).toBe(firstRns.startup);
     expect(ctx.run.startup).not.toBe(secondRns.startup);
     expect(forkedEm.nativeUpdate).toHaveBeenCalledTimes(1);
@@ -286,10 +274,8 @@ describe('InitiativeService.refineInitiative provenance', () => {
       }),
     };
 
-    // The controller opens initiatives_refine runs with startupId: null,
-    // since the only route param is the initiative id. ctx.run.startup
-    // starts unset here to mirror that; the assertion below proves the
-    // service fixes it up once the startup is loaded.
+    // The controller opens initiatives_refine runs with startupId: null (the
+    // only route param is the initiative id), so ctx.run.startup starts unset.
     const ctx = {
       runId: 88,
       run: { id: 88, startup: undefined } as any,

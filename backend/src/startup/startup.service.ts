@@ -143,12 +143,10 @@ export class StartupService {
 
       await this.em.persistAndFlush(startup);
 
-      // The run opened before the startup existed, so attribute it now that
-      // there is an id — otherwise a failed application leaves an orphaned
-      // run row that no startup-filtered provenance query would surface.
+      // Run opened before the startup had an id; attribute now or a failed
+      // application leaves a run row no startup-filtered query can find.
       await this.aiRunService.attribute(ctx, startup);
 
-      // Add the startup leader/owner to the members collection
       startup.members.add(user);
       await this.em.flush();
 
@@ -240,8 +238,7 @@ export class StartupService {
     let aiPayload: string | null | undefined = null;
 
     if (file.mimetype.startsWith('image/')) {
-      // PRIMARY PATH: Send image directly to Gemini Vision for OCR + extraction
-      // This gives far superior results for handwritten documents compared to Tesseract
+      // Primary path: Gemini Vision beats Tesseract by a wide margin on handwriting.
       try {
         aiPayload = await this.aiService.getCapsuleProposalInfoFromImage(
           ctx,
@@ -253,16 +250,15 @@ export class StartupService {
         console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
       }
 
-      // Also run Tesseract in parallel for raw text logging and sketch detection
+      // Tesseract still needed for raw text and sketch detection.
       try {
         const result = await this.ocrService.parseBuffer(file.buffer) as any;
         parsedText = result.text || '';
         tesseractAvgConfidence = result.avgConfidence as number | undefined;
       } catch {
-        // Tesseract failure is non-critical since we have Gemini Vision
+        // Non-critical — Gemini Vision already covers extraction.
       }
 
-      // If Gemini Vision failed, fall back to Tesseract text + AI text extraction
       if (!aiPayload && parsedText) {
         aiPayload = await this.aiService.getCapsuleProposalInfo(ctx, parsedText);
       }
@@ -326,15 +322,13 @@ export class StartupService {
         };
       }
 
-      // For PDFs, use the text-based AI extraction
       aiPayload = await this.aiService.getCapsuleProposalInfo(ctx, parsedText);
     }
 
     const cleanPayload = aiPayload
       ? aiPayload.replace(/^```json\s*/, '').replace(/\s*```$/, '')
       : '';
-    
-    // Sketch detection for image uploads
+
     let visionLabels: any[] = [];
     const sketchInfo = file.mimetype.startsWith('image/')
       ? (() => {
@@ -346,14 +340,13 @@ export class StartupService {
       try {
         const v = await this.ocrService.detectWithVision(file.buffer);
         visionLabels = v.labels || [];
-        // if vision strongly indicates drawing/diagram, boost sketch confidence
         const drawing = visionLabels.find((l: any) => /drawing|diagram|illustration|sketch/i.test(l.description));
         if (drawing && drawing.score >= 0.6) {
           sketchInfo.sketchConfidence = Math.max(sketchInfo.sketchConfidence, Number((drawing.score * 0.9).toFixed(2)));
           sketchInfo.sketchDetected = true;
         }
       } catch (e) {
-        // ignore
+        // Vision labels are optional; sketch detection still works without them.
       }
     }
 
@@ -367,7 +360,7 @@ export class StartupService {
       }
     }
 
-    // Use raw_transcription from Gemini Vision if available (better than Tesseract)
+    // Gemini's transcription is more accurate than Tesseract's, so prefer it.
     if (parsedPayload.raw_transcription && !parsedText) {
       parsedText = parsedPayload.raw_transcription;
     }
@@ -471,22 +464,18 @@ export class StartupService {
         targetMarket: dto.targetMarket,
         solutionDescription: dto.solutionDescription,
 
-        // Ensure objectives is always an array
         objectives: Array.isArray(dto.objectives) ? dto.objectives : [],
 
-        // Ensure historicalTimeline is always an array
         historicalTimeline: Array.isArray(dto.historicalTimeline)
           ? dto.historicalTimeline
           : [],
 
-        // Ensure competitiveAdvantageAnalysis is always an array of objects
         competitiveAdvantageAnalysis: Array.isArray(
           dto.competitiveAdvantageAnalysis,
         )
           ? dto.competitiveAdvantageAnalysis
           : [],
 
-        // Ensure members is always an array of objects
         members: Array.isArray(dto.members) ? dto.members : [],
 
         intellectualPropertyStatus: dto.intellectualPropertyStatus ?? 'Pending AI Generation',
@@ -672,7 +661,6 @@ export class StartupService {
   }
 
   async getPendingStartupsRankingByUrat() {
-    // Fetch all UratQuestionAnswers with their startup relation
     const allAnswers = await this.em.find(
       UratQuestionAnswer,
       {},
@@ -686,7 +674,6 @@ export class StartupService {
       return [];
     }
 
-    // Group by startup and sum scores
     const startupScoreMap = new Map<number, number>();
     for (const answer of allAnswers) {
       const startupId = answer.startup.id;
@@ -698,7 +685,7 @@ export class StartupService {
       return [];
     }
 
-    // Add technology level to each startup's score
+    // Ranking score is URAT total plus the calculator-derived technology level.
     const finalScores: { startup_id: number; score: number }[] = [];
     for (const [startupId, uratScore] of startupScoreMap.entries()) {
       const technologyLevel = await this.calculateTechnologyLevel(startupId);
@@ -712,10 +699,8 @@ export class StartupService {
       return [];
     }
 
-    // Sort by total score descending order
     finalScores.sort((a, b) => b.score - a.score);
 
-    // Fetch the startups
     const startupIds = finalScores.map((ranking) => ranking.startup_id);
     const startups = await this.em.find(
       Startup,
@@ -727,7 +712,7 @@ export class StartupService {
       return [];
     }
 
-    // Map by ID for ordered results
+    // Re-key by id so results come back in ranked order, not query order.
     const startupsMap = new Map<number, Startup>();
     for (const startup of startups) {
       startupsMap.set(startup.id, startup);
@@ -745,7 +730,7 @@ export class StartupService {
       })
       .filter((startup): startup is Startup & { ranking_score: number } =>
         Boolean(startup),
-      ); // Remove nulls
+      );
 
     if (orderedStartups.length === 0) {
       console.warn('No startups matched the final scores.');
@@ -907,7 +892,7 @@ export class StartupService {
       );
     }
 
-    // Maybe (if have time) add logic for sending the startup an email that they got approved
+    // TODO: email the startup on approval.
 
     startup.qualificationStatus = QualificationStatus.QUALIFIED;
 
@@ -925,7 +910,6 @@ export class StartupService {
 
     startup.qualificationStatus = QualificationStatus.WAITLISTED;
 
-    // Find the manager who is waitlisting the startup
     const manager = await this.em.findOne(User, { id: dto.managerId });
     if (!manager) {
       throw new NotFoundException(
@@ -933,7 +917,6 @@ export class StartupService {
       );
     }
 
-    // Create waitlist message
     const waitlistMessage = new StartupWaitlistMessage();
     waitlistMessage.startup = startup;
     waitlistMessage.message = dto.message;
@@ -1029,7 +1012,7 @@ export class StartupService {
       throw new NotFoundException(`Mentor with ID ${dto.mentorId} not found`);
     }
 
-    // Replace existing mentors with the new mentor
+    // set() replaces rather than adds — changeMentor is a swap, not an append.
     startup.mentors.set([newMentor]);
 
     await this.em.flush();
@@ -1061,7 +1044,7 @@ export class StartupService {
         startup: startupId,
       },
       {
-        populate: ['question'], // Ensure the question relationship is populated
+        populate: ['question'],
       },
     );
 
@@ -1185,7 +1168,6 @@ export class StartupService {
   private async createStartupReadinessLevels(
     startupId: number,
   ): Promise<StartupReadinessLevel[]> {
-    // Fetch the startup
     const startup = await this.em.findOne(Startup, { id: startupId });
     if (!startup) {
       throw new NotFoundException(
@@ -1203,7 +1185,6 @@ export class StartupService {
       },
     );
 
-    // Calculate total scores for each ReadinessType
     const scoresByReadinessType: Record<ReadinessType, number> = {
       [ReadinessType.T]: 0,
       [ReadinessType.M]: 0,
@@ -1222,19 +1203,17 @@ export class StartupService {
       //   scoresByReadinessType[readinessType] / 3,
       // );
 
-      // Average to range of 1-5
+      // Three URAT questions per readiness type, so /3 averages back to 1-5.
       const normalizedScore = Math.ceil(
         scoresByReadinessType[readinessType] / 3,
       );
-      // Scale from 1-5 range to 1-9 range using the formula:
-      // newScore = (((oldScore - oldMin) * (newMax - newMin)) / (oldMax - oldMin)) + newMin
+      // Rescale 1-5 onto the 1-9 readiness-level scale.
       const scaledScore = Math.ceil(
         ((normalizedScore - 1) * (9 - 1)) / (5 - 1) + 1,
       );
       scoresByReadinessType[readinessType] = scaledScore;
     }
 
-    // Fetch all readiness levels
     const readinessLevels = await this.em.find(ReadinessLevel, {});
     const readinessLevelsByType = readinessLevels.reduce(
       (map, level) => {
@@ -1247,10 +1226,9 @@ export class StartupService {
       {} as Record<ReadinessType, ReadinessLevel[]>,
     );
 
-    // Create a StartupReadinessLevel for each ReadinessType
     const startupReadinessLevels: StartupReadinessLevel[] = [];
     for (const readinessType of Object.values(ReadinessType)) {
-      const score = scoresByReadinessType[readinessType] || 1; // Default to 1 if no score
+      const score = scoresByReadinessType[readinessType] || 1;
       const levels = readinessLevelsByType[readinessType];
 
       if (!levels || levels.length === 0) {
@@ -1259,9 +1237,9 @@ export class StartupService {
         );
       }
 
-      // Map the normalized score directly to the corresponding level
+      // Fallback is levels[5], not levels[0], despite the score-to-level mapping.
       const selectedLevel =
-        levels.find((level) => level.level === score) || levels[5]; // Default to the first level if no match
+        levels.find((level) => level.level === score) || levels[5];
 
       const startupReadinessLevel = new StartupReadinessLevel();
       startupReadinessLevel.startup = startup;
@@ -1271,7 +1249,6 @@ export class StartupService {
       startupReadinessLevels.push(startupReadinessLevel);
     }
 
-    // Save all the new StartupReadinessLevel entities
     await this.em.flush();
 
     return startupReadinessLevels;
@@ -1297,23 +1274,20 @@ export class StartupService {
     try {
       await this.em.persistAndFlush(startup);
 
-      // Add the startup leader/owner to the members collection
       startup.members.add(user);
       await this.em.flush();
     } catch (e: any) {
-      // Handle out-of-sync sequence: duplicate key on startups_pkey
+      // Seeded rows insert explicit ids without bumping the sequence, so the
+      // next generated id collides. Resync the sequence and retry once.
       const msg = String(e?.message ?? '');
       if (e?.code === '23505' && msg.includes('startups_pkey')) {
-        // Reset sequence to max(id)
         await this.em
           .getConnection()
           .execute(
             "select setval(pg_get_serial_sequence('startups','id'), coalesce((select max(id) from startups), 0), true)",
           );
-        // Retry once
         await this.em.persistAndFlush(startup);
 
-        // Add the startup leader/owner to the members collection
         startup.members.add(user);
         await this.em.flush();
       } else {
@@ -1361,7 +1335,7 @@ export class StartupService {
 
     startup.name = dto.title;
 
-    // Change status to PENDING when reapplying
+    // Editing the proposal is a reapplication, so it re-enters review.
     startup.qualificationStatus = QualificationStatus.PENDING;
 
     await this.em.flush();
@@ -1393,7 +1367,6 @@ export class StartupService {
 
     const proposal = startup.capsuleProposal;
 
-    // Update only the fields that are provided
     if (dto.title !== undefined) proposal.title = dto.title;
     if (dto.description !== undefined) proposal.description = dto.description;
     if (dto.problemStatement !== undefined)
@@ -1402,7 +1375,7 @@ export class StartupService {
       proposal.targetMarket = dto.targetMarket;
     if (dto.solution !== undefined) proposal.solutionDescription = dto.solution;
     if (dto.objectives !== undefined) {
-      // Split objectives by newlines and filter out empty lines
+      // Arrives as a textarea blob; the entity stores one objective per item.
       proposal.objectives = dto.objectives
         .split('\n')
         .map((line) => line.trim())

@@ -4,7 +4,6 @@
 
 	const allReadinessTypes: any = ['T', 'M', 'R', 'A', 'O', 'I']; // All expected readiness types
 
-	// Initialize the count object with 0 for each readiness type
 	const countByReadinessType = allReadinessTypes.reduce((acc, type) => {
 		acc[type] = 0; // Default to 0
 		return acc;

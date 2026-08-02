@@ -3,19 +3,14 @@ import { ConfigService } from '@nestjs/config';
 /**
  * Resolve `JWT_SECRET`, or refuse to start.
  *
- * Both the signing side (auth.module) and the verifying side (jwt.strategy)
- * previously fell back to the literal `'launchup-dev-secret'` when the variable
- * was unset. That string is committed to a public repository, so a deployment
- * missing the variable would sign every token with a value anyone can read —
- * enough to forge an Admin token. The `||` is what made it dangerous: it failed
- * *silently*, and a working login gave no hint the secret was public.
+ * Signing (auth.module) and verifying (jwt.strategy) both used to fall back to
+ * a literal `'launchup-dev-secret'`. That string is in a public repo, so a
+ * deployment missing the variable signed every token with a value anyone could
+ * read — enough to forge an Admin token — and failed silently, since login
+ * still worked. Failing at boot is the point.
  *
- * Failing at boot is the whole point. A misconfigured auth secret that starts
- * cleanly is worse than one that does not start at all.
- *
- * Both call sites must use this, and both must resolve the same value — the
- * frontend verifies the JWT itself with `jose` rather than calling the backend
- * (see hooks.server.ts), so its `JWT_SECRET` has to match too.
+ * Both call sites must use this, and the frontend's `JWT_SECRET` must match:
+ * it verifies the JWT itself with `jose` (see hooks.server.ts).
  */
 export function requireJwtSecret(config: ConfigService): string {
   const secret = config.get<string>('JWT_SECRET')?.trim();

@@ -1,20 +1,17 @@
 import { Type } from '@mikro-orm/core';
 
 /**
- * Dimension of every vector stored in `vector_embeddings`.
+ * Dimension of every vector in `vector_embeddings`. Lives next to the column
+ * definition because the column is what enforces it; EmbeddingService imports
+ * it so the API request and the column cannot drift.
  *
- * It lives here, next to the column definition, because the column type is the
- * thing that actually enforces it — Postgres rejects a vector of the wrong
- * length at insert. EmbeddingService imports this constant so the API request
- * and the column can never drift apart.
+ * 768, not the model's native 3072, because pgvector caps hnsw and ivfflat at
+ * 2000 dimensions — at 3072 the column could never be ANN-indexed (verified
+ * against pgvector 0.8.1, 2026-07-27).
  *
- * 768 and not the embedding model's native 3072 because pgvector caps hnsw and
- * ivfflat at 2000 dimensions; at 3072 the column could never be ANN-indexed.
- * Verified against this database (pgvector 0.8.1) on 2026-07-27.
- *
- * Changing this requires re-embedding every existing row. Vectors of different
- * dimensions are not comparable, so a half-migrated table does not error — it
- * quietly returns meaningless similarity rankings.
+ * Changing it requires re-embedding every row. Different-dimension vectors are
+ * not comparable, so a half-migrated table returns meaningless rankings rather
+ * than erroring.
  */
 export const EMBEDDING_DIMENSIONS = 768;
 
@@ -30,9 +27,8 @@ export class VectorType extends Type<number[] | null, string | null> {
     if (value === null || value === undefined) {
       return null;
     }
-    // pgvector comes back as the literal '[0.1,0.2,...]'. Guard against an
-    // already-parsed array so a re-hydrated entity does not get mangled into
-    // a list of NaN by the string path below.
+    // pgvector returns the literal '[0.1,0.2,...]'. Guard the already-parsed
+    // case so a re-hydrated entity isn't mangled into NaNs by the string path.
     if (Array.isArray(value)) {
       return value;
     }

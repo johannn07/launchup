@@ -43,6 +43,15 @@ Both apps read DB/JWT config from their own `.env` (see `backend/.env.example`, 
 
 Do not include a `Co-Authored-By` line in commit messages.
 
+## Comment & documentation style
+- Keep all code comments short and to the point — one line where possible.
+- Explain *why*, not *what* — don't describe what the code obviously already shows.
+- No filler phrases ("this function is responsible for...", "this method will...").
+- Same rule for docs/markdown: short sentences, no padding, no repeating the same
+  point in different words. Bullet points over paragraphs where it fits.
+- If a comment or doc line doesn't add information a reader wouldn't already have,
+  cut it.
+
 ## Architecture
 
 ### Backend (NestJS + MikroORM)
@@ -56,7 +65,7 @@ Notable non-obvious behavior:
 - Auth: `JwtGuard` (passport `jwt` strategy) is applied per-controller via `@UseGuards`; `AdminGuard` is a separate `CanActivate` checking `req.user.role === Role.Admin` and must be paired with `JwtGuard` (it reads `req.user`, it doesn't authenticate). Roles: `Startup | Mentor | Manager | Admin` (`entities/enums/role.enum.ts`).
 - `mikro-orm.config.ts` falls back to an in-memory SQLite DB when `DB_HOST` isn't set — useful for quick local runs without Docker, but state won't persist and won't match Postgres-only SQL behavior.
 - OCR (`src/ocr/`, Tesseract.js) and AI baseline scoring (`src/ai/`, Gemini) are separate modules from the core assessment domain — the "AI insights" and "OCR document parsing" features are additive layers on top of the assessment/readiness data, not built into it.
-- **File storage is unconfigured.** `upload.service.ts` reads five `DO_SPACES_*` vars left over from the previous team; none are set, so it sets `enabled = false` and all uploads 503. It uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, so any S3-compatible provider is a drop-in — only env values change.
+- **File storage is unconfigured.** `upload.service.ts` reads five `S3_*` vars; none are set, so `enabled = false` and all uploads 503. It uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, so any S3-compatible provider is a drop-in — only env values change.
 
 ### Capstone context (this is a rebase, not a greenfield build)
 

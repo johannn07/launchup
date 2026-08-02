@@ -29,9 +29,9 @@ export interface RetrievedDoc {
 }
 
 /**
- * The three retrieval channels SDD §3.2 specifies for the RAG Query Service:
- * "verified startup frameworks, business model references, and contextually
- * similar prior validated profiles". Only the third was ever implemented.
+ * The three retrieval channels SDD §3.2 specifies: "verified startup
+ * frameworks, business model references, and contextually similar prior
+ * validated profiles" — here rubrics, frameworks and peers respectively.
  */
 export interface RAGContext {
   verifiedFrameworks: RetrievedDoc[];
@@ -79,22 +79,18 @@ export class RagQueryService {
     }
 
     const corpusOn = opts?.config?.ragCorpus ?? false;
-    // AI_RAG_ENABLED's entire purpose is producing the "no retrieval" baseline
-    // arm (see AiPipelineConfig.rag's doc). Path 1 (ai.service.ts) already
-    // honours it; this channel didn't, so ragCorpus's rubric/framework gate
-    // was the only thing narrowing retrieval here, and disabling AI_RAG_ENABLED
-    // left RNA/RNS fully retrieval-augmented via peers regardless.
+    // Honoured here too, not just in ai.service.ts — otherwise disabling
+    // AI_RAG_ENABLED still left RNA/RNS fully augmented through the peer
+    // channel, and the "no retrieval" baseline arm was never actually produced.
     const ragOn = opts?.config?.rag ?? false;
 
     const verifiedFrameworks = corpusOn ? await this.retrieveRubrics(opts!) : [];
     const businessModels = corpusOn ? await this.retrieveFrameworks(id) : [];
     const similarProfiles = ragOn ? await this.retrievePeers(id) : [];
 
-    // "If the vector database returns no relevant results, the system falls back
-    // to profile-only prompting and logs a low-confidence flag" (SRS §2.2). All
-    // three channels, not just peers — the previous rule flagged a generation
-    // grounded in verified rubrics as low-confidence whenever no peer cleared
-    // the floor, which teaches users to ignore the indicator.
+    // SRS §2.2's low-confidence flag, keyed on all three channels rather than
+    // peers alone — flagging a rubric-grounded generation just because no peer
+    // cleared the floor teaches users to ignore the indicator.
     const lowConfidence =
       verifiedFrameworks.length === 0 &&
       businessModels.length === 0 &&
@@ -117,19 +113,10 @@ export class RagQueryService {
   }
 
   /**
-   * Channel 1 — readiness rubrics.
-   *
-   * Deterministic by default: the correct context for a Technology assessment at
-   * level 3 is the TRL 3 and TRL 4 rubric, regardless of that text's cosine
-   * distance to the capsule proposal. `semantic` mode below embeds the bare
-   * readinessType name (e.g. "Technology") — it is the code's own substitute
-   * for SDD §3.2's specified mechanism ("the startup's profile data as the
-   * search embedding"), not an implementation of it, and was measured
-   * (measurement/measure-grounding.js) to retrieve nothing: 0/12
-   * correct-dimension against this corpus. The SDD's actual mechanism, tested
-   * separately by embedding whole startup profiles, also came back empty
-   * (0/2). Both are kept so the deviation is measured rather than asserted;
-   * see measurement/README.md.
+   * Channel 1 — readiness rubrics. Deterministic by default: the right context
+   * for a Technology assessment at level 3 is the TRL 3 and TRL 4 rubric,
+   * whatever its cosine distance to the capsule proposal. See RubricMode in
+   * ai-config.types.ts for why `semantic` exists and what it measured.
    */
   private async retrieveRubrics(opts: RagQueryOptions): Promise<RetrievedDoc[]> {
     const dimensions = opts.dimensions ?? [];
@@ -147,8 +134,7 @@ export class RagQueryService {
       wanted.add(rubricKey(readinessType, Math.min(level + 1, MAX_READINESS_LEVEL)));
     }
 
-    // 54 short rows; filtering in memory avoids a Postgres-specific JSON query
-    // for no measurable gain.
+    // 54 short rows — in-memory filtering avoids a Postgres-specific JSON query.
     const rows = await this.em.find(RagContext, { sourceType: RUBRIC_SOURCE_TYPE });
     return rows
       .filter((row) => wanted.has((row.metadata as CorpusRowMetadata | undefined)?.key ?? ''))
@@ -213,7 +199,7 @@ export class RagQueryService {
       }));
   }
 
-  /** Channel 3 — peer startups. SQL unchanged; only the mapping carries content now. */
+  /** Channel 3 — peer startups. */
   private async retrievePeers(id: number): Promise<RetrievedDoc[]> {
     const rows = await this.em.getConnection().execute<
       {

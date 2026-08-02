@@ -13,8 +13,7 @@
  *                           a value is a measurable grounding failure.
  *   Test C - schema:        did the response parse into the expected shape?
  *
- * Small N by design — free-tier quota is the constraint, and 429s are the
- * failure mode. Treat the output as indicative, not as a study.
+ * Small N by design — free-tier quota is the constraint. Indicative, not a study.
  */
 const path = require('path');
 const BACKEND = 'C:/Users/John Anthony/Projects/Github/Projects/Launchup/launchup/backend';

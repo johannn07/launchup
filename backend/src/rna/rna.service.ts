@@ -85,7 +85,6 @@ export class RnaService {
   }
 
   async generateRNA(id: number, ctx: AiRunContext) {
-    // 1. Validate startup exists
     const startup = await this.em.findOne(
       Startup,
       { id: id },
@@ -95,12 +94,10 @@ export class RnaService {
     );
     if (!startup) throw new NotFoundException('Startup not found');
 
-    // 2. Get capsule proposal info
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
       throw new BadRequestException('No capsule proposal found.');
 
-    // 3. Get existing RNA entries for this startup
     const existingRNAs = await this.em.find(
       StartupRNA,
       { startup: startup },
@@ -109,14 +106,13 @@ export class RnaService {
       },
     );
 
-    // 4. Get all readiness levels for this startup
     const startupReadinessLevels = await this.em.find(
       StartupReadinessLevel,
       { startup: startup },
       { populate: ['readinessLevel'] },
     );
 
-    // 5. Find readiness levels that don't have RNA yet
+    // Generation only fills gaps; existing RNAs are never regenerated.
     const readinessLevelsWithoutRNA = startupReadinessLevels.filter(
       (startupReadinessLevel) =>
         !existingRNAs.some(
@@ -126,13 +122,10 @@ export class RnaService {
         ),
     );
 
-    // 6. If all readiness levels already have RNA, return empty array
     if (readinessLevelsWithoutRNA.length === 0) {
       return [];
     }
 
-    // --- RAG pipeline integration ---
-    // Query vector DB for context
     const ragContext = await this.ragQueryService.queryVectorDatabase(id.toString(), {
       config: ctx.config,
       dimensions: readinessLevelsWithoutRNA.map((srl) => ({
@@ -141,7 +134,6 @@ export class RnaService {
       })),
     });
 
-    // Build a profile object (simplified, extend as needed)
     const startupProfile = {
       ...capsuleProposalInfo,
       readinessLevels: startupReadinessLevels.map((srl) => ({
@@ -150,10 +142,8 @@ export class RnaService {
       })),
     };
 
-    // Use grounded prompt builder if RAG context is available
-    // Expressed as the negation of the flag rather than as its own condition:
-    // RNS's equivalent guard drifted out of step precisely because it restated
-    // "do we have context?" independently.
+    // Negate the flag rather than restating "do we have context?" — RNS's
+    // equivalent guard drifted out of step precisely by doing that.
     let prompt: string;
     if (!ragContext.lowConfidence) {
       const missingTypes = readinessLevelsWithoutRNA.map(
@@ -165,10 +155,9 @@ export class RnaService {
         missingTypes,
       );
     } else {
-      // Pass rubricMode through so a low-confidence *semantic*-arm result
-      // doesn't silently pick up createBasePrompt's deterministic rubric
-      // lookup instead — that would relabel a deterministic result as
-      // belonging to the semantic arm. See createBasePrompt's opts JSDoc.
+      // rubricMode passed through so a low-confidence semantic result doesn't
+      // pick up the deterministic lookup and get relabelled as the semantic
+      // arm. See createBasePrompt's opts JSDoc.
       const basePrompt = await this.aiService.createBasePrompt(ctx, startup, this.em, {
         rubricMode: ctx.config.rubricMode,
       });
@@ -180,10 +169,9 @@ export class RnaService {
         .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max 500 chars)}]`;
     }
 
-    // Use AI service as before
     const generatedRNAs = await this.aiService.generateRNAsFromPrompt(ctx, prompt);
     console.log('AI generatedRNAs:', JSON.stringify(generatedRNAs, null, 2));
-    // 9. Create RNA entries only for missing readiness types
+
     const createdRNAs: StartupRNA[] = [];
     for (const generatedRNA of generatedRNAs) {
       const matchingReadinessLevel = readinessLevelsWithoutRNA.find(
@@ -194,12 +182,11 @@ export class RnaService {
       if (matchingReadinessLevel && generatedRNA.rna?.trim()) {
         const newRNA = new StartupRNA();
         newRNA.rna = generatedRNA.rna.trim();
-        // Stays `true`, unlike the RNS/initiative/roadblock generators. The RNA
-        // page renders every row unfiltered (rna/+page.svelte:255), so the flag
-        // is not what hides AI output there — it only drives the "AI Generated"
-        // label in the dialog. Writing `false` would also make addToRNA's
-        // same-readiness-type lookup (rna/+page.svelte:75-80) match the row
-        // against itself, deleting it and then PATCHing a deleted id.
+        // `true` here, unlike the RNS/initiative/roadblock generators: the RNA
+        // page renders every row regardless, so this only drives the dialog's
+        // "AI Generated" label. `false` would also make addToRNA's
+        // same-readiness-type lookup match this row against itself, deleting it
+        // and then PATCHing a deleted id.
         newRNA.isAiGenerated = true;
         newRNA.startup = startup;
         newRNA.readinessLevel = matchingReadinessLevel.readinessLevel;
@@ -234,14 +221,12 @@ export class RnaService {
     const startup = await this.em.findOne(Startup, { id: startupId });
     if (!startup) throw new NotFoundException('Startup not found');
 
-    // Get all readiness levels for this startup
     const startupReadinessLevels = await this.em.find(
       StartupReadinessLevel,
       { startup: startup },
       { populate: ['readinessLevel'] },
     );
 
-    // Get existing RNA entries for this startup
     const existingRNAs = await this.em.find(
       StartupRNA,
       { startup: startup },
@@ -250,7 +235,6 @@ export class RnaService {
       },
     );
 
-    // Check if all readiness levels have RNA
     return startupReadinessLevels.every((startupReadinessLevel) =>
       existingRNAs.some(
         (existingRNA) =>
@@ -279,12 +263,9 @@ export class RnaService {
     if (!rna) throw new NotFoundException('RNA not found');
 
     const startup = rna.startup;
-    // The refine run is opened with startupId: null (the route only has the
-    // RNA id), so attribute it to the startup now that it's in hand — this
-    // is the same entity already loaded above, no extra query. Goes through
-    // AiRunService.attribute so the attribution is written immediately: on
-    // the failure path nothing else flushes, and a bare assignment would be
-    // discarded with the request-context EM.
+    // The refine route carries only the RNA id, so the run opens with
+    // startupId: null. See AiRunService.attribute for why a bare assignment
+    // would be discarded here.
     await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
@@ -340,7 +321,6 @@ export class RnaService {
 
     const result = await this.aiService.refineRna(ctx, prompt);
 
-    // Save chat history
     const newMessages = [
       new RnaChatHistory({
         rna,

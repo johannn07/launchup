@@ -69,8 +69,7 @@ export class StartupController {
     return await conn.execute(`SELECT id, startup_id, composite_score, tier_label FROM readiness_evaluations`);
   }
 
-  // ==================================================
-  // Deprecated endpoints - keeping for backward compatibility
+  // Deprecated, kept for backward compatibility.
   @Get('/ranking-by-urat')
   async getStartupsByUrat() {
     return await this.startupService.getPendingStartupsRankingByUrat();
@@ -80,7 +79,6 @@ export class StartupController {
   async getStartupsByRubrics() {
     return await this.startupService.getQualifiedStartupsRankingByRubrics();
   }
-  // ==================================================
 
   @Post('/apply')
   async applyStartup(
@@ -91,8 +89,7 @@ export class StartupController {
     const userId = req.user.id;
     const isPrivileged =
       req.user?.role === Role.Manager || req.user?.role === Role.Admin;
-    // Opens with a null startupId — the startup is created inside create(),
-    // which calls aiRunService.attribute() once it has an id.
+    // Null startupId — create() calls aiRunService.attribute() once it has an id.
     await this.aiRunService.track(
       null,
       'analysis_summary',
@@ -125,8 +122,8 @@ export class StartupController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    // startupId is null: parsing happens while filling in the application, so
-    // no startup exists yet to attribute the run to.
+    // Null startupId: parsing happens during application fill-in, before a
+    // startup exists to attribute the run to.
     const isPrivileged =
       req.user?.role === Role.Manager || req.user?.role === Role.Admin;
     try {

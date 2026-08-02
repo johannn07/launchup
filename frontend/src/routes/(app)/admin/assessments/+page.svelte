@@ -34,20 +34,17 @@
     File: 3
   };
 
-  // Modal states
   let showConfirm = $state(false);
   let confirmText = $state('');
   /** @type {(() => Promise<void>) | null} */
   let confirmAction = $state(null);
 
-  // Create assessment state
   let showCreateTypeModal = $state(false);
   let createName = $state('');
   let createDescription = $state('');
   let selectedAssessmentType = $state('Technology');
   let selectedFieldType = $state('1');
 
-  // Field edit state
   let showFieldEditModal = $state(false);
   /** @type {{ name: string; description?: string; answerType: string; assessmentType: string; id?: number }} */
   let editingField = $state({
@@ -90,7 +87,6 @@
    * @param {any} assessment
    */
   function openAssessmentFields(assessment) {
-    // Open edit modal directly
     openFieldModal(assessment);
   }
 
@@ -99,7 +95,7 @@
    */
   function openFieldModal(assessment = null) {
     if (assessment) {
-      // Convert backend enum name to numeric string value
+      // The API sends the enum name; the select binds the numeric value.
       const answerTypeValue =
         typeof assessment.answerType === 'string'
           ? ANSWER_TYPE_MAP[assessment.answerType] || 1
@@ -135,7 +131,6 @@
 
     let res;
     if (editingField.id) {
-      // Update existing assessment
       res = await fetch(`${PUBLIC_API_URL}/assessments/${editingField.id}`, {
         method: 'PATCH',
         headers: {

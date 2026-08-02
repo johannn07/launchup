@@ -1,21 +1,19 @@
 /**
  * Pure scorers for the grounding harness. No I/O, no model calls, and no
- * dependency on the stage-marker lexicon - stageAppropriateness takes the
- * predicate as an argument so this module can be tested on its own.
+ * dependency on the stage-marker lexicon — stageAppropriateness takes the
+ * predicate as an argument so this module tests standalone.
  *
- * Every function skips a dimension the model omitted rather than scoring it as
- * a failure. A missing field is a schema-compliance problem, not evidence the
- * model ignored its grounding; conflating the two would let a model that
- * returns less look better. Watch the reported n for a low denominator.
+ * Omitted dimensions are skipped, not scored as failures: a missing field is a
+ * schema problem, not evidence the model ignored grounding, and conflating them
+ * would reward a model that returns less. Watch `n` for a low denominator.
  */
 
 /**
  * Metric 1: how close did the model put the startup to where it actually sits?
  *
- * Ground truth is the seeded per-dimension StartupReadinessLevel, which is
- * independent of anything in the prompt - unlike "did the output resemble the
- * retrieved rubric", which structurally favours whichever arm was shown that
- * rubric and so measures parroting rather than grounding.
+ * Ground truth is the seeded StartupReadinessLevel, independent of the prompt —
+ * unlike "did the output resemble the retrieved rubric", which favours whichever
+ * arm saw that rubric and so measures parroting rather than grounding.
  */
 function levelPlacement(assignedByDim, truthByDim, dimensions) {
   const errors = [];

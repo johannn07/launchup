@@ -4,7 +4,7 @@ import { env } from '$env/dynamic/public';
 const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
 export const load: PageServerLoad = async ({ cookies, locals }) => {
-  // Removed redirect so Managers can view the startups tiering dashboard
+  // No role redirect here: Managers need the startups tiering dashboard too.
   const access = cookies.get('Access')!;
   const res = await fetch(`${PUBLIC_API_URL}/startups/startups`, {
     headers: { Authorization: `Bearer ${access}` }
@@ -26,17 +26,14 @@ export const actions: Actions = {
     const startupId = startupIdRaw ? Number(startupIdRaw) : null;
     let response, data;
 
-    // Update existing startup
     if (startupId) {
-
-      // Check if a new capsule proposal file was uploaded
       const capsuleProposalFile = formData.get('capsuleProposal');
       if (
         capsuleProposalFile &&
         capsuleProposalFile instanceof File &&
         capsuleProposalFile.size > 0
       ) {
-        // Use the new endpoint that handles file uploads
+        // Multipart endpoint — the JSON one below can't carry the file.
         const newFormData = new FormData();
         newFormData.append('name', formData.get('startup_name') as string);
         newFormData.append('userId', locals.user.id.toString());
@@ -68,7 +65,6 @@ export const actions: Actions = {
           }
         );
       } else {
-        // Use the regular update endpoint (no file upload)
         const updatePayload = {
           dataPrivacy: formData.get('data_privacy'),
           eligibility: formData.get('eligibility'),
@@ -90,7 +86,6 @@ export const actions: Actions = {
       }
       data = await response.json();
     } else {
-      // Create new startup via JSON payload to /apply
       const createPayload = {
         title: formData.get('title') || formData.get('startup_name'),
         description: formData.get('startupDescription') || 'Pending AI Generation',
@@ -143,7 +138,6 @@ export const actions: Actions = {
     ];
 
     if (startupId) {
-      // Update existing URAT question answers
       const answers: {
         id: number;
         response: string;
@@ -161,7 +155,6 @@ export const actions: Actions = {
         }
       });
 
-      // Update existing calculator question answers
       const calculatorAnswers: {
         id: number;
         calculatorQuestionId: number;
@@ -178,7 +171,6 @@ export const actions: Actions = {
         }
       });
 
-      // Update URAT question answers
       for (const answer of answers) {
         const response = await fetch(
           `${PUBLIC_API_URL}/readinesslevel/urat-question-answers/${answer.id}`,
@@ -193,7 +185,6 @@ export const actions: Actions = {
         );
       }
 
-      // Update calculator question answers
       for (const answer of calculatorAnswers) {
         const response = await fetch(
           `${PUBLIC_API_URL}/readinesslevel/calculator-question-answers/${answer.id}`,
@@ -211,7 +202,6 @@ export const actions: Actions = {
       }
 
     } else {
-      // Create new URAT question answers
       const answers: {
         startupId: number;
         uratQuestionId: number;
@@ -244,9 +234,6 @@ export const actions: Actions = {
         });
       });
 
-      ////////////////////////////////////////////////////////////////
-      ////////////////////////////////////////////////////////////////
-      ////////////////////////////////////////////////////////////////
 
       const urat_answers = await fetch(
         `${PUBLIC_API_URL}/readinesslevel/urat-question-answers/create`,

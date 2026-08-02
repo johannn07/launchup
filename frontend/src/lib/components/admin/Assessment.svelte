@@ -11,7 +11,6 @@
   import * as RadioGroup from '$lib/components/ui/radio-group';
 
   function updateScore(questionId: number, score: number) {
-    // Call the callback function passed from the parent
     onScoreChange({ readinessType: type, questionId, score });
   }
 </script>

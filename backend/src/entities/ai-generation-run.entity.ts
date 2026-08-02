@@ -8,13 +8,11 @@ import {
 import { Startup } from './startup.entity';
 
 /**
- * `capsule_extract` covers the whole capsule-proposal parse, including the
- * Gemini Vision path used for handwritten documents (Objective 3). The vision
- * call and the Tesseract-text fallback are two model calls within one run, not
- * two runs — which one fired is visible in the token totals, not the operation.
+ * `capsule_extract` covers the whole proposal parse, Gemini Vision included.
+ * The vision call and Tesseract fallback are two model calls in one run — which
+ * fired shows in the token totals, not the operation.
  *
- * `analysis_summary` is the one-shot summary written when an application is
- * submitted.
+ * `analysis_summary` is the one-shot summary written on application submit.
  */
 export type AiRunOperation =
   | 'rna'
@@ -30,9 +28,8 @@ export type AiRunOperation =
 export type AiRunStatus = 'running' | 'completed' | 'failed';
 
 /**
- * One row per AI generation call. Records the pipeline configuration in effect
- * so that every generated artifact can be attributed to the exact arm of the
- * baseline-vs-enhanced comparison that produced it.
+ * One row per AI generation call, recording the pipeline config in effect, so
+ * every artifact is attributable to the exact comparison arm that produced it.
  */
 @Entity({ tableName: 'ai_generation_runs' })
 export class AiGenerationRun {

@@ -26,7 +26,6 @@ export class InitiativeService {
     private readonly aiRunService: AiRunService,
   ) {}
 
-  //find one ra guro ni dapat?
   async getStartupInitiative(startupId: number): Promise<Initiative[]> {
     return this.em.find(
       Initiative,
@@ -156,12 +155,8 @@ export class InitiativeService {
     if (dto.rnsIds && dto.rnsIds.length > 0) {
       const initiatives: Initiative[] = [];
 
-      // Resolve every referenced Rns before anything else runs. This is the
-      // same lookup the per-item loop below used to do, just moved earlier:
-      // a bad id (e.g. a nonexistent rnsId) now throws before the
-      // renumbering loop mutates any existing Initiative row, and — via the
-      // ctx.run.startup assignment below — before the run can be left
-      // attributed to no startup at all for longer than necessary.
+      // Resolved up front so a bad id throws before the renumbering loop
+      // mutates any existing Initiative row.
       const rnsList: Rns[] = [];
       for (const rnsId of dto.rnsIds) {
         const rns = await this.em.findOneOrFail(
@@ -180,24 +175,20 @@ export class InitiativeService {
         rnsList.push(rns);
 
         if (rnsList.length === 1) {
-          // The run is opened with startupId: null (generate-initiatives has
-          // no startup id in its DTO), so attribute it here, from the first
-          // resolved Rns, rather than reassigning on every iteration below.
-          // This assumes the batch belongs to a single startup — true for
-          // the only current caller (the initiatives board's "generate for
-          // selected RNS" action, which only ever sends RNS ids from one
-          // startup's page) but not enforced by the DTO — so a hypothetical
-          // multi-startup batch would attribute the run to the first
-          // startup rather than silently to whichever one was processed
-          // last. Written immediately via AiRunService.attribute — a bare
-          // assignment is discarded on any path that never flushes (a throw,
-          // or the empty-fallback success path where no Initiative is
-          // persisted), leaving the row's startup_id NULL.
+          // GenerateInitiativeDto carries no startup id, so the run opens with
+          // startupId: null and is attributed here instead. attribute() writes
+          // immediately — a bare assignment is discarded on any path that never
+          // flushes (a throw, or the empty-fallback success path), leaving
+          // startup_id NULL.
+          //
+          // Attributing from the first Rns assumes the batch is single-startup.
+          // True of the only caller (the initiatives board's "generate for
+          // selected RNS"), but not enforced by the DTO — a mixed batch lands on
+          // the first startup rather than whichever happened to be processed last.
           await this.aiRunService.attribute(ctx, rns.startup);
         }
       }
 
-      // Get current minimum priority number
       const existingInitiatives = await this.em.find(
         Initiative,
         {},
@@ -209,7 +200,7 @@ export class InitiativeService {
           : 1;
       if (minInitiativeNumber > 1) minInitiativeNumber = 1;
 
-      // Increment existing initiatives' priority numbers to make room for new ones
+      // Shift existing rows up so the new initiatives can take the low numbers.
       for (const initiative of existingInitiatives) {
         initiative.initiativeNumber += dto.rnsIds.length;
         await this.em.persistAndFlush(initiative);
@@ -218,7 +209,6 @@ export class InitiativeService {
       for (let i = 0; i < rnsList.length; i++) {
         const rns = rnsList[i];
 
-        // Get the current max initiativeNumber for this startup
         const maxInitiativeNumber =
           (await this.em.count(Initiative, { startup: rns.startup })) + 1;
 
@@ -254,7 +244,7 @@ export class InitiativeService {
 
         for (const entry of resultText) {
           const initiative = new Initiative();
-          initiative.initiativeNumber = minInitiativeNumber + i; // assign initiativeNumber
+          initiative.initiativeNumber = minInitiativeNumber + i;
           initiative.description = entry.description;
           initiative.measures = entry.measures;
           initiative.targets = entry.targets;
@@ -275,10 +265,7 @@ export class InitiativeService {
 
       return initiatives;
     } else if (dto.rnsId) {
-      // Resolve the Rns before anything else runs — same lookup as before,
-      // just moved above the renumbering loop, so a bad id throws before
-      // that loop mutates any existing Initiative row, and the run is
-      // attributed to its startup as early as possible.
+      // Resolved before the renumbering loop so a bad id throws first.
       const rns = await this.em.findOneOrFail(
         Rns,
         { id: dto.rnsId },
@@ -293,14 +280,9 @@ export class InitiativeService {
         },
       );
 
-      // The run is opened with startupId: null (generate-initiatives has no
-      // startup id in its DTO), so attribute it now that the Rns's startup
-      // is in hand — the same entity already loaded above, no extra query.
-      // Written immediately via AiRunService.attribute; see the batch branch
-      // above for why a bare assignment is not enough.
+      // See the batch branch above for why this goes through attribute().
       await this.aiRunService.attribute(ctx, rns.startup);
 
-      // Similar logic for single RNS
       const existingInitiatives = await this.em.find(
         Initiative,
         {},
@@ -312,7 +294,6 @@ export class InitiativeService {
           : 1;
       if (minInitiativeNumber > 1) minInitiativeNumber = 1;
 
-      // Increment existing initiatives' priority numbers
       for (const initiative of existingInitiatives) {
         initiative.initiativeNumber += 1;
         await this.em.persistAndFlush(initiative);
@@ -398,12 +379,8 @@ export class InitiativeService {
     if (!initiative) throw new NotFoundException('Initiative not found');
 
     const startup = initiative.startup;
-    // The refine run is opened with startupId: null (the route only has the
-    // initiative id), so attribute it to the startup now that it's in hand —
-    // this is the same entity already loaded above, no extra query. Goes
-    // through AiRunService.attribute so the attribution is written
-    // immediately: on the failure path nothing else flushes, and a bare
-    // assignment would be discarded with the request-context EM.
+    // The refine route carries only the initiative id, so the run opens with
+    // startupId: null. See generateInitiatives for why attribute() is needed.
     await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
@@ -474,7 +451,6 @@ export class InitiativeService {
 
     const result = await this.aiService.refineInitiative(ctx, prompt);
 
-    // Save chat history
     const newMessages = [
       new InitiativeChatHistory({
         initiative,

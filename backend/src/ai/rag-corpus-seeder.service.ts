@@ -16,24 +16,18 @@ export interface SeedResult {
   updated: number;
   unchanged: number;
   /**
-   * Present with byte-identical content, but had no vector yet — repaired
-   * rather than left "unchanged" forever. A crash, quota exhaustion, or a
-   * missing GEMINI_API_KEY mid-run leaves exactly this state: the row landed
-   * but embedding never ran. Content-only change detection would call that
-   * row unchanged on every future run and retrieval would never see it,
-   * since retrieval joins rag_contexts against vector_embeddings.
+   * Row present with identical content but no vector — repaired, not left
+   * "unchanged" forever. A crash, spent quota, or missing GEMINI_API_KEY
+   * mid-run leaves exactly this: row landed, embedding never ran. Retrieval
+   * joins rag_contexts to vector_embeddings, so it would never see the row.
    */
   reindexed: number;
   embedded: number;
   /**
-   * A row was queued for embedding but `indexRagContext` itself rejected —
-   * a DB error in its vector-write path (find/remove/create/flush on
-   * VectorEmbedding), not the "no embedding produced" case it already
-   * reports by returning `false` (that's counted by embedded being lower
-   * than created+updated+reindexed, not here). Isolated per-row so one
-   * failure can't abort the whole batch before `seed()` ever returns — the
-   * same failure mode, one level deeper, that produced the original 54
-   * unvectored rows this task had to repair.
+   * `indexRagContext` threw on its vector-write path — not the "no embedding
+   * produced" case, which it reports by returning `false` and which shows up
+   * as embedded < created+updated+reindexed. Counted per-row so one failure
+   * can't abort the batch before `seed()` returns.
    */
   failed: number;
 }
@@ -44,10 +38,9 @@ export interface CorpusFileRow extends CorpusRowMetadata {
 }
 
 /**
- * Two levels up reaches `backend/data` from source (`src/ai/`) and from a
- * `dist/ai/` build. But `nest build` emits to `dist/src/ai/` in this repo
- * (a `.ts` file sits at the backend root), which needs a third `../` — so try
- * two first and fall back to three rather than hardcoding either.
+ * Two `../` reach `backend/data` from `src/ai/` and from a `dist/ai/` build,
+ * but `nest build` emits to `dist/src/ai/` here (a `.ts` sits at the backend
+ * root), needing a third. Try two, fall back to three.
  */
 const twoUp = join(__dirname, '../../data/rag-corpus');
 const DATA_DIR = existsSync(twoUp) ? twoUp : join(__dirname, '../../../data/rag-corpus');
@@ -55,10 +48,10 @@ const DATA_DIR = existsSync(twoUp) ? twoUp : join(__dirname, '../../../data/rag-
 /**
  * Loads the checked-in corpus into `rag_contexts` and indexes it.
  *
- * A service rather than logic inside seed-rag-corpus.js so the upsert rules are
- * unit-testable — particularly "unchanged means no embedding call", which is
- * the property that makes re-running safe. Embedding costs quota, and a seeder
- * nobody dares re-run is a corpus that drifts from its data files.
+ * A service rather than logic in seed-rag-corpus.js so the upsert rules stay
+ * unit-testable — above all "unchanged means no embedding call", which is what
+ * makes re-running safe. Embedding costs quota, and a seeder nobody dares
+ * re-run is a corpus that drifts from its data files.
  */
 @Injectable()
 export class RagCorpusSeederService {
@@ -69,15 +62,11 @@ export class RagCorpusSeederService {
     private readonly embeddingIndex: EmbeddingIndexService,
   ) {}
 
-  // seed-rag-corpus.js (the only real caller of `seed`) runs via
-  // NestFactory.createApplicationContext, which has no HTTP request scope.
-  // MikroORM's injected EntityManager rejects direct use outside one — both
-  // here and, more subtly, inside EmbeddingIndexService.indexRagContext,
-  // which holds its own separately-injected instance. The runner is
-  // responsible for wrapping this call in `RequestContext.create(orm.em, …)`
-  // so every injected EntityManager across the whole call graph resolves to
-  // the same per-call fork; `seed`/`seedRows` stay written against a plain
-  // request-scoped EntityManager, same as any other service in this app.
+  // Callers must wrap this in `RequestContext.create(orm.em, …)`. seed-rag-corpus.js
+  // runs under createApplicationContext, which has no request scope, and MikroORM's
+  // injected EntityManager rejects use outside one — here and inside
+  // EmbeddingIndexService, which holds its own instance. The wrapper resolves both
+  // to one per-call fork, so these methods stay plain request-scoped services.
   async seed(): Promise<SeedResult> {
     const rubrics = this.load('readiness-rubrics.json');
     const frameworks = this.load('business-frameworks.json');
@@ -115,11 +104,8 @@ export class RagCorpusSeederService {
       }
     }
 
-    // A row can exist with byte-identical content yet have no vector at all —
-    // exactly what a crash, quota exhaustion, or missing GEMINI_API_KEY
-    // mid-run leaves behind. Content comparison alone cannot see that, so
-    // check what is actually vectored up front rather than trusting that
-    // "the row exists and matches the file" implies "retrieval can see it".
+    // Content comparison can't tell whether a row was ever vectored, so check
+    // that separately — see `reindexed` on SeedResult.
     const vectors = await this.em.find(VectorEmbedding, { source_type: RAG_CONTEXT_SOURCE });
     const vectoredIds = new Set(vectors.map((v) => v.source_id));
 
@@ -152,11 +138,8 @@ export class RagCorpusSeederService {
         continue;
       }
 
-      // Only `content` decides whether re-embedding is needed for an edit —
-      // the vector is derived from title + content, so a title change counts
-      // too. Separately, a row with no change at all may still need its
-      // first-ever embedding if an earlier run landed the row but never
-      // vectored it.
+      // Title and content both, since the vector is derived from both.
+      // Metadata is not — it never reaches the embedding.
       const changed = current.content !== content || current.title !== title;
       current.title = title;
       current.content = content;
@@ -167,8 +150,6 @@ export class RagCorpusSeederService {
         toIndex.push(current);
         result.updated += 1;
       } else if (!vectoredIds.has(String(current.id))) {
-        // Present, content identical, but never actually embedded — repair
-        // it rather than reporting false success.
         toIndex.push(current);
         result.reindexed += 1;
       } else {
@@ -179,10 +160,8 @@ export class RagCorpusSeederService {
     await this.em.flush();
 
     for (const context of toIndex) {
-      // One row's DB write failing inside indexRagContext must not abort the
-      // rest of the batch or the caller never sees `result` at all — that
-      // would be the same silent-partial-failure shape this task exists to
-      // repair, just moved one level deeper into the embed loop itself.
+      // Isolated per row: one failure here must not abort the batch, or the
+      // caller never sees `result` at all.
       try {
         if (await this.embeddingIndex.indexRagContext(context)) {
           result.embedded += 1;

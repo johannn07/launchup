@@ -9,7 +9,7 @@
   export let startupId: number;
   export let waitlistStartup: (startupId: number, message: string) => Promise<any>;
   
-  // Get the current user's ID from session/store
+  // The waitlisting manager is recorded on the message.
   // This should be replaced with actual user ID from your auth system
 
   let reason: string = '';

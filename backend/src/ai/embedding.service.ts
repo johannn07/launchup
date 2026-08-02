@@ -6,21 +6,17 @@ import { EMBEDDING_DIMENSIONS } from '../common/types/vector-type';
 export { EMBEDDING_DIMENSIONS };
 
 /**
- * `gemini-embedding-2`, not `gemini-embedding-001`, on two measurements against
- * this key (2026-07-27):
+ * `gemini-embedding-2` over `-001`, on two measurements against this key
+ * (2026-07-27):
  *
- *  - Retrieval margin. Scoring one relevant and one irrelevant document against
- *    the same query, embedding-2 separated them by 0.082 at 768 dims vs 0.070
- *    for -001. Small, but the right direction, and -001 is the older model.
- *  - Truncation safety. embedding-2 returns unit-normalised vectors at 768 dims
- *    (norm 1.0000). -001 returns norm 0.5891 at 768 — it truncates without
- *    re-normalising, so cosine still works but inner-product distance silently
- *    does not. That is a footgun we do not need to carry.
+ *  - Retrieval margin: separated a relevant from an irrelevant document by
+ *    0.082 at 768 dims vs 0.070 for -001.
+ *  - Truncation safety: unit-normalised at 768 dims (norm 1.0000), where -001
+ *    returns 0.5891 — it truncates without re-normalising, so cosine works but
+ *    inner-product distance silently does not.
  *
- * Note that embedding-2 ignores `taskType` entirely: RETRIEVAL_DOCUMENT and
- * RETRIEVAL_QUERY returned bit-identical vectors (cosine 1.000000) for the same
- * text, where -001 returned different ones (cosine 0.917). So there is no
- * asymmetric doc/query encoding to get right here, and we do not send taskType.
+ * No `taskType` is sent: embedding-2 ignores it, returning bit-identical
+ * vectors for RETRIEVAL_DOCUMENT and RETRIEVAL_QUERY (-001 gave cosine 0.917).
  */
 const DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-2';
 
@@ -40,12 +36,9 @@ export class EmbeddingService {
   }
 
   /**
-   * Embed one text. Returns null rather than throwing.
-   *
-   * Callers use this to enrich a prompt, never to produce the answer itself, so
-   * an embedding failure should degrade retrieval to "no context found" — the
-   * same state the system was in before any of this existed — rather than fail
-   * a user's assessment generation. The null is logged, not swallowed silently.
+   * Returns null rather than throwing. Callers enrich a prompt with this, never
+   * produce the answer from it, so a failure degrades retrieval to "no context
+   * found" instead of failing the user's generation. Logged, not swallowed.
    */
   async embed(text: string): Promise<number[] | null> {
     const [vector] = await this.embedBatch([text]);
@@ -53,12 +46,9 @@ export class EmbeddingService {
   }
 
   /**
-   * Embed several texts in one request.
-   *
-   * Blank inputs are dropped before the call and come back as null in their
-   * original position, so the result array always lines up index-for-index with
-   * the input — callers zip these against entity rows and a silent length
-   * change would misattribute vectors to the wrong record.
+   * Blank inputs are dropped from the request but come back as null in place,
+   * so the result stays index-for-index with the input — callers zip these
+   * against entity rows, and a length change would misattribute vectors.
    */
   async embedBatch(texts: string[]): Promise<(number[] | null)[]> {
     if (!this.enabled) {
@@ -89,8 +79,8 @@ export class EmbeddingService {
           return;
         }
         if (values.length !== EMBEDDING_DIMENSIONS) {
-          // Storing a wrong-length vector would be rejected by the column, and
-          // any that slipped through would corrupt every later comparison.
+          // The column rejects wrong-length vectors, and one that slipped
+          // through would corrupt every later comparison.
           this.logger.error(
             `${this.model} returned ${values.length} dimensions, expected ${EMBEDDING_DIMENSIONS}`,
           );

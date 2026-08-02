@@ -6,24 +6,14 @@ import { ReadinessEvaluation } from 'src/entities/readiness-evaluation.entity';
 import { ReadinessGap } from 'src/entities/readiness-gap.entity';
 import { TierConfig } from 'src/entities/tier-config.entity';
 
-// Team readiness gets the highest weight because execution quality and decision speed
-// determine whether the startup can turn plans into consistent progress.
+// Weights are ordered by how hard each dimension is to fix later: team and
+// market are the slowest to change, product is iterable, and traction and
+// funding are lagging signals that early-stage startups can be promising
+// without. TierConfig.weights does not override these — see TODO_CHECKLIST.
 const TEAM_WEIGHT = 0.3;
-
-// Market readiness is weighted strongly because validated demand is the clearest
-// signal that the startup is solving a problem people will pay attention to.
 const MARKET_WEIGHT = 0.25;
-
-// Product readiness stays slightly below team/market because product maturity is
-// important, but still easier to improve iteratively than team or market fit.
 const PRODUCT_WEIGHT = 0.2;
-
-// Traction matters as a differentiation signal, but early-stage startups can still
-// be promising before they have large measured traction.
 const TRACTION_WEIGHT = 0.15;
-
-// Funding is included to capture runway and execution capacity, but it should not
-// outweigh the core evidence of team, market, and product readiness.
 const FUNDING_WEIGHT = 0.1;
 
 type DimensionKey = 'team' | 'market' | 'product' | 'traction' | 'funding';
@@ -152,7 +142,7 @@ export class ReadinessService {
       dimensions.reduce((total, dimension) => total + dimension.weightedScore, 0),
     );
 
-    // Try to load persisted tier thresholds from the database; fall back to defaults
+    // Admin-configured thresholds, falling back to the constants above.
     const persisted = await this.em.find(TierConfig, {});
     const sortedTiers = persisted.sort((a, b) => b.threshold - a.threshold);
 
@@ -160,7 +150,7 @@ export class ReadinessService {
     let tierThreshold = 25;
     
     if (sortedTiers.length > 0) {
-      // Fallback to lowest tier if score is below all thresholds
+      // Seed with the lowest tier so a score below every threshold still lands.
       tierLabel = sortedTiers[sortedTiers.length - 1].tierLabel;
       tierThreshold = sortedTiers[sortedTiers.length - 1].threshold;
 

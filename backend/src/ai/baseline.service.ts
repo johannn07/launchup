@@ -8,7 +8,7 @@ const BASELINE_FILE = path.resolve(__dirname, '..', '..', 'data', 'ai-baseline.j
 export class BaselineService {
   private readonly logger = new Logger(BaselineService.name);
 
-  // Load baseline stats from local JSON file. If missing, return empty defaults.
+  // Absent stats are normal on a fresh checkout, so default rather than throw.
   private async loadBaseline(): Promise<{ mean: number; std: number }> {
     try {
       const raw = await fs.readFile(BASELINE_FILE, 'utf8');
@@ -24,7 +24,7 @@ export class BaselineService {
   async normalizeScore(score: number): Promise<{ z: number; scaled: number }> {
     const { mean, std } = await this.loadBaseline();
     const z = std === 0 ? 0 : (score - mean) / std;
-    // Map z (roughly -3..+3) to 1..9
+    // z is roughly -3..+3; the readiness scale is 1..9.
     const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
     const scaled = clamp(Math.round(((z + 3) / 6) * 8 + 1), 1, 9);
     return { z, scaled };

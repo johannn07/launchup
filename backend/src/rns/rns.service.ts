@@ -232,7 +232,6 @@ async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
     I: irl,
   };
 
-  // Full fallback basePrompt (same as original code)
   const basePrompt = `
     Given these data:
     Acceleration Proposal Title: ${capsuleProposalInfo.title}
@@ -282,19 +281,14 @@ Requirements:
 `;
 
     let prompt: string;
-    // Was `!lowConfidence && similarProfiles?.length > 0`, which required a peer
-    // before it would use the grounded builder — so retrieved rubrics would be
-    // discarded whenever no peer cleared the 0.78 floor. With two seeded
-    // startups that is the common case.
+    // Deliberately not `&& similarProfiles?.length > 0` — that required a peer
+    // before using the grounded builder, discarding retrieved rubrics whenever
+    // none cleared the 0.78 floor. With two seeded startups, that is the norm.
     if (!ragContext.lowConfidence) {
-      // ragContext was fetched once for every RNA in rnasToGenerateFrom, so
-      // verifiedFrameworks can hold rubric rows for dimensions other than the
-      // one this single-dimension task block is generating for (e.g. a Market
-      // rubric row riding along into a Technology task prompt). Filter to the
-      // current readinessType per iteration rather than shipping every
-      // dimension's rubric into every task prompt — the wrong direction for a
-      // hallucination-reduction objective, and it multiplies prompt length for
-      // no benefit.
+      // ragContext covers every RNA in rnasToGenerateFrom, so verifiedFrameworks
+      // holds rubrics for other dimensions too (a Market row riding into a
+      // Technology prompt). Filter per iteration — shipping every dimension's
+      // rubric everywhere inflates the prompt and works against Objective 1.
       const dimensionScopedContext = {
         ...ragContext,
         verifiedFrameworks: ragContext.verifiedFrameworks.filter(
@@ -447,12 +441,9 @@ Requirement note:
     );
     if (!rns) throw new NotFoundException('RNS not found');
     const startup = rns.startup;
-    // The refine run is opened with startupId: null (the route only has the
-    // Rns id), so attribute it to the startup now that it's in hand — this
-    // is the same entity already loaded above, no extra query. Goes through
-    // AiRunService.attribute so the attribution is written immediately: on
-    // the failure path nothing else flushes, and a bare assignment would be
-    // discarded with the request-context EM.
+    // The refine route carries only the Rns id, so the run opens with
+    // startupId: null. See AiRunService.attribute for why a bare assignment
+    // would be discarded here.
     await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)

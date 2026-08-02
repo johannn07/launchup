@@ -56,7 +56,6 @@
   function toggleAssessment(id: number, assessmentType: string) {
     const next = new Set(selectedAssessments);
 
-    // Find all assessments of the same type
     const sameTypeAssessments = assessments
       .filter((a) => a.assessmentType === assessmentType)
       .map((a) => a.id);
@@ -65,9 +64,7 @@
     if (next.has(id)) {
       next.delete(id);
     } else {
-      // Remove all other assessments of the same type
       sameTypeAssessments.forEach((asmtId) => next.delete(asmtId));
-      // Add the newly selected assessment
       next.add(id);
     }
 

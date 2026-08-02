@@ -53,7 +53,6 @@
   let showConfirmCompleteModal = false;
   let selectedMentorId: string;
 
-  // Edit assessments state
   let showEditAssessments = false;
   let selectedAssessments = new Set<number>();
   let previewOpen = false;
@@ -68,7 +67,6 @@
 
   $: statusColors = getBadgeColorObject('Qualified');
 
-  // Flatten assessments with type info
   $: flatAssessments = assessments
     .filter((group) => group.assessments.length > 0)
     .flatMap((group) =>
@@ -78,7 +76,6 @@
       }))
     );
 
-  // Group flat assessments by type for UI display
   $: groupedAssessments = flatAssessments.reduce(
     (acc, asmt) => {
       const type = asmt.assessmentType || 'Other';
@@ -91,7 +88,6 @@
     {} as Record<string, typeof flatAssessments>
   );
 
-  // Create a display-friendly version with assessment details at top level
   $: displayAssessments = startupAssessments.map(sa => ({
     id: sa.id,
     name: sa.assessment.name,
@@ -133,7 +129,6 @@
     }
   }
 
-  // Initialize selectedAssessments from startupAssessments
   $: {
     if (startup && displayAssessments.length > 0 && !showEditAssessments) {
       selectedAssessments = new Set(
@@ -144,7 +139,6 @@
     }
   }
 
-  // Update selectedMentorId whenever startup changes
   $: {
     if (startup?.mentors?.[0]?.id) {
       selectedMentorId = String(startup.mentors[0].id);
@@ -157,18 +151,15 @@
   function toggleAssessment(id: number, assessmentType: string) {
     const next = new Set(selectedAssessments);
 
-    // Find all assessments of the same type
     const sameTypeAssessments = flatAssessments
       .filter((a) => a.assessmentType === assessmentType)
       .map((a) => a.id);
 
-    // If clicking the already selected assessment, uncheck it
+    // One assessment per type, so selecting replaces rather than adds.
     if (next.has(id)) {
       next.delete(id);
     } else {
-      // Remove all other assessments of the same type
       sameTypeAssessments.forEach((asmtId) => next.delete(asmtId));
-      // Add the newly selected assessment
       next.add(id);
     }
 
@@ -190,7 +181,6 @@
 
   function cancelEditAssessments() {
     showEditAssessments = false;
-    // Reset selectedAssessments to original
     selectedAssessments = new Set(
       displayAssessments
         .map((a) => flatAssessments.find((asmt) => asmt.name === a.name)?.id)

@@ -158,7 +158,6 @@
   const selectedMembers: any = $state([]);
 
   $effect(() => {
-    // Handle URL params and column data
     const searchParam = $page.url.searchParams.get('tab');
     selectedTab = getSavedTab('initiatives', searchParam);
 
@@ -174,9 +173,8 @@
       });
     }
 
-    // Handle RNS task selection
     if ($initiativesQueries[1].isSuccess && $initiativesQueries[2].isSuccess) {
-      // Get all RNS IDs that already have initiatives
+      // An RNS that already has initiatives is not offered again.
       const rnsWithInitiatives = new Set(
         $initiativesQueries[2].data.map((initiative: any) => initiative.rns)
       );
@@ -188,7 +186,6 @@
   });
 
   const createInitiative = async (payload: any) => {
-    // Increment existing priority numbers
     const currentItems = await axiosInstance.get(
       `/initiatives/?startupId=${startupId}`,
       {
@@ -312,7 +309,6 @@
       let indexOf = taskIds.indexOf(item.rns);
 
       if (indexOf === -1) {
-        // New taskId, initialize it
         taskIds.push(item.rns);
         counters.push(1); // Start counter at 1
         indexOf = taskIds.length - 1; // Get the last index
@@ -342,7 +338,6 @@
       let indexOf = taskIds.indexOf(item.rns);
 
       if (indexOf === -1) {
-        // New taskId, initialize it
         taskIds.push(item.rns);
         counters.push(1); // Start counter at 1
         indexOf = taskIds.length - 1; // Get the last index
@@ -372,7 +367,6 @@
       let indexOf = taskIds.indexOf(item.rns);
 
       if (indexOf === -1) {
-        // New taskId, initialize it
         taskIds.push(item.rns);
         counters.push(1); // Start counter at 1
         indexOf = taskIds.length - 1; // Get the last index
@@ -402,7 +396,6 @@
       let indexOf = taskIds.indexOf(item.rns);
 
       if (indexOf === -1) {
-        // New taskId, initialize it
         taskIds.push(item.rns);
         counters.push(1); // Start counter at 1
         indexOf = taskIds.length - 1; // Get the last index
@@ -432,7 +425,6 @@
       let indexOf = taskIds.indexOf(item.rns);
 
       if (indexOf === -1) {
-        // New taskId, initialize it
         taskIds.push(item.rns);
         counters.push(1); // Start counter at 1
         indexOf = taskIds.length - 1; // Get the last index
@@ -459,7 +451,6 @@
     });
 
     try {
-      // Execute all update requests concurrently
       await Promise.all(updatePromises);
       // $rnsQueries[1].refetch();
     } catch (error) {
@@ -555,7 +546,6 @@
 
     generatingInitiatives = true;
     try {
-      // First, get all current initiatives
       const currentItems = await axiosInstance.get(
         `/initiatives/?startupId=${startupId}`,
         {
@@ -565,7 +555,7 @@
         }
       );
 
-      // Increment priority numbers of all existing items so that new initiatives will be at the top of the column
+      // Shift existing items down so new initiatives land at the top.
       const updatePromises = currentItems.data.map((item: any) =>
         axiosInstance.patch(
           `/initiatives/${item.id}/`,
@@ -580,7 +570,6 @@
 
       await Promise.all(updatePromises);
 
-      // Generate new initiatives with priority numbers starting from 1
       await axiosInstance.post(
         `/initiatives/generate-initiatives/`,
         {

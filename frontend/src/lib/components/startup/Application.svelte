@@ -98,7 +98,6 @@
     'Technology and Commercialization Readiness Level Calculator'
   ];
 
-  // Map steps to step groups
   function getStepGroupIndex(stepIndex: number): number {
     if (stepIndex <= 1) return 0; // Consent
     if (stepIndex <= 3) return 1; // Details
@@ -142,7 +141,6 @@
 
   let submitting = false;
 
-  // Extract waitlist message
   let waitlistMessage: string;
   $: {
     if (startup?.waitlistMessages && startup.waitlistMessages.length > 0) {
@@ -157,7 +155,6 @@
   $: currentGroupIndex = getStepGroupIndex(currentActive);
   $: progressPercent = Math.round((currentActive / (steps.length - 1)) * 100);
 
-  // Count completed URAT dimensions
   $: uratCompleted = (() => {
     if (currentActive < 4) return 0;
     if (currentActive > 9) return 6;

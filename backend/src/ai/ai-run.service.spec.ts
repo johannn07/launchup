@@ -25,8 +25,7 @@ const emMock = () => {
     }),
     flush: jest.fn().mockResolvedValue(undefined),
     getReference: jest.fn((_e, id) => ({ id })),
-    // `finish` writes through a forked EM (see ai-run.service.ts) rather
-    // than flushing `this.em` directly, so tests observe the update via
+    // `finish` writes through a forked EM, so assertions watch
     // `forkedEm.nativeUpdate` rather than `flush`.
     fork: jest.fn(function (this: any) {
       return this.forkedEm;
@@ -73,8 +72,7 @@ describe('AiRunService', () => {
     expect(ctx.run.promptTokens).toBe(100);
     expect(ctx.run.completedAt).toBeInstanceOf(Date);
 
-    // The durable write goes through a forked EM via nativeUpdate, not
-    // `this.em.flush()`.
+    // Durable write goes via forked nativeUpdate, not `this.em.flush()`.
     expect(em.fork).toHaveBeenCalled();
     expect(em.forkedEm.nativeUpdate).toHaveBeenCalledWith(
       expect.anything(),
@@ -104,9 +102,8 @@ describe('AiRunService', () => {
     );
   });
 
-  // Ledger minor #7: the startupId=null branch of begin() had no coverage.
-  // It is the branch every refine route and generate-initiatives takes, and
-  // it is exactly why attribute() has to exist.
+  // The startupId=null branch every refine route and generate-initiatives
+  // takes — exactly why attribute() has to exist.
   it('opens a run with no startup when startupId is null', async () => {
     const em = emMock();
     const service = new AiRunService(em as unknown as EntityManager, configService());
@@ -137,11 +134,10 @@ describe('AiRunService', () => {
 
     await service.attribute(ctx, startup);
 
-    // In-memory view stays accurate...
+    // In-memory view stays accurate…
     expect(ctx.run.startup).toBe(startup);
-    // ...but the assertion that actually matters is the durable write.
-    // `finish`'s payload never includes `startup`, so without this the row
-    // would only ever be corrected by an unrelated later flush.
+    // …but the durable write is what matters. `finish`'s payload never
+    // includes `startup`, so otherwise only an unrelated later flush fixes it.
     expect(em.forkedEm.nativeUpdate).toHaveBeenCalledWith(
       expect.anything(),
       { id: ctx.runId },
@@ -213,12 +209,10 @@ describe('AiRunService.track', () => {
     );
   });
 
-  // The exact scenario the durable-attribution fix exists for: a refine
-  // handler attributes the run and then the model call blows up. Nothing
-  // flushes the request-context EM on this path, so a bare
-  // `ctx.run.startup = startup` would be discarded and the row would land
-  // status='failed' with startup_id NULL — invisible to the startup-filtered
-  // provenance query the table exists to serve.
+  // Why durable attribution exists: a refine handler attributes the run, then
+  // the model call throws. Nothing flushes the request EM here, so a bare
+  // assignment would leave status='failed' with startup_id NULL — invisible to
+  // the startup-filtered provenance query.
   it('keeps the startup attribution in the database when the tracked work throws', async () => {
     const em = emMock();
     const service = new AiRunService(em as unknown as EntityManager, configService());
@@ -254,11 +248,9 @@ describe('AiRunService.track', () => {
     expect(update).not.toHaveProperty('completionTokens');
   });
 
-  // Property 1 from the review: a failure inside run bookkeeping must never
-  // replace or mask the caller's real error. Simulate the bookkeeping write
-  // itself failing (e.g. the DB connection that just caused the domain
-  // failure is also unusable for the finish() call) and confirm the
-  // *domain* error, not the bookkeeping error, is what reaches the caller.
+  // Bookkeeping failure must never mask the caller's real error. The
+  // connection that caused the domain failure is often also unusable for
+  // finish(), so assert the domain error is what surfaces.
   it('property 1: a bookkeeping failure never masks the original domain error', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     const em = emMock();
@@ -274,10 +266,9 @@ describe('AiRunService.track', () => {
   });
 });
 
-// Token accounting is only meaningful end to end: AiService.generate folds
-// each response's usageMetadata into ctx.tokens, and track() writes the
-// total. Wiring a real AiService to a real AiRunService is what proves the
-// two halves actually meet — a unit test of either alone would not.
+// Token accounting only holds end to end: AiService.generate folds usage into
+// ctx.tokens, track() writes the total. Only wiring both real services proves
+// the halves meet; a unit test of either would not.
 describe('AiRunService token accounting', () => {
   const buildAiService = (generateContent: jest.Mock) => {
     const service = new AiService(
@@ -294,9 +285,8 @@ describe('AiRunService token accounting', () => {
     return service;
   };
 
-  // callAiExpectJson retries once on unparseable output, so a single run
-  // routinely makes two model calls. Recording only the last call's usage
-  // would under-report the run's real Gemini spend.
+  // callAiExpectJson retries once, so a run routinely makes two calls.
+  // Recording only the last would under-report real Gemini spend.
   it('records the sum of every model call in the run, not just the last one', async () => {
     const em = emMock();
     const runService = new AiRunService(em as unknown as EntityManager, configService());

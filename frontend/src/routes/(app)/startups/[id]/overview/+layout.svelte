@@ -24,7 +24,7 @@
     const userRole = data.user?.role as 'Startup' | 'Mentor' | 'Manager' | 'Manager as Mentor';
     const roleModules = access.roles[userRole]?.modules ?? [];
     
-    // Find the startups module dynamically
+    // Looked up by name because the module list is role-dependent.
     const startupsModule = roleModules.find(m => m.link === 'startups');
     if (!startupsModule) return [];
     

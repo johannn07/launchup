@@ -35,7 +35,7 @@ export const actions: Actions = {
 
       const { user: updatedUser, access_token } = await response.json();
 
-      // Update the Access token cookie with the new JWT
+      // Profile fields are baked into the JWT, so it must be re-issued.
       cookies.set('Access', access_token, {
         path: '/',
         httpOnly: true,
@@ -44,7 +44,6 @@ export const actions: Actions = {
         maxAge: 60 * 60 * 24 // 24 hours
       });
 
-      // Update locals.user with new data
       if (locals.user) {
         locals.user.firstName = updatedUser.firstName;
         locals.user.lastName = updatedUser.lastName;

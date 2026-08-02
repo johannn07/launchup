@@ -56,9 +56,8 @@ async function seedLocalDemoData(orm: MikroORM) {
     Role.Mentor,
   );
 
-  // A startup is owned by its founder — a Startup-role account. Staff accounts
-  // (manager/mentor) must never be the `user` owner, and a mentor must never be
-  // assigned to a startup they own. Each demo startup gets its own founder.
+  // Startups are owned by a Startup-role founder, never a staff account, and a
+  // mentor is never assigned to a startup they own.
   const agroFounder = await ensure(
     'founder.agrolink@launchup.local',
     'Rafael',
@@ -111,7 +110,7 @@ async function seedLocalDemoData(orm: MikroORM) {
 
   await em.flush();
 
-  // Commented out to prevent auto-seeding the demo startup per user request
+  // Disabled: auto-seeding the demo startup was unwanted.
   /*
   let demoStartup = await em.findOne(Startup, {
     user: { id: demoUser.id },
@@ -164,8 +163,7 @@ async function seedLocalDemoData(orm: MikroORM) {
     }
   }
   */
-  // The original startup initialization remains unmodified
-  // After ensuring baseline readiness levels and users, seed the demo startups
+  // Runs last — depends on the baseline readiness levels and users above.
   await seedDemoStartups(orm, mentorUser, agroFounder, mediFounder);
 }
 
@@ -199,9 +197,8 @@ async function seedDemoStartup(
 ) {
   const existing = await em.findOne(Startup, { name: spec.name });
   if (existing) {
-    // Guarded, so an already-seeded startup is never rewritten. If an older
-    // boot left one owned by a staff account, run `node seed-demo-full.js` to
-    // repair it — this seeder deliberately does not mutate existing rows.
+    // Never rewrites an existing startup. If an older boot left one owned by a
+    // staff account, run `node seed-demo-full.js` to repair it.
     console.log(`${spec.name} already exists id=`, existing.id);
     return;
   }
@@ -218,9 +215,8 @@ async function seedDemoStartup(
   await em.flush();
 
   startup.members.add(spec.founder);
-  // What `appoint-mentors` does after a Manager approves the applicant. Seeding
-  // the startup without it leaves it mentorless, which reads as the Manager
-  // doing the mentor's work.
+  // Mirrors `appoint-mentors` after Manager approval. Without it the seeded
+  // startup is mentorless, which reads as the Manager doing a mentor's work.
   startup.mentors.add(spec.mentor);
   await em.flush();
 
@@ -290,15 +286,14 @@ async function seedDemoStartups(
 /**
  * Embed any rag_contexts row that has no vector yet.
  *
- * Runs on boot for the same reason the schema sync and demo seed do: this
- * database is developer-local and self-assembling. rag_contexts has been
- * written since long before anything embedded it, so without this every
- * existing row is invisible to semantic retrieval and the feature looks broken
- * rather than unindexed.
+ * On boot for the same reason as the schema sync and demo seed: the dev
+ * database is self-assembling. rag_contexts predates anything embedding it, so
+ * without this the corpus is invisible to semantic retrieval and the feature
+ * looks broken rather than unindexed.
  *
- * Idempotent — it only selects rows with no vector, so a second boot costs no
- * API calls. Failures are logged and swallowed: an unreachable embedding API
- * degrades retrieval, but it must not stop the server from starting.
+ * Idempotent — only selects unvectored rows, so a second boot costs no API
+ * calls. Failures are logged and swallowed; an unreachable embedding API
+ * degrades retrieval but must not stop the server booting.
  */
 async function backfillRagEmbeddings(app: NestExpressApplication) {
   try {

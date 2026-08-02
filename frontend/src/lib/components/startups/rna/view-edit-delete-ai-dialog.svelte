@@ -186,7 +186,7 @@
                               const container = button.parentElement;
                               if (!container) return;
                               
-                              // Get the HTML content (excluding the button)
+                              // Excludes the button, which is UI, not content.
                               const htmlContent = message.refinedRna || '';
                               
                               try {

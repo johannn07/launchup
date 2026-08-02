@@ -33,9 +33,8 @@
   let fileToDeleteIndex: number | null = null;
   let initialized = false;
 
-  // Initialize uploaded files from existing JSON data
   $: {
-    // Check value prop first (from answerValue), then fileUrl as fallback
+    // answerValue wins; fileUrl is the pre-presign fallback.
     const dataSource = value || fileUrl;
     if (dataSource && !initialized) {
       try {
@@ -45,7 +44,7 @@
           initialized = true;
         }
       } catch {
-        // Not JSON, ignore - might be empty string or non-JSON data
+        // Empty or legacy non-JSON value; leave the list empty.
         initialized = true;
       }
     } else if (!dataSource && !initialized) {
@@ -53,7 +52,6 @@
     }
   }
 
-  // Update value whenever uploadedFiles changes
   function updateValue(): void {
     if (uploadedFiles.length > 0) {
       value = JSON.stringify({ files: uploadedFiles });
@@ -84,8 +82,8 @@
   }
 
   async function previewFile(file: StoredFile): Promise<void> {
-    // Opened up front and pointed at the URL afterwards: opening it after the
-    // await would be treated as an unsolicited popup and blocked.
+    // Opened before the await — a window opened afterwards reads as an
+    // unsolicited popup and gets blocked.
     const tab = window.open('', '_blank', 'noopener,noreferrer');
 
     try {
@@ -200,9 +198,8 @@
   }
 
   /**
-   * Two steps: ask the API to sign an upload, then PUT the bytes straight to
-   * the bucket. The file never passes through the API, so a slow 10MB upload
-   * no longer occupies a request there.
+   * Sign an upload, then PUT the bytes straight to the bucket, so a slow 10MB
+   * upload never occupies an API request.
    */
   async function uploadOne(file: File): Promise<StoredFile> {
     const { data: presigned } = await axiosInstance.post(
@@ -216,9 +213,8 @@
       { headers: { Authorization: `Bearer ${access}` } }
     );
 
-    // Plain fetch, not axiosInstance: this goes to the storage provider, and
-    // the instance's baseURL and Authorization header would break the
-    // signature.
+    // Plain fetch, not axiosInstance — this goes to the storage provider, and
+    // the instance's baseURL and Authorization header would break the signature.
     const response = await fetch(presigned.uploadUrl, {
       method: 'PUT',
       // Must match the headers the URL was signed with, exactly.

@@ -1,10 +1,9 @@
 /**
  * Follow-up to measure-models.js.
  *
- * Leniency (Objective 4) is not "does the model score low", it is "does the
- * model inflate a weak venture". And differentiation (Objective 2) is whether
- * an early-stage and a mid-stage startup land at meaningfully different
- * levels. One document cannot show either — this runs both.
+ * Leniency (Objective 4) is not "does the model score low" but "does it inflate
+ * a weak venture"; differentiation (Objective 2) is whether an early- and a
+ * mid-stage startup land at different levels. One document shows neither.
  *
  *   AgroLink PH   — paper prototype, zero revenue, no pilot   -> should be LOW
  *   MediSync Cebu — 6 paying facilities, PHP 5k MRR, 3 founders -> should be HIGHER

@@ -8,21 +8,16 @@ const axiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  // Send the httpOnly `Access` cookie with cross-origin requests. Without this
-  // every client-side call is anonymous — the cookie is httpOnly by design, so
-  // no script here can read it to build an Authorization header, and this
-  // instance was previously sending no credentials of any kind. The backend
-  // reads that cookie in JwtStrategy's extractor.
+  // Sends the httpOnly `Access` cookie cross-origin; without it every
+  // client-side call is anonymous, since no script can read an httpOnly cookie
+  // to build an Authorization header. JwtStrategy's extractor reads it. Legal
+  // because the backend's CORS sets `credentials: true` with an origin allowlist.
   //
-  // The backend's CORS config already sets `credentials: true` with an
-  // explicit origin allowlist, which is what makes this legal.
-  //
-  // NOTE for deployment: the cookie is set `sameSite: 'strict'`, so this works
-  // when both apps share a site (localhost:5173 -> localhost:3000 does, since
-  // "site" ignores the port) but the browser will NOT attach it from
-  // launchup.vercel.app to launchup.onrender.com. Those are different sites
-  // and will need `sameSite: 'none'` + `secure: true` on the cookie, which is
-  // a CSRF trade-off worth making deliberately rather than by accident.
+  // DEPLOYMENT: the cookie is `sameSite: 'strict'`, so this works while both
+  // apps share a site (localhost:5173 -> :3000 does — "site" ignores the port)
+  // but the browser will NOT attach it from launchup.vercel.app to
+  // launchup.onrender.com. That needs `sameSite: 'none'` + `secure: true`, a
+  // CSRF trade-off to make deliberately rather than by accident.
   withCredentials: true
 });
 

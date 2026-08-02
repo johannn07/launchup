@@ -54,7 +54,6 @@ export class AdminService {
   async createUser(createUserDto: CreateUserDto) {
     const { email, password, firstName, lastName, role } = createUserDto;
 
-    // If user exists, just update role/password as needed
     const existing = await this.userService.findOneByEmail(email);
     if (existing) {
       throw new InternalServerErrorException('User already exists');
@@ -68,7 +67,7 @@ export class AdminService {
       // return updated;
     }
 
-    // Otherwise sign up and then set role if needed
+    // signup() always creates a Startup-role user, so the role is set after.
     await this.authService.signup({
       email,
       password,
@@ -119,7 +118,7 @@ export class AdminService {
       await this.log('Admin', `Updated user ${updatedUser.email}`, 'admin');
       return updatedUser;
     } catch (error: any) {
-      // Handle unique constraint violation for email
+      // Surface the email collision as a 400 rather than a 500.
       if (
         error?.code === '23505' ||
         (typeof error?.message === 'string' && error.message.includes('unique'))
@@ -198,13 +197,12 @@ export class AdminService {
     await this.log('Admin', `Deleted startup ${s.name}`, 'admin');
   }
 
-  // Tier config accessors
   async getTierConfigs(): Promise<TierConfig[]> {
     return this.em.find(TierConfig, {}, { orderBy: { id: 'ASC' } });
   }
 
   async upsertTierConfigs(configs: { tierLabel: string; threshold: number; weights?: Record<string, number> }[]) {
-    // naive replace-all strategy: delete existing and insert provided
+    // Replace-all rather than diffing — the editor always posts the full set.
     const existing = await this.em.find(TierConfig, {});
     for (const e of existing) {
       await this.em.remove(e);
@@ -225,12 +223,13 @@ export class AdminService {
     }
     await this.em.flush();
 
-    // Retroactively apply the new tier labels to all existing readiness evaluations
+    // Relabel existing evaluations, or old rows keep tiers from the old
+    // thresholds and the admin sees no effect from the edit.
     if (configs.length > 0) {
       const sortedConfigs = [...configs].sort((a, b) => b.threshold - a.threshold);
       let caseSql = 'CASE ';
       for (const cfg of sortedConfigs) {
-        // Escape single quotes just in case
+        // Interpolated into raw SQL below, so the label must be escaped.
         const safeLabel = cfg.tierLabel.replace(/'/g, "''");
         caseSql += `WHEN composite_score >= ${cfg.threshold} THEN '${safeLabel}' `;
       }
@@ -244,7 +243,6 @@ export class AdminService {
     return created;
   }
 
-  // AI bias audits
   async getBiasAudits(): Promise<AiBiasAudit[]> {
     return this.em.find(AiBiasAudit, {}, { orderBy: { createdAt: 'DESC' }, populate: ['startup'] });
   }

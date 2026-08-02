@@ -70,7 +70,7 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    // Check if email is being changed and if it's already taken
+    // Only re-check uniqueness when the email actually changed.
     if (dto.email && dto.email !== user.email) {
       const existingUser = await this.findOneByEmail(dto.email);
       if (existingUser) {
@@ -78,7 +78,6 @@ export class UserService {
       }
     }
 
-    // Update fields
     if (dto.firstName !== undefined) {
       user.firstName = dto.firstName;
     }

@@ -1,8 +1,8 @@
 # LaunchUp — Project Overview
 
-A refresher written from a full read of the repository (backend, frontend, docs, scripts). Every claim below cites the file it came from so you can dig in yourself.
+Written from a full read of the repository. Every claim cites its source file.
 
-> **Note on accuracy:** this describes what the code *actually does today*, which in several places differs from `README.md` and from what the UI implies. Known broken/dead paths are called out in [§7](#7-known-gaps-dead-code-and-discrepancies) rather than silently omitted.
+> **Accuracy:** this describes what the code does today, which in places differs from `README.md` and from what the UI implies. Broken and dead paths are called out in [§7](#7-known-gaps-dead-code-and-discrepancies), not omitted.
 
 ---
 
@@ -12,9 +12,9 @@ LaunchUp is a **startup incubation-and-readiness management platform**, almost c
 
 ### The problem it solves
 
-An incubator receives more startup applications than it can support. It needs to (a) decide which to admit, (b) measure how "ready" each admitted startup is across several independent dimensions, and (c) run a repeating coaching loop that turns those measurements into concrete next steps. Doing this by hand — spreadsheets, rubrics, mentor notes — is slow and inconsistent between reviewers.
+An incubator gets more applications than it can support. It must decide who to admit, measure each admitted startup's readiness across several dimensions, and run a coaching loop turning those measurements into next steps. By hand — spreadsheets, rubrics, mentor notes — that is slow and inconsistent between reviewers.
 
-LaunchUp digitizes that entire pipeline and layers **Google Gemini** on top to draft the analytical work (assessments, recommended next steps, initiatives, roadblocks) that a mentor would otherwise write from scratch. The mentor edits and approves rather than authors.
+LaunchUp digitizes the pipeline and uses **Google Gemini** to draft the analytical work a mentor would otherwise write from scratch. The mentor edits and approves rather than authors.
 
 ### The core domain model in one paragraph
 
@@ -50,9 +50,9 @@ Every one of those four artifacts can be **AI-generated** (`isAiGenerated` flag)
 | Backend | NestJS 11 + TypeScript | `backend/src/` |
 | ORM | MikroORM 6 (PostgreSQL driver; SQLite fallback) | `backend/src/mikro-orm.config.ts` |
 | Auth | Passport JWT + argon2 hashing | `backend/src/auth/` |
-| AI | Google Gemini, model/temperature/pipeline flags env-configured via `AiConfigService` (default model `gemini-2.5-flash-lite`) | `backend/src/ai/ai-config.service.ts:5` |
-| OCR | Tesseract.js (+ `eng.traineddata`) | `backend/src/ocr/` |
-| File storage | AWS S3 SDK → DigitalOcean Spaces | `backend/src/upload/` |
+| AI | Google Gemini, model/temperature/pipeline flags env-configured via `AiConfigService` (default model `gemini-3.6-flash`) | `backend/src/ai/ai-config.service.ts:21` |
+| OCR | Tesseract.js (+ `eng.traineddata`), Gemini Vision for handwriting | `backend/src/ocr/` |
+| File storage | `@aws-sdk/client-s3`, any S3-compatible endpoint via `S3_*` (unset by default) | `backend/src/upload/` |
 | Frontend | SvelteKit 2 / Svelte 5 (runes) | `frontend/src/` |
 | Styling | TailwindCSS + shadcn-svelte (`bits-ui`) | `frontend/tailwind.config.ts`, `frontend/src/lib/components/ui/` |
 | Client data | `@sveltestack/svelte-query` + axios | `frontend/src/lib/axios.ts` |
@@ -765,7 +765,13 @@ This is the most serious category. Full per-controller audit is in §5.4.
 
 ### 7.6 Verified *not* broken
 
-Checked so you don't re-investigate: `.env` files are **not** tracked in git (only `.env.example`); the zips are untracked; the `admin` and `assessments` modules have correct guard coverage; password handling is sound (argon2, `hidden: true` on `User.hash`, old-password verification on change); cookies are `httpOnly` + `sameSite: 'strict'` + `secure` outside dev; the global `ValidationPipe` uses `whitelist: true`.
+Checked, so don't re-investigate:
+
+- `.env` files are not tracked in git (only `.env.example`); the zips are untracked
+- `admin` and `assessments` have correct guard coverage
+- Password handling is sound — argon2, `hidden: true` on `User.hash`, old-password verification on change
+- Cookies are `httpOnly` + `sameSite: 'strict'` + `secure` outside dev
+- The global `ValidationPipe` uses `whitelist: true`
 
 ---
 
@@ -781,7 +787,7 @@ cd backend && pnpm install && pnpm dev      # :3000, auto-syncs schema + seeds d
 cd frontend && pnpm install && pnpm dev     # :5173
 ```
 
-Both need their own `.env` (`backend/.env.example`, `frontend/.env.example`). **`JWT_SECRET` must match in both files** (§5.1). The backend additionally wants `GEMINI_API_KEY` for any AI feature and S3-compatible storage credentials for uploads (the `DO_SPACES_*` vars are currently unset, so uploads return 503 — `upload.service.ts:52`). If `DB_HOST` is unset the backend silently falls back to in-memory SQLite (`backend/src/mikro-orm.config.ts:8-16`), which starts fine but loses everything on restart.
+Both need their own `.env` (`backend/.env.example`, `frontend/.env.example`). **`JWT_SECRET` must match in both files** (§5.1). The backend also wants `GEMINI_API_KEY` for any AI feature, and the `S3_*` vars for uploads — unset by default, so uploads return 503 (`upload.service.ts:51-57`). With `DB_HOST` unset it falls back to in-memory SQLite (`backend/src/mikro-orm.config.ts:8-16`), which starts fine but loses everything on restart.
 
 ⚠️ **`backend/src/main.ts:292` runs `updateSchema()` and seeds demo data on every boot.** Against a shared Neon database that means every developer's `pnpm dev` mutates the same schema and re-inserts demo rows. Give each developer their own **Neon branch**, and gate the auto-sync on `NODE_ENV`.
 
@@ -791,7 +797,7 @@ Log in with any seeded account at `password123`; use `/admin-login` for `admin@l
 
 ## 9. Capstone objectives vs. implementation
 
-The four general objectives come from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2). Full item-by-item status, with the remediation work, is in **[TODO_CHECKLIST.md §0](TODO_CHECKLIST.md)**. Summary:
+The four objectives come from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2). Item-by-item status and remediation work: **[TODO_CHECKLIST.md §0](TODO_CHECKLIST.md)**.
 
 | Objective | Status |
 |---|---|
@@ -800,14 +806,16 @@ The four general objectives come from `Team_07_LaunchUpEnhanced_Software Proposa
 | 3. Multimodal intake (handwriting OCR, sketch recognition) | 🟡 OCR partial; canvas-section recognition minimal |
 | 4. Leniency bias correction (adversarial prompting, normalization) | 🟡 Normalization + audit trail built; prompting is post-hoc review, not adversarial |
 
-Three findings deserve emphasis because the scaffolding hides them:
+Three findings the scaffolding hides:
 
-- **RAG is implemented with a verified-knowledge corpus.** `EmbeddingService` calls `gemini-embedding-2` (768 dims) and `EmbeddingIndexService` writes `vector_embeddings` on every `recordRagContext` plus a boot-time backfill. `RagQueryService.queryVectorDatabase()` returns three populated channels: readiness rubrics (via deterministic `(readinessType, level)` key lookup, or semantic pgvector search if `AI_RAG_RUBRIC_MODE=semantic`), business frameworks, and peer capsule profiles. The corpus is **54 readiness-rubric rows + 10 business-framework rows**, seeded idempotently by `backend/seed-rag-corpus.js`. Gated by `AI_RAG_CORPUS_ENABLED` (default true) and `AI_RAG_RUBRIC_MODE` (deterministic default). **Provenance caveat:** only the 9 Technology rows are transcribed from a public standard (EU Horizon Europe TRL / ISO 16290:2013); 36 rows (Market/Acceptance/Organizational/Regulatory) are authored against BRLa's published dimension framework; the remaining 9 (Investment/IRL) are authored outright with no external source. **Not measured:** whether the corpus actually reduces hallucination — the `gemini-3.6-flash` free tier (20 generation requests/day) has prevented completing the three-arm measurement (~54 requests needed).
+- **RAG is implemented with a verified-knowledge corpus.** `EmbeddingService` calls `gemini-embedding-2` (768 dims); `EmbeddingIndexService` writes `vector_embeddings` on every `recordRagContext`, plus a boot-time backfill. `RagQueryService.queryVectorDatabase()` returns three populated channels: readiness rubrics (deterministic `(readinessType, level)` lookup, or pgvector search under `AI_RAG_RUBRIC_MODE=semantic`), business frameworks, and peer capsule profiles. The corpus is **54 rubric rows + 10 framework rows**, seeded idempotently by `backend/seed-rag-corpus.js`, gated by `AI_RAG_CORPUS_ENABLED` and `AI_RAG_RUBRIC_MODE`.
+  - **Provenance:** only the 9 Technology rows are transcribed from a public standard (EU Horizon Europe TRL / ISO 16290:2013). 36 rows (Market/Acceptance/Organizational/Regulatory) are authored against BRLa's published framework; the 9 Investment/IRL rows have no external source.
+  - **Not measured:** whether the corpus reduces hallucination. The `gemini-3.6-flash` free tier (20 requests/day) has blocked the three-arm measurement (~54 needed).
 - **`OutputValidatorService` and `RecommendationStorageService` are stubs** — every method body is a `// TODO`. `validateEach()` returns `isValid: true` unconditionally; `saveRecommendations()` does nothing.
 - **The scored dimensions don't match the specification.** All three documents specify TRL, MRL, **RRL**, ARL, ORL. The code scores Technology, Market, Acceptance, Organizational, and **Investment** — omitting Regulatory, adding Investment (`readiness.service.ts:38-73`).
 
 ### Infrastructure the documents leave open
 
-The SRS and SDD deliberately do **not** name a storage vendor (SDD p.48 says only *"Object storage (file storage service)"*), a model version, or a container strategy — Docker is not mentioned in either document. Those are open decisions; recommendations are in [TODO_CHECKLIST.md §5](TODO_CHECKLIST.md).
+The SRS and SDD name no storage vendor (SDD p.48 says only *"Object storage (file storage service)"*), no model version, and no container strategy — Docker appears in neither. Recommendations: [TODO_CHECKLIST.md §5](TODO_CHECKLIST.md).
 
 What the documents *do* fix: SvelteKit + NestJS + PostgreSQL + MikroORM as the foundational stack (SRS §2.5), the **Gemini API** as the LLM provider (SRS §2.4 constraint and §2.5 assumption), and Google Cloud Vision **or** Tesseract for OCR (SDD p.48). So the model *family* is committed, but the model *tier* is not.

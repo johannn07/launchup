@@ -75,7 +75,6 @@
         return;
       }
 
-      // Add new user to local list
       const result = await res.json();
       if (result.user) {
         users = [...users, result.user];
@@ -131,7 +130,6 @@
         return;
       }
 
-      // Update local users list
       const updated = await res.json();
       users = users.map((u: any) =>
         u.id === toEdit.id ? { ...u, ...editForm } : u

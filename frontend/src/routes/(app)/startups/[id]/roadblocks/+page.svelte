@@ -103,7 +103,6 @@
             })
           );
 
-          // Check if user is already in members
           const isUserInMembers = baseMembers.some(
             (member: Member) => member.userId === data.user.id
           );
@@ -313,7 +312,6 @@
     });
 
     try {
-      // Execute all update requests concurrently
       await Promise.all(updatePromises);
     } catch (error) {
       $roadblocksQueries[1].refetch();
@@ -334,7 +332,7 @@
   };
 
   const createRoadblock = async (payload: any) => {
-    // Increment existing risk numbers
+    // Shift existing rows so new roadblocks take the low risk numbers.
     const currentItems = await axiosInstance.get(
       `/roadblocks/?startupId=${startupId}`,
       {
@@ -386,7 +384,7 @@
   const generateRoadblocks = async (count: number) => {
     generatingRoadblocks = true;
     try {
-      // Increment existing risk numbers
+      // Shift existing rows so new roadblocks take the low risk numbers.
       const currentItems = await axiosInstance.get(
         `/roadblocks/?startupId=${startupId}`,
         {
