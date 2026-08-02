@@ -22,76 +22,68 @@ node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-07
 node measurement/measure-grounding.js --merge measurement/results/*.json
 ```
 
-`--dry-run` and `--fingerprint` (and `--retrieval-only`, for the generation
-endpoint specifically) are the quota-free paths, alongside `pnpm
-test:measurement` (`node --test measurement/tests/*.test.js`, 64 tests as of
-this writing, no network calls at all — every scorer and prompt builder is
-exercised as a pure function). `--dry-run` exists because unit tests cannot
-tell you whether an assembled prompt *looks* right, and this harness has
-twice now measured a property of the prompt rather than of the model (see
-the two confounds below) — a standing, quota-free eyeball path is the direct
-defence against a third one. It still calls `embedContent` for the
-`sdd-semantic` arm's retrieval (a separate, much higher-ceiling quota than
-generation), which is why it isn't advertised as calling zero endpoints —
-only zero *generation* calls.
+### Quota-free paths
 
-`--merge` re-runs the report functions over the concatenated raw per-call
-records, so N days of one rep is arithmetically identical to one N-rep run.
-It refuses to merge files whose model, embedding model, corpus size,
-similarity floor **or probe design** differ, rather than silently averaging
-two different experiments.
+- `pnpm test:measurement` — `node --test measurement/tests/*.test.js`, 64 tests,
+  no network at all. Every scorer and prompt builder runs as a pure function.
+- `--dry-run` and `--fingerprint` — no generation calls. `--dry-run` still calls
+  `embedContent` for the `sdd-semantic` arm, a separate and far higher ceiling.
+- `--retrieval-only` — no generation calls; Step A only.
 
-**The `--merge results/*.json` glob above works on any shell, including
-PowerShell.** PowerShell does not expand globs before handing arguments to a
-program, and neither does a plain `child_process` spawn — only a POSIX shell
-like bash does that on the script's behalf. `measure-grounding.js` no longer
-relies on the shell for this: any `--merge` argument containing glob
-metacharacters (`* ? [ ] { }`) is expanded internally with Node 22's
-`fs.globSync`, so the same command line runs the same way regardless of shell.
-Explicit file lists (`--merge day1.json day2.json`) still work exactly as
-before and are never glob-expanded, even if one of them doesn't exist yet — a
-typo'd explicit path surfaces as a plain "file not found" from the merge step
-itself, rather than being silently reinterpreted as "no matches". A glob that
-matches nothing, or a bare `--merge` with nothing after it, is now a hard
-error (exit 1) rather than falling through to a live 12-call generation run —
-see the CLI-argument tests below.
+`--dry-run` exists because unit tests cannot tell you whether an assembled
+prompt *looks* right, and this harness has twice measured a property of the
+prompt rather than of the model (see the confounds below).
 
-The probe-design check matters because both confounds below changed what a
-"rep" actually measures without changing its shape — a model-and-corpus
-check alone would happily pool a pre-fix levels probe (which leaked the
-answer to the deterministic arm) with a post-fix one asking a genuinely
-different question. `lib/fingerprint.js`'s `fingerprintMap` hashes, **per
-(metric, arm)** — not once per metric — the grounding instruction, the
-dimension list, each startup's document/levels/field lists, that arm's rubric
-mode, and the rubric *scope* it receives (`'full-ladder'` / `'current-and-next'`
-/ `'none'`). It does **not** stop at the top-level prompt builder's own source
-text, because `.toString()` on a function does not include the body of
-anything that function *calls* — `rnaPrompt` and `levelsPrompt` both delegate
-rendering to helpers (`readinessLevelBlock`, `renderRubricBlock`,
-`fullLadderRubrics`), and a change to any of those would otherwise move zero
-fingerprints while still changing every affected prompt byte-for-byte. So each
-metric hashes exactly the helpers whose output can reach it:
+### `--merge`
 
-- **`levels`** — `levelsPrompt`'s own source, `renderRubricBlock`'s source,
-  `fullLadderRubrics`' source, the rubric scope, and — for a corpus arm only —
-  a content hash of the full `RUBRICS` corpus (title/content/keyTerms/key/
-  readinessType/level per row, not merely `corpusRows`' row *count*, which a
-  same-length edit to any row would leave unchanged).
-- **`rna`** — `rnaPrompt`'s own source, `readinessLevelBlock`'s source (every
-  arm gets this block, not only a corpus arm — see confound 1 below),
-  `renderRubricBlock`'s source, the rubric scope, the stage-marker lexicon
-  (metric 2 is scored with it), and the same per-corpus-arm content hash.
-- **`fabrication`** — the hallucination prompt's own source and the field
-  lists, unchanged from before.
+Re-runs the report over the concatenated raw per-call records, so N days of one
+rep is arithmetically identical to one N-rep run. It refuses to merge files
+whose model, embedding model, corpus size, similarity floor **or probe design**
+differ, rather than averaging two different experiments.
 
-Per-arm granularity matters because a rubric-scope change (like the
-levels-probe fix below) alters what a corpus arm receives while leaving
-`baseline` untouched — a single per-metric hash would discard `baseline`'s
-still-valid data along with the arm that actually changed; the same logic now
-extends to the corpus-content hash, which is only folded in for an arm whose
-`ragCorpus` flag is `true`. `--fingerprint` prints what a run today would
-stamp — currently a 9-entry map (3 probes × 3 arms) — so you can check an
-existing results file is still mergeable without spending a call.
+The glob works on any shell, including PowerShell. Neither PowerShell nor a
+plain `child_process` spawn expands globs — only a POSIX shell does. So any
+`--merge` argument containing `* ? [ ] { }` is expanded internally with Node
+22's `fs.globSync` instead.
+
+- Explicit file lists are never glob-expanded, so a typo surfaces as a plain
+  "file not found" rather than as "no matches".
+- A glob matching nothing, or a bare `--merge`, is a hard error (exit 1) rather
+  than falling through to a live 12-call run.
+
+### Why probe design is fingerprinted
+
+Both confounds below changed what a "rep" measures without changing its shape.
+A model-and-corpus check alone would pool a pre-fix levels probe — which leaked
+the answer to the deterministic arm — with a post-fix one asking a different
+question.
+
+`lib/fingerprint.js`'s `fingerprintMap` hashes **per (metric, arm)**, not once
+per metric: the grounding instruction, the dimension list, each startup's
+document/levels/field lists, the arm's rubric mode, and its rubric *scope*
+(`'full-ladder'` / `'current-and-next'` / `'none'`).
+
+It does not stop at the top-level builder's source text. `.toString()` omits the
+body of anything a function calls, and `rnaPrompt` and `levelsPrompt` both
+delegate to helpers — so a helper change would move zero fingerprints while
+changing every affected prompt. Each metric hashes the helpers that reach it:
+
+- **`levels`** — `levelsPrompt`, `renderRubricBlock` and `fullLadderRubrics`
+  sources, the rubric scope, and for corpus arms a content hash of the full
+  `RUBRICS` corpus (per-row title/content/keyTerms/key/readinessType/level, not
+  the row *count*, which a same-length edit leaves unchanged).
+- **`rna`** — `rnaPrompt`, `readinessLevelBlock` (every arm gets this block, not
+  only corpus arms — see confound 1) and `renderRubricBlock` sources, the rubric
+  scope, the stage-marker lexicon, and the same corpus hash.
+- **`fabrication`** — the hallucination prompt's source and the field lists.
+
+Per-arm granularity matters because a rubric-scope change alters what a corpus
+arm receives while leaving `baseline` untouched. One hash per metric would
+discard `baseline`'s still-valid data along with the arm that changed. The
+corpus-content hash is likewise folded in only for arms with `ragCorpus: true`.
+
+`--fingerprint` prints what a run today would stamp — a 9-entry map (3 probes ×
+3 arms) — so you can check an existing results file is mergeable for free.
 
 ## What each one measures
 
@@ -452,14 +444,12 @@ design; the 2026-07-29 numbers above cannot answer it either way.
 
 ## Reading the output
 
-The trustworthy signal is the **gap and its direction**, not the absolute
-levels — there is no expert ground truth here. A negative gap means the model
-ranked the mid-stage venture *below* the early-stage one, which is what
-`gemini-2.5-flash-lite` did.
+Trust the **gap and its direction**, not the absolute levels — there is no
+expert ground truth here. A negative gap means the model ranked the mid-stage
+venture *below* the early-stage one, as `gemini-2.5-flash-lite` did.
 
-The two generation scripts use `temperature: 0` and the verbatim
-`AI_GROUNDING_INSTRUCTION` from `ai.service.ts`, so the only variable is the
-model.
+Both generation scripts use `temperature: 0` and the verbatim
+`AI_GROUNDING_INSTRUCTION`, so the only variable is the model.
 
 ## Caveats
 
@@ -476,13 +466,12 @@ Retrieval scripts (`calibrate-similarity`, `measure-retrieval`) — read these
 before quoting the numbers:
 
 - **The documents are written, not sampled.** Nine descriptions composed for
-  this test, deliberately three clean domains. Real capsule proposals are
-  longer, messier, and cluster less neatly, so the separation here is an
-  optimistic case.
-- **Ground truth is domain membership, not human relevance judgement.** Two
-  health startups are assumed to be useful context for each other. That is
-  coarse — the correct answer is sometimes a same-stage startup in a different
-  sector. The saving grace is that neither arm can see the labels.
+  this test across three clean domains. Real capsule proposals are longer and
+  messier, so this separation is an optimistic case.
+- **Ground truth is domain membership, not human judgement.** Two health
+  startups are assumed useful context for each other. That is coarse — the
+  right answer is sometimes a same-stage startup in another sector. Neither arm
+  sees the labels, which is what keeps it honest.
 - **N is 9 documents / 36 pairs.** Enough to reject a threshold of 0.70; not
   enough to fine-tune between 0.78 and 0.80.
 - Embeddings are deterministic here, so unlike the generation scripts a re-run
@@ -495,73 +484,54 @@ measurement being taken.
 
 `measure-grounding.js`:
 
-- **Step A is quota-free of the generation endpoint, not quota-free
-  outright.** It still calls `embedContent`, which has its own free-tier
-  ceiling (`embed_content_free_tier_requests`) — hit once during this
-  measurement, independent of any `generateContent` usage, and recovered on
-  its own within a minute. Embeddings are deterministic, so a re-run
-  reproduces the 12/12 vs 0/12 result exactly; it is not a small-N number
-  that needs more repetitions.
-- **Step B's ceiling is a hard daily cap, not `DELAY_MS`.** It is
+- **Step A is free of the generation endpoint, not free outright.** It calls
+  `embedContent`, which has its own ceiling (`embed_content_free_tier_requests`)
+  — hit once here, independent of `generateContent`, and recovered within a
+  minute. Embeddings are deterministic, so the 12/12 vs 0/12 result reproduces
+  exactly; it is not a small-N number needing more reps.
+- **Step B's ceiling is a hard daily cap, not `DELAY_MS`.**
   `GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20` for
-  `gemini-3.6-flash`, confirmed from the 429 body. No pacing value works
-  around it; only a fresh day's quota (or a paid tier) does. The window
-  resets at **midnight US Pacific**, which is **15:00 Philippine time** — so
-  a run started in the PH morning is drawing on the *previous* window and may
-  find it already spent. The 2026-07-29 run got 16 calls, not 18, for exactly
-  this reason.
+  `gemini-3.6-flash`, confirmed from the 429 body. Only fresh quota or a paid
+  tier helps. The window resets at **midnight US Pacific = 15:00 Philippine
+  time**, so a PH-morning run draws on the *previous* window and may find it
+  spent — that is why the 2026-07-29 run got 16 calls, not 18.
 - **N is the binding constraint on every Step B conclusion, and the noise
   floor is now measured rather than assumed** — ±1.0 differentiation-gap
   points between two byte-identical prompts (see Step B above). Accumulate at
   least three reps with `--merge` before treating any between-arm difference
   in metric 3 as real.
-- **Metric 1 (level-placement accuracy) replaced the old rubric-term
-  metric because that one measured whether retrieval's exact wording
-  reached the output, not whether the output was correct.** A generated
-  RNA could contain a `keyTerm` while describing the wrong readiness level,
-  or omit every `keyTerm` while being an accurate paraphrase — on the
-  2026-07-29 run it scored 1/12 (8%) even though inspection showed the
-  underlying text was substantively on-target, because the RNA prompt's own
-  "be specific and grounded in the provided data" instruction discourages
-  echoing abstract rubric phrasing. Level-placement MAE is scored against
-  the seeded ground truth instead, which cannot be gamed by fluent
-  paraphrase or defeated by faithful paraphrase either.
-- **Metric 1 and metric 3's denominators exclude a dimension the model
-  dropped entirely.** If a levels-generation response omits a `dimension`
-  the prompt asked for, that dimension is skipped (`levelPlacement`'s
-  `typeof assigned !== 'number'` check) rather than scored as an error — a
-  missing field is a schema-compliance problem, not evidence of a bad
-  placement. Schema compliance is not measured by this script; check `n=`
-  for a low denominator as a sign it's happening.
-- **Metric 2's markers are exact word-boundary matched, case-insensitive,
-  against the RNA text — not against the rubric.** `isStageInappropriate`
-  flags a dimension only when an authored marker phrase for a level well
-  above the startup's actual rung appears in the generated recommendation
-  (`\bphrase\b`, so "ipo" doesn't false-positive inside "IPOPHL"). A model
-  that recommends an advanced action in words the lexicon doesn't contain
-  is not flagged — that under-counts the failure rather than over-counting
-  it, the same safer-direction trade-off the old exact-substring metric
-  made.
-- **Metric 2's denominator excludes a dimension the model dropped from the
-  RNA entirely**, the same convention as metric 1: a missing
-  `readiness_level_type` is a schema-compliance gap (`stageAppropriateness`
-  skips it), not evidence the recommendation was stage-appropriate.
-- **The two seeded startups' per-dimension levels are real, not
-  approximated** — `main.ts`'s `seedDemoStartups` (AgroLink: T2/M2/A1/O2/R1/I1;
-  MediSync: T5/M4/A3/O4/R3/I3), not a uniform guess per startup. The
-  documents themselves are `measure-differentiation.js`'s verbatim early/mid
-  pair.
-- **The code's `semantic` rubric mode's Step B query is startup-invariant.**
-  When every dimension is missing (`RnaService.generateRNA`'s normal case for
-  a fresh startup), `retrieveRubrics`'s semantic query is
-  `dimensions.map(d => d.readinessType).join(' ')` — the same six-word string
-  regardless of which startup or what level it's actually at. AgroLink
-  (early) and MediSync (mid) would therefore receive an *identical* retrieved
-  rubric set in that arm, a structural property of the production code being
-  measured, not an artifact of this harness — and a second, independent way
-  this substitute cannot deliver a level-appropriate rubric, beyond Step A's
-  per-dimension accuracy finding. This is still the code's substitute, not
-  SDD §3.2's mechanism — see the profile-data query below for that.
+- **Metric 1 replaced the old rubric-term metric**, which measured whether
+  retrieval's exact wording reached the output rather than whether the output
+  was correct. An RNA can contain a `keyTerm` while describing the wrong level,
+  or omit every `keyTerm` and still be an accurate paraphrase. It scored 1/12
+  on 2026-07-29 despite the text being substantively on-target, because the RNA
+  prompt discourages echoing abstract rubric phrasing. Level-placement MAE is
+  scored against seeded ground truth, which paraphrase can neither game nor
+  defeat.
+- **Metrics 1 and 3 exclude dimensions the model dropped.** An omitted
+  `dimension` is skipped (`levelPlacement`'s `typeof assigned !== 'number'`),
+  not scored as an error — a missing field is a schema problem, not a bad
+  placement. This script does not measure schema compliance; watch `n=`.
+- **Metric 2 word-boundary matches, case-insensitively, against the RNA text —
+  not the rubric.** `isStageInappropriate` flags a dimension only when a marker
+  phrase for a level well above the startup's rung appears in the
+  recommendation (`\bphrase\b`, so "ipo" doesn't match inside "IPOPHL"). An
+  advanced action phrased outside the lexicon goes unflagged, under-counting
+  rather than over-counting.
+- **Metric 2 excludes dropped dimensions too.** A missing
+  `readiness_level_type` is a schema gap (`stageAppropriateness` skips it), not
+  evidence the recommendation was stage-appropriate.
+- **The seeded per-dimension levels are real, not approximated** — from
+  `seedDemoStartups` (AgroLink T2/M2/A1/O2/R1/I1, MediSync T5/M4/A3/O4/R3/I3).
+  The documents are `measure-differentiation.js`'s verbatim early/mid pair.
+- **The `semantic` mode's Step B query is startup-invariant.** With every
+  dimension missing (the normal case for a fresh startup), `retrieveRubrics`
+  queries `dimensions.map(d => d.readinessType).join(' ')` — the same six-word
+  string whatever the startup or level. AgroLink and MediSync therefore receive
+  an *identical* rubric set in that arm. That is production code's property,
+  not a harness artifact, and a second independent reason this substitute
+  cannot deliver a level-appropriate rubric. Still the code's substitute, not
+  SDD §3.2's mechanism.
 - **The profile-data query's ground truth is deliberately loose.** "Correct"
   means every returned row's key is among the startup's 12 valid
   `(dimension, current-or-next-level)` pairs across *all six* dimensions, not
