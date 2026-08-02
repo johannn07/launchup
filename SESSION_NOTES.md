@@ -398,3 +398,130 @@ Two things it surfaced that are worth knowing:
 - **The business-framework channel retrieves nothing** (see the `inspect-prompt.js` section above). Three plausible fixes — lower the floor for that channel alone, make it deterministic the way rubrics are, or drop the channel and the 10 rows. Not a merge blocker; it has never worked differently. Worth deciding before anyone describes the corpus as "64 rows grounding the model," because in practice 54 are.
 - **`backup/rag-corpus-preflight` still exists** (tip `99fbcda`) and holds the pre-rewrite history including the 13.7 MB of PDF blobs. The merge is done, so it is now safe to delete — and worth doing, since it is the only remaining reference keeping those blobs alive locally.
 - **`.superpowers/sdd/2026-07-28-rag-corpus/`** (gitignored) was deliberately *not* deleted despite the process prescribing it — it holds the ten task reports with TDD evidence, which is the debugging record while John tests. Remove after merge.
+
+---
+
+## Grounding measurement — Step B finally ran — 2026-07-29
+
+Branch `measure/grounding-arms`, off `master` (which now carries the merged corpus work, PRs #13/#14/#15). Nothing pushed.
+
+The top open item was Step B of `measure-grounding.js` — the three generation arms, n=0 since 2026-07-28. **It ran.** 16 of 18 calls landed before the daily cap; raw per-call records are committed at `backend/measurement/results/2026-07-29-rep1.json`.
+
+### The blocker was two problems, and only one of them was quota
+
+The 20/day cap on `gemini-3.6-flash` was real, but the harness made it fatal rather than merely limiting. It iterated `arm → startup → rep` at `REPS = 3`, so 9 calls went into the first (arm, startup) cell and the whole 20-call budget was consumed **inside the baseline arm**. Every metric in the file is a *between-arm* contrast, so that partial run had nothing to compare and reported n=0 across the board.
+
+Three changes, verified before spending any quota:
+
+- **`REPS` defaults to 1**, overridable with `--reps=N`. One rep is 18 calls — what a free-tier day actually buys.
+- **Reps are the outermost loop.** Each completed rep is now a full three-arm comparison, so a 429 costs precision instead of the comparison itself. Retrieval is hoisted above the rep loop so `semantic` still embeds only once.
+- **`--out` / `--merge`** persist and recombine the raw per-call records. The report functions are pure over the concatenated calls, so N days of one rep equals one N-rep run. `--merge` **refuses** files whose model, embedding model, corpus size or floor differ rather than averaging two experiments together.
+
+The merge path and the refusal path were both exercised against synthetic fixtures first — no quota spent proving the plumbing.
+
+### What the numbers say, and mostly what they don't
+
+| metric | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — rubric-term grounding | n/a | n/a (nothing retrieved) | 1/12 (8%) |
+| 2 — invented absent fields | 0/6 | 0/6 | 0/3 |
+| 3 — differentiation gap | +1.50 | +2.50 | incomplete |
+
+**Four findings, and the most valuable one is not in the table.**
+
+1. **`sdd-semantic` is not a distinct arm — it is a null-condition replicate of `baseline`.** Semantic rubric retrieval returned 0 rows for both startups (confirmed in the results file, exactly as Step A predicted), so its rubric block is the empty string — and baseline's is too. **The two arms sent byte-identical prompts.** The study is really two conditions plus one accidental control.
+2. **That control measured the noise floor, and it is large.** Same prompt, `temperature: 0`, two samples: **8 of 12 per-dimension levels differed**, gap +1.50 → +2.50. AgroLink came back `T3 M3 A3 O3 R1 I1` once and `T2 M3 A2 O2 R1 I1` the other time. So **±1.0 gap points is run-to-run variance at n=1**, and no corpus effect below that is detectable. This is the single most useful number the run produced, and it was free.
+3. **Metric 2 is saturated and cannot move.** 0/15 invented, 15/15 present recalled, every arm — reproducing 2026-07-27's 0/9 and 9/9 across two different models. `groundPrompt()` already handles this probe completely. A null result here is **evidence about the probe, not the corpus**; Objective 1's claim cannot be tested until the probe is harder (longer documents, plausible distractors, partially-supported fields).
+4. **Metric 1's 8% is largely an artifact, and inspecting the misses proves it.** With `TRL 2`/`TRL 3` verbatim in the prompt, the model wrote *"Tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025"* — a correct TRL-2/3 characterization that shares no wording with `keyTerms: ["concept formulated", "speculative application", …]`. The RNA prompt demands specificity to the source document, which structurally conflicts with echoing abstract rubric phrasing. Metric 1 measures **vocabulary reuse**, which is near zero here even where retrieval demonstrably worked. The README had flagged exact-substring matching as a risk; this run shows it is the dominant case.
+
+### Operational note worth keeping
+
+**The free-tier daily window resets at midnight US Pacific = 15:00 Philippine time.** A run started in the PH morning draws on the *previous* window. That is why this run got 16 calls rather than 18 — some of 2026-07-28's evening attempts had already spent from the same window.
+
+### What's owed
+
+- **Two calls**: `deviation-deterministic` / MediSync (levels + hallucination probe). That gap is why metric 3's headline arm reads `n/a`.
+- **At least two more reps**, one per quota window, then `--merge`. Three reps is the minimum for metric 3 to clear the ±1.0 noise floor.
+- **Two probe redesigns** — now indicated by measurement rather than speculation: metric 2 needs headroom, metric 1 needs to stop rewarding verbatim echo.
+
+---
+
+## Probe redesign executed, and the first clean rep — 2026-07-30
+
+Branch `measure/grounding-arms`, several commits past `master` at the time of this entry (the branch kept growing after it was written — run `git log master..HEAD --oneline | wc -l` for the current count rather than trusting a number here), **nothing pushed**. Spec `docs/superpowers/specs/2026-07-29-grounding-probes-design.md`, plan `docs/superpowers/plans/2026-07-29-grounding-probes.md`, executed as 8 subagent tasks with an independent review after each.
+
+### The two confounds — the actual reason the redesign was necessary
+
+Reading production's `createBasePrompt` (`ai.service.ts:937-943`) showed the harness's arms differed by more than the treatment, which invalidates the comparison at *any* N. More reps would not have helped.
+
+1. **Production emits the startup's readiness levels for every arm**; only the rubric block varies with `ragCorpus`. The harness emitted them for none — so it was measuring *"told its levels" vs "not told"*, a contrast production never presents.
+2. **Deterministic retrieval keys on `(readinessType, level)` using the startup's actual level**, and the levels probe then asked the model to assess that level. The arm was shown the answer.
+
+Fixed: the levels block now goes to all three arms in the RNA prompt; the levels probe receives the full nine-rung ladder instead of the startup's own rung.
+
+### What else changed
+
+Metric 1 became level-placement accuracy against seeded ground truth (the old one scored 1/12 while the text was substantively right — it measured vocabulary reuse). Metric 2 became SO 1.3's own example, the stage-inappropriate recommendation rate, scored with an **authored** lexicon held disjoint from the corpus `keyTerms` by test. The saturated absent-field probe was demoted behind `--with-fabrication-probe`, taking a rep from 18 calls to 12. Fingerprints are keyed **(metric, arm)** so a probe change refuses only what it actually invalidates. `--dry-run` prints every arm's assembled prompts without a generation call.
+
+**49 measurement tests exist where there were none**, run by `pnpm test:measurement` (Node's built-in runner — no new dependency, and jest's 167/2 baseline is untouched).
+
+### First clean rep (`measurement/results/2026-07-30-redesign-rep1.json`, n=1)
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — placement MAE (lower better) | 0.67 | 0.42 | **1.50** |
+| 2 — stage-inappropriate rate | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.83 | 2.33 | **1.17** |
+
+`baseline` and `sdd-semantic` send **byte-identical prompts** (semantic retrieves nothing against this corpus), so their spread is the noise floor, not a comparison: 0.25 MAE and 0.50 gap points this rep. **The corpus arm sits outside it on both metrics** — +0.83 MAE, −1.66 gap.
+
+Per-dimension it is not uniform inflation: on MediSync the deterministic arm overshoots Technology/Market/Acceptance and collapses Organizational, Regulatory and Investment to level 1. **Working hypothesis: the levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement rather than grounding it** — a property of the harness's confound-2 fix, not of the shipped product.
+
+That case also vindicated a fix insisted on during Task 3. MediSync's deterministic deltas are `+2 +2 +2 −3 −2 −2`: signed mean **−0.17**, which would have read as near-perfect, against a true MAE of **2.17**. The suite originally could not distinguish `Math.abs` from a signed difference; a mutation check proved it, and the guard added then is what makes this row honest.
+
+**Metric 2's 0% is real, not a dead metric** — injecting *"Move to full market launch and prepare an IPO."* at AgroLink Technology 2 correctly flags both markers. Since confound 1's fix gives all arms the levels block, the economical reading is that **the levels block, not the corpus, is what keeps recommendations stage-appropriate.** The reserved `baseline-no-levels` arm is how to isolate that.
+
+**n=1. This does not show the corpus is harmful** — the +2.28 differentiation baseline it is measured against was itself 3 reps. It shows the instrument is finally clean and that the first clean reading runs against the corpus. Two more reps, then `--merge`.
+
+### What the review loop actually caught
+
+Seven defects. **Six were in the spec or plan, not in any implementer's work** — the subagents transcribed faithfully and the reviews caught design errors. Five were found by *mutation testing*, not by reading; in each case the suite was green and the guard was decorative. The two that would have cost real money:
+
+- **`ipo` matched `IPOPHL`.** The Philippine IP Office appears verbatim in both seeded documents, so an RNA recommending a trademark filing — correct advice at Regulatory 1 — would have scored as the most severe hallucination the metric can record. Fixed generally with whole-word matching.
+- **`mergeRuns` keyed its comparability reference on `days[0]`.** The documented `--merge results/*.json` sorts the legacy file first; with it as reference, *nothing* pooled. Reproduced: 0 calls pooled where 2 should have been. That would have silently destroyed the multi-day accumulation the redesign exists to enable.
+
+One test had also **fabricated its own fixture** — replacing MediSync's real `Revenue: PHP 5,000 monthly recurring` with `Revenue: None to date`, which was precisely the line that would have failed the assertion.
+
+### Final whole-branch review — five more findings, all fixed
+
+Run on the most capable model over all 28 commits, then one fix wave (`0a493cb` code, `cbd0bd7` docs). Tests went 49 → 64.
+
+1. **The fingerprint covered less than its own documentation claimed.** It hashed `.toString()` of the three top-level prompt builders only — which excludes the bodies of helpers they *call*. So `readinessLevelBlock`, `renderRubricBlock` and `fullLadderRubrics` were invisible to it, meaning **this branch's own confound-1 fix could have been reverted with every fingerprint unchanged.** `envKey` also checked `corpusRows`, a row *count*, so any same-length edit to a rubric row went undetected. Now hashes all three helper sources plus a full content hash of `RUBRICS`, still scoped per arm so a corpus edit never refuses `baseline` data. The stored map in the results file was regenerated at zero quota cost — done now precisely because exactly one fingerprinted file existed.
+2. **`--merge results/*.json` — the documented workflow — did not run on this machine.** Neither PowerShell nor Node expands globs; only a POSIX shell does. Fixed inside the script with `fs.globSync`, so the same command works on any shell, and explicit file lists still bypass expansion.
+3. **A typo could silently spend the day's budget.** A bare `--merge`, `--merge` placed last, or a glob matching nothing all left `MERGE_FILES` empty and **fell through to a full 12-call live run**. `--out foo.json` (space instead of `=`) spent 12 calls and discarded the output. All now hard-error before any model call, with messages naming the likely typo. Highest-value fix on the branch: the others cost a reader's time, this one cost a day of measurement.
+4. **The README overclaimed.** It called metrics 1 and 3 "two independent metrics moving the same direction". They are both computed from the same `levelCalls` array — two readings of one signal, mechanically coupled. Retracted, along with a "~3× the noise" multiplier that rested on a single paired difference.
+5. **`TODO_CHECKLIST.md` contradicted itself** — re-asserted the two completed probe redesigns as open work, carried the same stale "18 calls" figure already corrected elsewhere, left the superseded 2026-07-29 table unmarked, and omitted the stage-marker lexicon's authored provenance.
+
+Scoped re-review: all five ADDRESSED, no new breakage, merge approved. Findings 6-13 were deliberately deferred and confirmed untouched.
+
+### State at end of session
+
+- **Branch `measure/grounding-arms`, 30 commits past `master`** (merge-base `037b4ff`), clean tree, **nothing pushed**.
+- **Touches zero files under `backend/src/` or `frontend/`.** The only non-measurement code change is `backend/package.json` gaining `test:measurement`; `"test"` is untouched. So the 2 Jest failures are provably the documented pre-existing pair, not this branch.
+- **64 measurement tests** (`pnpm test:measurement`, Node's built-in runner, no new dependency) where there were none. Jest 167 passing / 2 failing, unchanged.
+- **The integration decision is still John's** — the finishing-a-development-branch menu was presented and not yet answered.
+
+### Next step
+
+**Two more reps, one per quota window, then merge them.** That is the whole remaining path to a defensible result, and it needs no more code:
+
+```
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/<date>-rep2.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
+
+The window resets at **15:00 Philippine time** (midnight US Pacific). A rep is 12 calls against a 20/day cap, so one rep per day is the ceiling.
+
+Before that, the quota-free ladder worth running locally: `pnpm test:measurement` proves the parts, `--dry-run` shows the real assembled prompts, `--merge` reproduces the result tables. None spends generation quota.
+
+Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
