@@ -15,17 +15,13 @@ export interface ReadinessLevelsByType {
 }
 
 /**
- * Keyed by ReadinessType rather than array position: `em.find(StartupReadinessLevel, ...)`
- * has no `orderBy`, so rows can come back in any order (insertion order, which
- * differs between the live DB and a freshly-seeded one). A positional read
- * (`levels[0]`, `levels[1]`, ...) would silently mislabel dimensions — e.g.
- * Acceptance data read as Technology — whenever insertion order doesn't match
- * declaration order. A keyed lookup cannot regress that way even if ordering
- * changes again.
+ * Keyed by ReadinessType, not array position. `em.find(StartupReadinessLevel)`
+ * has no `orderBy`, so rows arrive in insertion order — which differs between
+ * the live DB and a freshly-seeded one. A positional read would silently
+ * mislabel dimensions (Acceptance data read as Technology).
  *
- * Shared by ai.service.ts's createBasePrompt and rns.service.ts's
- * generateTasks/refineRnsDescription, all three of which previously
- * duplicated (or, for the latter two, never fixed) this exact lookup.
+ * Shared by createBasePrompt and rns.service.ts's generateTasks and
+ * refineRnsDescription, which each used to do this lookup themselves.
  */
 export function readinessLevelsByType(
   levels: StartupReadinessLevelLike[],

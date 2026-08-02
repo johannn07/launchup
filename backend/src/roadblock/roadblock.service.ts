@@ -127,10 +127,8 @@ export class RoadblockService {
   }
 
   async generateRoadblocks(dto: GenerateRoadblocksDto, ctx: AiRunContext) {
-    // dto.startupId is a real field on GenerateRoadblocksDto, so the caller
-    // (RoadblockController) already passes it straight to AiRunService.track()
-    // when opening the run — ctx.run.startup is attributed before this method
-    // even runs. No backfill needed here.
+    // No attribute() call needed: GenerateRoadblocksDto carries startupId, so
+    // the controller already passed it to track() when opening the run.
     const startup = await this.em.findOneOrFail(
       Startup,
       { id: dto.startupId },
@@ -294,13 +292,9 @@ export class RoadblockService {
     if (!roadblock) throw new NotFoundException('Roadblock not found');
 
     const startup = roadblock.startup;
-    // The refine run is opened with startupId: null (the route only has the
-    // roadblock id), so attribute it to the startup now that it's in hand —
-    // this is the same entity already loaded above, no extra query. Placed
-    // before the capsule-proposal check below so even that failure path
-    // leaves the run attributed rather than null — and written immediately
-    // via AiRunService.attribute, because on the failure path the
-    // request-context EM is discarded and a bare assignment never lands.
+    // The refine route carries only the roadblock id, so the run opens with
+    // startupId: null. Before the capsule-proposal check below, so even that
+    // failure path leaves the run attributed. See AiRunService.attribute.
     await this.aiRunService.attribute(ctx, startup);
     const capsuleProposalInfo = startup.capsuleProposal;
     if (!capsuleProposalInfo)
@@ -369,7 +363,6 @@ export class RoadblockService {
 
     const result = await this.aiService.refineRoadblock(ctx, prompt);
 
-    // Save chat history
     const newMessages = [
       new RoadblockChatHistory({
         roadblock,

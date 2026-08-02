@@ -35,17 +35,13 @@ export class UploadController {
         status: 'connected',
       };
     } catch {
-      // Deliberately opaque: the SDK's message names the bucket, endpoint, and
-      // sometimes the credential, and this only tells the caller whether the
-      // backend can reach its own storage.
+      // Opaque on purpose — the SDK's message names the bucket, endpoint and
+      // sometimes the credential.
       return { message: 'Object storage connection failed', status: 'failed' };
     }
   }
 
-  /**
-   * Preferred upload path: the browser asks for a signed URL, then PUTs the
-   * file straight to the bucket. Keeps large files off the API process.
-   */
+  /** Preferred path — keeps large files off the API process entirely. */
   @Post('presign')
   async presign(
     @Body() dto: PresignUploadDto,
@@ -53,7 +49,7 @@ export class UploadController {
     return this.uploadService.createPresignedUpload(dto);
   }
 
-  /** Resolves a stored key to a temporary readable URL. The bucket is private. */
+  /** The bucket is private, so reads go through a signed URL. */
   @Get('signed-url')
   async signedUrl(@Query('key') key: string): Promise<SignedUrlResponseDto> {
     if (!key) {

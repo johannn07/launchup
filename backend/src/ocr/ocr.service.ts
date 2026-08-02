@@ -6,10 +6,9 @@ import * as os from 'os';
 const TMP_PREFIX = 'launchup-ocr-';
 
 /**
- * Partial OCR service.
- * - Currently returns a stubbed transcription when given a file path.
- * - Designed as a placeholder so a real OCR engine (Tesseract, AWS Textract, etc.)
- *   can be integrated later.
+ * Legibility checks, Tesseract transcription, and heuristic sketch detection.
+ * Both tesseract.js and Google Vision are optional dependencies — every path
+ * degrades rather than throwing when they are absent.
  */
 @Injectable()
 export class OcrService {
@@ -124,13 +123,11 @@ export class OcrService {
     return entropy;
   }
   async parseImageFile(filePath: string): Promise<{ text: string }> {
-    // Minimal safety: ensure file exists
     try {
       const abs = path.resolve(filePath);
       await fs.access(abs);
-      // Try to use tesseract.js if available
       try {
-        // dynamic import so app still runs if the package isn't installed yet
+        // Dynamic import so the app still boots without the package installed.
         const tesseract = await import('tesseract.js');
         const { createWorker } = tesseract;
         const worker = await createWorker();
@@ -139,7 +136,6 @@ export class OcrService {
         await worker.initialize('eng');
         const { data } = await worker.recognize(abs);
         await worker.terminate();
-        // compute average confidence when available
         let avgConfidence: number | undefined = undefined;
         try {
           const words = data.words || [];
@@ -170,12 +166,11 @@ export class OcrService {
   }
 
   async parseBuffer(_buf: Buffer): Promise<{ text: string }> {
-    // Write buffer to a temp file then call parseImageFile to reuse logic
+    // Tesseract and Vision both take a path, so round-trip through a temp file.
     try {
       const tmpFile = path.join(os.tmpdir(), `${TMP_PREFIX}${Date.now()}.png`);
       await fs.writeFile(tmpFile, _buf);
       const res = await this.parseImageFile(tmpFile);
-      // best-effort cleanup
       try {
         await fs.unlink(tmpFile);
       } catch {}
@@ -185,7 +180,8 @@ export class OcrService {
     }
   }
 
-  // Heuristic sketch detection using parsed text length and entropy
+  // Heuristic: sketches transcribe as short, punctuation-heavy, low-confidence
+  // text over high-entropy image bytes. Weights are hand-tuned, not fitted.
   detectSketch(parsedText: string, buffer: Buffer, tesseractAvgConfidence?: number) {
     const text = String(parsedText || '').trim();
     const textLength = text.length;
@@ -202,7 +198,6 @@ export class OcrService {
     const avgWordLen = words.length ? words.reduce((s: number, w: string) => s + (w?.length || 0), 0) / words.length : 0;
     const repeatedNonAlphaSeqs = (text.match(/[^A-Za-z0-9\s]{4,}/g) || []).length;
 
-    // Score components (higher -> more likely a sketch/diagram)
     let score = 0;
     if (textLength < 120) score += 0.30;
     if (nonAlphaRatio > 0.35) score += 0.25;
@@ -212,14 +207,13 @@ export class OcrService {
     if (entropy >= 5.5) score += 0.10;
     if (tesseractAvgConfidence !== undefined && tesseractAvgConfidence < 60) score += 0.20;
 
-    // normalize
     const sketchConfidence = Math.min(1, Number(score.toFixed(2)));
     const sketchDetected = sketchConfidence >= 0.45 || (textLength < 40 && entropy >= 4.8);
 
     return { sketchDetected, sketchConfidence, entropy, textLength, nonAlphaRatio, avgWordLen };
   }
 
-  // Optional Google Vision integration: returns label annotations if client available
+  // Optional — returns [] when @google-cloud/vision isn't installed.
   async detectWithVision(buffer: Buffer) {
     try {
       const vision: any = await import('@google-cloud/vision').catch(() => null);

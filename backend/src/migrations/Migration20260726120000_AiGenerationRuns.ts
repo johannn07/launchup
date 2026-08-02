@@ -1,27 +1,18 @@
 import { Migration } from '@mikro-orm/migrations';
 
 /**
- * Hand-written, not CLI-generated.
+ * Hand-written, not CLI-generated. `migration:create` diffs against the live
+ * database, which here is a shared Neon instance that `main.ts` also auto-syncs
+ * on every boot — the CLI would pick up unrelated drift. Written against
+ * `entities/ai-generation-run.entity.ts` instead.
  *
- * `pnpm mikro-orm migration:create` diffs against the live database, and in
- * this repo that database is a shared Neon instance (see backend/.env) that
- * `main.ts` also auto-syncs and re-seeds on every boot via
- * `orm.getSchemaGenerator().updateSchema()`. Running the CLI here would pick
- * up unrelated schema drift from that shared instance rather than just this
- * change, so this migration was written by hand against
- * `backend/src/entities/ai-generation-run.entity.ts` instead.
+ * The dev database is still shaped by `updateSchema()`, not by replaying this.
+ * It exists so the change is reviewable and replayable somewhere that does not
+ * auto-sync (a fresh database, or CI).
  *
- * In practice, the dev/shared database is still shaped by `updateSchema()`
- * on boot, not by replaying this file. This migration exists so the change
- * is reviewable and so it can be replayed in an environment that does not
- * auto-sync (e.g. a fresh database, or CI).
- *
- * Adds:
- *  - `ai_generation_runs`, one row per AI generation call, recording the
- *    resolved AiPipelineConfig for that run.
- *  - a nullable `generation_run_id` FK (on delete set null) on each table
- *    whose rows can be attributed back to the run that produced them:
- *    rna, rns, initiatives, roadblocks, ai_recommendations, ai_bias_audits.
+ * Adds `ai_generation_runs` plus a nullable `generation_run_id` FK (on delete
+ * set null) on rna, rns, initiatives, roadblocks, ai_recommendations and
+ * ai_bias_audits.
  */
 export class Migration20260726120000_AiGenerationRuns extends Migration {
 
