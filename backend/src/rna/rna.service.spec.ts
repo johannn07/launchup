@@ -4,20 +4,13 @@ import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 
-// RnaService's real constructor arity (EntityManager, AiService,
-// RagQueryService, GroundedPromptBuilderService, OutputValidatorService,
-// RecommendationStorageService) matches what the brief assumed, so no
-// correction was needed there. What the brief did NOT cover is that
-// `generateRNA` queries `ragQueryService.queryVectorDatabase` unconditionally
-// and only calls `groundedPromptBuilderService.buildGroundedPrompt` when
-// `!ragContext.lowConfidence` — a low-confidence context (all three
-// retrieval channels empty) routes the method through
-// `aiService.createBasePrompt` instead, which is what this test exercises so
-// `groundedPromptBuilderService` can stay `{} as any`.
+// `generateRNA` always queries queryVectorDatabase but only calls
+// buildGroundedPrompt when `!ragContext.lowConfidence`. These tests take the
+// low-confidence path (all three channels empty), which routes through
+// createBasePrompt — so groundedPromptBuilderService can stay `{} as any`.
 
-// A *real* AiRunService over a stub EntityManager, so these tests exercise
-// the actual durable-attribution write rather than a mock that only mutates
-// ctx.run in memory.
+// A *real* AiRunService over a stub EntityManager, so these tests exercise the
+// durable-attribution write rather than a mock that only mutates ctx.run.
 function buildAiRunService() {
   const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
   const service = new AiRunService(

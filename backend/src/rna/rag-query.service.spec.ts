@@ -157,9 +157,8 @@ describe('RagQueryService — rubric channel', () => {
 
 describe('RagQueryService — lowConfidence', () => {
   it('is false when rubrics were found even with no peers', async () => {
-    // The old rule flagged low confidence whenever no peer cleared the floor,
-    // which would mark a generation grounded in verified rubrics as unreliable
-    // and train users to ignore the indicator.
+    // Flagging low confidence whenever no peer cleared the floor would mark a
+    // rubric-grounded generation unreliable and train users to ignore it.
     const { em } = emDouble({ ormRows: [rubricRow('trl-3', ReadinessType.T, 3)] });
 
     const result = await build(em).queryVectorDatabase('1', { config: config(), dimensions: dims });
@@ -186,10 +185,9 @@ const peerSqlRow = (startupId: number, similarity = 0.9) => ({
 });
 
 describe('RagQueryService — AI_RAG_ENABLED gating (peer channel)', () => {
-  // AI_RAG_ENABLED's whole purpose is producing the "no retrieval" baseline
-  // arm. Before this fix, queryVectorDatabase read only config.ragCorpus and
-  // always ran retrievePeers unconditionally, so this flag never actually
-  // reached RNA/RNS generation.
+  // queryVectorDatabase used to read only config.ragCorpus and always run
+  // retrievePeers, so AI_RAG_ENABLED never reached RNA/RNS generation and the
+  // "no retrieval" baseline arm was never produced.
   it('does not query peers when rag is disabled', async () => {
     const { em, execute } = emDouble({ sqlRows: [peerSqlRow(2)] });
 
@@ -229,10 +227,9 @@ describe('RagQueryService — AI_RAG_ENABLED gating (peer channel)', () => {
 });
 
 describe('RagQueryService — readinessType on RetrievedDoc', () => {
-  // RNS generates one dimension's tasks per RNA in a loop but fetches the
-  // rubric channel once for every dimension being generated across the whole
-  // call; without a way to tell which dimension a retrieved rubric row
-  // belongs to, the per-RNA loop cannot filter out other dimensions' rubrics.
+  // RNS loops per RNA but fetches the rubric channel once for every dimension
+  // in the call, so without knowing a row's dimension the loop cannot filter
+  // out the other dimensions' rubrics.
   it('carries readinessType through the deterministic exact-key path', async () => {
     const { em } = emDouble({ ormRows: [rubricRow('trl-3', ReadinessType.T, 3)] });
 

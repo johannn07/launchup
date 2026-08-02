@@ -5,11 +5,9 @@ import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { Roadblock } from 'src/entities/roadblock.entity';
 
-// A *real* AiRunService over a stub EntityManager, so these tests exercise
-// the actual durable-attribution write rather than a mock that only mutates
-// ctx.run in memory. An earlier round of this fix passed its tests while the
-// database row stayed startup_id NULL precisely because the assertions
-// stopped at ctx.run.
+// A *real* AiRunService over a stub EntityManager. An earlier round of this
+// fix passed while the row stayed startup_id NULL, precisely because the
+// assertions stopped at ctx.run.
 function buildAiRunService() {
   const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
   const service = new AiRunService(
@@ -19,14 +17,10 @@ function buildAiRunService() {
   return { aiRunService: service, forkedEm };
 }
 
-// RoadblockService's real constructor arity (EntityManager, AiService)
-// matches what the brief assumed, so no correction was needed there.
-// Unlike GenerateInitiativeDto, GenerateRoadblocksDto DOES carry a real
-// startupId field, so RoadblockController passes it straight to
-// AiRunService.track() when opening the run — generateRoadblocks never
-// needs to backfill ctx.run.startup itself. refineRoadblock, whose only
-// route param is the roadblock id, still needs the backfill, mirroring
-// InitiativeService.refineInitiative.
+// Unlike GenerateInitiativeDto, GenerateRoadblocksDto carries a startupId, so
+// the controller passes it to track() and generateRoadblocks never backfills
+// ctx.run.startup. refineRoadblock still does — its only route param is the
+// roadblock id, mirroring InitiativeService.refineInitiative.
 function buildCtx() {
   return {
     runId: 77,
@@ -54,8 +48,8 @@ describe('RoadblockService.generateRoadblocks provenance', () => {
     } as any;
   }
 
-  // em mock branches on entity class rather than relying on call order, so
-  // reordering an unrelated query in the service does not break this test.
+  // Branches on entity class, not call order, so reordering an unrelated query
+  // in the service doesn't break this test.
   function buildEm(startup: any, created: any[]) {
     return {
       findOneOrFail: jest.fn((entity: any, where: any) => {
@@ -98,8 +92,8 @@ describe('RoadblockService.generateRoadblocks provenance', () => {
     const { aiRunService } = buildAiRunService();
     const service = new RoadblockService(em as any, aiService as any, aiRunService);
 
-    // dto.startupId is a real field, so the controller already attributed
-    // ctx.run.startup at AiRunService.begin() time; simulate that here.
+    // The controller already attributed ctx.run.startup at begin() time from
+    // dto.startupId; simulate that here.
     ctx.run.startup = startup;
 
     await service.generateRoadblocks(
@@ -114,12 +108,11 @@ describe('RoadblockService.generateRoadblocks provenance', () => {
       expect.objectContaining({ dimensionKey: 'roadblock', rawScore: 4 }),
     );
 
-    // generationRun? is optional on Roadblock, so an unasserted stamping
-    // would compile clean and pass silently if the line were reverted.
+    // generationRun? is optional on Roadblock, so reverting the stamping would
+    // compile clean and pass without this assertion.
     expect(created.some((row) => row.generationRun === ctx.run)).toBe(true);
 
-    // generationRun? is likewise optional on the recordAiRecommendation and
-    // recordBiasAudit input types.
+    // Likewise optional on recordAiRecommendation and recordBiasAudit.
     expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
       expect.objectContaining({ generationRun: ctx.run }),
     );
@@ -127,8 +120,8 @@ describe('RoadblockService.generateRoadblocks provenance', () => {
       expect.objectContaining({ generationRun: ctx.run }),
     );
 
-    // generateRoadblocks does not touch ctx.run.startup itself — attribution
-    // stays exactly what the controller set from dto.startupId.
+    // generateRoadblocks never touches ctx.run.startup — attribution stays
+    // whatever the controller set from dto.startupId.
     expect(ctx.run.startup).toBe(startup);
   });
 });
@@ -150,10 +143,8 @@ describe('RoadblockService.refineRoadblock provenance', () => {
     };
   }
 
-  // The controller opens roadblocks_refine runs with startupId: null, since
-  // the only route param is the roadblock id. ctx.run.startup starts unset
-  // here to mirror that; the assertions below prove the service fixes it up
-  // once the startup is loaded.
+  // The controller opens roadblocks_refine runs with startupId: null (the only
+  // route param is the roadblock id), so ctx.run.startup starts unset.
   const refineCtx = () =>
     ({
       runId: 88,
@@ -196,9 +187,8 @@ describe('RoadblockService.refineRoadblock provenance', () => {
     expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, s, em);
     expect(aiService.refineRoadblock).toHaveBeenCalledWith(ctx, expect.any(String));
     expect(ctx.run.startup).toBe(s);
-    // The point of the fix: attribution reaches the database, not just
-    // ctx.run. `finish`'s payload never carries `startup`, so without this
-    // write the row would depend entirely on some later flush.
+    // Attribution must reach the database, not just ctx.run — `finish`'s
+    // payload omits `startup`, so otherwise the row waits on a later flush.
     expect(forkedEm.nativeUpdate).toHaveBeenCalledWith(
       expect.anything(),
       { id: 88 },
@@ -207,10 +197,9 @@ describe('RoadblockService.refineRoadblock provenance', () => {
     expect(result.refinedDescription).toBe('New, sharper description');
   });
 
-  // The regression this whole fix exists for: on the failure path nothing
-  // flushes the request-context EM, so a bare `ctx.run.startup = startup`
-  // assignment is discarded and the row lands status='failed' with
-  // startup_id NULL — invisible to the startup-filtered provenance query.
+  // On the failure path nothing flushes the request EM, so a bare assignment
+  // is discarded and the row lands status='failed' with startup_id NULL —
+  // invisible to the startup-filtered provenance query.
   it('attributes the run in the database even when the AI call then throws', async () => {
     const s = startup();
     const em = buildRefineEm({

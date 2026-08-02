@@ -6,21 +6,13 @@ import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.enti
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { Rns } from 'src/entities/rns.entity';
 
-// NOTE ON THIS TEST FILE: the brief's Step 1 test assumed a `generateTasks`
-// that (a) calls `aiService.createBasePrompt` for its prompt text, (b)
-// accepts a bare `{ startup_id }` dto with no `rnaIds`, and (c) creates Rns
-// rows via `em.create`. The real implementation on disk does none of those
-// things: it requires `dto.rnaIds`, builds its prompt inline (falling back
-// to a hand-built template when RAG context is low-confidence), calls
-// `ragQueryService.queryVectorDatabase` unconditionally, and creates each
-// Rns via `new Rns()` + `em.persist()`. Per Ruling 3, the mocks and
-// assertions below are adjusted to match the real control flow while
-// preserving the original intent: verify `ctx` is threaded into every AI
-// call and that generated rows/records are stamped with the run.
+// `generateTasks` requires `dto.rnaIds`, builds its prompt inline (falling
+// back to a hand-built template on low-confidence RAG), calls
+// `queryVectorDatabase` unconditionally, and creates each Rns via `new Rns()`
+// + `em.persist()` — the mocks below match that shape.
 
-// A *real* AiRunService over a stub EntityManager, so these tests exercise
-// the actual durable-attribution write rather than a mock that only mutates
-// ctx.run in memory.
+// A *real* AiRunService over a stub EntityManager, so these tests exercise the
+// durable-attribution write rather than a mock that only mutates ctx.run.
 function buildAiRunService() {
   const forkedEm = { nativeUpdate: jest.fn().mockResolvedValue(1) };
   const service = new AiRunService(
@@ -58,9 +50,8 @@ describe('RnsService.generateTasks provenance', () => {
 
     const targetLevel = { id: 42, readinessType: 'Technology', level: 4 };
 
-    // Keyed by entity class rather than call order: reordering an unrelated
-    // query inside generateTasks should not make this test fail for an
-    // unrelated reason.
+    // Keyed by entity class, not call order, so reordering an unrelated query
+    // inside generateTasks doesn't break this test.
     const em = {
       findOne: jest.fn((entity: any) => {
         if (entity === Startup) return Promise.resolve(startup);
@@ -132,9 +123,8 @@ describe('RnsService.generateTasks provenance', () => {
       persisted.some((row) => row.generationRun?.id === 99 || row.generationRun === ctx.run),
     ).toBe(true);
 
-    // Only the Rns stamping had compiler/test backstop before this fix:
-    // `generationRun?` is optional on both input types below, so deleting
-    // either call site would previously compile clean and still pass.
+    // `generationRun?` is optional on both input types, so deleting either
+    // call site compiles clean and passes without this assertion.
     expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
       expect.objectContaining({ generationRun: ctx.run }),
     );
@@ -186,10 +176,8 @@ describe('RnsService.refineRnsDescription provenance', () => {
       }),
     };
 
-    // The controller opens rns_refine runs with startupId: null, since the
-    // only route param is the Rns id. `ctx.run.startup` starts unset here
-    // to mirror that, and the assertion below is what proves the service
-    // fixes it up once the startup is loaded (Important 3 / Ruling 1).
+    // The controller opens rns_refine runs with startupId: null (the only
+    // route param is the Rns id), so `ctx.run.startup` starts unset here.
     const ctx = {
       runId: 55,
       run: { id: 55, startup: undefined } as any,
@@ -229,11 +217,9 @@ describe('RnsService.refineRnsDescription provenance', () => {
 describe('RnsService dimension-level lookup (Finding 3 — keyed, not positional)', () => {
   const srl = (readinessType: string, level: number) => ({ readinessLevel: { readinessType, level } });
 
-  // Mirrors ai.service.spec.ts's scrambled-order test for createBasePrompt:
-  // both em.find(StartupReadinessLevel, ...) call sites in this file had no
-  // orderBy, so a positional read ([0] -> TRL, [1] -> MRL, ...) could silently
-  // mislabel dimensions whenever insertion order didn't match declaration
-  // order. This scrambles every dimension away from its array-index position.
+  // Mirrors ai.service.spec.ts's scrambled-order test: neither
+  // em.find(StartupReadinessLevel) call site has an orderBy, so a positional
+  // read would mislabel dimensions. Every dimension is scrambled here.
   const scrambledLevels = [
     srl('Investment', 6),
     srl('Acceptance', 2),
@@ -290,9 +276,8 @@ describe('RnsService dimension-level lookup (Finding 3 — keyed, not positional
       recordBiasAudit: jest.fn().mockResolvedValue(undefined),
     };
 
-    // lowConfidence: true routes generateTasks through the hand-built
-    // fallback template that embeds trl/mrl/arl/orl/rrl/irl directly — the
-    // template these two call sites feed.
+    // lowConfidence: true routes generateTasks through the hand-built fallback
+    // template, which embeds trl/mrl/arl/orl/rrl/irl directly.
     const ragQueryService = {
       queryVectorDatabase: jest.fn().mockResolvedValue({ lowConfidence: true }),
     };
@@ -446,9 +431,8 @@ describe('RnsService.generateTasks per-dimension rubric scoping (Finding 6)', ()
       recordBiasAudit: jest.fn().mockResolvedValue(undefined),
     };
 
-    // One queryVectorDatabase call for the whole batch (both dimensions), the
-    // way the real code does it — this is exactly the shape that used to leak
-    // into every per-RNA prompt unfiltered.
+    // One queryVectorDatabase call for the whole batch, as the real code does
+    // — the shape that used to leak unfiltered into every per-RNA prompt.
     const ragContext = {
       lowConfidence: false,
       verifiedFrameworks: [

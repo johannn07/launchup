@@ -18,7 +18,7 @@ const context = (over: Partial<RagContext> = {}) =>
 
 /**
  * Minimal EntityManager double. `find` is queue-driven so a test can script
- * successive calls (existing-vectors lookup, then pending-contexts lookup).
+ * successive calls: existing vectors, then pending contexts.
  */
 const emDouble = () => {
   const findResults: unknown[][] = [];
@@ -27,9 +27,8 @@ const emDouble = () => {
   const calls: { entity: unknown; where: unknown }[] = [];
 
   const em: Record<string, jest.Mock> = {
-    // MikroORM rejects writes through the global instance outside a request
-    // context, so backfill has to fork. The double returns itself so the
-    // assertions still see one shared call log.
+    // backfill must fork (MikroORM rejects global-instance writes outside a
+    // request). The double returns itself so assertions see one call log.
     fork: jest.fn(() => em),
     find: jest.fn(async (entity: unknown, where: unknown) => {
       calls.push({ entity, where });
@@ -129,9 +128,8 @@ describe('EmbeddingIndexService', () => {
   describe('backfill', () => {
     it('forks the EntityManager, because it runs outside a request context', async () => {
       // Regression: the first version used the injected global EM and every
-      // boot failed with "Using global EntityManager instance methods for
-      // context specific actions is disallowed". No mocked-EM test caught it,
-      // so assert the fork directly.
+      // boot threw "Using global EntityManager instance methods … is
+      // disallowed". No mocked-EM test caught it, so assert the fork directly.
       const { em, raw, findResults } = emDouble();
       findResults.push([]);
       findResults.push([]);

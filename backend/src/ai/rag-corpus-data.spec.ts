@@ -52,19 +52,18 @@ describe('readiness-rubrics.json', () => {
     for (const row of byType(ReadinessType.T)) {
       expect(row.provenance).toBe('standard');
     }
-    // IRL is not in the specification's five dimensions and has no external
-    // source; it is seeded only because the code still requests it.
+    // IRL is not one of the spec's five dimensions and has no external source;
+    // it is seeded only because the code still requests it.
     for (const row of byType(ReadinessType.I)) {
       expect(row.provenance).toBe('authored');
     }
   });
 
   it('marks Market, Regulatory, Acceptance and Organizational as framework-derived', () => {
-    // These are the BRLa dimensions authored against a paywalled paper's stated
-    // criteria, not transcribed from a public standard. Without this check, a
-    // row mislabelled 'standard' here would pass every other assertion in this
-    // file while silently claiming a published standard's authority for text
-    // that was actually composed for this project.
+    // BRLa dimensions authored against a paywalled paper's criteria, not
+    // transcribed from a public standard. Without this, a row mislabelled
+    // 'standard' passes every other assertion here while claiming an authority
+    // the text does not have.
     const byType = (t: ReadinessType) => rows.filter((r) => r.readinessType === t);
     for (const type of [
       ReadinessType.M,

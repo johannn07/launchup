@@ -5,9 +5,9 @@ import { BaselineService } from './baseline.service';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 
-// Same pattern as ai-config.service.spec.ts's `configFrom` — a `get` that
-// always returns undefined so AiConfigService falls back to its documented
-// defaults (model: 'gemini-2.5-flash-lite', temperature: 0, grounding: true).
+// Same pattern as ai-config.service.spec.ts's `configFrom`: a `get` returning
+// undefined, so AiConfigService falls back to DEFAULT_MODEL. The literal in
+// `ctxWith` below is fixture data, not that default.
 const undefinedConfigService = { get: () => undefined } as unknown as ConfigService;
 
 const ctxWith = (overrides: Partial<AiRunContext['config']> = {}): AiRunContext =>
@@ -113,9 +113,8 @@ describe('AiService', () => {
     const request = generateContent.mock.calls[0][0];
     expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
-    // No output cap anywhere: at the base commit these calls passed
-    // maxOutputTokens at the top level, where the SDK dropped it, so nothing
-    // was ever actually capped. Sending one now would be a new, unrequested
+    // These calls used to pass maxOutputTokens at the top level, where the SDK
+    // dropped it — nothing was ever capped, so adding one now would be a new
     // truncation regression. See TODO_CHECKLIST §5.
     expect(request.config).not.toHaveProperty('maxOutputTokens');
     expect(request).not.toHaveProperty('maxOutputTokens');
@@ -157,9 +156,8 @@ describe('AiService', () => {
     expect(request.model).toBe('gemini-3.6-flash');
     expect(request.config).toEqual(expect.objectContaining({ temperature: 0 }));
     expect(request).not.toHaveProperty('temperature');
-    // Uncapped on purpose: this prompt asks for eight full prose fields from
-    // a whole document, and a truncated response fails JSON.parse in
-    // startup.service.ts, which shows the founder a blank review screen.
+    // Uncapped: eight prose fields from a whole document, and a truncated
+    // response fails JSON.parse into a blank review screen for the founder.
     expect(request.config).not.toHaveProperty('maxOutputTokens');
     expect(request).not.toHaveProperty('maxOutputTokens');
   });
@@ -210,10 +208,8 @@ describe('AiService', () => {
       expect(prompt).not.toContain('Verified context retrieved');
     });
 
-    // The third arm of the ragBlock three-way, and the only one that had no
-    // test. The literal "none found" is a deliberate anti-hallucination cue:
-    // it tells the model retrieval ran and came back empty, rather than
-    // leaving a silence the model is free to fill by inventing context.
+    // The literal "none found" is an anti-hallucination cue: it tells the model
+    // retrieval ran and was empty, rather than leaving a silence to fill.
     it('states that retrieval found nothing when rag is enabled but no context matches', async () => {
       const emWithNoContexts = { find: jest.fn().mockResolvedValue([]) } as any;
 
@@ -246,11 +242,9 @@ describe('AiService', () => {
       readinessLevel: { readinessType, level },
     });
 
-    // The query in createBasePrompt has no orderBy, so rows can come back in
-    // any order. main.ts's boot seeder inserts in a different order than the
-    // live DB happens to have today, so a positional read ([0] -> TRL, [1] ->
-    // MRL, ...) would silently mislabel dimensions on a fresh Neon branch. This
-    // scrambles every dimension away from its array-index position.
+    // createBasePrompt's query has no orderBy, and main.ts's seeder inserts in
+    // a different order than the live DB, so a positional read would mislabel
+    // dimensions on a fresh Neon branch. Every dimension is scrambled here.
     const emWithScrambledLevels = () =>
       ({
         find: jest.fn(async (entity: any) => {
@@ -331,9 +325,7 @@ describe('AiService', () => {
         }),
       }) as any;
 
-    // The gap this closes: buildRubricBlock had zero coverage in either
-    // direction before this fix — nothing proved matching rows ever actually
-    // reached the returned prompt.
+    // buildRubricBlock had no coverage in either direction before this.
     it('includes rubric text when ragCorpus is enabled and matching rows exist (positive path)', async () => {
       const prompt = await service.createBasePrompt(
         ctxWith({ ragCorpus: true, rubricMode: 'deterministic', rag: false }),
@@ -346,10 +338,8 @@ describe('AiService', () => {
       expect(prompt).toContain('TRL 4 rubric text');
     });
 
-    // The actual Finding 1 defect: a fallback prompt built after a
-    // rubricMode: 'semantic' retrieval came back empty must not silently pick
-    // up createBasePrompt's own deterministic rubric lookup — that would
-    // relabel a deterministic result as belonging to the semantic arm.
+    // A fallback prompt built after an empty semantic retrieval must not pick
+    // up the deterministic lookup — that relabels the arm.
     it('suppresses the rubric block when opts.rubricMode is semantic, even with matching rows and ragCorpus enabled', async () => {
       const prompt = await service.createBasePrompt(
         ctxWith({ ragCorpus: true, rag: false }),
@@ -373,11 +363,9 @@ describe('AiService', () => {
       expect(prompt).toContain('Verified readiness rubrics (authoritative)');
     });
 
-    // Preserves the documented constraint: initiative/roadblock/refine callers
-    // never pass opts at all, so they must keep the fixed deterministic
-    // mechanism regardless of ctx.config.rubricMode — letting rubricMode leak
-    // into those paths would change two things at once during a measurement
-    // run.
+    // Initiative/roadblock/refine callers pass no opts, so they keep the fixed
+    // deterministic mechanism whatever ctx.config.rubricMode says — otherwise a
+    // measurement run changes two things at once.
     it('ignores ctx.config.rubricMode entirely when the caller passes no opts', async () => {
       const prompt = await service.createBasePrompt(
         ctxWith({ ragCorpus: true, rubricMode: 'semantic', rag: false }),
@@ -447,10 +435,9 @@ describe('AiService', () => {
     });
   });
 
-  // These three used to read AiConfigService.defaults directly and opened no
-  // ai_generation_runs row, so the capsule-parsing path — including the Gemini
-  // Vision route behind Objective 3 — was invisible to the provenance table and
-  // silently ignored any X-Ai-Pipeline-Config override.
+  // These three used to read AiConfigService.defaults and open no run row, so
+  // the capsule-parsing path was invisible to the provenance table and ignored
+  // any X-Ai-Pipeline-Config override.
   describe('capsule-parsing calls contribute to the run', () => {
     const trackedCtx = (): AiRunContext =>
       ({

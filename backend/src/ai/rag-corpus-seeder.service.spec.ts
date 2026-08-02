@@ -4,10 +4,8 @@ import { EmbeddingIndexService } from './embedding-index.service';
 import { VectorEmbedding } from '../entities/vector-embeddings.entity';
 import { RUBRIC_SOURCE_TYPE } from './rag-corpus.types';
 
-// Cast rather than annotate: the fields below are plain strings so the
-// literals stay easy to override in tests, while the service's real callers
-// (the JSON corpus files, loaded via JSON.parse) go through the same
-// assertion implicitly since JSON.parse's return type is `any`.
+// Cast rather than annotate so the literals stay easy to override. Real
+// callers get the same treatment implicitly — JSON.parse returns `any`.
 const row = (over: Record<string, unknown> = {}): CorpusFileRow =>
   ({
     key: 'trl-1',
@@ -22,11 +20,9 @@ const row = (over: Record<string, unknown> = {}): CorpusFileRow =>
   }) as unknown as CorpusFileRow;
 
 /**
- * EntityManager double. `find` is entity-aware because seedRows now queries
- * two different entities up front: existing RagContext rows (`existing`) and
- * which of them already have a vector (`vectorSourceIds`, matched against
- * VectorEmbedding.source_id) — the latter is what lets the seeder tell "never
- * embedded" apart from "content unchanged".
+ * EntityManager double. `find` is entity-aware because seedRows queries two
+ * entities up front: existing RagContext rows, and which already have a
+ * VectorEmbedding — the latter separates "never embedded" from "unchanged".
  */
 const emDouble = (existing: unknown[] = [], vectorSourceIds: string[] = []) => {
   const persist = jest.fn();
@@ -62,8 +58,8 @@ describe('RagCorpusSeederService', () => {
   });
 
   it('leaves an unchanged, already-vectored row alone and does not spend an embedding call', async () => {
-    // Embedding costs quota. A no-op re-run must cost nothing, or nobody will
-    // re-run the seeder and the corpus will drift from the data files.
+    // Embedding costs quota. A no-op re-run must cost nothing, or nobody
+    // re-runs the seeder and the corpus drifts from the data files.
     const existing = {
       id: 4,
       sourceType: RUBRIC_SOURCE_TYPE,
@@ -71,8 +67,7 @@ describe('RagCorpusSeederService', () => {
       content: 'original content',
       metadata: { key: 'trl-1' },
     };
-    // The row already has a vector (source_id '4') — this is the case that
-    // should be skipped entirely.
+    // Row already has a vector (source_id '4'), so it should be skipped.
     const { em, create } = emDouble([existing], ['4']);
     const index = jest.fn();
 
@@ -84,12 +79,9 @@ describe('RagCorpusSeederService', () => {
   });
 
   it('reindexes an existing row with identical content but no vector yet', async () => {
-    // This is the state a crash, quota exhaustion, or a missing
-    // GEMINI_API_KEY mid-run leaves behind: the row landed in a prior run but
-    // was never embedded. Content-only change detection would call this row
-    // "unchanged" forever and retrieval would never see it, since retrieval
-    // joins rag_contexts against vector_embeddings. That is a real failure
-    // this seeder must repair, not silently report as success.
+    // The state a crash, spent quota, or missing GEMINI_API_KEY leaves: row
+    // landed, never embedded. Content-only detection would call it
+    // "unchanged" forever and retrieval would never see it.
     const existing = {
       id: 4,
       sourceType: RUBRIC_SOURCE_TYPE,
