@@ -67,7 +67,6 @@
       chart.destroy();
     }
   });
-  // Create chart when component mounts or when data/labels change
   $effect(() => {
     if (browser && data && labels) {
       createChart();

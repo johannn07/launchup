@@ -16,7 +16,6 @@
   let loading = false;
   let error = '';
 
-  // Fetch fields when assessment changes and dialog is open
   $: if (assessment && open) {
     fetchAssessmentFields(assessment.id);
   }

@@ -221,7 +221,6 @@ export class RnaService {
     const startup = await this.em.findOne(Startup, { id: startupId });
     if (!startup) throw new NotFoundException('Startup not found');
 
-    // Get all readiness levels for this startup
     const startupReadinessLevels = await this.em.find(
       StartupReadinessLevel,
       { startup: startup },
@@ -322,7 +321,6 @@ export class RnaService {
 
     const result = await this.aiService.refineRna(ctx, prompt);
 
-    // Save chat history
     const newMessages = [
       new RnaChatHistory({
         rna,

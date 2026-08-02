@@ -217,7 +217,6 @@
   const progress = $derived(() => (currentStep / steps.length) * 100);
   const currentStepData = $derived(() => steps[currentStep - 1]);
 
-  // Add a derived state for the waitlist message
   const waitlistMessage = $derived(() => {
     if (
       !startupData?.waitlistMessages ||
@@ -225,7 +224,6 @@
     ) {
       return 'Unable to load waitlisted message';
     }
-    // Get the most recent message
     const messages = startupData.waitlistMessages;
     const latestMessage = messages[messages.length - 1];
     return latestMessage.message;

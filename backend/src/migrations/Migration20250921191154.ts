@@ -2,7 +2,7 @@ import { Migration } from '@mikro-orm/migrations';
 
 export class Migration20250101000000 extends Migration {
   override async up(): Promise<void> {
-    // Add a backup column to track original values
+    // Backup column so `down()` can restore the pre-migration values.
     this.addSql(
       `ALTER TABLE startups ADD COLUMN original_qualification_status smallint;`,
     );
@@ -12,7 +12,6 @@ export class Migration20250101000000 extends Migration {
       `UPDATE startups SET original_qualification_status = qualification_status;`,
     );
 
-    // Check current data distribution
     this.addSql(`-- Check current data distribution
       SELECT qualification_status, COUNT(*) as count
       FROM startups 
@@ -50,7 +49,6 @@ export class Migration20250101000000 extends Migration {
     this.addSql(`UPDATE startups 
       SET qualification_status = original_qualification_status;`);
 
-    // Remove the backup column
     this.addSql(
       `ALTER TABLE startups DROP COLUMN original_qualification_status;`,
     );

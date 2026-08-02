@@ -4,13 +4,11 @@
   export let calculatorQuestions: any;
   export let startup: any = null;
 
-  // Sort calculator answers by question ID
   $: calculatorAnswers =
     startup?.calculatorQuestionAnswers?.sort(
       (a: any, b: any) => a.question.id - b.question.id
     ) ?? [];
 
-  // Create a map of category to selected question ID
   $: selectedAnswers = calculatorAnswers.reduce(
     (acc: Record<string, number>, answer: any) => {
       acc[answer.question.category] = answer.question.id;
@@ -19,7 +17,6 @@
     {}
   );
 
-  // Create a map of category to answer ID
   $: answerIds = calculatorAnswers.reduce(
     (acc: Record<string, number>, answer: any) => {
       acc[answer.question.category] = answer.id;

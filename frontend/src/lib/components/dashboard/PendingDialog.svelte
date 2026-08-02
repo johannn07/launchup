@@ -39,7 +39,6 @@
 
   $: statusColors = getBadgeColorObject('Pending');
 
-  // Filter out empty assessment types and flatten to array with type info
   $: flatAssessments = assessments
     .filter((group) => group.assessments.length > 0) // Only include types with assessments
     .flatMap((group) =>

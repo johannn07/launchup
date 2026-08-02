@@ -6,7 +6,6 @@
   import { Label } from '$lib/components/ui/label/index.js';
   import { Textarea } from '$lib/components/ui/textarea';
 
-  // Filter and sort technology answers
   $: technologyAnswers =
     startup?.uratQuestionAnswers
       ?.filter(

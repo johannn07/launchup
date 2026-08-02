@@ -43,7 +43,6 @@
     links: startup?.links ?? ''
   };
 
-  // Initialize information with existing capsule proposal data if available
   $: if (startup?.capsuleProposal && !files) {
     information = {
       title: startup.capsuleProposal.title || '',

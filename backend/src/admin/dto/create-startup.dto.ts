@@ -21,7 +21,7 @@ export class CreateStartupDto {
   userId!: number;
 
   @Transform(({ value }) => {
-    // Check if the value is a string and a valid key in the QualificationStatus enum
+    // Forms post the enum key as a string; the entity stores the numeric value.
     if (
       typeof value === 'string' &&
       QualificationStatus[value as keyof typeof QualificationStatus] !==
