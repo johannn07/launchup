@@ -43,6 +43,15 @@ Both apps read DB/JWT config from their own `.env` (see `backend/.env.example`, 
 
 Do not include a `Co-Authored-By` line in commit messages.
 
+## Comment & documentation style
+- Keep all code comments short and to the point — one line where possible.
+- Explain *why*, not *what* — don't describe what the code obviously already shows.
+- No filler phrases ("this function is responsible for...", "this method will...").
+- Same rule for docs/markdown: short sentences, no padding, no repeating the same
+  point in different words. Bullet points over paragraphs where it fits.
+- If a comment or doc line doesn't add information a reader wouldn't already have,
+  cut it.
+
 ## Architecture
 
 ### Backend (NestJS + MikroORM)
