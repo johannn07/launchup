@@ -31,14 +31,13 @@ export const RAG_TOP_K = 3;
 /**
  * Cosine-similarity floor for a semantically retrieved context.
  *
- * A floor is not optional here. Nearest-neighbour search always returns its top
- * K, so without one every generation gets three "verified contexts" no matter
- * how unrelated they are — and feeding irrelevant text to a grounded prompt as
- * corroboration is a way to *cause* the hallucination Objective 1 is meant to
- * reduce. The keyword arm has the same guard as `score > 0`.
+ * Without a floor, nearest-neighbour always returns its top K, so every
+ * generation gets three "verified contexts" however unrelated — feeding a
+ * grounded prompt irrelevant corroboration causes the hallucination Objective 1
+ * targets. The keyword arm guards the same way with `score > 0`.
  *
- * Calibrated, not guessed — see measurement/calibrate-similarity.js, run
- * 2026-07-27 over nine startup descriptions in three domains (36 pairs):
+ * Calibrated by measurement/calibrate-similarity.js, run 2026-07-27 over nine
+ * startup descriptions in three domains (36 pairs):
  *
  *   threshold   same-domain kept   cross-domain leaked
  *     0.70            9/9                21/27  (78%)
@@ -47,17 +46,13 @@ export const RAG_TOP_K = 3;
  *     0.80            6/9                 1/27   (4%)
  *     0.82            4/9                 0/27   (0%)
  *
- * The two distributions overlap — same-domain runs as low as 0.7295 and
- * cross-domain as high as 0.8036 — so no threshold separates them cleanly and
- * this is a trade-off, not a boundary. 0.78 keeps 8 of 9 true neighbours while
- * cutting the leak to 11%; 0.80 buys little and loses a third of real matches.
+ * The distributions overlap (same-domain down to 0.7295, cross-domain up to
+ * 0.8036), so this is a trade-off, not a boundary. 0.80 loses a third of real
+ * matches for little gain. An earlier 0.70 was fitted to one hand-picked pair
+ * and let an agriculture startup through at 0.765 for a health platform.
  *
- * An earlier value of 0.70 was fitted to one hand-picked pair and let an
- * agriculture startup through at 0.765 as context for a health platform.
- *
- * Embeddings score same-register prose high across the board, which is why the
- * usable band is this narrow and this high. Re-run the calibration if the
- * embedding model or the shape of stored context changes.
+ * Embeddings score same-register prose high, hence the narrow high band.
+ * Re-run the calibration if the embedding model or stored context shape changes.
  */
 export const RAG_MIN_SIMILARITY = 0.78;
 
@@ -127,13 +122,12 @@ export class AiService {
     });
   }
 
-  // Normalize numeric AI scores using the baseline service. Returns scaled value 1-9.
   async normalizeAiScore(score: number) {
     try {
       const res = await this.baselineService.normalizeScore(score);
       return res;
     } catch (err) {
-      // on error return a conservative mapping
+      // Clamp rather than propagate — a missing baseline must not fail scoring.
       return { z: 0, scaled: Math.max(1, Math.min(9, Math.round(score))) };
     }
   }
@@ -298,10 +292,8 @@ export class AiService {
     this.em.persist(ragContext);
     await this.em.flush();
 
-    // Index immediately: a context row that is never embedded is invisible to
-    // semantic retrieval, and this is the only place rag_contexts is written.
-    // Deliberately not awaited-and-thrown — a failed embedding must not fail
-    // the startup application that produced the text.
+    // Only place rag_contexts is written, and an unembedded row is invisible to
+    // semantic retrieval. Must not throw — that would fail the application.
     await this.embeddingIndex.indexRagContext(ragContext);
 
     return ragContext;
@@ -352,11 +344,8 @@ export class AiService {
   }
 
   /**
-   * Retrieve context to put in front of the model.
-   *
-   * @param strategy Which retrieval arm to run. Defaults to keyword so that a
-   *   caller that has not been updated keeps the pre-existing behaviour rather
-   *   than silently switching to embeddings.
+   * @param strategy Defaults to keyword so an un-updated caller keeps the
+   *   pre-existing behaviour instead of silently switching to embeddings.
    */
   async getRelevantRagContexts(
     startup: Startup,
@@ -401,11 +390,8 @@ export class AiService {
   }
 
   /**
-   * Nearest neighbours by embedding distance, computed in Postgres.
-   *
-   * The ordering is done by pgvector's `<=>` rather than by pulling every
-   * vector into Node and sorting there — at 768 float4 per row that is ~3KB of
-   * transfer per candidate for a result set of three.
+   * Ordered by pgvector's `<=>` in Postgres rather than in Node — at 768 float4
+   * per row that would be ~3KB of transfer per candidate to return three.
    */
   private async retrieveSemantic(
     startup: Startup,
@@ -414,9 +400,8 @@ export class AiService {
   ): Promise<RetrievedContext[]> {
     const vector = await this.embeddings.embed(query);
     if (!vector) {
-      // No vector, no ranking. Falling back to keyword here would quietly
-      // report a semantic run that never happened, which is exactly the kind
-      // of contamination the arm comparison cannot tolerate.
+      // Falling back to keyword would report a semantic run that never
+      // happened — contamination the arm comparison cannot tolerate.
       return [];
     }
 
@@ -441,9 +426,8 @@ export class AiService {
       [
         `[${vector.join(',')}]`,
         RAG_CONTEXT_SOURCE,
-        // Exclude the startup's own context. Retrieving your own capsule
-        // proposal back as a "verified prior profile" is circular: the model
-        // would read its own input as independent corroboration.
+        // Excluded: retrieving your own capsule proposal back is circular —
+        // the model would read its own input as independent corroboration.
         startup.id,
         RUBRIC_SOURCE_TYPE,
         `[${vector.join(',')}]`,
@@ -467,20 +451,15 @@ export class AiService {
 
   /**
    * Chokepoint for prompt-shaped, ctx-driven Gemini calls. Sampling parameters
-   * go inside `config` — passing them at the top level silently does nothing.
+   * go inside `config` — at the top level the SDK silently drops them.
    *
-   * No `maxOutputTokens` is sent: none of these calls was ever actually
-   * capped (the pre-existing top-level value was silently dropped by the
-   * SDK), and picking one now would be a guess that can truncate long
+   * No `maxOutputTokens`: these calls were never actually capped (the old
+   * top-level value was dropped), and a guess now can truncate long
    * extractions. See TODO_CHECKLIST §5.
    *
-   * The capsule-parsing methods (getCapsuleProposalInfo,
-   * getCapsuleProposalInfoFromImage, generateStartupAnalysisSummary) are
-   * tracked and ctx-driven too, but call the SDK directly rather than through
-   * here: the image variant sends a parts array instead of a string prompt and
-   * skips grounding, and the other two need the raw response rather than this
-   * method's return shape. They call accumulateTokenUsage themselves, so their
-   * spend still lands on the run.
+   * The three capsule-parsing methods call the SDK directly instead: the image
+   * variant sends a parts array and skips grounding, the other two need the raw
+   * response. All three call accumulateTokenUsage, so spend still lands.
    */
   private async generate(
     ctx: AiRunContext,
@@ -501,16 +480,12 @@ export class AiService {
   }
 
   /**
-   * Folds one model response's usage into the run's running total, so the
-   * ai_generation_runs row records the whole run's spend rather than the last
-   * call's — `callAiExpectJson` retries, and batch generation loops, so a run
-   * routinely makes more than one call. Usage metadata is optional on the
-   * SDK response, so an absent block simply contributes nothing.
+   * Accumulates rather than overwrites: `callAiExpectJson` retries and batch
+   * generation loops, so one run routinely makes several calls.
    *
-   * Known under-count: completionTokens sums `candidatesTokenCount` only.
-   * Gemini 2.5 bills thinking tokens separately as `thoughtsTokenCount`, which
-   * is NOT included in that figure, so recorded output spend is a floor rather
-   * than a total on any thinking-enabled model. See TODO_CHECKLIST.md section 5.
+   * Known under-count: sums `candidatesTokenCount` only. Gemini 2.5 bills
+   * thinking tokens separately as `thoughtsTokenCount`, so recorded output
+   * spend is a floor on any thinking-enabled model. See TODO_CHECKLIST §5.
    */
   private accumulateTokenUsage(
     ctx: AiRunContext,
@@ -607,9 +582,8 @@ export class AiService {
         JSON format: {"title": "", "startup_description": "", "problem_statement": (int), "target_market": "", "solution_description": "", "objectives": "", "scope": "", "methodology": ""}
         `;
 
-    // No maxOutputTokens: this extracts eight full prose fields from a whole
-    // document, and a cap here truncates the JSON mid-object, which the
-    // caller's JSON.parse turns into a blank extraction review screen.
+    // No maxOutputTokens: eight prose fields from a whole document, and a cap
+    // truncates the JSON mid-object into a blank extraction review screen.
     const res = await this.ai.models.generateContent({
       model: ctx.config.model,
       contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
@@ -624,15 +598,11 @@ export class AiService {
   }
 
   /**
-   * Send an image directly to Gemini's vision model for OCR + field extraction.
-   * This bypasses Tesseract entirely and gives far better results for handwritten documents.
+   * Bypasses Tesseract entirely — far better on handwriting. Tracked under the
+   * `capsule_extract` operation so Objective 3's path stays attributable.
    *
-   * Tracked under the `capsule_extract` operation, so the model and pipeline
-   * config behind Objective 3's handwriting path are attributable like every
-   * other run. Deliberately does not apply the groundPrompt() wrapper:
-   * contents here is an image array (inlineData + instruction text), not a
-   * string prompt, so the text-oriented grounding instruction doesn't apply
-   * cleanly — hence no ctx.config.grounding branch below.
+   * No groundPrompt() wrapper: contents is an image parts array, not a string
+   * prompt, so the text-oriented grounding instruction doesn't apply.
    */
   async getCapsuleProposalInfoFromImage(
     ctx: AiRunContext,
@@ -642,9 +612,8 @@ export class AiService {
     const base64Image = imageBuffer.toString('base64');
     const res = await this.ai.models.generateContent({
       model: ctx.config.model,
-      // No maxOutputTokens: the response carries a raw_transcription field
-      // (the full document text) on top of the 8 extracted proposal fields,
-      // so any fixed cap risks truncating the JSON.
+      // No maxOutputTokens: raw_transcription carries the full document text on
+      // top of the 8 extracted fields, so any cap risks truncating the JSON.
       config: {
         temperature: ctx.config.temperature,
       },
@@ -776,7 +745,6 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
         'The previous answer was invalid. Return only a JSON array where every item has an integer target_level and a description string.',
     });
 
-    // Normalize any numeric target_level fields using baseline
     const normalized = await Promise.all(
       tasks.map(async (t) => {
         try {
@@ -866,14 +834,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     em: EntityManager,
     opts?: {
       /**
-       * Set only by the RNA-generation fallback (rna.service.ts) after it has
-       * already run RagQueryService.queryVectorDatabase under this mode and
-       * gotten an empty/low-confidence result. When that mode is 'semantic',
-       * buildRubricBlock's own deterministic lookup is suppressed rather than
-       * silently substituted — see the rubricMode note on buildRubricBlock
-       * for why this can't just read ctx.config.rubricMode itself. Every other
-       * caller (initiatives, roadblocks, RNA/RNS refine) omits this and keeps
-       * the fixed deterministic mechanism unconditionally.
+       * Set only by the RNA-generation fallback (rna.service.ts) after its own
+       * queryVectorDatabase came back empty under this mode. 'semantic'
+       * suppresses buildRubricBlock rather than silently substituting a
+       * deterministic result. All other callers omit it — see buildRubricBlock.
        */
       rubricMode?: RubricMode;
     },
@@ -901,13 +865,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
           .map((context) => `- [${context.sourceType}] ${context.title}: ${context.content}`)
           .join('\n')}`
       : ctx.config.rag ? '\nVerified context retrieved from similar startup records: none found' : '';
-    // Rubrics come from the dimension keys, not from similarity, and are
-    // deliberately independent of ctx.config.ragStrategy: that setting selects
-    // how *peers* are found and its measured comparison must not be perturbed
-    // by a rubric change. The one exception is opts.rubricMode === 'semantic',
-    // which suppresses the block entirely rather than mislabelling a
-    // deterministic result as belonging to the semantic arm — see the opts
-    // JSDoc above.
+    // Rubrics key off dimensions, not similarity, so they stay independent of
+    // ctx.config.ragStrategy — that setting selects how *peers* are found and
+    // its measured comparison must not be perturbed. Only opts.rubricMode
+    // 'semantic' suppresses the block, to avoid mislabelling the arm.
     const rubricBlock =
       ctx.config.ragCorpus && opts?.rubricMode !== 'semantic'
         ? await this.buildRubricBlock(em, startupReadinessLevels)
@@ -954,14 +915,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     em: EntityManager,
     levels: StartupReadinessLevel[],
   ): Promise<string> {
-    // Deliberately does not read ctx.config.rubricMode itself. That setting
-    // exists to compare two mechanisms on the RNA/RNS channel SDD §3.2
-    // describes; letting this method also swing the initiative and roadblock
-    // paths would change two things at once during a measurement run, which is
-    // a confound rather than a control. This always does the exact lookup —
-    // callers that need to suppress it under a semantic-mode fallback (see
-    // createBasePrompt's opts.rubricMode) do so by not calling it at all,
-    // rather than by asking it to branch on the mode.
+    // Deliberately ignores ctx.config.rubricMode. That setting compares two
+    // mechanisms on the RNA/RNS channel; letting it also swing initiatives and
+    // roadblocks would confound a measurement run. Always the exact lookup —
+    // callers suppress it by not calling (see createBasePrompt's opts).
     const wanted = new Set<string>();
     for (const srl of levels) {
       const type = srl.readinessLevel.readinessType;
