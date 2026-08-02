@@ -35,7 +35,6 @@
     }
   );
 
-  // Svelte 5 runes mode state
   let search = $state('');
   let searchedUsers = $state<any[]>([]);
   let firstName = $state('');
@@ -48,22 +47,19 @@
   let isSearching = $state(false);
   let searchTimeout: NodeJS.Timeout | null = null;
 
-  // Debounced search function
   function handleSearchInput(value: string) {
     search = value;
 
-    // Clear previous timeout
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
 
-    // Don't search if query is empty
     if (value.length < 1) {
       searchedUsers = [];
       return;
     }
 
-    // Debounce for 300ms
+    // Debounced so typing doesn't fire a request per keystroke.
     searchTimeout = setTimeout(() => {
       searchUsersDebounced();
     }, 300);
@@ -84,7 +80,7 @@
       const users = await response.json();
 
       if (response.ok) {
-        // Filter out existing members and the startup owner
+        // Existing members and the owner can't be added again.
         const membersSet = new Set($queryResult.data.members.map((member: any) => member.id));
         searchedUsers = users.filter(
           (user: any) => !membersSet.has(user.id) && user.id !== $queryResult.data.user_id
@@ -117,7 +113,6 @@
         toast.success('Successfully added a member');
         $queryResult.refetch();
 
-        // Close dialog and reset search
         dialogOpen = false;
         search = '';
         searchedUsers = [];

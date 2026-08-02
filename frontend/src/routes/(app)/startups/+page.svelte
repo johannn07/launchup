@@ -109,7 +109,6 @@
     );
   });
 
-  // Utility function to get initiatives for a single startup
   async function getInitiativesForStartup(startupId: number, access: string) {
     const res = await axiosInstance.get(`/initiatives?startupId=${startupId}`, {
       headers: { Authorization: `Bearer ${access}` }
@@ -117,12 +116,10 @@
     return res.data;
   }
 
-  // Fetch all initiatives for all startups
   async function getAllInitiativesForStartups(startups: any[], access: string) {
     const results = await Promise.all(
       startups.map((startup) => getInitiativesForStartup(startup.id, access))
     );
-    // Flatten the array if each result is an array of initiatives
     return results.flat();
   }
 

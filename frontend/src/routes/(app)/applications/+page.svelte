@@ -76,7 +76,6 @@
     }
   }
 
-  // Approve startup and assign mentor (unchanged)
   async function approveStartup(startupId: number, selectedMentor: any) {
     const response = await fetch(
       `${PUBLIC_API_URL}/startups/${startupId}/approve-applicant/`,
@@ -104,21 +103,18 @@
         }
       );
       if (assignmentor.ok) {
-        // Refetch the queries
         await Promise.all([
           $queries[0].refetch(),
           $queries[1].refetch(),
           $queries[2].refetch()
         ]);
 
-        // Close the dialog
         showDialog = false;
         selectedStartup = null;
       }
     }
   }
 
-  // waitlist startup
   async function waitlistStartup(startupId: number, message: string) {
     try {
       const response = await axiosInstance.patch(
@@ -134,14 +130,12 @@
         }
       );
       if (response.status === 200) {
-        // Refetch the queries
         await Promise.all([
           $queries[0].refetch(),
           $queries[1].refetch(),
           $queries[2].refetch()
         ]);
 
-        // Close the dialog
         showDialog = false;
         selectedStartup = null;
       }
@@ -217,10 +211,8 @@
         }
       );
       if (response.status === 200) {
-        // Refetch the queries
         await Promise.all([$queries[0].refetch(), $queries[1].refetch()]);
 
-        // Close the dialog
         showDialog = false;
         selectedStartup = null;
       }
@@ -244,10 +236,8 @@
         }
       );
       if (response.status === 200) {
-        // Refetch the queries to update the data
         await Promise.all([$queries[0].refetch(), $queries[1].refetch()]);
 
-        // Update the selectedStartup with new data
         const updatedStartup = $queries[0].data.find(
           (s: any) => s.id === startupId
         );
@@ -262,7 +252,6 @@
     }
   }
 
-  // Update applicants based on selected tab and query results
   $: if ($queries[0].isSuccess) {
     if ($queries[0].data.length > 0) {
       if (selectedTab === 'pending') {

@@ -7,18 +7,14 @@ import type { Role } from '$lib/types/user.types';
 /**
  * Fail at startup if JWT_SECRET is missing, rather than falling back.
  *
- * This used to be `JWT_SECRET || 'launchup-dev-secret'` at the point of
- * verification. Two problems with that: the fallback string is committed to a
- * public repo, so anyone could mint a token this app would accept; and because
- * the verification sits inside a try/catch that redirects to /login on any
- * error, a misconfigured deployment would present as "your login didn't work"
- * rather than as a security failure.
+ * This used to be `JWT_SECRET || 'launchup-dev-secret'`. That string is in a
+ * public repo, so anyone could mint an accepted token — and since verification
+ * sits in a try/catch that redirects to /login, a misconfigured deployment
+ * looked like "your login didn't work" rather than a security failure.
  *
- * Checked at module scope so it surfaces when the server boots, not on the
- * first request that happens to carry a cookie.
- *
- * This value must match the backend's JWT_SECRET — the frontend verifies the
- * token itself here instead of calling the backend to do it.
+ * Checked at module scope so it surfaces at boot, not on the first request
+ * carrying a cookie. Must match the backend's JWT_SECRET — the frontend
+ * verifies the token itself rather than asking the backend.
  */
 if (!JWT_SECRET?.trim()) {
   throw new Error(
@@ -41,7 +37,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   let accessToken = event.cookies.get('Access');
   const pathname = event.url.pathname;
 
-  // Treat protected route only if exact match or prefixed with '/'
+  // Segment-boundary match, so /startups-public doesn't inherit /startups.
   const isProtectedRoute = protectedRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + '/')
   );
@@ -52,7 +48,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   if (!accessToken) {
     if (isProtectedRoute) {
-      // If admin area and not logged, go to admin-login; else normal login
       if (pathname.startsWith('/admin')) {
         throw redirect(
           302,

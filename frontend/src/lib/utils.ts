@@ -416,14 +416,13 @@ export const getReadinessStyles = (
 
 export function getProfileColor(firstName: string) {
   if (!firstName || typeof firstName !== 'string') {
-    return 'bg-gray-500'; // Default color if no valid name is provided
+    return 'bg-gray-500';
   }
 
-  // Get the ASCII value of the first letter, convert it to uppercase for consistency
+  // Uppercased first so the same name always gets the same colour.
   const firstChar = firstName[0].toUpperCase();
   const asciiValue = firstChar.charCodeAt(0);
 
-  // Map the ASCII value to an index in the profileColor array
   const colorIndex = asciiValue % profileColor.length;
 
   return profileColor[colorIndex];

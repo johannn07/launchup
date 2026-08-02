@@ -18,7 +18,6 @@
 
   const downloadMultiPagePDF = async () => {
     try {
-      // Select all the pages to capture
       const pages = document.querySelectorAll('.pdf-page');
       const tables = document.querySelectorAll('.pdf-table');
       if (pages.length === 0) {
@@ -34,26 +33,21 @@
       // 	page.style.backgroundColor = 'white';
       // 	page.style.color = 'black'
       // });
-      // Create a new PDF document
       const pdfDoc = await PDFDocument.create();
 
       for (const pageElement of pages) {
-        // Capture the current element as a canvas
         const canvas = await html2canvas(pageElement, {
           scale: 2, // Increases the resolution
           useCORS: true // Avoid cross-origin issues
         });
 
-        // Convert the canvas to an image
         const imageData = canvas.toDataURL('image/png');
 
-        // Get the dimensions of the canvas
         const { width, height } = canvas;
 
-        // Add a new page to the PDF with dimensions matching the canvas
+        // Page is sized to the canvas so nothing is cropped or scaled.
         const pdfPage = pdfDoc.addPage([width, height]);
 
-        // Embed the PNG image into the PDF
         const pngImage = await pdfDoc.embedPng(imageData);
         pdfPage.drawImage(pngImage, {
           x: 0,
@@ -63,10 +57,8 @@
         });
       }
 
-      // Serialize the PDF document to bytes
       const pdfBytes = await pdfDoc.save();
 
-      // Trigger a download
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
