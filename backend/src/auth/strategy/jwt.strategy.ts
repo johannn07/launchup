@@ -9,18 +9,14 @@ import { requireJwtSecret } from '../jwt-secret';
 /**
  * Read the JWT from the `Access` cookie the frontend sets at login.
  *
- * Needed because that cookie is `httpOnly`, so browser JavaScript cannot read
- * it to build an `Authorization` header — and the shared axios instance
- * (`frontend/src/lib/axios.ts`) therefore sends no credentials at all. Without
- * this extractor, putting a guard on any controller the UI calls from the
- * client would 401 every one of those calls.
+ * The cookie is `httpOnly`, so browser JS cannot read it to build an
+ * `Authorization` header and the shared axios instance sends no credentials.
+ * Without this extractor, any guarded controller the UI calls client-side 401s.
  *
- * Keeping the token in an httpOnly cookie and reading it here is the stronger
- * arrangement anyway: the alternative is exposing the token to any script on
- * the page. The Bearer header still works, for server-side loads and for
- * anything driving the API directly.
+ * The alternative — exposing the token to page scripts — is weaker anyway. The
+ * Bearer header still works for server-side loads and direct API use.
  *
- * Parsed by hand rather than pulling in cookie-parser — one header, one name.
+ * Parsed by hand rather than adding cookie-parser: one header, one name.
  */
 const accessCookieExtractor = (req: {
   headers?: { cookie?: string };
@@ -45,8 +41,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     private em: EntityManager,
   ) {
     super({
-      // Header first: an explicit Authorization header is a deliberate act and
-      // should win over whatever cookie the browser happens to attach.
+      // Header first — an explicit Authorization header is deliberate and
+      // should beat whatever cookie the browser happens to attach.
       jwtFromRequest: ExtractJwt.fromExtractors([
         ExtractJwt.fromAuthHeaderAsBearerToken(),
         accessCookieExtractor,
