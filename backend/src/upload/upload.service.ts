@@ -21,12 +21,11 @@ import {
   SignedUrlResponseDto,
 } from './dto';
 
-/** Signed PUT lifetime. Long enough for a slow connection, short enough that a
- *  leaked URL is not a standing write grant. */
+/** Long enough for a slow connection, short enough that a leaked URL is not a
+ *  standing write grant. */
 const UPLOAD_URL_TTL_SECONDS = 300;
 
-/** Signed GET lifetime. Refreshed per render, so this only has to outlive the
- *  page the user is looking at. */
+/** Refreshed per render, so it only has to outlive the current page. */
 const DOWNLOAD_URL_TTL_SECONDS = 3600;
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -78,14 +77,12 @@ export class UploadService {
       endpoint,
       region,
       credentials: { accessKeyId, secretAccessKey },
-      // Supabase Storage (and most non-AWS S3 endpoints) address buckets as a
-      // path segment rather than a subdomain. AWS itself accepts path style
-      // too, so this stays correct if the provider changes.
+      // Non-AWS endpoints address buckets as a path segment, not a subdomain.
+      // AWS accepts path style too, so this survives a provider change.
       forcePathStyle: true,
-      // Without this the SDK adds a CRC32 checksum to every request. On a
-      // presigned PUT there is no body at signing time, so it signs the
-      // checksum of an empty payload and the browser's real bytes then fail
-      // validation at the bucket. Covered by upload.service.spec.ts.
+      // Otherwise the SDK checksums every request. A presigned PUT has no body
+      // at signing time, so it signs an empty payload's checksum and the
+      // browser's real bytes fail validation. Covered by the spec.
       requestChecksumCalculation: 'WHEN_REQUIRED',
     });
   }
@@ -95,15 +92,13 @@ export class UploadService {
   }
 
   /**
-   * Mints a short-lived URL the browser PUTs the file straight to, so the API
-   * never buffers the bytes.
+   * Short-lived URL the browser PUTs straight to, so the API never buffers the
+   * bytes. Signing `Content-Type` binds the client to the type it declared — it
+   * cannot request an image URL and PUT an executable.
    *
-   * `Content-Type` is added to the signed headers, so the client must send
-   * back exactly the type it declared — it cannot ask for an image URL and
-   * then PUT an executable through it. Length is **not** covered: enforcing
-   * that needs a POST policy, which the S3 presigner does not emit. Set the
-   * bucket's own max-file-size limit in the provider console; that is the
-   * backstop, not the `size` checked here.
+   * Length is **not** covered: that needs a POST policy, which the S3 presigner
+   * does not emit. The bucket's own max-file-size limit is the real backstop,
+   * not the `size` checked here.
    */
   async createPresignedUpload(
     dto: PresignUploadDto,
@@ -123,8 +118,7 @@ export class UploadService {
         }),
         {
           expiresIn: UPLOAD_URL_TTL_SECONDS,
-          // Only `host` is signed by default; naming content-type here is what
-          // actually binds the client to the type it declared.
+          // Only `host` is signed by default; this is what binds the type.
           signableHeaders: new Set(['content-type']),
         },
       );
@@ -133,8 +127,7 @@ export class UploadService {
         key,
         uploadUrl,
         expiresIn: UPLOAD_URL_TTL_SECONDS,
-        // The browser must send exactly this back or the signature will not
-        // match the request it signed.
+        // Must come back verbatim or the signature won't match.
         requiredHeaders: { 'Content-Type': dto.mimeType },
       };
     } catch (error) {
@@ -145,9 +138,7 @@ export class UploadService {
   }
 
   /**
-   * Resolves a stored object key to a temporary readable URL. The bucket is
-   * private, so this is the only way stored files are read back — nothing is
-   * publicly addressable.
+   * The bucket is private, so this is the only way stored files are read back.
    */
   async createSignedDownloadUrl(key: string): Promise<SignedUrlResponseDto> {
     this.assertEnabled();
@@ -172,10 +163,9 @@ export class UploadService {
   }
 
   /**
-   * Server-side upload, kept for callers that already hold the bytes (OCR
-   * intake, tests) and as a fallback if a browser cannot reach the bucket
-   * directly. The returned `url` is a signed GET and therefore expires —
-   * persist `key`, not `url`.
+   * For callers that already hold the bytes (OCR intake, tests), and as a
+   * fallback when the browser can't reach the bucket. The returned `url` is a
+   * signed GET and expires — persist `key`, not `url`.
    */
   async uploadSingle(
     file: Express.Multer.File,
@@ -301,9 +291,8 @@ export class UploadService {
       throw new BadRequestException('File size exceeds 10MB limit');
     }
 
-    // The MIME type is client-supplied on the presign path, so this rejects
-    // honest mistakes rather than a determined uploader. The bucket's own size
-    // and type limits are what actually hold.
+    // Client-supplied on the presign path, so this catches honest mistakes, not
+    // a determined uploader. The bucket's own limits are what hold.
     if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
       throw new BadRequestException('File type not allowed');
     }
