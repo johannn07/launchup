@@ -14,9 +14,8 @@
  *              Jaccard, keep anything scoring above zero)
  *   semantic - gemini-embedding-2 at 768 dims, cosine, floor RAG_MIN_SIMILARITY
  *
- * Ground truth here is domain membership, which is coarser than a human
- * relevance judgement but is at least not circular — neither arm can see the
- * labels. See the caveats in README.md before quoting these numbers.
+ * Ground truth is domain membership — coarser than a human judgement, but not
+ * circular, since neither arm sees the labels. See README.md's caveats.
  *
  *   node measurement/measure-retrieval.js
  */
@@ -138,9 +137,8 @@ const cos = (a, b) => {
     })),
   );
 
-  // Precision alone rewards an arm that returns almost nothing, so report the
-  // recall side too: of the 2 same-domain documents available per query, how
-  // many were actually surfaced.
+  // Precision alone rewards an arm that returns nothing, so report recall too:
+  // of the 2 same-domain documents per query, how many surfaced.
   const available = 2 * DOCS.length;
   console.log(
     `\nsame-domain documents available across all queries: ${available}` +

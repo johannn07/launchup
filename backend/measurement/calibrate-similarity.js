@@ -1,17 +1,14 @@
 /**
  * Where should the retrieval similarity floor sit?
  *
- * The floor decides which stored contexts are shown to the model as "verified
- * context". Too high and retrieval never fires; too low and an unrelated
- * startup is presented as corroboration, which manufactures exactly the
- * hallucination Objective 1 is meant to reduce. A first guess of 0.70 was
- * wrong: an agriculture startup scored 0.765 against a health-referral query.
+ * Too high and retrieval never fires; too low and an unrelated startup is
+ * presented as corroboration, manufacturing the hallucination Objective 1 is
+ * meant to reduce. A first guess of 0.70 was wrong — an agriculture startup
+ * scored 0.765 against a health-referral query.
  *
- * This measures the actual separation. Nine startup descriptions across three
- * domains, every pair compared, then the same-domain and cross-domain
- * distributions reported. Production compares a startup's own prose against
- * other startups' prose, so every comparison here is document-to-document —
- * the same regime, unlike a short question against a document.
+ * Nine descriptions across three domains, every pair compared, same-domain and
+ * cross-domain distributions reported. Every comparison is document-to-document,
+ * matching production's regime.
  *
  *   node measurement/calibrate-similarity.js
  */
@@ -25,8 +22,7 @@ const { GoogleGenAI } = require(path.join(BACKEND, 'node_modules/@google/genai')
 const MODEL = 'gemini-embedding-2';
 const DIMS = 768;
 
-// Three domains, three startups each. Within a domain they are genuine
-// neighbours; across domains they are not.
+// Three domains, three startups each - genuine neighbours within, not across.
 const DOCS = [
   ['health', 'MediSync Cebu', 'Referral coordination platform linking rural health units with district and tertiary hospitals, replacing paper-and-phone patient transfers. Structured referral records carry triage category and bed availability.'],
   ['health', 'ClinicBridge Bohol', 'Digital patient referral and bed-availability tracking between provincial clinics and regional hospitals. Replaces phone-based coordination for emergency transfers.'],
@@ -83,7 +79,7 @@ const stats = (xs) => {
   console.table([stats(cross)]);
 
   // A usable floor sits above the cross-domain mass and below the same-domain
-  // mass. Report what each candidate would actually admit.
+  // mass, so report what each candidate would admit.
   console.log('\nthreshold sweep:');
   const rows = [];
   for (let t = 0.6; t <= 0.92; t += 0.02) {

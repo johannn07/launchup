@@ -1,40 +1,32 @@
 /**
  * Full demo seeder — makes every AI generation path exercisable from a clean DB.
+ * Additive and idempotent.
  *
  *   pnpm build && node seed-demo-full.js
  *
- * main.ts's boot seeder creates the four demo accounts and two startups, but it
- * never creates capsule proposals and only seeds the handful of readiness levels
- * those startups sit at. Every generation path needs both: they throw
- * "No capsule proposal found" without one, and generateTasks skips any task
- * whose target level has no matching ReadinessLevel row.
+ * main.ts's boot seeder creates the accounts and startups but no capsule
+ * proposals, and only the readiness levels those startups sit at. Generation
+ * needs both: it throws "No capsule proposal found" without one, and
+ * generateTasks skips any target level with no ReadinessLevel row.
  *
- * This script is additive and idempotent — safe to re-run.
+ * The two startups are seeded differently so all four paths are testable:
+ *   AgroLink PH   — proposal, no RNAs  -> RNA generation
+ *   MediSync Cebu — proposal + 6 RNAs  -> RNS / initiative / roadblock
  *
- * The two startups are deliberately seeded differently so all four paths are
- * testable at once:
- *   AgroLink PH   — proposal, no RNAs  -> exercises RNA generation
- *   MediSync Cebu — proposal + 6 RNAs  -> exercises RNS / initiative / roadblock generation
+ * Step 2 is a no-op on a fresh boot; it stays to *repair* Neon branches created
+ * before 2026-07-27, where the older main.ts gave the startups to staff
+ * accounts and assigned no mentor. That seeder is guarded on `if (existing)`
+ * and never rewrites those rows.
  *
- * Role separation matters here: a founder owns the startup, a Manager runs
- * admissions, and a Mentor is attached through startups_mentors. main.ts now
- * seeds that shape itself, so step 2 below is a no-op on a fresh boot — it
- * stays because it also *repairs* databases seeded by the older main.ts, which
- * gave AgroLink to managerUser and MediSync to mentorUser and assigned no
- * mentor at all. main.ts's own seeder is guarded on `if (existing)` and will
- * never rewrite those rows, so this script is the migration path for any Neon
- * branch created before 2026-07-27.
- *
- * Only the four real roles are used; the frontend-only `Manager as Mentor`
+ * Only the four real roles are used — the frontend-only `Manager as Mentor`
  * pseudo-role is deliberately not exercised.
  */
 const { MikroORM } = require('@mikro-orm/core');
 
 process.chdir(__dirname);
 
-// `nest build` emits to dist/src/ when a .ts file sits at the backend root
-// (seed-dummy.ts does), and to dist/ otherwise. Resolve either — the older
-// seed-*.js scripts hardcode ./dist/ and break under the current layout.
+// `nest build` emits to dist/src/ when a .ts sits at the backend root
+// (seed-dummy.ts does), else dist/. Older seed-*.js hardcode ./dist/ and break.
 const fs = require('fs');
 const DIST = fs.existsSync(`${__dirname}/dist/src/mikro-orm.config.js`) ? './dist/src' : './dist';
 const req = (p) => require(`${DIST}/${p}`);
@@ -42,8 +34,8 @@ const req = (p) => require(`${DIST}/${p}`);
 const ormConfigModule = req('mikro-orm.config');
 const ormConfig = ormConfigModule.default || ormConfigModule;
 
-// Founder accounts. Emails and names must match the ones main.ts seeds, or the
-// two seeders would fight over ownership and create duplicate founders.
+// Emails and names must match main.ts's, or the two seeders fight over
+// ownership and create duplicate founders.
 const FOUNDERS = {
   'AgroLink PH': { email: 'founder.agrolink@launchup.local', firstName: 'Rafael', lastName: 'Domingo' },
   'MediSync Cebu': { email: 'founder.medisync@launchup.local', firstName: 'Elena', lastName: 'Reyes' },
@@ -150,11 +142,10 @@ const MEDISYNC_RNAS = {
     'Operations are funded by founder capital and modest recurring revenue. There is no runway model, no external investment, and no articulated path from current revenue to sustainable operation at province scale.',
 };
 
-// Assessment questions. The table is empty after a wipe, so the assessment
-// page renders nothing at all — including the File field, which is the only
-// place uploads are exercised from the UI. `answerType` is the numeric
-// AssessmentAnswerType (1 ShortAnswer, 2 LongAnswer, 3 File); the API
-// reverse-maps it to the name before the frontend sees it.
+// Without these the assessment page renders nothing — including the File
+// field, the only place uploads are exercised from the UI. `answerType` is the
+// numeric AssessmentAnswerType (1 ShortAnswer, 2 LongAnswer, 3 File); the API
+// reverse-maps it before the frontend sees it.
 const ASSESSMENTS = [
   { type: 'Technology', answerType: 2, name: 'Describe the current state of your core technology', description: 'What is built, what is deployed, and what remains prototype?' },
   { type: 'Technology', answerType: 3, name: 'Upload your system architecture diagram', description: 'PDF or image. Handwritten sketches are acceptable.' },
@@ -183,10 +174,8 @@ async function run() {
   const orm = await MikroORM.init(cfg);
   const em = orm.em.fork();
 
-  // 1. Full 6x9 readiness-level grid. generateTasks looks up
-  //    ReadinessLevel{readinessType, level} for the reviewed target score and
-  //    skips the task when the row is missing, so a partial grid silently
-  //    drops generated output.
+  // 1. Full 6x9 grid - generateTasks skips any task whose target level has no
+  //    ReadinessLevel row, so a partial grid silently drops output.
   const types = [
     ReadinessType.T, ReadinessType.M, ReadinessType.A,
     ReadinessType.O, ReadinessType.R, ReadinessType.I,
@@ -208,8 +197,7 @@ async function run() {
   await em.flush();
   console.log(`readiness levels: +${createdLevels} (grid now 6 types x 9 levels)`);
 
-  // 2. Role separation — founders own startups, a mentor is assigned to each.
-  //    A no-op on a DB seeded by the current main.ts; repairs older ones.
+  // 2. Role separation. No-op under the current main.ts; repairs older DBs.
   const argon = require('argon2');
   const password = await argon.hash('password123');
   const mentorUser = await em.findOne(User, { email: 'mentor@launchup.local' });
@@ -244,8 +232,8 @@ async function run() {
     }
     if (!startup.members.contains(founder)) startup.members.add(founder);
 
-    // Mentor assignment is what `appoint-mentors` would do. Setting
-    // QUALIFIED without it is the shortcut that leaves a startup mentorless.
+    // What `appoint-mentors` would do. Setting QUALIFIED without it is the
+    // shortcut that leaves a startup mentorless.
     if (mentorUser && !startup.mentors.contains(mentorUser)) {
       startup.mentors.add(mentorUser);
       console.log(`  ${startupName}: mentor -> mentor@launchup.local`);
@@ -276,9 +264,8 @@ async function run() {
   }
   await em.flush();
 
-  // 4. RNAs for MediSync only — AgroLink is deliberately left without any so
-  //    RNA generation itself stays testable (it only generates for readiness
-  //    types that have no RNA yet).
+  // 4. MediSync only — AgroLink stays empty so RNA generation is testable
+  //    (it only generates for readiness types with no RNA yet).
   const medi = await em.findOne(Startup, { name: 'MediSync Cebu' });
   if (medi) {
     const srls = await em.find(StartupReadinessLevel, { startup: medi }, { populate: ['readinessLevel'] });
@@ -305,8 +292,7 @@ async function run() {
     console.log(`  MediSync Cebu: +${createdRnas} RNAs`);
   }
 
-  // 5. Assessment questions, applied to both startups. Without these the
-  //    assessment page is blank and the File-upload field never renders.
+  // 5. Applied to both startups, or the assessment page is blank.
   let createdAssessments = 0;
   const allStartups = await em.find(Startup, {});
   for (const spec of ASSESSMENTS) {

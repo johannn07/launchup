@@ -3,21 +3,18 @@
  *
  *   pnpm build && node inspect-prompt.js <startupId> [--dimension T]
  *
- * Answers a question `rag_retrieval_log` cannot: retrieval finding rows and
- * those rows' text reaching the prompt are two different things, and the defect
- * this corpus work fixed lived in the gap between them — buildGroundedPrompt
+ * Answers what `rag_retrieval_log` cannot: retrieval finding rows and those
+ * rows' text reaching the prompt are different things. buildGroundedPrompt once
  * rendered peer docs as id/similarity/metadata and never emitted `content`, so
- * retrieval logs looked healthy while the model received nothing. Reading the
- * assembled string is the only direct check.
+ * the logs looked healthy while the model got nothing. Reading the assembled
+ * string is the only direct check.
  *
- * Spends NO generation quota: it stops at GroundedPromptBuilderService and
- * never reaches sendToGemini. The framework channel still embeds its query
- * (a separate, far larger quota bucket than GenerateRequestsPerDay), and in
- * the default `deterministic` rubric mode the rubric channel embeds nothing.
+ * Spends NO generation quota — stops before sendToGemini. The framework channel
+ * still embeds its query (a far larger quota bucket); `deterministic` rubric
+ * mode embeds nothing.
  *
- * Not side-effect free: queryVectorDatabase writes a rag_retrieval_log row, by
- * design — it is the same row the corpus-toggle test reads, so what you audit
- * afterwards includes what you inspected here. Nothing else is written.
+ * Not side-effect free: queryVectorDatabase writes a rag_retrieval_log row, the
+ * same row the corpus-toggle test reads. Nothing else is written.
  */
 process.chdir(__dirname);
 
@@ -45,9 +42,8 @@ if (!Number.isInteger(startupId)) {
   process.exit(1);
 }
 
-// ReadinessType is a string enum keyed T/M/A/O/R/I but *valued* Technology/
-// Market/... and it is the value that is stored and compared. Accept either, so
-// `--dimension T` and `--dimension Technology` both work.
+// ReadinessType is keyed T/M/A/O/R/I but valued Technology/Market/..., and the
+// value is what's stored. Accept either form.
 const onlyDimension = dimensionArg
   ? (ReadinessType[dimensionArg.toUpperCase()] ?? dimensionArg)
   : null;
@@ -59,13 +55,11 @@ const rule = (label) => `\n${'='.repeat(72)}\n${label}\n${'='.repeat(72)}`;
     logger: ['error', 'warn'],
   });
   try {
-    // Same reason as seed-rag-corpus.js: createApplicationContext never runs the
-    // HTTP middleware that opens a MikroORM RequestContext per request, so every
-    // injected EntityManager reached from this call would otherwise reject use.
+    // See seed-rag-corpus.js - createApplicationContext opens no RequestContext,
+    // so every injected EntityManager would otherwise reject use.
     const orm = app.get(MikroORM);
-    // mikro-orm.config.ts hard-codes debug: true, which echoes every statement —
-    // including the full 768-float pgvector literal the framework channel sends,
-    // twice per query. That buries the prompt this tool exists to show.
+    // mikro-orm.config.ts hard-codes debug: true, echoing the full 768-float
+    // pgvector literal twice per query and burying the prompt.
     orm.config.set('debug', false);
     await RequestContext.create(orm.em, async () => {
       const em = orm.em;
@@ -91,9 +85,8 @@ const rule = (label) => `\n${'='.repeat(72)}\n${label}\n${'='.repeat(72)}`;
         return;
       }
 
-      // Driven off StartupReadinessLevel rather than off existing RNAs (which is
-      // what rns.service.ts does) so this works on any startup regardless of what
-      // has already been generated for it.
+      // Driven off StartupReadinessLevel, not existing RNAs like rns.service.ts,
+      // so it works whatever has already been generated.
       const dimensions = readinessLevels.map((srl) => ({
         readinessType: srl.readinessLevel.readinessType,
         level: srl.readinessLevel.level,
@@ -147,9 +140,8 @@ const rule = (label) => `\n${'='.repeat(72)}\n${label}\n${'='.repeat(72)}`;
       }
 
       for (const { readinessType, level } of targets) {
-        // Per-dimension scoping reproduced from rns.service.ts: one ragContext is
-        // fetched for every dimension, so verifiedFrameworks holds rubric rows for
-        // dimensions other than the one a given task prompt is generating for.
+        // Per-dimension scoping from rns.service.ts: one ragContext covers every
+        // dimension, so verifiedFrameworks holds other dimensions' rubrics too.
         const scoped = {
           ...context,
           verifiedFrameworks: context.verifiedFrameworks.filter(
