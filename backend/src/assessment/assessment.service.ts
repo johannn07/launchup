@@ -23,12 +23,9 @@ import { QualificationStatus } from '../entities/enums/qualification-status.enum
 export class AssessmentService {
   constructor(private readonly em: EntityManager) {}
 
-  // ==================== ADMIN: ASSESSMENT ENDPOINTS ====================
+  // --- Admin: assessments ---
 
-  /**
-   * Create a new assessment
-   * POST /assessments
-   */
+  /** POST /assessments — also assigns the new assessment to every qualified startup. */
   async createAssessment(dto: CreateAssessmentDto): Promise<{
     id: number;
     assessmentType: string;
@@ -69,10 +66,7 @@ export class AssessmentService {
     };
   }
 
-  /**
-   * Get all assessments
-   * GET /assessments
-   */
+  /** GET /assessments */
   async getAllAssessments(): Promise<
     Array<{
       id: number;
@@ -93,10 +87,7 @@ export class AssessmentService {
     }));
   }
 
-  /**
-   * Get assessments grouped by type
-   * GET /assessments/grouped
-   */
+  /** GET /assessments/grouped — every type is present, empty ones included. */
   async getAssessmentsGroupedByType(): Promise<
     Record<
       string,
@@ -115,12 +106,10 @@ export class AssessmentService {
       Array<{ id: number; name: string; description?: string; answerType: string }>
     > = {};
 
-    // Initialize all types with empty arrays
     Object.values(AssessmentType).forEach((type) => {
       grouped[type] = [];
     });
 
-    // Group assessments by type
     assessments.forEach((assessment) => {
       grouped[assessment.assessmentType].push({
         id: assessment.id,
@@ -133,10 +122,7 @@ export class AssessmentService {
     return grouped;
   }
 
-  /**
-   * Get a single assessment
-   * GET /assessments/:id
-   */
+  /** GET /assessments/:id */
   async getAssessmentById(id: number): Promise<{
     id: number;
     assessmentType: string;
@@ -159,10 +145,7 @@ export class AssessmentService {
     };
   }
 
-  /**
-   * Update an assessment
-   * PATCH /assessments/:id
-   */
+  /** PATCH /assessments/:id */
   async updateAssessment(
     id: number,
     dto: UpdateAssessmentDto,
@@ -208,10 +191,7 @@ export class AssessmentService {
     };
   }
 
-  /**
-   * Delete an assessment
-   * DELETE /assessments/:id
-   */
+  /** DELETE /assessments/:id */
   async deleteAssessment(id: number): Promise<{ message: string }> {
     const assessment = await this.em.findOne(Assessment, { id });
 
@@ -224,22 +204,14 @@ export class AssessmentService {
     return { message: `Assessment ${id} deleted successfully` };
   }
 
-  // ==================== UTILITY METHODS ====================
-
-  /**
-   * Get all assessment types
-   * GET /assessments/types
-   */
+  /** GET /assessments/types */
   listTypes(): Array<{ name: string }> {
     return Object.values(AssessmentType).map((type) => ({ name: type }));
   }
 
-  // ==================== STARTUP: ASSIGNMENT ENDPOINTS ====================
+  // --- Startup: assignments ---
 
-  /**
-   * Assign an assessment to a startup
-   * POST /startups/:id/assessments
-   */
+  /** POST /startups/:id/assessments */
   async assignAssessmentToStartup(
     startupId: number,
     dto: AssignAssessmentDto,
@@ -258,7 +230,6 @@ export class AssessmentService {
       );
     }
 
-    // Check if already assigned
     const existing = await this.em.findOne(StartupAssessment, {
       startup: startup,
       assessment: assessment,
@@ -284,10 +255,7 @@ export class AssessmentService {
     };
   }
 
-  /**
-   * Assign all assessments to a startup
-   * POST /assessments/startup-assessment/:id
-   */
+  /** POST /assessments/startup-assessment/:id — skips already-assigned ones. */
   async assignAssessmentsToStartup(id: number): Promise<{
     message: string;
   }> {
@@ -327,10 +295,7 @@ export class AssessmentService {
     };
   }
 
-  /**
-   * Get all assessments assigned to a startup
-   * GET /startups/:id/assessments
-   */
+  /** GET /startups/:id/assessments */
   async getStartupAssessments(startupId: number): Promise<
     Array<{
       id: number;
@@ -391,10 +356,7 @@ export class AssessmentService {
     });
   }
 
-  /**
-   * Toggle whether an assessment is applicable to a startup
-   * PATCH /assessments/startup-assessment/:id/toggle-applicable
-   */
+  /** PATCH /assessments/startup-assessment/:id/toggle-applicable */
   async toggleAssessmentApplicability(
     startupAssessmentId: number,
     isApplicable: boolean,
@@ -415,12 +377,9 @@ export class AssessmentService {
     };
   }
 
-  // ==================== STARTUP: RESPONSE ENDPOINTS ====================
+  // --- Startup: responses ---
 
-  /**
-   * Submit answer(s) for assessments
-   * POST /startups/:id/responses
-   */
+  /** POST /startups/:id/responses — upserts, and skips unknown assessment ids. */
   async submitResponses(
     startupId: number,
     dto: SubmitResponsesDto,
@@ -445,21 +404,18 @@ export class AssessmentService {
         continue;
       }
 
-      // Check if response already exists
       const existingResponse = await this.em.findOne(StartupResponse, {
         startup: startup,
         assessment: assessment,
       });
 
       if (existingResponse) {
-        // Update existing response
         existingResponse.answerValue = responseDto.answerValue;
         existingResponse.fileUrl = responseDto.fileUrl;
         existingResponse.fileName = responseDto.fileName;
         this.em.persist(existingResponse);
         updated++;
       } else {
-        // Create new response
         const newResponse = this.em.create(StartupResponse, {
           startup: startup,
           assessment: assessment,
@@ -477,10 +433,7 @@ export class AssessmentService {
     return { submitted, updated };
   }
 
-  /**
-   * Get responses for a specific assessment
-   * GET /startups/:id/responses/:assessmentId
-   */
+  /** GET /startups/:id/responses/:assessmentId */
   async getAssessmentResponses(
     startupId: number,
     assessmentId: number,
