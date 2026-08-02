@@ -12,22 +12,17 @@
  *
  * Two halves, run in a specific order because quota is the binding constraint:
  *
- *   Step A - mechanism comparison (--retrieval-only stops here). Whether each
- *   rubric mode retrieves the CORRECT dimension's rubric for a given startup
- *   is a pure retrieval question, checkable against rubricKey(type, level) as
- *   ground truth. Uses the embedding endpoint only (batched, 3 calls total),
- *   not the rate-limited generation endpoint, so it reproduces at full N on
- *   every run and costs none of the generation budget.
+ *   Step A - mechanism comparison (--retrieval-only stops here). Whether a
+ *   rubric mode retrieves the CORRECT dimension is pure retrieval, checkable
+ *   against rubricKey(type, level). Embedding endpoint only (3 batched calls),
+ *   so it reproduces at full N and costs no generation budget.
  *
- *   Step B - the three generation arms. Expensive: 2 calls (RNA text, 1-9
- *   levels) x 2 startups x 3 arms = 12 calls PER REP by default, or 18 with
- *   --with-fabrication-probe adding the hallucination-probe call back in.
- *   Stops cleanly on a 429 and reports partial results with n= counts per
- *   cell rather than padding or dropping them silently.
+ *   Step B - the three generation arms. 2 calls x 2 startups x 3 arms = 12 per
+ *   rep, or 18 with --with-fabrication-probe. Stops cleanly on a 429 and
+ *   reports partial results with per-cell n= rather than padding them.
  *
- * Metrics are mechanical, not LLM-judged - model leniency is one of the things
- * under investigation, so grading the output with a model would fold the
- * thing being measured into the measurement.
+ * Metrics are mechanical, not LLM-judged: model leniency is under
+ * investigation, so grading with a model would fold it into the measurement.
  *
  *   node measurement/measure-grounding.js                  (full harness)
  *   node measurement/measure-grounding.js --retrieval-only  (Step A only, free)
@@ -37,24 +32,16 @@
  *
  * ## Why one rep per day, accumulated
  *
- * gemini-3.6-flash's free tier allows 20 generateContent calls per day and a
- * full rep costs 12 by default (18 with --with-fabrication-probe), so a day
- * buys exactly one rep either way - two reps would need 24, over budget even
- * at the cheaper default. Two consequences are designed for here rather than
- * discovered at runtime:
+ * The free tier allows 20 generateContent calls/day and a rep costs 12 (18 with
+ * --with-fabrication-probe), so a day buys exactly one rep. Two consequences:
  *
- *   1. Reps are the OUTERMOST loop, not the innermost. Arm-major ordering
- *      (the original) spends the whole daily budget inside the first arm, so
- *      a partial run yields one fully-powered arm and nothing to compare it
- *      against - which is worthless, since every metric here is a BETWEEN-arm
- *      contrast. Rep-major ordering means each completed rep is a full
- *      three-arm comparison, and a 429 costs precision rather than the
- *      comparison itself.
- *   2. --out persists the raw per-call records so separate days can be
- *      combined with --merge, which re-runs the report functions over the
- *      concatenated calls. Retrieval is deterministic, so merging days is
- *      sound as long as the corpus and the model are unchanged - both are
- *      recorded in the file and checked on merge.
+ *   1. Reps are the OUTERMOST loop. Arm-major ordering spends the whole daily
+ *      budget inside the first arm, leaving one fully-powered arm and nothing
+ *      to compare it against — worthless, since every metric is a BETWEEN-arm
+ *      contrast. Rep-major means a 429 costs precision, not the comparison.
+ *   2. --out persists raw per-call records so days combine with --merge, which
+ *      re-runs the report over the concatenated calls. Sound because retrieval
+ *      is deterministic — the corpus and model are recorded and checked.
  */
 const path = require('path');
 const BACKEND = path.resolve(__dirname, '..');
@@ -68,22 +55,20 @@ const fs = require('fs');
 const RETRIEVAL_ONLY = process.argv.includes('--retrieval-only');
 
 /**
- * Assembles and prints every arm's prompts without calling the model. The one
- * thing unit tests cannot check is whether the assembled prompt LOOKS right -
- * and this harness has now twice measured a property of the prompt rather
- * than of the model. Same philosophy as inspect-prompt.js: stop before sendToGemini.
+ * Assembles and prints every arm's prompts without calling the model. Unit
+ * tests cannot check whether an assembled prompt LOOKS right, and this harness
+ * has twice measured a property of the prompt rather than of the model.
  */
 const DRY_RUN = process.argv.includes('--dry-run');
 
 /**
- * The absent-field probe is saturated - 0/15 invented on every arm, 2026-07-29,
- * reproducing the 2026-07-27 model comparison's 0/9 on two different models.
- * groundPrompt() already handles it completely, so it discriminates nothing.
+ * The absent-field probe is saturated — 0/15 invented on every arm (2026-07-29,
+ * reproducing 0/9 across two models on 2026-07-27). groundPrompt() handles it
+ * completely, so it discriminates nothing.
  *
- * It is kept rather than deleted because 0/15 with 15/15 recalled is a PASSING
- * result against SRS 2.2's "return null for unverifiable fields" criterion, and
- * that evidence is worth having. Running it once per series is enough. Skipping
- * it by default takes a rep from 18 calls to 12, against a 20/day cap.
+ * Kept because 0/15 with 15/15 recalled is a PASSING result against SRS 2.2's
+ * "return null for unverifiable fields", and that evidence is worth having.
+ * Once per series is enough; skipping it takes a rep from 18 calls to 12.
  */
 const WITH_FABRICATION = process.argv.includes('--with-fabrication-probe');
 
@@ -94,20 +79,14 @@ const flagValue = (name) => {
 
 const OUT_FILE = flagValue('out');
 
-// --merge takes every following non-flag argument:
-//   node measurement/measure-grounding.js --merge results/day1.json results/day2.json
-//   node measurement/measure-grounding.js --merge results/day*.json
-// A bash shell expands the second form itself before this script ever sees
-// it. PowerShell (and a plain Node child_process.spawn) does not glob at
-// all, so without help the second form would silently pass through the
-// literal, un-expanded string "results/day*.json" as a single "file" and
-// fail confusingly. Node 22's fs.globSync closes that gap: any argument that
-// actually contains glob metacharacters is expanded here, so the documented
-// command works the same way regardless of shell. An argument with no glob
-// metacharacters is never touched, even if the file doesn't exist yet - it
-// passes straight through so a genuine typo still surfaces as a plain ENOENT
-// naming exactly what was typed, from mergeRuns' fs.readFileSync, rather than
-// disappearing into a glob that "matched nothing".
+// --merge takes every following non-flag argument, including globs. bash
+// expands those itself; PowerShell and child_process.spawn do not, and would
+// pass "results/day*.json" through as one literal filename. fs.globSync closes
+// that gap so the documented command works in any shell.
+//
+// Arguments without glob metacharacters pass through untouched, so a typo
+// still surfaces as a plain ENOENT naming what was typed rather than
+// vanishing into a glob that "matched nothing".
 const MERGE_INDEX = process.argv.indexOf('--merge');
 const MERGE_ARGS = MERGE_INDEX === -1
   ? []
@@ -123,29 +102,21 @@ const KNOWN_EXACT_FLAGS = new Set([
 const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps='];
 
 /**
- * Pure validation over raw CLI args (process.argv.slice(2)) plus the already
- * glob-resolved --merge file list. Returns an array of error strings - empty
- * means the invocation is well-formed. Exported (and called only from the
- * require.main guard below, never at module load) so tests can exercise it
- * directly without spawning a subprocess or touching process.exit, and so
- * requiring this file from `node --test` - where argv[0..] is the test
- * runner's own arguments, not this script's - never runs it by accident.
+ * Pure validation over raw CLI args plus the glob-resolved --merge list.
+ * Returns error strings; empty means well-formed. Exported and called only
+ * from the require.main guard, so tests can call it without a subprocess and
+ * `node --test` never runs the harness by accident on the runner's own argv.
  *
- * Two failure modes this closes, both of which previously spent the
- * generation budget silently instead of erroring:
- *   - `--merge` present but resolving to zero files (missing arguments, a
- *     bare trailing flag, or a glob matching nothing) used to fall straight
- *     through to a live 12-call run.
- *   - `--out foo.json` (a space instead of `=`) used to leave OUT_FILE null
- *     and "foo.json" ignored as if never typed, so a full run's results were
- *     computed and then never written anywhere.
+ * Closes two failure modes that used to spend the generation budget silently:
+ *   - `--merge` resolving to zero files fell through to a live 12-call run.
+ *   - `--out foo.json` (space instead of `=`) left OUT_FILE null, so results
+ *     were computed and then written nowhere.
  */
 function validateArgs(argv, mergeFiles) {
   const errors = [];
   const mergeIdx = argv.indexOf('--merge');
-  // Everything from --merge onward is file arguments for it - never validated
-  // as a flag or a stray positional here, since MERGE_FILES' own scan already
-  // consumes that entire tail of argv.
+  // Everything from --merge onward is its file list — MERGE_FILES' own scan
+  // already consumes that tail, so don't re-validate it as flags here.
   const toValidate = mergeIdx === -1 ? argv : argv.slice(0, mergeIdx);
 
   for (let i = 0; i < toValidate.length; i++) {
@@ -159,9 +130,8 @@ function validateArgs(argv, mergeFiles) {
         );
       }
     } else {
-      // The most common way to land here is `--out foo.json` or `--reps 3`
-      // (a space where "=" belongs) - the preceding bare flag names exactly
-      // what was probably meant, so say so instead of a generic message.
+      // Usually `--out foo.json` or `--reps 3` — a space where "=" belongs.
+      // The preceding bare flag names the likely intent, so quote it back.
       const prev = toValidate[i - 1];
       const hint =
         prev === '--out' || prev === '--reps'
@@ -190,19 +160,15 @@ const RUBRIC_LIMIT = 2; // searchCorpus's default limit, rag-query.service.ts
 const MAX_READINESS_LEVEL = 9;
 
 /**
- * gemini-3.6-flash's free-tier ceiling for generateContent is
- * GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20/day (confirmed via
- * the 429 body, 2026-07-28) - a hard daily cap, not a per-minute rate limit.
- * No amount of re-pacing works around it; 54 calls in one day is not
- * possible on this tier for this model. Re-run on a day with fresh quota, or
- * split the three arms across multiple days.
+ * A hard daily cap, not a per-minute rate limit:
+ * GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20/day (confirmed from
+ * the 429 body, 2026-07-28). Re-pacing cannot work around it — re-run on a day
+ * with fresh quota, or split the arms across days.
  */
 const GEN_MODEL = 'gemini-3.6-flash'; // the model the +2.28 differentiation baseline was measured on
-// One rep costs 12 of the 20 daily calls by default (18 with
-// --with-fabrication-probe), so the default is what a single day can
-// actually buy either way. Raise it only against a paid key; --reps=3 on the
-// free tier reproduces exactly the 2026-07-28 failure (arm 1 completes,
-// nothing to compare it to).
+// A rep costs 12 of the 20 daily calls (18 with --with-fabrication-probe), so
+// 1 is what a day buys. Raise it only against a paid key — --reps=3 on the free
+// tier reproduces the 2026-07-28 failure: arm 1 completes, nothing to compare.
 const REPS = Number(flagValue('reps') ?? 1);
 const DELAY_MS = 4000; // matches measure-models.js/measure-differentiation.js's pacing
 
@@ -236,10 +202,8 @@ const { levelPlacement, stageAppropriateness, differentiationGap } = require(
 );
 const { isStageInappropriate } = require(path.join(__dirname, 'lib/stage-markers.js'));
 
-// The two seeded startups. Documents are measure-differentiation.js's verbatim
-// text (same early/mid pair already validated for this purpose); levels are
-// the actual per-dimension StartupReadinessLevel rows main.ts seeds for them
-// (seedDemoStartups), not a guess.
+// Documents are measure-differentiation.js's verbatim early/mid pair; levels
+// are the real StartupReadinessLevel rows seedDemoStartups writes, not a guess.
 const STARTUPS = {
   'AgroLink PH': {
     doc: `Title: AgroLink PH: Cooperative Market Access Platform
@@ -348,13 +312,10 @@ function allWantedKeysForStartup(startup) {
 }
 
 /**
- * "Quota-free" in the brief means "does not touch the rate-limited generation
- * endpoint" - it still calls embedContent, which turned out to have its own
- * free-tier ceiling (observed 2026-07-28: embed_content_free_tier_requests
- * exhausted independently of any generateContent usage). Embeddings are
- * deterministic (calibrate-similarity.js's point), so a failure here is
- * reported plainly rather than retried in a loop - re-run once the embed
- * quota resets and the numbers reproduce exactly.
+ * "Quota-free" means it avoids the generation endpoint, not that it is free:
+ * embedContent has its own free-tier ceiling (observed 2026-07-28, exhausted
+ * independently of generateContent). Embeddings are deterministic, so a failure
+ * is reported plainly rather than retried — re-run and the numbers reproduce.
  */
 async function runRetrievalOnly(ai) {
   console.log('=== Step A: rubric-retrieval mechanism comparison (quota-free of the generation endpoint) ===\n');
@@ -370,18 +331,14 @@ async function runRetrievalOnly(ai) {
       RUBRICS.map((r) => `${r.title}\n\n${r.content}`),
     );
 
-    // Per-dimension query used when RagQueryService.retrieveRubrics is called
-    // with exactly one missing dimension (dimensions.map(d=>d.readinessType)
-    // .join(' ') degenerates to the bare readinessType string in that case).
-    // NOTE: this is the CODE's dimension-name substitute, not SDD §3.2's
-    // mechanism - see the profile-embedding query below for that.
+    // What retrieveRubrics sends when exactly one dimension is missing — the
+    // join degenerates to the bare readinessType. This is the CODE's
+    // substitute, not SDD §3.2's mechanism; see the profile query below.
     dimVecs = await embedAll(ai, DIMENSIONS);
 
-    // SDD §3.2, as written: "queries the vector database using the startup's
-    // profile data as the search embedding." rag-query.service.ts:126 does not
-    // do this for the rubric channel - it embeds the bare readinessType name
-    // instead - so this is the one query in this script that tests the SDD's
-    // actual specified mechanism rather than the code's substitute for it.
+    // SDD §3.2 as written: "the startup's profile data as the search
+    // embedding". The rubric channel embeds the bare readinessType instead, so
+    // this is the only query here testing the SDD's actual mechanism.
     profileVecs = await embedAll(
       ai,
       Object.values(STARTUPS).map((s) => s.doc),
@@ -411,9 +368,8 @@ async function runRetrievalOnly(ai) {
       const detRows = RUBRICS.filter((r) => wanted.has(r.key));
       const detClass = detRows.length === 0 ? 'empty' : detRows.every((r) => r.readinessType === dim) ? 'correct' : 'wrong';
 
-      // semantic: nearest neighbours to the bare dimension name, floor 0.78,
-      // top-2 (searchCorpus's default limit). Classified by the top hit, same
-      // convention as measure-retrieval.js's "top hit correct".
+      // semantic: neighbours of the bare dimension name, floor 0.78, top-2.
+      // Classified by top hit, as measure-retrieval.js does.
       const scored = RUBRICS.map((r, i) => ({ r, score: cos(dimVecs[d], corpusVecs[i]) }))
         .sort((a, b) => b.score - a.score)
         .slice(0, RUBRIC_LIMIT)
@@ -464,12 +420,9 @@ async function runRetrievalOnly(ai) {
           `Still not a test of SDD §3.2 itself - see the profile-embedding query below for that.`,
   );
 
-  // --- SDD §3.2 as actually written: "the startup's profile data as the
-  // search embedding." One query per startup (not per dimension - a whole
-  // profile isn't aimed at one dimension), checked against the union of all
-  // 12 (dimension, current-or-next-level) keys for that startup: does the
-  // profile, embedded whole, surface ANY rubric row that's actually relevant
-  // to where this startup currently sits, across all six dimensions?
+  // One query per startup, not per dimension — a whole profile isn't aimed at
+  // one. Checked against the union of that startup's 12 (dimension, level) keys:
+  // does the profile surface ANY rubric row relevant to where it sits?
   const profileRows = [];
   const profileTally = { queries: 0, correct: 0, wrong: 0, empty: 0 };
   const startupNames = Object.keys(STARTUPS);
@@ -525,17 +478,13 @@ function renderRubricBlock(rows) {
 }
 
 /**
- * Retrieval is deterministic (both modes are pure functions of fixed
- * embeddings/keys), so it is computed once per (arm, startup) and reused
- * across all reps rather than re-run 3x for no informational gain - the same
- * property calibrate-similarity.js's caveats note about re-running retrieval.
+ * Retrieval is deterministic, so it is computed once per (arm, startup) and
+ * reused across reps rather than re-run for no informational gain.
  *
- * `deterministic` needs no embedding call at all (pure key lookup), so it -
- * and the baseline arm, which needs no rubric at all - must never be blocked
- * by the one embed call `semantic` needs. That call is requested lazily, at
- * most once (memoized on `state`), and degrades to "nothing retrieved" on
- * failure exactly as EmbeddingService.embed does in production: an embedding
- * outage lowers confidence, it does not fail the run.
+ * `deterministic` is a pure key lookup and baseline needs no rubric, so neither
+ * may be blocked by the single embed call `semantic` needs. That call is lazy,
+ * memoized on `state`, and degrades to "nothing retrieved" on failure — as
+ * EmbeddingService.embed does in production.
  */
 async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
   if (!arm.ragCorpus) return [];
@@ -550,11 +499,9 @@ async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
     return RUBRICS.filter((r) => wanted.has(r.key));
   }
 
-  // semantic: dimensions.map(d => d.readinessType).join(' ') when ALL six
-  // types are missing (a fresh startup's first RNA generation) - this string
-  // does not depend on the startup at all, so both startups receive the
-  // identical retrieved set. That is a property of the production code being
-  // measured, not an artifact of this harness; it's called out in the README.
+  // With all six types missing, the joined query does not depend on the startup
+  // at all, so both startups get an identical retrieved set. That is production
+  // code's property, not a harness artifact — see the README.
   if (!corpusVecs) return []; // Step A's embed already failed; nothing to compare against.
   if (state.combinedDimVec === undefined) {
     try {
@@ -574,13 +521,11 @@ async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
 }
 
 /**
- * Verbatim in shape from ai.service.ts:937-943. Production emits this for EVERY
- * arm - only rubricBlock varies with ragCorpus - so omitting it here made the
- * harness measure "told its levels" against "not told its levels", which is a
- * contrast production never presents and not a retrieval effect.
+ * Production emits this for EVERY arm — only rubricBlock varies with ragCorpus.
+ * Omitting it made the harness measure "told its levels" vs "not told its
+ * levels", a contrast production never presents and not a retrieval effect.
  *
- * The abbreviation order is production's and must not be re-sorted: a reviewer
- * comparing the two prompts should see the same block.
+ * Abbreviation order is production's; do not re-sort it.
  */
 function readinessLevelBlock(levels) {
   return `
@@ -594,16 +539,14 @@ IRL ${levels.Investment}`;
 }
 
 /**
- * The nine-rung ladder for every dimension, for the LEVELS probe only.
+ * The nine-rung ladder for every dimension, LEVELS probe only.
  *
- * Deterministic retrieval keys on (readinessType, level) using the startup's
- * actual level. Handing that to a probe that asks the model to assess the level
- * shows it the answer, so any differentiation advantage for that arm is leakage
- * rather than grounding - and no number of reps fixes it.
+ * Deterministic retrieval keys on the startup's actual level, so handing it to a
+ * probe that asks the model to assess that level shows it the answer — any
+ * advantage is leakage, not grounding, and no number of reps fixes it.
  *
- * The RNA probe deliberately keeps the (L, L+1) lookup, because that is what
- * production ships. These are different instruments and the asymmetry is
- * intentional: do not "tidy" them into agreement.
+ * The RNA probe keeps the (L, L+1) lookup because that is what production
+ * ships. The asymmetry is intentional: do not tidy them into agreement.
  */
 function fullLadderRubrics() {
   return RUBRICS.slice().sort(
@@ -656,32 +599,28 @@ async function runGenerationArms(ai, corpusVecs) {
 
   const embedState = {}; // memoizes the one embed call `semantic` needs, see retrieveRubricsForArm
   const results = {};
-  // Every arm gets an entry up front, even one a 429 stops us from ever
-  // starting - the report functions below iterate all of ARMS unconditionally
-  // and must see an empty (n=0), not undefined, cell for anything not reached.
+  // Every arm gets an entry up front, even one a 429 prevents starting — the
+  // report functions iterate all of ARMS and need an empty cell, not undefined.
   for (const arm of ARMS) {
     results[arm.name] = { startups: {}, quotaHit: false };
   }
   let quotaHit = false;
 
-  // Retrieval is deterministic and independent of the rep, so it is resolved
-  // once for every (arm, startup) pair BEFORE the rep loop opens. Under the
-  // old arm-major ordering this fell out naturally; with reps outermost it has
-  // to be hoisted deliberately, or `semantic` would re-embed once per rep.
-  // Two rubric blocks per (arm, startup), not one. The RNA probe mirrors
-  // production's (L, L+1) lookup; the levels probe gets the full ladder so it
-  // is not handed the quantity it is being asked to predict. See
-  // fullLadderRubrics for why the asymmetry is deliberate.
+  // Hoisted above the rep loop deliberately — with reps outermost, `semantic`
+  // would otherwise re-embed once per rep.
+  //
+  // Two rubric blocks per (arm, startup): the RNA probe mirrors production's
+  // (L, L+1) lookup, the levels probe gets the full ladder so it isn't handed
+  // the quantity it must predict. See fullLadderRubrics.
   const rnaBlocks = new Map();    // `${arm}|${startup}` -> block for the RNA probe
   const levelBlocks = new Map();  // `${arm}|${startup}` -> block for the levels probe
   for (const arm of ARMS) {
     for (const [startupName, startup] of Object.entries(STARTUPS)) {
       const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
       rnaBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
-      // Only a corpus arm gets a rubric at all. `semantic` retrieves nothing
-      // against this corpus (Step A: 0/12), which is what makes it a
-      // null-condition replicate of baseline - preserved deliberately as a
-      // noise control, not a third condition.
+      // Only corpus arms get a rubric. `semantic` retrieves nothing here
+      // (Step A: 0/12), making it a null-condition replicate of baseline —
+      // kept deliberately as a noise control, not a third condition.
       const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
       levelBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(ladder));
       results[arm.name].startups[startupName] = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
@@ -689,8 +628,6 @@ async function runGenerationArms(ai, corpusVecs) {
   }
 
   // Reps outermost: a 429 partway through costs precision, not the comparison.
-  // See the header - every metric in this file is a between-arm contrast, so a
-  // run that completes one arm and abandons the others measures nothing.
   repLoop: for (let rep = 0; rep < REPS; rep++) {
     for (const arm of ARMS) {
       for (const [startupName, startup] of Object.entries(STARTUPS)) {
@@ -719,8 +656,8 @@ async function runGenerationArms(ai, corpusVecs) {
             results[arm.name].quotaHit = true;
             break repLoop;
           } else {
-            // Anything else (parse failure, network blip, schema error) must
-            // not vanish silently: this harness is meant to run unattended
+            // Parse failures, network blips and schema errors must not vanish
+            // silently: this harness runs unattended
             // across a 20-request daily cap, and the only symptom of a
             // swallowed non-429 error is a lower n= with no explanation.
             console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna]`, e.message);

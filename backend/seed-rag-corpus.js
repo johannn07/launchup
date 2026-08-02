@@ -7,9 +7,8 @@
  * writes and spends no embedding quota — check the "unchanged" count.
  *
  * Uses NestFactory.createApplicationContext rather than a bare MikroORM
- * connection because the seeding path depends on EmbeddingIndexService, which
- * depends on EmbeddingService and ConfigService. Building the real DI graph is
- * also what makes this exercise the same code the running server uses.
+ * connection: the seeding path needs EmbeddingIndexService, and building the
+ * real DI graph is what makes this exercise the server's own code.
  */
 process.chdir(__dirname);
 
@@ -27,12 +26,10 @@ const { RagCorpusSeederService } = req('ai/rag-corpus-seeder.service');
     logger: ['error', 'warn', 'log'],
   });
   try {
-    // createApplicationContext never runs the HTTP middleware that normally
-    // opens a MikroORM RequestContext per request, so any injected
-    // EntityManager throughout the DI graph — the seeder's own, and the one
-    // EmbeddingIndexService holds internally — would reject direct use.
-    // Establishing the context by hand here covers every service reached
-    // from this call, not just the seeder's own EntityManager.
+    // createApplicationContext skips the HTTP middleware that normally opens a
+    // RequestContext, so every injected EntityManager in the graph would reject
+    // direct use. Establishing it here covers all of them, not just the
+    // seeder's own.
     const orm = app.get(MikroORM);
     const result = await RequestContext.create(orm.em, () =>
       app.get(RagCorpusSeederService).seed(),
@@ -40,12 +37,9 @@ const { RagCorpusSeederService } = req('ai/rag-corpus-seeder.service');
     console.log(result);
     const needingVectors = result.created + result.updated + result.reindexed;
     if (result.embedded < needingVectors) {
-      // Checking for a *partial* shortfall, not just embedded === 0: if 60 of
-      // 64 rows embed and 4 come back null (embedBatch converts a transient
-      // API error, a rate limit, or a dimension mismatch to null rather than
-      // throwing), embedded > 0 but this run still leaves rows unvectored —
-      // the exact state this task exists to repair, just with a clean exit
-      // code that would otherwise be indistinguishable from full success.
+      // Partial shortfall, not just embedded === 0: embedBatch turns a
+      // transient error or dimension mismatch into null, so 60 of 64 rows can
+      // embed and still leave rows unvectored behind a clean exit code.
       console.error(
         `WARNING: ${needingVectors - result.embedded} of ${needingVectors} rows that needed a ` +
           'vector did not get one (missing GEMINI_API_KEY, embedding failure, or a DB error — ' +
