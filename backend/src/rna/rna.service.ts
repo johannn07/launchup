@@ -16,6 +16,7 @@ import { OutputValidatorService } from './output-validator.service';
 import { RecommendationStorageService } from './recommendation-storage.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { RNA_MAX_LENGTH } from './rna.constants';
 
 @Injectable()
 export class RnaService {
@@ -166,7 +167,7 @@ export class RnaService {
       }
       prompt = `${basePrompt}\n\nTASK: Generate a Readiness and Needs Assessment (RNA) for: ${readinessLevelsWithoutRNA
         .map((srl) => srl.readinessLevel.readinessType)
-        .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max 500 chars)}]`;
+        .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max ${RNA_MAX_LENGTH} chars)}]`;
     }
 
     const generatedRNAs = await this.aiService.generateRNAsFromPrompt(ctx, prompt);
@@ -195,13 +196,20 @@ export class RnaService {
         await this.em.persist(newRNA);
         createdRNAs.push(newRNA);
 
+        const verdict = this.outputValidatorService.validate({
+          content: newRNA.rna,
+          retrievalLowConfidence: ragContext.lowConfidence,
+          maxLength: RNA_MAX_LENGTH,
+        });
+
         await this.aiService.recordAiRecommendation({
           startupId: startup.id,
           dimensionKey: matchingReadinessLevel.readinessLevel.readinessType,
           recommendationKind: 'RNA',
           content: newRNA.rna,
-          validationStatus: 'validated',
-          confidenceStatus: 'high-confidence',
+          validationStatus: verdict.validationStatus,
+          confidenceStatus: verdict.confidenceStatus,
+          notes: verdict.notes,
           generationRun: ctx.run,
         });
       }

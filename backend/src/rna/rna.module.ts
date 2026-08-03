@@ -18,8 +18,9 @@ import { RecommendationStorageService } from './recommendation-storage.service';
     RecommendationStorageService,
   ],
   exports: [
-    RagQueryService,             
-    GroundedPromptBuilderService,   
+    RagQueryService,
+    GroundedPromptBuilderService,
+    OutputValidatorService,
   ],
 })
 export class RnaModule {}

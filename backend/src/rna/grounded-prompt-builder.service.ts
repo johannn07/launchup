@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { RAGContext, RetrievedDoc } from './rag-query.service';
+import { RNA_MAX_LENGTH } from './rna.constants';
 
 export interface StartupProfile {
   // Define fields as needed
@@ -67,7 +68,7 @@ export class GroundedPromptBuilderService {
       prompt += `Requirement: The response must be a valid JSON array.\n`;
       prompt += `JSON format: [{"readiness_level_type": (string), "rna": (string)}]\n`;
       prompt += `- readiness_level_type must be exactly one of: ${missingReadinessTypes.join(', ')}\n`;
-      prompt += `- rna must be a string of max 500 characters\n`;
+      prompt += `- rna must be a string of max ${RNA_MAX_LENGTH} characters\n`;
       prompt += `- Be specific, grounded in the provided data.\n`;
       prompt += `- If you cannot generate a meaningful RNA for a type, use "rna": "Insufficient data for assessment" instead of null.\n`;
       if (context.lowConfidence) {

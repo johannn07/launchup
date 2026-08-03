@@ -3,6 +3,7 @@ import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
+import { OutputValidatorService } from './output-validator.service';
 
 // `generateRNA` always queries queryVectorDatabase but only calls
 // buildGroundedPrompt when `!ragContext.lowConfidence`. These tests take the
@@ -106,7 +107,7 @@ describe('RnaService.generateRNA provenance', () => {
       aiService as any,
       ragQueryService as any,
       {} as any, // GroundedPromptBuilderService, unused on this fallback path
-      {} as any, // OutputValidatorService, unused by generateRNA
+      new OutputValidatorService(),
       {} as any, // RecommendationStorageService, unused by generateRNA
       buildAiRunService().aiRunService,
     );
@@ -294,5 +295,105 @@ describe('RnaService.refineRna provenance', () => {
       { startup: startup.id },
     );
     expect(result.refinedRna).toBe('New, punchier RNA description');
+  });
+});
+
+describe('RnaService.generateRNA output validation (Objective 1c)', () => {
+  // Returns the aiService mock so each test can assert on it. `rna` is the
+  // text the model is pretended to have produced.
+  const runGenerate = async (rna: string) => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: { title: 't', description: 'd' },
+    };
+    const readinessLevel = { id: 100, readinessType: 'Technology', level: 3 };
+    const startupReadinessLevel = { id: 200, readinessLevel };
+    const persisted: any[] = [];
+
+    const em = {
+      findOne: jest.fn((entity: any) =>
+        Promise.resolve(entity === Startup ? startup : null),
+      ),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([]);
+        if (entity === StartupReadinessLevel)
+          return Promise.resolve([startupReadinessLevel]);
+        return Promise.resolve([]);
+      }),
+      persist: jest.fn((e) => {
+        persisted.push(e);
+        return e;
+      }),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const aiService = {
+      generateRNAsFromPrompt: jest
+        .fn()
+        .mockResolvedValue([{ readiness_level_type: 'Technology', rna }]),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+    };
+
+    const ragQueryService = {
+      // lowConfidence: true is what makes this the low-confidence case, and it
+      // also routes generateRNA down its fallback prompt branch.
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    // NOTE: after Task 4 removes RecommendationStorageService this argument
+    // list is one shorter. Match whatever the constructor currently takes.
+    const service = new RnaService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any, // GroundedPromptBuilderService, unused on the fallback path
+      new OutputValidatorService(),
+      {} as any, // RecommendationStorageService, deleted in Task 4
+      buildAiRunService().aiRunService,
+    );
+
+    await service.generateRNA(1, ctx);
+    return aiService;
+  };
+
+  it('records low-confidence when retrieval was low-confidence, not the literal', async () => {
+    const aiService = await runGenerate('Validate demand with 10 interviews.');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confidenceStatus: 'low-confidence',
+        validationStatus: 'validated',
+        notes: null,
+      }),
+    );
+  });
+
+  it('flags an RNA longer than the 500 characters the prompt declares', async () => {
+    const aiService = await runGenerate('x'.repeat(600));
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        validationStatus: 'flagged',
+        notes: expect.stringContaining('500'),
+      }),
+    );
   });
 });
