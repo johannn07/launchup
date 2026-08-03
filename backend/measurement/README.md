@@ -332,11 +332,39 @@ Metric 3 is barely affected by the same imbalance (deviation's AgroLink mean
 moves 2.25 → 2.17, shifting the gap by 0.09), but metric 3 is unresolvable
 anyway.
 
-**Next:** one full rep to fill the missing `deviation / MediSync / levels` cell.
-The harness has no arm/startup filter, so completing one cell costs a whole
-12-call rep — worth knowing before assuming a failed cell is cheap to retry.
-A `--only=arm/startup` filter would have made this a 1-call fix and is the
-single highest-value addition to the harness right now.
+**Next:** one run to fill the missing `deviation / MediSync / levels` cell —
+now **2 calls rather than a 12-call rep**, see below.
+
+### Cell filtering and 503 retry — added 2026-08-03 in response to the above
+
+Two harness gaps the partial rep exposed, both now closed (26 new tests, all
+four guards mutation-verified):
+
+**`--only-arm=` / `--only-startup=`** narrow which cells run. Case-insensitive
+prefix match, comma-separated for several, so the space in `MediSync Cebu`
+never needs quoting:
+
+```bash
+node measurement/measure-grounding.js --only-arm=deviation \
+  --only-startup=MediSync --out=measurement/results/<date>-refill.json
+```
+
+A filter matching nothing **hard-errors before any network call** and lists the
+real names, rather than falling through to the full 12-call run — the same
+reasoning as `validateArgs`' refusal to fall through on an empty `--merge`.
+Unselected arms still get an empty results entry, so reports and `--merge` stay
+well-formed.
+
+**A filtered file is a partial rep.** Its own tables show n=0 for everything
+unselected; `--merge` it with a full run rather than reading it alone.
+
+**Transient 503s are now retried** — 3 attempts at 15s then 30s. A 503 is the
+model being busy; a **429 is never retried**, because the daily cap does not
+reopen for ~24h and a retry loop would only burn wall-clock to earn another
+429. That separation is the whole point, and it is the one guard that needed a
+dedicated test: a plain 429 body contains neither `503` nor `UNAVAILABLE`, so
+removing the quota check passed every other test. The test that pins it uses a
+body naming both.
 
 ### Result, 2026-08-03 — second rep, n=2 pooled
 

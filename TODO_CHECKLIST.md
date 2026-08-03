@@ -136,7 +136,14 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   - **Metric 1 does separate the arms.** Per-rep MAE: baseline 0.67/0.75/0.92, sdd 0.42/0.33/0.50, deviation 1.50/1.33/(incomplete) — non-overlapping ranges. This is the metric to report.
   - **AgroLink's reproducibility now holds 3/3** (`+0 +2 +3`, `+0 +2 +2`, `+0 +1 +2` on Market/Acceptance, other four exact). The MediSync −2 collapse still rests on 2 observations.
   - **Do not quote the n=3 pooled MAE (1.23).** It fell from 1.42 only because rep 3 added 6 AgroLink calls (low error) and 0 MediSync calls (all the error), leaving deviation at 18/12 against baseline's 18/18. The **balanced n=2 figure, 1.42, is the like-for-like number.**
-  - **Harness gap worth closing:** there is no `--only=arm/startup` filter, so refilling one failed cell costs a full 12-call rep. That would have made this a 1-call fix.
+  - **Both harness gaps this exposed are now closed (2026-08-03, 26 new tests, all four guards mutation-verified).** `--only-arm=` / `--only-startup=` narrow which cells run — refilling the missing cell is now **2 calls, not a 12-call rep** — and transient **503s are retried** (3 attempts, 15s/30s) while a **429 is still never retried**, since the daily cap does not reopen for ~24h. A filter matching nothing hard-errors before any network call rather than falling through to the full run.
+
+  **Work — refill the missing cell, then merge:**
+  ```bash
+  node measurement/measure-grounding.js --only-arm=deviation --only-startup=MediSync --out=measurement/results/<date>-refill.json
+  node measurement/measure-grounding.js --merge measurement/results/*.json
+  ```
+  A filtered file is a partial rep: its own tables read n=0 for everything unselected, so merge it rather than reading it alone.
 
   **Work:** one more rep, then merge — a third rep is what metric 3 needs to clear its own rep-to-rep swing:
   ```bash

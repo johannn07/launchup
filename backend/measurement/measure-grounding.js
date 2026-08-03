@@ -30,6 +30,14 @@
  *   node measurement/measure-grounding.js --merge day1.json day2.json day3.json
  *   node measurement/measure-grounding.js --merge results/*.json   (glob - see below)
  *
+ *   # Refill one cell a transient 503 killed, for 2 calls instead of a 12-call
+ *   # rep. Names are case-insensitive prefixes, comma-separated for several.
+ *   node measurement/measure-grounding.js --only-arm=deviation \
+ *     --only-startup=MediSync --out=results/refill.json
+ *
+ * A filtered file is a partial rep: --merge it with a full run rather than
+ * reading its tables alone, since unselected cells report n=0.
+ *
  * ## Why one rep per day, accumulated
  *
  * The free tier allows 20 generateContent calls/day and a rep costs 12 (18 with
@@ -99,7 +107,7 @@ const MERGE_FILES = MERGE_ARGS.flatMap((pattern) =>
 const KNOWN_EXACT_FLAGS = new Set([
   '--retrieval-only', '--dry-run', '--with-fabrication-probe', '--fingerprint', '--merge',
 ]);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup='];
 
 /**
  * Pure validation over raw CLI args plus the glob-resolved --merge list.
@@ -126,17 +134,17 @@ function validateArgs(argv, mergeFiles) {
       if (!known) {
         errors.push(
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
-            '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, --merge <files...>.',
+            '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
+            '--only-arm=<names>, --only-startup=<names>, --merge <files...>.',
         );
       }
     } else {
       // Usually `--out foo.json` or `--reps 3` — a space where "=" belongs.
       // The preceding bare flag names the likely intent, so quote it back.
       const prev = toValidate[i - 1];
-      const hint =
-        prev === '--out' || prev === '--reps'
-          ? ` Did you mean "${prev}=${arg}"? That flag takes "=", not a space.`
-          : '';
+      const hint = ['--out', '--reps', '--only-arm', '--only-startup'].includes(prev)
+        ? ` Did you mean "${prev}=${arg}"? That flag takes "=", not a space.`
+        : '';
       errors.push(
         `Unrecognized argument "${arg}" - positional arguments are only accepted after --merge.${hint}`,
       );
@@ -285,6 +293,94 @@ async function call(ai, prompt) {
 
 function is429(e) {
   return String(e.message || e).includes('429');
+}
+
+/**
+ * A 503 is the model being busy; a 429 is the daily cap, which does not reopen
+ * for ~24h. Retrying the first can save a cell, retrying the second only earns
+ * another 429 — so they must never share a code path. 2026-08-03 lost
+ * deviation-deterministic / MediSync / levels to an unretried 503.
+ */
+function isRetryableServerError(e) {
+  const s = String(e.message || e);
+  if (is429(e)) return false;
+  return s.includes('503') || s.includes('UNAVAILABLE');
+}
+
+/**
+ * `attempts` is a total call budget, not extra tries on top of the first.
+ * Delay grows with the attempt so a busy model gets progressively longer to
+ * recover; `sleep` is injected so tests don't wait in real time.
+ */
+async function withRetry(fn, { attempts = 3, delayMs = 15000, sleep: nap = sleep, onRetry } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= attempts || !isRetryableServerError(e)) throw e;
+      if (onRetry) onRetry(attempt, e);
+      await nap(delayMs * attempt);
+    }
+  }
+}
+
+/**
+ * Retry policy for transient 503s. Three attempts at 15s/30s costs at most ~45s
+ * of wall-clock to save a cell that would otherwise cost a whole 12-call rep to
+ * refill. Deliberately modest: a 503 that outlives this is the model being down
+ * rather than busy, and sitting in a retry loop would only delay the report.
+ */
+const RETRY = { attempts: 3, delayMs: 15000 };
+
+/** Retries transient 503s around a generation call; 429s propagate untouched. */
+const attempt = (fn, ai, prompt, retry, label) =>
+  withRetry(() => fn(ai, prompt), {
+    ...retry,
+    onRetry: (n, e) => console.log(`  [503 retry ${n}: ${label}] ${String(e.message || e).slice(0, 120)}`),
+  });
+
+/**
+ * Resolves --only-arm / --only-startup into the cells to run. Case-insensitive
+ * prefix match over comma-separated names, so `--only-arm=deviation` works
+ * without quoting and `--only-startup=MediSync` avoids the space in the real
+ * name.
+ *
+ * An entry that matches nothing is an error, never a silent drop: the point of
+ * this filter is to spend 1 call instead of 12, so quietly running the full set
+ * (or quietly running fewer cells than asked) defeats it in the expensive
+ * direction. Same reasoning as validateArgs' refusal to fall through.
+ */
+function selectCells(armFilter, startupFilter, arms, startupNames) {
+  const errors = [];
+
+  const pick = (filter, candidates, nameOf, label) => {
+    if (filter == null) return candidates;
+    const entries = String(filter)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const unmatched = entries.filter(
+      (e) => !candidates.some((c) => nameOf(c).toLowerCase().startsWith(e.toLowerCase())),
+    );
+    if (unmatched.length) {
+      errors.push(
+        `--only-${label}=${filter} matched no ${label}: ${unmatched.map((u) => `"${u}"`).join(', ')}. ` +
+          `Available: ${candidates.map(nameOf).join(', ')}.`,
+      );
+      return [];
+    }
+    // Filter the canonical list rather than mapping over the entries, so the
+    // run order matches an unfiltered run's regardless of how it was typed.
+    return candidates.filter((c) =>
+      entries.some((e) => nameOf(c).toLowerCase().startsWith(e.toLowerCase())),
+    );
+  };
+
+  return {
+    arms: pick(armFilter, arms, (a) => a.name, 'arm'),
+    startups: pick(startupFilter, startupNames, (s) => s, 'startup'),
+    errors,
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -587,20 +683,49 @@ ${keys.map((k) => `"${k}"`).join(', ')}
 Grounding instruction: ${GROUNDING}`;
 }
 
-async function runGenerationArms(ai, corpusVecs) {
-  console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
-  const callsPerCell = WITH_FABRICATION ? 3 : 2;
-  const perRep = ARMS.length * Object.keys(STARTUPS).length * callsPerCell;
-  console.log(
-    `reps=${REPS}, ${perRep} calls per rep (${REPS * perRep} total) ` +
-      `against a 20/day free-tier cap on ${GEN_MODEL}` +
-      (WITH_FABRICATION ? ' [+ fabrication probe]' : '') + '\n',
-  );
+/**
+ * Everything variable is injected with a production default, so the loop can be
+ * exercised without a model call. `arms`/`startupNames` are what --only-arm /
+ * --only-startup narrow; `callFn` and `retry` are what let the wiring tests
+ * prove the filter and the 503 retry are actually used rather than merely
+ * present (measurement/tests/generation-wiring.test.js).
+ */
+async function runGenerationArms(ai, corpusVecs, opts = {}) {
+  const {
+    arms = ARMS,
+    startupNames = Object.keys(STARTUPS),
+    reps = REPS,
+    callFn = call,
+    retry = RETRY,
+    withFabrication = WITH_FABRICATION,
+    report = true,
+    pacingMs = DELAY_MS,
+  } = opts;
+
+  const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
+  const filtered = arms.length !== ARMS.length || startupNames.length !== Object.keys(STARTUPS).length;
+
+  if (report) {
+    console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
+    const callsPerCell = withFabrication ? 3 : 2;
+    const perRep = arms.length * selectedStartups.length * callsPerCell;
+    console.log(
+      `reps=${reps}, ${perRep} calls per rep (${reps * perRep} total) ` +
+        `against a 20/day free-tier cap on ${GEN_MODEL}` +
+        (withFabrication ? ' [+ fabrication probe]' : '') +
+        (filtered
+          ? `\n[filtered] arms: ${arms.map((a) => a.name).join(', ')} | startups: ${startupNames.join(', ')}` +
+            '\n[filtered] unselected cells report n=0 - merge this file with a full run rather than reading it alone.'
+          : '') +
+        '\n',
+    );
+  }
 
   const embedState = {}; // memoizes the one embed call `semantic` needs, see retrieveRubricsForArm
   const results = {};
-  // Every arm gets an entry up front, even one a 429 prevents starting — the
-  // report functions iterate all of ARMS and need an empty cell, not undefined.
+  // Every arm gets an entry up front, even one a 429 prevents starting or a
+  // filter excludes — the report functions iterate all of ARMS and need an
+  // empty cell, not undefined.
   for (const arm of ARMS) {
     results[arm.name] = { startups: {}, quotaHit: false };
   }
@@ -614,8 +739,8 @@ async function runGenerationArms(ai, corpusVecs) {
   // the quantity it must predict. See fullLadderRubrics.
   const rnaBlocks = new Map();    // `${arm}|${startup}` -> block for the RNA probe
   const levelBlocks = new Map();  // `${arm}|${startup}` -> block for the levels probe
-  for (const arm of ARMS) {
-    for (const [startupName, startup] of Object.entries(STARTUPS)) {
+  for (const arm of arms) {
+    for (const [startupName, startup] of selectedStartups) {
       const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
       rnaBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
       // Only corpus arms get a rubric. `semantic` retrieves nothing here
@@ -628,16 +753,16 @@ async function runGenerationArms(ai, corpusVecs) {
   }
 
   // Reps outermost: a 429 partway through costs precision, not the comparison.
-  repLoop: for (let rep = 0; rep < REPS; rep++) {
-    for (const arm of ARMS) {
-      for (const [startupName, startup] of Object.entries(STARTUPS)) {
+  repLoop: for (let rep = 0; rep < reps; rep++) {
+    for (const arm of arms) {
+      for (const [startupName, startup] of selectedStartups) {
         const rnaBlock = rnaBlocks.get(`${arm.name}|${startupName}`);
         const levelBlock = levelBlocks.get(`${arm.name}|${startupName}`);
         const cell = results[arm.name].startups[startupName];
 
         // --- RNA generation (metric 1) ---
         try {
-          const out = await call(ai, rnaPrompt(startup.doc, rnaBlock, startup.levels));
+          const out = await attempt(callFn, ai, rnaPrompt(startup.doc, rnaBlock, startup.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna`);
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
           if (Array.isArray(parsed)) {
@@ -663,11 +788,11 @@ async function runGenerationArms(ai, corpusVecs) {
             console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna]`, e.message);
           }
         }
-        await sleep(DELAY_MS);
+        if (pacingMs) await sleep(pacingMs);
 
         // --- Levels (metric 3) ---
         try {
-          const out = await call(ai, levelsPrompt(startup.doc, levelBlock));
+          const out = await attempt(callFn, ai, levelsPrompt(startup.doc, levelBlock), retry, `${arm.name} / ${startupName} / rep ${rep} / levels`);
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
           if (Array.isArray(parsed)) {
@@ -687,12 +812,12 @@ async function runGenerationArms(ai, corpusVecs) {
             console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / levels]`, e.message);
           }
         }
-        await sleep(DELAY_MS);
+        if (pacingMs) await sleep(pacingMs);
 
         // --- Hallucination probe (metric 2) ---
-        if (WITH_FABRICATION) {
+        if (withFabrication) {
           try {
-            const out = await call(ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent));
+            const out = await attempt(callFn, ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent), retry, `${arm.name} / ${startupName} / rep ${rep} / hallucination`);
             const payload = extractJsonPayload(out.text);
             const parsed = payload ? JSON.parse(payload) : null;
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -721,20 +846,22 @@ async function runGenerationArms(ai, corpusVecs) {
               console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / hallucination]`, e.message);
             }
           }
-          await sleep(DELAY_MS);
+          if (pacingMs) await sleep(pacingMs);
         }
 
-        console.log(
-          `rep ${rep} / ${arm.name} / ${startupName}: rna n=${cell.rnaCalls.length} ` +
-            `levels n=${cell.levelCalls.length} halluc n=${cell.hallucCalls.length} (cumulative)`,
-        );
+        if (report) {
+          console.log(
+            `rep ${rep} / ${arm.name} / ${startupName}: rna n=${cell.rnaCalls.length} ` +
+              `levels n=${cell.levelCalls.length} halluc n=${cell.hallucCalls.length} (cumulative)`,
+          );
+        }
       }
     }
   }
 
-  printReports(results);
+  if (report) printReports(results);
 
-  if (quotaHit) {
+  if (quotaHit && report) {
     console.log('\n[QUOTA HIT] Stopped cleanly; the tables above and below reflect only what completed. Check n= before comparing cells.');
   }
 
@@ -1032,6 +1159,18 @@ if (require.main === module) {
       process.exit(1);
     }
 
+    // Resolved before any network call so a typo'd filter costs nothing.
+    const selection = selectCells(
+      flagValue('only-arm'),
+      flagValue('only-startup'),
+      ARMS,
+      Object.keys(STARTUPS),
+    );
+    if (selection.errors.length) {
+      for (const e of selection.errors) console.error(e);
+      process.exit(1);
+    }
+
     if (process.argv.includes('--fingerprint')) {
       console.log(JSON.stringify(currentFingerprints(), null, 2));
       return;
@@ -1058,8 +1197,9 @@ if (require.main === module) {
 
     if (DRY_RUN) {
       const embedState = {};
-      for (const arm of ARMS) {
-        for (const [startupName, startup] of Object.entries(STARTUPS)) {
+      for (const arm of selection.arms) {
+        for (const startupName of selection.startups) {
+          const startup = STARTUPS[startupName];
           const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
           const rnaBlock = renderRubricBlock(retrieved);
           const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
@@ -1074,7 +1214,10 @@ if (require.main === module) {
       return;
     }
 
-    const results = await runGenerationArms(ai, corpusVecs);
+    const results = await runGenerationArms(ai, corpusVecs, {
+      arms: selection.arms,
+      startupNames: selection.startups,
+    });
     if (OUT_FILE) writeResults(OUT_FILE, results);
   })().catch((e) => {
     console.error('FAILED:', e.message);
@@ -1107,4 +1250,9 @@ module.exports = {
   mergeRuns,
   currentFingerprints,
   validateArgs,
+  selectCells,
+  isRetryableServerError,
+  is429,
+  withRetry,
+  runGenerationArms,
 };

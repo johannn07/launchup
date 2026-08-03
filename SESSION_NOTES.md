@@ -622,4 +622,15 @@ node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-08
 node measurement/measure-grounding.js --merge measurement/results/*.json
 ```
 
-Worth doing first, since it is free and would have saved today: add the `--only=` filter and a bounded 503 retry.
+### Both harness gaps closed, same session
+
+Built TDD (tests written and watched fail before any implementation), then mutation-tested. **91 measurement tests, up from 64.** Jest unchanged at the documented 167 passing / 2 failing.
+
+- **`--only-arm=` / `--only-startup=`** — case-insensitive prefix match, comma-separated, so `MediSync Cebu`'s space never needs quoting. Refilling tomorrow's missing cell is now **2 calls instead of 12**. A filter matching nothing **hard-errors before any network call** and lists the real names; verified live (`exit=1`, Step A never ran). Unselected arms keep an empty results entry so reports and `--merge` stay well-formed.
+- **Bounded 503 retry** — 3 attempts at 15s then 30s. **429 is never retried**, because the daily cap does not reopen for ~24h.
+
+**The mutation pass earned its keep, exactly as it did on the last measurement branch.** Four guards were mutated; three broke tests immediately. The fourth — the `is429` early-return inside `isRetryableServerError` — **passed with the guard removed**, because a real 429 body contains neither `503` nor `UNAVAILABLE`, so nothing I had written could tell the difference. It was a decorative guard. The test that now kills it uses a body naming both codes, which is the only case where the precedence is load-bearing. Written after the mutation revealed the hole, and confirmed to fail without the guard.
+
+Verified end to end without spending generation quota: `--only-arm=deviation --only-startup=MediSync --dry-run` assembles exactly one cell (12 rubric rows for the RNA probe, 54 for the levels probe) and reports no quota spent.
+
+**Caveat recorded in the README:** a filtered file is a partial rep — its own tables read n=0 for everything unselected, so it must be `--merge`d with a full run rather than read alone.
