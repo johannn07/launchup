@@ -6,6 +6,7 @@ import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.enti
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { Rns } from 'src/entities/rns.entity';
 import { OutputValidatorService } from 'src/rna/output-validator.service';
+import { RNS_MAX_LENGTH } from './rns.constants';
 
 // `generateTasks` requires `dto.rnaIds`, builds its prompt inline (falling
 // back to a hand-built template on low-confidence RAG), calls
@@ -610,12 +611,13 @@ describe('RnsService.generateTasks output validation (Objective 1c)', () => {
     );
   });
 
-  it('does not flag a long description, because the RNS prompt declares no limit', async () => {
-    // The load-bearing case: enforcing RNA's 500 here would flag correct
-    // output the model was never told to keep short.
-    const aiService = await runGenerate('x'.repeat(5000));
+  it('flags a description longer than the 500 characters both prompt branches declare', async () => {
+    const aiService = await runGenerate('x'.repeat(RNS_MAX_LENGTH + 100));
     expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
-      expect.objectContaining({ validationStatus: 'validated' }),
+      expect.objectContaining({
+        validationStatus: 'flagged',
+        notes: expect.stringContaining('500'),
+      }),
     );
   });
 });

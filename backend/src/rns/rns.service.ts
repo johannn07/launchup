@@ -21,6 +21,7 @@ import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.ser
 import { OutputValidatorService } from '../rna/output-validator.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
+import { RNS_MAX_LENGTH } from './rns.constants';
 
 @Injectable()
 export class RnsService {
@@ -279,7 +280,7 @@ Requirements:
 - target_level is an integer from 1 to 9
 - the tasks should help increase the level of the ${readinessType} readiness type from its current level
 - target_level must not exceed 9
-- description has a max length of 500 characters
+- description has a max length of ${RNS_MAX_LENGTH} characters
 `;
 
     let prompt: string;
@@ -318,7 +319,7 @@ Requirement note:
 - target_level is from 1-9
 - make sure that the tasks will increase the level(target_level) of the specified readiness level type from the initial readiness level type
 - target_level should not exceed to 9
-- description has a max length of 500
+- description has a max length of ${RNS_MAX_LENGTH}
       `;
     }
 
@@ -384,7 +385,7 @@ Requirement note:
         const verdict = this.outputValidatorService.validate({
           content: task.description,
           retrievalLowConfidence: ragContext.lowConfidence,
-          // No maxLength: the RNS prompt declares no character limit.
+          maxLength: RNS_MAX_LENGTH,
         });
 
         await this.aiService.recordAiRecommendation({
