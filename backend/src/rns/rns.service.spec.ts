@@ -5,6 +5,7 @@ import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { Rns } from 'src/entities/rns.entity';
+import { OutputValidatorService } from 'src/rna/output-validator.service';
 
 // `generateTasks` requires `dto.rnaIds`, builds its prompt inline (falling
 // back to a hand-built template on low-confidence RAG), calls
@@ -111,6 +112,7 @@ describe('RnsService.generateTasks provenance', () => {
       aiService as any,
       ragQueryService as any,
       {} as any, // GroundedPromptBuilderService
+      new OutputValidatorService(),
       buildAiRunService().aiRunService,
     );
     await service.generateTasks(
@@ -198,6 +200,7 @@ describe('RnsService.refineRnsDescription provenance', () => {
       aiService as any,
       {} as any,
       {} as any,
+      {} as any, // OutputValidatorService, unused by refineRnsDescription
       aiRunService,
     );
 
@@ -300,6 +303,7 @@ describe('RnsService dimension-level lookup (Finding 3 — keyed, not positional
       aiService as any,
       ragQueryService as any,
       {} as any,
+      new OutputValidatorService(),
       buildAiRunService().aiRunService,
     );
 
@@ -367,7 +371,14 @@ describe('RnsService dimension-level lookup (Finding 3 — keyed, not positional
     } as any;
 
     const { aiRunService } = buildAiRunService();
-    const service = new RnsService(em as any, aiService as any, {} as any, {} as any, aiRunService);
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      {} as any,
+      {} as any,
+      {} as any, // OutputValidatorService, unused by refineRnsDescription
+      aiRunService,
+    );
 
     await service.refineRnsDescription(20, [], 'Make it punchier', ctx);
 
@@ -469,6 +480,7 @@ describe('RnsService.generateTasks per-dimension rubric scoping (Finding 6)', ()
       aiService as any,
       ragQueryService as any,
       groundedPromptBuilderService as any,
+      new OutputValidatorService(),
       buildAiRunService().aiRunService,
     );
 
@@ -486,5 +498,124 @@ describe('RnsService.generateTasks per-dimension rubric scoping (Finding 6)', ()
     expect(marketCall[0].verifiedFrameworks).toEqual([
       expect.objectContaining({ readinessType: 'Market' }),
     ]);
+  });
+});
+
+describe('RnsService.generateTasks output validation (Objective 1c)', () => {
+  // Returns the aiService mock so each test can assert on it. `description`
+  // is the text the model is pretended to have produced for the task.
+  const runGenerate = async (description: string) => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      user: { id: 7 },
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+
+    const rna = {
+      id: 10,
+      rna: 'Validate demand with 10 customer interviews.',
+      readinessLevel: { readinessType: 'Technology', level: 3 },
+    };
+
+    const targetLevel = { id: 42, readinessType: 'Technology', level: 4 };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        if (entity === ReadinessLevel) return Promise.resolve(targetLevel);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([rna]);
+        if (entity === StartupReadinessLevel) return Promise.resolve([]);
+        if (entity === Rns) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+      create: jest.fn((_e, data) => data),
+      persist: jest.fn(),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+      flush: jest.fn().mockResolvedValue(undefined),
+      getReference: jest.fn((_e, id) => ({ id })),
+    };
+
+    const aiService = {
+      generateTasksFromPrompt: jest
+        .fn()
+        .mockResolvedValue([{ target_level: 3, description }]),
+      reviewBiasScore: jest
+        .fn()
+        .mockResolvedValue({ correctedScore: 3, biasFlagged: false, justification: '' }),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      recordBiasAudit: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const ragQueryService = {
+      // lowConfidence: true routes generateTasks through its inline fallback
+      // prompt builder, and is also what makes this the low-confidence case.
+      queryVectorDatabase: jest.fn().mockResolvedValue({ lowConfidence: true }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any, // GroundedPromptBuilderService, unused on this low-confidence path
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    await service.generateTasks(
+      { startup_id: 1, rnaIds: [10], no_of_tasks_to_create: 1 } as any,
+      ctx,
+    );
+    return aiService;
+  };
+
+  it('records low-confidence when retrieval was low-confidence', async () => {
+    const aiService = await runGenerate('Interview 10 clinic administrators.');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ confidenceStatus: 'low-confidence' }),
+    );
+  });
+
+  it('flags an empty task description, which RNS does not guard upstream', async () => {
+    // Unlike RNA, rns.service.ts assigns task.description with no trim guard,
+    // so this genuinely reaches the validator.
+    const aiService = await runGenerate('   ');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ validationStatus: 'flagged' }),
+    );
+  });
+
+  it('does not flag a long description, because the RNS prompt declares no limit', async () => {
+    // The load-bearing case: enforcing RNA's 500 here would flag correct
+    // output the model was never told to keep short.
+    const aiService = await runGenerate('x'.repeat(5000));
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ validationStatus: 'validated' }),
+    );
   });
 });

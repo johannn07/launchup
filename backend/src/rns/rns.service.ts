@@ -18,6 +18,7 @@ import { AiService } from 'src/ai/ai.service';
 import { RnsChatHistory } from 'src/entities/rns-chat-history.entity';
 import { RagQueryService } from '../rna/rag-query.service';
 import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
+import { OutputValidatorService } from '../rna/output-validator.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
 
@@ -28,6 +29,7 @@ export class RnsService {
     private readonly aiService: AiService,
     private readonly ragQueryService: RagQueryService,                // new
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService, // new
+    private readonly outputValidatorService: OutputValidatorService,
     private readonly aiRunService: AiRunService,
   ) {}
 
@@ -379,13 +381,20 @@ Requirement note:
         this.em.persist(newRns);
         createdRns.push(newRns);
 
+        const verdict = this.outputValidatorService.validate({
+          content: task.description,
+          retrievalLowConfidence: ragContext.lowConfidence,
+          // No maxLength: the RNS prompt declares no character limit.
+        });
+
         await this.aiService.recordAiRecommendation({
           startupId: startup.id,
           dimensionKey: readinessType,
           recommendationKind: 'RNS',
           content: task.description,
-          validationStatus: 'validated',
-          confidenceStatus: 'high-confidence',
+          validationStatus: verdict.validationStatus,
+          confidenceStatus: verdict.confidenceStatus,
+          notes: verdict.notes,
           generationRun: ctx.run,
         });
 
