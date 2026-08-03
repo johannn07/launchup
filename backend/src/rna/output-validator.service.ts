@@ -1,29 +1,42 @@
 import { Injectable } from '@nestjs/common';
-import { RecommendationSet, Recommendation } from './grounded-prompt-builder.service';
-import { StartupProfile } from './grounded-prompt-builder.service';
 
-export interface ValidationResult {
-  recommendationId: string;
-  isValid: boolean;
-  reason: string;
+export type ValidationStatus = 'validated' | 'flagged';
+export type ConfidenceStatus = 'high-confidence' | 'low-confidence';
+
+export interface ValidationVerdict {
+  validationStatus: ValidationStatus;
+  confidenceStatus: ConfidenceStatus;
+  notes: string | null;
+}
+
+export interface ValidateInput {
+  content: string;
+  retrievalLowConfidence: boolean;
+  /** Omit when the prompt declared no limit — see the design doc. */
+  maxLength?: number;
 }
 
 @Injectable()
 export class OutputValidatorService {
-  validateEach(recommendations: RecommendationSet, profile: StartupProfile): ValidationResult[] {
-    // TODO: Implement validation logic
-    return recommendations.rnaItems.concat(recommendations.rnsItems).map(rec => ({
-      recommendationId: rec.id,
-      isValid: true,
-      reason: '',
-    }));
-  }
+  validate({ content, retrievalLowConfidence, maxLength }: ValidateInput): ValidationVerdict {
+    const confidenceStatus: ConfidenceStatus = retrievalLowConfidence
+      ? 'low-confidence'
+      : 'high-confidence';
 
-  flagInconsistencies(results: ValidationResult[]): void {
-    // TODO: Implement flagging logic
-  }
+    const trimmed = (content ?? '').trim();
 
-  markUnverifiable(recommendationId: string): void {
-    // TODO: Implement unverifiable marking
+    if (!trimmed) {
+      return { validationStatus: 'flagged', confidenceStatus, notes: 'Empty recommendation text.' };
+    }
+
+    if (maxLength !== undefined && trimmed.length > maxLength) {
+      return {
+        validationStatus: 'flagged',
+        confidenceStatus,
+        notes: `Exceeds the ${maxLength}-character limit declared in the prompt (${trimmed.length}).`,
+      };
+    }
+
+    return { validationStatus: 'validated', confidenceStatus, notes: null };
   }
 }
