@@ -704,6 +704,6 @@ git commit -m "feat(1c): expose validation and confidence on RNA/RNS payloads"
 
 - [ ] `cd backend && pnpm test` — 167 passing / 2 failing, plus this plan's tests. No third pre-existing failure.
 - [ ] `cd backend && pnpm build` — clean.
-- [ ] `grep -rn "validationStatus: 'validated'" backend/src/` returns **nothing** — no hardcoded literal survives.
+- [ ] `grep -rn "validationStatus: 'validated'" backend/src/ --include=*.ts | grep -v spec` returns **nothing** — no hardcoded literal survives in production code. Spec files legitimately assert that string, so they are excluded.
 - [ ] Update `TODO_CHECKLIST.md` §0 to mark 1c implemented, stating precisely what is and is not checked (confidence + declared-schema only; groundedness and stage-appropriateness excluded as measured-saturated).
 - [ ] Update `SESSION_NOTES.md` with the outcome, including the orphaned `recommendations` table and the un-backfilled legacy rows.
