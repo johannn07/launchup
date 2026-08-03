@@ -445,15 +445,8 @@ describe('RnaService.getRNAbyId verdict join (Task 5)', () => {
     // Same (generationRun.id, dimensionKey) key, but recorded under 'RNS' —
     // a startup has both kinds against the same run. If the join query
     // dropped its `recommendationKind: 'RNA'` filter, this row would leak in
-    // and (being inserted second) win the Map, flipping the asserted status.
-    const rnsRecSameKey = {
-      generationRun: { id: 7 },
-      dimensionKey: 'Technology',
-      recommendationKind: 'RNS',
-      validationStatus: 'validated',
-      confidenceStatus: 'high-confidence',
-      notes: null,
-    };
+    // and (being inserted second, so it wins the Map's overwrite) flip the
+    // asserted status.
     const rnaRec = {
       generationRun: { id: 7 },
       dimensionKey: 'Technology',
@@ -462,12 +455,20 @@ describe('RnaService.getRNAbyId verdict join (Task 5)', () => {
       confidenceStatus: 'high-confidence',
       notes: 'too long',
     };
+    const rnsRecSameKey = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNS',
+      validationStatus: 'validated',
+      confidenceStatus: 'high-confidence',
+      notes: null,
+    };
 
     const em = {
       find: jest.fn((entity: any, filter?: any) => {
         if (entity === StartupRNA) return Promise.resolve([row]);
         if (entity === AiRecommendation) {
-          const all = [rnsRecSameKey, rnaRec];
+          const all = [rnaRec, rnsRecSameKey];
           const filtered = filter?.recommendationKind
             ? all.filter((r) => r.recommendationKind === filter.recommendationKind)
             : all;
