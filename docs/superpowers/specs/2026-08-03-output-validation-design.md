@@ -93,17 +93,29 @@ validate(input: {
 
 **`maxLength` is only checked when the prompt actually declared a limit.** The
 validator must not invent a constraint the model was never given — flagging on
-an undeclared limit would flag correct output. The two paths differ, and the
-asymmetry is real rather than an oversight to normalise away:
+an undeclared limit would flag correct output.
 
-| | declared length limit | empty guard upstream | so the live check is |
+**Correction (2026-08-03, found by the Task 3 reviewer and verified):** an
+earlier version of this section claimed the RNS prompt declares no length limit.
+That was wrong. **Both** RNS prompt branches declare one —
+`rns.service.ts:282` (*"description has a max length of 500 characters"*) and
+`:321` (*"max length of 500"*). The rule above is unaffected; the fact it was
+applied to was false. RNS therefore passes `maxLength` too.
+
+| | declared length limit | empty guard upstream | live checks |
 |---|---|---|---|
-| RNA | `max 500 chars`, unenforced today | yes, `generatedRNA.rna?.trim()` | the length check |
-| RNS | **none** | **none** — `newRns.description = task.description` unchecked | the empty check |
+| RNA | `max 500 chars`, both prompt paths | yes, `generatedRNA.rna?.trim()` | length |
+| RNS | `max length of 500`, both prompt branches | **none** — `newRns.description = task.description` unchecked | length **and** empty |
 
-So `maxLength` is passed for RNA and omitted for RNS. Adding a declared limit to
-the RNS prompt would make the length check meaningful there too; that is a
-prompt change, out of scope here, and noted below.
+The empty check still matters more on the RNS path, because RNS has no upstream
+`trim()` guard where RNA does.
+
+**Two constants, not one.** `RNA_MAX_LENGTH` (`rna.constants.ts`) and
+`RNS_MAX_LENGTH` (`rns.constants.ts`), each interpolated into its own prompt
+declarations and passed to its own `validate()` call. Both are 500 today, and
+the duplication is deliberate: they are separate contracts declared to separate
+prompts, so a later change to one must not silently move the other. Sharing a
+single constant would couple two prompts that have no reason to move together.
 
 Confidence and validation are **independent**: a low-confidence recommendation
 can still be well-formed, and a flagged one can come from high-confidence
@@ -153,9 +165,10 @@ and `null` is distinguishable from `'validated'`.
   but returns only the parsed value; the retry is recorded via
   `metrics.recordFailure`, not returned. Surfacing it would change that
   function's return type across every caller — a separate change.
-- Declaring a length limit in the RNS prompt. That is a prompt change, and
-  changing a production prompt mid-measurement would invalidate the arm
-  comparison currently in flight on `measure/grounding-rep2`.
+- Changing what any prompt *declares*. Interpolating a constant that renders to
+  the same text is safe; altering the declared limit itself would change a
+  production prompt and invalidate the arm comparison currently in flight on
+  `measure/grounding-rep2`.
 - Backfilling existing `ai_recommendations` rows. They keep their hardcoded
   `'validated'`; only new rows carry a real verdict. Noted so nobody reads the
   old rows as validated output.
