@@ -108,7 +108,6 @@ describe('RnaService.generateRNA provenance', () => {
       ragQueryService as any,
       {} as any, // GroundedPromptBuilderService, unused on this fallback path
       new OutputValidatorService(),
-      {} as any, // RecommendationStorageService, unused by generateRNA
       buildAiRunService().aiRunService,
     );
 
@@ -203,7 +202,6 @@ describe('RnaService.generateRNA rubric-mode fallback (Finding 1)', () => {
       ragQueryService as any,
       {} as any,
       {} as any,
-      {} as any,
       buildAiRunService().aiRunService,
     );
 
@@ -277,7 +275,6 @@ describe('RnaService.refineRna provenance', () => {
     const service = new RnaService(
       em as any,
       aiService as any,
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -360,15 +357,12 @@ describe('RnaService.generateRNA output validation (Objective 1c)', () => {
       }),
     } as any;
 
-    // NOTE: after Task 4 removes RecommendationStorageService this argument
-    // list is one shorter. Match whatever the constructor currently takes.
     const service = new RnaService(
       em as any,
       aiService as any,
       ragQueryService as any,
       {} as any, // GroundedPromptBuilderService, unused on the fallback path
       new OutputValidatorService(),
-      {} as any, // RecommendationStorageService, deleted in Task 4
       buildAiRunService().aiRunService,
     );
 

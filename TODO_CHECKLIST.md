@@ -420,7 +420,7 @@ These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hi
 
 - [ ] 🧹 **DEBT · S · Consolidate duplicate enums and tables**
   - `RnsStatus` (integer-backed, `backend/src/entities/enums/rns.enum.ts`) and `Status` (string-backed, `enums/status.enum.ts`) define the same seven states. `Status` also carries a Cebuano comment (`// basin pwede sa RNS…`) that should go before submission.
-  - `recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:176`) overlap heavily.
+  - ~~`recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:176`) overlap heavily.~~ Resolved: `recommendation.entity.ts` and `recommendation-storage.service.ts` deleted (both were dead — stub methods, never called, no writer). The `recommendations` **table** itself is now orphaned — `updateSchema()` doesn't drop tables — and still needs a manual `DROP TABLE recommendations;` against Neon.
   **Fix:** pick one of each and migrate.
 
 - [ ] 🧹 **DEBT · S · Remove committed scratch files**

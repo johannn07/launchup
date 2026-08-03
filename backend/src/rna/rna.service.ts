@@ -13,7 +13,6 @@ import { AiService } from 'src/ai/ai.service';
 import { RagQueryService } from './rag-query.service';
 import { GroundedPromptBuilderService } from './grounded-prompt-builder.service';
 import { OutputValidatorService } from './output-validator.service';
-import { RecommendationStorageService } from './recommendation-storage.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { RNA_MAX_LENGTH } from './rna.constants';
@@ -26,7 +25,6 @@ export class RnaService {
     private readonly ragQueryService: RagQueryService,
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService,
     private readonly outputValidatorService: OutputValidatorService,
-    private readonly recommendationStorageService: RecommendationStorageService,
     private readonly aiRunService: AiRunService,
   ) {}
 
