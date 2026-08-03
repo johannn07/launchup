@@ -22,6 +22,7 @@ import { OutputValidatorService } from '../rna/output-validator.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
 import { RNS_MAX_LENGTH } from './rns.constants';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 
 @Injectable()
 export class RnsService {
@@ -38,25 +39,54 @@ export class RnsService {
     const rns = await this.em.find(
       Rns,
       { startup: { id: startupId } },
-      { populate: ['assignee', 'targetLevel'] },
+      { populate: ['assignee', 'targetLevel', 'generationRun'] },
     );
 
-    return rns.map((r: Rns) => ({
-      id: r.id,
-      priorityNumber: r.priorityNumber,
-      description: r.description,
-      targetLevelId: r.targetLevel.id,
-      isAiGenerated: r.isAiGenerated,
-      status: r.status,
-      requestedStatus: r.requestedStatus,
-      approvalStatus: r.approvalStatus,
-      readinessType: r.readinessType,
-      startup: r.startup.id,
-      assignee: r.assignee,
-      targetLevelScore: r.getTargetLevelScore(),
-      clickedByMentor: r.clickedByMentor,
-      clickedByStartup: r.clickedByStartup,
-    }));
+    const runIds = [
+      ...new Set(
+        rns
+          .map((r) => r.generationRun?.id)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+
+    // Correlation key is (generationRun.id, dimensionKey) — filter to RNS so
+    // a startup's RNA recommendations against the same run don't cross in.
+    const recs = runIds.length
+      ? await this.em.find(AiRecommendation, {
+          generationRun: { $in: runIds },
+          recommendationKind: 'RNS',
+        })
+      : [];
+
+    const byKey = new Map(
+      recs.map((rec) => [`${rec.generationRun?.id}|${rec.dimensionKey}`, rec]),
+    );
+
+    return rns.map((r: Rns) => {
+      const rec = r.generationRun
+        ? byKey.get(`${r.generationRun.id}|${r.readinessType}`)
+        : undefined;
+      return {
+        id: r.id,
+        priorityNumber: r.priorityNumber,
+        description: r.description,
+        targetLevelId: r.targetLevel.id,
+        isAiGenerated: r.isAiGenerated,
+        status: r.status,
+        requestedStatus: r.requestedStatus,
+        approvalStatus: r.approvalStatus,
+        readinessType: r.readinessType,
+        startup: r.startup.id,
+        assignee: r.assignee,
+        targetLevelScore: r.getTargetLevelScore(),
+        clickedByMentor: r.clickedByMentor,
+        clickedByStartup: r.clickedByStartup,
+        validationStatus: rec?.validationStatus ?? null,
+        confidenceStatus: rec?.confidenceStatus ?? null,
+        validationNotes: rec?.notes ?? null,
+      };
+    });
   }
 
   async createRns(dto: CreateRnsDto) {

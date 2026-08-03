@@ -1,4 +1,4 @@
-import { EntityManager } from '@mikro-orm/core';
+import { EntityManager, wrap } from '@mikro-orm/core';
 import {
   BadRequestException,
   Injectable,
@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { Startup } from 'src/entities/startup.entity';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
@@ -28,14 +29,48 @@ export class RnaService {
     private readonly aiRunService: AiRunService,
   ) {}
 
-  async getRNAbyId(startupId: number) {
-    return await this.em.find(
+  // Explicit return type: `wrap().toObject()`'s inferred type references
+  // MikroORM's internal `__loadedType`, which TS can't name in the .d.ts
+  // (declaration: true), so tsc build fails without this annotation.
+  async getRNAbyId(startupId: number): Promise<Record<string, unknown>[]> {
+    const rnas = await this.em.find(
       StartupRNA,
       { startup: startupId },
-      {
-        populate: ['readinessLevel'],
-      },
+      { populate: ['readinessLevel', 'generationRun'] },
     );
+
+    const runIds = [
+      ...new Set(
+        rnas
+          .map((r) => r.generationRun?.id)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+
+    // Correlation key is (generationRun.id, dimensionKey) — filter to RNA so
+    // a startup's RNS recommendations against the same run don't cross in.
+    const recs = runIds.length
+      ? await this.em.find(AiRecommendation, {
+          generationRun: { $in: runIds },
+          recommendationKind: 'RNA',
+        })
+      : [];
+
+    const byKey = new Map(
+      recs.map((rec) => [`${rec.generationRun?.id}|${rec.dimensionKey}`, rec]),
+    );
+
+    return rnas.map((r) => {
+      const rec = r.generationRun
+        ? byKey.get(`${r.generationRun.id}|${r.readinessLevel.readinessType}`)
+        : undefined;
+      return {
+        ...wrap(r).toObject(),
+        validationStatus: rec?.validationStatus ?? null,
+        confidenceStatus: rec?.confidenceStatus ?? null,
+        validationNotes: rec?.notes ?? null,
+      };
+    });
   }
 
   async create(dto: CreateStartupRnaDto) {

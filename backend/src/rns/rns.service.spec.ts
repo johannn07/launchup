@@ -5,6 +5,7 @@ import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { Rns } from 'src/entities/rns.entity';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { OutputValidatorService } from 'src/rna/output-validator.service';
 import { RNS_MAX_LENGTH } from './rns.constants';
 
@@ -619,5 +620,107 @@ describe('RnsService.generateTasks output validation (Objective 1c)', () => {
         notes: expect.stringContaining('500'),
       }),
     );
+  });
+});
+
+describe('RnsService.getStartupRns verdict join (Task 5)', () => {
+  const buildRow = (overrides: Record<string, any>) => ({
+    id: 1,
+    priorityNumber: 1,
+    description: 'Interview 10 clinic administrators.',
+    targetLevel: { id: 42, level: 4 },
+    isAiGenerated: true,
+    status: 1,
+    requestedStatus: 1,
+    approvalStatus: 'Unchanged',
+    readinessType: 'Technology',
+    startup: { id: 1 },
+    assignee: { id: 7 },
+    clickedByMentor: false,
+    clickedByStartup: false,
+    generationRun: undefined,
+    getTargetLevelScore() {
+      return this.targetLevel.level;
+    },
+    ...overrides,
+  });
+
+  it('returns null verdict fields for rows with no generation run', async () => {
+    const row = buildRow({ generationRun: undefined });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === Rns) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnsService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getStartupRns(1);
+    expect(result.validationStatus).toBeNull();
+    expect(result.confidenceStatus).toBeNull();
+  });
+
+  it('joins the recorded verdict onto the matching generated row, filtered to RNS (would catch a dropped recommendationKind filter)', async () => {
+    const row = buildRow({
+      generationRun: { id: 7 },
+      readinessType: 'Technology',
+    });
+
+    // Same (generationRun.id, dimensionKey) key, but recorded under 'RNA' —
+    // a startup has both kinds against the same run. If the join query
+    // dropped its `recommendationKind: 'RNS'` filter, this row would leak in
+    // and (being inserted second) win the Map, flipping the asserted status.
+    const rnaRecSameKey = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNA',
+      validationStatus: 'validated',
+      confidenceStatus: 'high-confidence',
+      notes: null,
+    };
+    const rnsRec = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNS',
+      validationStatus: 'flagged',
+      confidenceStatus: 'high-confidence',
+      notes: 'too long',
+    };
+
+    const em = {
+      find: jest.fn((entity: any, filter?: any) => {
+        if (entity === Rns) return Promise.resolve([row]);
+        if (entity === AiRecommendation) {
+          const all = [rnaRecSameKey, rnsRec];
+          const filtered = filter?.recommendationKind
+            ? all.filter((r) => r.recommendationKind === filter.recommendationKind)
+            : all;
+          return Promise.resolve(filtered);
+        }
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnsService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getStartupRns(1);
+    expect(result.validationStatus).toBe('flagged');
   });
 });

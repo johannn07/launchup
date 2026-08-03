@@ -3,6 +3,7 @@ import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { OutputValidatorService } from './output-validator.service';
 
 // `generateRNA` always queries queryVectorDatabase but only calls
@@ -387,6 +388,135 @@ describe('RnaService.generateRNA output validation (Objective 1c)', () => {
       expect.objectContaining({
         validationStatus: 'flagged',
         notes: expect.stringContaining('500'),
+      }),
+    );
+  });
+});
+
+describe('RnaService.getRNAbyId verdict join (Task 5)', () => {
+  // `wrap(r).toObject()` returns `r` itself when `r` isn't a live MikroORM
+  // entity (no `__helper`), so these mock rows need their own `toObject` —
+  // the same shape a real hydrated entity's would produce.
+  const buildRow = (overrides: Record<string, any>) => ({
+    id: 1,
+    rna: 'Validate demand with 10 interviews.',
+    isAiGenerated: true,
+    startup: { id: 1 },
+    readinessLevel: { readinessType: 'Technology', level: 3 },
+    generationRun: undefined,
+    toObject() {
+      const { toObject, ...rest } = this;
+      return rest;
+    },
+    ...overrides,
+  });
+
+  it('returns null verdict fields for rows with no generation run', async () => {
+    const row = buildRow({ generationRun: undefined });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result.validationStatus).toBeNull();
+    expect(result.confidenceStatus).toBeNull();
+  });
+
+  it('joins the recorded verdict onto the matching generated row, filtered to RNA (would catch a dropped recommendationKind filter)', async () => {
+    const row = buildRow({
+      generationRun: { id: 7 },
+      readinessLevel: { readinessType: 'Technology', level: 3 },
+    });
+
+    // Same (generationRun.id, dimensionKey) key, but recorded under 'RNS' —
+    // a startup has both kinds against the same run. If the join query
+    // dropped its `recommendationKind: 'RNA'` filter, this row would leak in
+    // and (being inserted second) win the Map, flipping the asserted status.
+    const rnsRecSameKey = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNS',
+      validationStatus: 'validated',
+      confidenceStatus: 'high-confidence',
+      notes: null,
+    };
+    const rnaRec = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNA',
+      validationStatus: 'flagged',
+      confidenceStatus: 'high-confidence',
+      notes: 'too long',
+    };
+
+    const em = {
+      find: jest.fn((entity: any, filter?: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) {
+          const all = [rnsRecSameKey, rnaRec];
+          const filtered = filter?.recommendationKind
+            ? all.filter((r) => r.recommendationKind === filter.recommendationKind)
+            : all;
+          return Promise.resolve(filtered);
+        }
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result.validationStatus).toBe('flagged');
+  });
+
+  it('still returns the fields the frontend already consumes', async () => {
+    const row = buildRow({ generationRun: undefined });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: expect.anything(),
+        rna: expect.anything(),
+        isAiGenerated: expect.anything(),
+        readinessLevel: expect.anything(),
       }),
     );
   });
