@@ -521,4 +521,43 @@ describe('RnaService.getRNAbyId verdict join (Task 5)', () => {
       }),
     );
   });
+
+  it('does not leak the populated AiGenerationRun onto the payload', async () => {
+    // Populated with the shape a real AiGenerationRun carries — model, the
+    // resolved pipeline config, timing, token counts — none of which belongs
+    // on a client-facing RNA row. `generationRun` is populated only so the
+    // join key above can read `.id`; it must not survive into the response.
+    const row = buildRow({
+      generationRun: {
+        id: 7,
+        model: 'gemini-2.5-flash-lite',
+        config: { temperature: 0, grounding: true },
+        status: 'completed',
+        latencyMs: 812,
+        promptTokens: 500,
+        completionTokens: 120,
+        error: null,
+      },
+    });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result).not.toHaveProperty('generationRun');
+  });
 });

@@ -64,8 +64,12 @@ export class RnaService {
       const rec = r.generationRun
         ? byKey.get(`${r.generationRun.id}|${r.readinessLevel.readinessType}`)
         : undefined;
+      // generationRun is only needed to build the join key above — drop it
+      // rather than ship AiGenerationRun internals (model, config, tokens) to
+      // the client.
+      const { generationRun: _generationRun, ...base } = wrap(r).toObject();
       return {
-        ...wrap(r).toObject(),
+        ...base,
         validationStatus: rec?.validationStatus ?? null,
         confidenceStatus: rec?.confidenceStatus ?? null,
         validationNotes: rec?.notes ?? null,
