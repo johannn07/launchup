@@ -128,7 +128,15 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
   **Metric 2 saturated at 0% everywhere, and the probe is verified live** (an injected "full market launch … IPO" recommendation is correctly flagged). Since confound 1's fix gives *all* arms the `Initial Readiness Level` block, the economical reading is that **the levels block, not the corpus, keeps recommendations stage-appropriate** — isolating that needs the reserved `baseline-no-levels` arm.
 
-  **Still not established, and this is the limit to quote:** whether the corpus helps or harms **in production**. Every number above comes from the levels probe, which hands corpus arms all 54 rubric rows; production's RNA path retrieves 12 (current rung + next). Metric 3's per-arm rep-to-rep swing (baseline 2.83 → 1.67) also remains comparable to the effect being measured.
+  **Still not established, and this is the limit to quote:** whether the corpus helps or harms **in production**. Every number above comes from the levels probe, which hands corpus arms all 54 rubric rows; production's RNA path retrieves 12 (current rung + next).
+
+  **UPDATE 2026-08-03 evening — rep 3 ran partial (503, not quota), and metric 3 is now declared unresolvable.**
+  11 of 12 calls landed; the twelfth failed on a transient **503 "high demand"** and it was `deviation-deterministic / MediSync / levels` — the one cell carrying the finding.
+  - **Metric 3 cannot resolve the corpus effect and should not be quoted as evidence.** `baseline` and `sdd-semantic` send byte-identical prompts, so their six gap readings are six draws from one distribution: 2.83, 1.67, 3.33, 2.33, 1.83, 1.83 — **spanning 1.66 gap points**. The corpus arm's deficit is −1.19, *smaller than the control spread*. The 2026-07-29 "±1.0 noise floor" was an underestimate, and the 0.17 control spread quoted at n=2 above was a small-sample artifact that grew to 0.61 with one more rep.
+  - **Metric 1 does separate the arms.** Per-rep MAE: baseline 0.67/0.75/0.92, sdd 0.42/0.33/0.50, deviation 1.50/1.33/(incomplete) — non-overlapping ranges. This is the metric to report.
+  - **AgroLink's reproducibility now holds 3/3** (`+0 +2 +3`, `+0 +2 +2`, `+0 +1 +2` on Market/Acceptance, other four exact). The MediSync −2 collapse still rests on 2 observations.
+  - **Do not quote the n=3 pooled MAE (1.23).** It fell from 1.42 only because rep 3 added 6 AgroLink calls (low error) and 0 MediSync calls (all the error), leaving deviation at 18/12 against baseline's 18/18. The **balanced n=2 figure, 1.42, is the like-for-like number.**
+  - **Harness gap worth closing:** there is no `--only=arm/startup` filter, so refilling one failed cell costs a full 12-call rep. That would have made this a 1-call fix.
 
   **Work:** one more rep, then merge — a third rep is what metric 3 needs to clear its own rep-to-rep swing:
   ```bash

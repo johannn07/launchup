@@ -577,3 +577,49 @@ node measurement/measure-grounding.js --merge measurement/results/*.json
 ```
 
 Then, newly indicated by this rep rather than by speculation: **a per-dimension calibration pass over the rubric text**, targeting the O/R/I rungs that read stricter than the model's prior and the T/M/A rungs that read looser. That is a corpus-content change, and it is the first time the measurement has pointed at one.
+
+---
+
+## Rep 3 — partial (503), and metric 3 is retired as unresolvable — 2026-08-03 evening
+
+Ran at 18:11 PH, after the 15:00 reset. **11 of 12 calls landed.** The twelfth failed on a transient **503 "This model is currently experiencing high demand"** — *not* a quota 429 — and it hit `deviation-deterministic / MediSync / levels`, the single cell that carries the whole finding. Raw records at `backend/measurement/results/2026-08-03-rep3.json`.
+
+### The useful result is a negative one about the instrument
+
+**Metric 3 cannot resolve the corpus effect, and I don't think more reps will fix it.** `baseline` and `sdd-semantic` send byte-identical prompts, so every gap reading they produce is a draw from one distribution. Three reps give six such draws:
+
+| | rep 1 | rep 2 | rep 3 |
+|---|---|---|---|
+| baseline gap | 2.83 | 1.67 | 3.33 |
+| sdd-semantic gap | 2.33 | 1.83 | 1.83 |
+
+That spans **1.67 to 3.33 — 1.66 gap points between identical prompts.** The corpus arm's pooled deficit is −1.19, i.e. *smaller than the control arms' own spread*. The 2026-07-29 "±1.0 noise floor" was an underestimate, and the 0.17 control spread I recorded at n=2 last night was a small-sample artifact — it grew to 0.61 with one more rep. That is precisely the failure the README warned against when it retracted the "~3× the noise" multiplier: a single paired difference of two means is one number, not a distribution. I reproduced the same mistake at n=2 and the third rep caught it.
+
+**Metric 1 behaves the opposite way and is the metric to report.** Per-rep MAE — baseline 0.67 / 0.75 / 0.92, sdd 0.42 / 0.33 / 0.50, deviation 1.50 / 1.33 / (incomplete). The deviation readings sit outside the baseline range with no overlap.
+
+### The reproducibility finding, one rep stronger and one rep short
+
+AgroLink's corpus-arm deltas now run three-for-three: `+0 +2 +3 +0 +0 +0`, `+0 +2 +2 +0 +0 +0`, `+0 +1 +2 +0 +0 +0` — Market and Acceptance pushed up, the other four exact. The MediSync half (the −2 collapse on O/R/I) still rests on two observations, because rep 3 is exactly the one that 503'd.
+
+### Do not quote the n=3 pooled MAE
+
+Adding rep 3 moved the corpus arm's pooled MAE from 1.42 to **1.23** — and that looks like improvement but is not. Rep 3 contributed 6 AgroLink calls (its low-error startup) and 0 MediSync calls (where all its error lives), so deviation's pool is now 18 AgroLink / 12 MediSync against baseline's 18 / 18. **The missing cell biases the corpus arm's headline number in its own favour.** The balanced n=2 figure, **1.42**, is the like-for-like comparison. Metric 3 is barely touched by the same imbalance (deviation's AgroLink mean moves 2.25 → 2.17, shifting the gap 0.09) but it is unresolvable regardless.
+
+The merge output is honest about this on its face — it prints `MediSync n = 12` next to `AgroLink n = 18` — but the pooled MAE column does not, so it is worth stating in words.
+
+### Harness gap this exposed
+
+**There is no `--only=arm/startup` filter**, so refilling one failed cell costs a full 12-call rep. A one-call retry was impossible. That is the highest-value addition to the harness right now, and it is cheap: the loop already iterates arm × startup.
+
+Also worth noting: **a 503 is not a 429.** The harness stops cleanly on quota, but a transient 503 spends the attempt and produces the same partial-cell outcome without the day being over. A bounded retry on 503 specifically would likely have saved this rep.
+
+### Next step
+
+One full rep to fill the missing `deviation / MediSync / levels` cell — **after 15:00 PH tomorrow (2026-08-04)**. Roughly 8 calls remain in the current window, and a rep needs 12; a partial run now would again spend everything on `baseline` + `sdd` before reaching the corpus arm.
+
+```
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-08-04-rep4.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
+
+Worth doing first, since it is free and would have saved today: add the `--only=` filter and a bounded 503 retry.

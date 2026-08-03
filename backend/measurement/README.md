@@ -292,6 +292,52 @@ the code):
 A rep is now **12 calls** (RNA + levels, × 2 startups × 3 arms), or **18**
 with `--with-fabrication-probe` added back in — against the same 20/day cap.
 
+### Result, 2026-08-03 evening — rep 3, partial; metric 3 declared unresolvable
+
+`measurement/results/2026-08-03-rep3.json`. 11 of 12 calls landed. The twelfth
+failed on a **503 "high demand" — not a quota 429** — and it failed on the one
+cell that carries the finding: `deviation-deterministic / MediSync / levels`.
+
+**Two conclusions, and the second is the more useful one.**
+
+**1. Metric 1 separates the arms; metric 3 does not, and probably cannot at any
+N reachable on this quota.** `baseline` and `sdd-semantic` send byte-identical
+prompts, so every gap reading they produce is one draw from the same
+distribution. Six such draws now exist — 2.83, 1.67, 3.33 (baseline) and 2.33,
+1.83, 1.83 (sdd) — spanning **1.67 to 3.33, a spread of 1.66 gap points.** The
+corpus arm's pooled deficit is −1.19. **The deficit is smaller than the control
+arms' own spread**, so metric 3 cannot resolve it. The 2026-07-29 "±1.0 noise
+floor" was an underestimate, and the n=2 section below quoting a 0.17 control
+spread was a small-sample artifact — it grew to 0.61 with one more rep, which is
+exactly what a single paired difference of two means was warned not to support.
+
+Metric 1 behaves the opposite way. Per-rep MAE: baseline 0.67 / 0.75 / 0.92,
+sdd 0.42 / 0.33 / 0.50, deviation 1.50 / 1.33 / (rep 3 incomplete). The
+deviation readings sit outside the baseline range and the ranges do not overlap.
+**Report metric 1; treat metric 3 as unresolved and say why.**
+
+**2. The AgroLink half of the reproducibility finding now holds three times.**
+Corpus-arm deltas on AgroLink: `+0 +2 +3 +0 +0 +0`, `+0 +2 +2 +0 +0 +0`,
+`+0 +1 +2 +0 +0 +0` — Market and Acceptance pushed up, the other four exact,
+three reps running. The MediSync half (the −2 collapse on O/R/I) still rests on
+two observations, because rep 3 is precisely the one that 503'd.
+
+**The missing cell biases the pooled numbers in the corpus arm's favour, so do
+not quote the n=3 pooled MAE.** Adding rep 3 moved deviation's pooled MAE from
+1.42 to **1.23** — not because the arm improved, but because rep 3 contributed
+6 AgroLink calls (its low-error startup) and 0 MediSync calls (where all of its
+error is). Deviation's pool is now 18 AgroLink / 12 MediSync against baseline's
+18 / 18. **The balanced n=2 figure below is the like-for-like comparison.**
+Metric 3 is barely affected by the same imbalance (deviation's AgroLink mean
+moves 2.25 → 2.17, shifting the gap by 0.09), but metric 3 is unresolvable
+anyway.
+
+**Next:** one full rep to fill the missing `deviation / MediSync / levels` cell.
+The harness has no arm/startup filter, so completing one cell costs a whole
+12-call rep — worth knowing before assuming a failed cell is cheap to retry.
+A `--only=arm/startup` filter would have made this a 1-call fix and is the
+single highest-value addition to the harness right now.
+
 ### Result, 2026-08-03 — second rep, n=2 pooled
 
 `measurement/results/2026-08-03-rep2.json`, all 12 calls, no quota hit on the
