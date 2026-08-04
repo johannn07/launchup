@@ -133,12 +133,13 @@ implemented — the verdict object replaces both, and neither had a caller.
   and their `app.module.ts` / `rna.module.ts` registrations.
 
 For RNA, `maxLength` is taken from the same constant the prompt string is built
-from, so the enforced limit and the declared one cannot drift apart. RNS passes
-no `maxLength` (see above).
+from, so the enforced limit and the declared one cannot drift apart. RNS does
+the same with its own constant (see above) — both prompts declare a limit, so
+both pass `maxLength`.
 
 ## API exposure
 
-RNA and RNS list payloads gain `validationStatus`, `confidenceStatus`, `notes`.
+RNA and RNS list payloads gain `validationStatus`, `confidenceStatus`, `validationNotes`.
 
 Correlated on `(generationRun, dimensionKey)` — both the artifact row and its
 `ai_recommendations` row are written in the same block with the same `ctx.run`.

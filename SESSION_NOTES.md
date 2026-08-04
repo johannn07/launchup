@@ -524,4 +524,61 @@ The window resets at **15:00 Philippine time** (midnight US Pacific). A rep is 1
 
 Before that, the quota-free ladder worth running locally: `pnpm test:measurement` proves the parts, `--dry-run` shows the real assembled prompts, `--merge` reproduces the result tables. None spends generation quota.
 
+## Output validation layer (Objective 1c) — built, live-verified, and a fix wave — 2026-08-04
+
+Branch `feat/output-validation`, off `master` at `e9d391c`, 17 commits, **nothing pushed**. Spec `docs/superpowers/specs/2026-08-03-output-validation-design.md`, plan `docs/superpowers/plans/2026-08-03-output-validation.md`, executed as 5 subagent tasks with an independent review after each, then a live-verification step, then a final whole-branch review, then this fix wave.
+
+### What was built
+
+`OutputValidatorService.validate({ content, retrievalLowConfidence, maxLength? })` (`rna/output-validator.service.ts`) replaces three stub methods (`validateEach()`, `flagInconsistencies()`, `markUnverifiable()`) and the dead `recommendation-storage.service.ts` + `recommendation.entity.ts`, both deleted along with the orphaned `recommendations` table (see below). It checks exactly two things:
+
+1. **Retrieval confidence** — `ragContext.lowConfidence`, a signal RAG already computed and the code was throwing away.
+2. **Length** — whether the generated text is empty/whitespace, or longer than the limit the prompt itself declared to the model. The validator never invents a constraint the model wasn't told about; `maxLength` is optional in the interface for exactly that reason.
+
+Both feed a verdict (`validationStatus: 'validated' | 'flagged'`, `confidenceStatus: 'high-confidence' | 'low-confidence'`, `notes`) written to `ai_recommendations` in place of the previous hardcoded `'validated'` / `'high-confidence'` literals, and exposed on the RNA/RNS list payloads as `validationStatus` / `confidenceStatus` / `validationNotes`.
+
+**Scope decisions, and why:**
+
+- **Groundedness/fabrication and stage-appropriateness checks were deliberately left out.** Both probes from the grounding-measurement work (`measurement/`) came back saturated — 0/15 fabrication, 0% stage-inappropriate output at n=3 — so there was no observed failure mode to build a check against. This is genuinely a length-and-confidence validator, not "full output validation" against the SDD's Validated/Flagged/Low-Confidence badge concept, and both `TODO_CHECKLIST.md` and this entry say so plainly rather than overclaiming.
+- **No model-judged validation** — deterministic checks only, so the validator's own behaviour is testable without a live Gemini call.
+- **Two constants, not one shared limit.** `RNA_MAX_LENGTH`, `RNS_MAX_LENGTH`, and now `ROADBLOCK_MAX_LENGTH` are separate 500-char constants, each interpolated into its own prompt and passed to its own `validate()` call — deliberately not unified, because they're separate contracts to separate prompts that have no reason to move together.
+
+### Live verification (plan Step 6, controller-owned) — PASSED
+
+Against the running server and real Neon, not mocks: `GET /rna?startupId=1|2` and `GET /rns?startupId=1|2`, authenticated.
+
+- All three fields present on both payloads (`validationStatus`/`confidenceStatus`/`validationNotes`).
+- `generationRun` not present on either payload — a leak fix (see below) holds on real data, not just mocked EntityManagers.
+- Frontend keys (`id`/`rna`/`isAiGenerated`/`readinessLevel`, etc.) survive `wrap().toObject()` serialization, which mocks can't exercise.
+- Startup 2's RNA rows, which have no `generationRun`, correctly return `null` for all three verdict fields — the null-vs-verdict distinction only mocks couldn't prove.
+
+**Honesty note, worth repeating here because it's easy to misread from the data alone:** startup 1's rows read back `'validated'` / `'high-confidence'` — but those are *pre-existing* rows written by the old hardcoded literals before this branch existed, not evidence the validator ran. Only newly generated rows carry a computed verdict. There is no backfill, by design (per spec) — retroactively computing a verdict for text nobody validated at generation time would be fabricating provenance, not recovering it.
+
+### Along the way
+
+- A genuine spec defect, caught by review and verified by the controller: the design doc claimed the RNS prompt declares no length limit. It does — both branches say so (`rns.service.ts`, "max length of 500 characters" / "max length of 500"). The design *rule* (never enforce an undeclared limit) was never wrong; the *fact* it was applied to was. Fixed before Task 3 finished: RNS now passes `RNS_MAX_LENGTH`.
+- Task 4 caught the RNA list payload spreading the entire `AiGenerationRun` (model, config snapshot, tokens, error) into the response — the plan's own reference snippet did this. Fixed to select only the three verdict fields, mirroring the pattern `getStartupRns` already used.
+- Task 5 hit the documented `pnpm lint` trap (TODO_CHECKLIST §4): a subagent ran it, `eslint --fix` touched 265 files, 80 with real content changes. Caught before commit — `git status` showed the 4 intended files only were staged, everything else was discarded with `git restore .`, and the suite was re-verified after.
+
+### Final whole-branch review and this fix wave
+
+11 findings on the completed branch. Two are real design decisions, escalated to John rather than patched:
+
+- **The RNS correlation key `(generationRun, dimensionKey)` is not unique** when `no_of_tasks_to_create` produces more than one task per dimension per run — `rns.service.ts`'s lookup `Map` keeps only the last, so a flagged task can be invisible in the payload. A proper fix needs an artifact FK on `ai_recommendations`, which isn't available at record time (persist-then-flush) — a schema change, not a patch.
+- **The verdict goes stale** if `update()` or `refineRna()` later rewrites an artifact's text — the recommendation row still reflects the original generation. Fixing this is a design choice (revalidate on write vs. null the stale verdict), not a bug fix.
+
+The rest — a genuinely missed writer and four documentation defects — got fixed in this wave:
+
+- **`roadblock.service.ts` was a third hardcoded writer the spec's own final-verification grep didn't catch**, because the spec assumed only two generation call sites (RNA, RNS) existed. Wired up the same way: `RoadblockModule` now imports `RnaModule` for `OutputValidatorService`, a new `ROADBLOCK_MAX_LENGTH = 500` constant replaces the bare literal in the prompt, and the verdict is computed against the same text passed to `recordAiRecommendation` (`description` + `fix` concatenated). `retrievalLowConfidence` is hardcoded `false` with a comment explaining why — this path never queries RAG, so there is no low-confidence signal to report; that's an honest absence, not a shortcut. Grep gate (`validationStatus: 'validated'` outside spec files, outside the validator's own return statement) now passes clean.
+- Fixed the design doc's self-contradiction (it corrected the RNS-maxLength premise in one section and then repeated the stale version two sections later), the matching stale justification in a test comment, `TODO_CHECKLIST.md §0` still calling 1c a stub and citing three deleted methods, and a false claim that `updateSchema()` doesn't drop tables (verified against the installed `@mikro-orm/knex@6.5.4`: `updateSchema()` with no options defaults `safe = false, dropTables = true`, so the orphaned `recommendations` table drops itself on the next boot — no manual `DROP TABLE` needed).
+- Also corrected the design doc's field-name claim (`notes` → `validationNotes`, matching what both payloads actually emit) and marked the `TODO_CHECKLIST.md` 1c item done, with the same "not full output validation" and "no backfill" caveats stated above.
+
+New test in `roadblock.service.spec.ts` proves the roadblock verdict is computed rather than hardcoded (an over-500-char recommendation is recorded `flagged`), following the fixture style already used in `rns.service.spec.ts`'s output-validation describe block.
+
+### State at end of session
+
+- 190 passing / 2 failing (`pnpm test`) — the 2 are the documented pre-existing pair (`ReadinessService › returns a weighted score…`, `AiService › passes valid task responses through unchanged`), unchanged by this branch. `pnpm build` clean.
+- Grep gate `validationStatus: 'validated'` outside spec files now matches only `output-validator.service.ts`'s own return statement.
+- Two design decisions (RNS correlation-key uniqueness, stale verdicts on edit) remain open, on purpose, for John to decide — see above. Not coded around.
+
 Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.

@@ -36,8 +36,10 @@ describe('OutputValidatorService.validate', () => {
   });
 
   it('does NOT flag long content when no maxLength was declared', () => {
-    // Load-bearing: RNS declares no limit, so enforcing one would flag
-    // output the model was never told to keep short.
+    // Load-bearing: `maxLength` is optional because not every prompt declares
+    // a limit. Enforcing one anyway would flag output the model was never
+    // told to keep short — all current callers happen to declare one today,
+    // but the validator itself must not assume that.
     expect(svc.validate({ ...ok, content: 'x'.repeat(5000) }).validationStatus).toBe('validated');
   });
 
