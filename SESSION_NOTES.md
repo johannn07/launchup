@@ -813,3 +813,30 @@ Every number is the **levels probe**, a harness construct: production does not a
 ### Next
 
 Not more reps and not another arm — **edit the O/R/I rubric rows** so their evidence bar matches the seeded ground truth, then re-run `deviation-deterministic` alone at `--only-probe=levels --reps=3` (6 calls). The corpus edit changes the content hash, so the recalibrated arm will correctly refuse to pool with these runs; that is the fingerprint guard working as designed.
+
+---
+
+## Session close-out — 2026-08-04
+
+Three work streams. Detail is in the three entries above; this is state and handoff only.
+
+| stream | outcome | where it lives |
+|---|---|---|
+| Output validation (1c) | merged | `master` via PR #18 |
+| Sector-aware weighted scoring (2b) | merged | `master` via PR #19 |
+| Grounding measurement, n=3 + volume ladder | **not merged** | `measure/grounding-rep2`, 8 commits ahead, unpushed |
+
+### A branch-hygiene problem worth not repeating
+
+`measure/grounding-rep2` forked from `master` at `e9d391c` and sat there through **two** merges (PR #18, PR #19). By the time today's measurement write-up was appended, its copies of `SESSION_NOTES.md`, `TODO_CHECKLIST.md` and `PROJECT_OVERVIEW.md` were two work streams stale — so the write-up landed on a version of the checklist that still described 1c as a stub.
+
+Merged `master` in and resolved it (`9a18a2a`). Both conflicts were the same shape: **each branch held the current version of a different row.** The checklist's 1b row was current on the measurement branch and stale on master; its 1c row was the reverse. Resolution was "best of both", not "take one side". Session-log entries were re-sorted chronologically, since the auto-merge had left 1c sitting before two 2026-08-03 entries.
+
+The lesson is cheap: **a long-lived measurement branch that edits shared docs should merge `master` before writing to them**, not after. Verified after the merge: 216 passing / 1 failing (the pre-existing `AiService` case), 103/103 measurement tests, `pnpm build` clean.
+
+### What is genuinely open
+
+1. **The O/R/I rubric recalibration** — the substantive next step, described at the end of the grounding entry above. 6 calls, one window.
+2. **`measure/grounding-rep2` is unpushed** and has no PR. It is now up to date with `master`, so it can be merged whenever the recalibration work is either done or explicitly deferred.
+3. **Deferred from the 2b final review, not blocking:** the mixed-scale `readiness_evaluations` rows (16 legacy rows scored under ÷5 sitting beside new ÷9 rows, with one admin action relabelling across both — a database cleanup, not a code change), and the tier-threshold recalibration left deliberately open at `TODO_CHECKLIST.md` §3.
+4. **Flagged in passing, unrelated to any of the above:** `backend/src/mikro-orm.config.ts` disables TLS certificate verification against Neon (`rejectUnauthorized: false`). Neon uses a public CA, so this is probably just tightenable.
