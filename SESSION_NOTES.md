@@ -653,5 +653,5 @@ select "w0".* from "weight_profiles" as "w0"
 ### State at end of session
 
 - **216 passing / 1 failing** (`pnpm test`) — the 1 is the documented pre-existing `AiService › passes valid task responses through unchanged`, untouched by this branch. `pnpm build` clean.
-- Demo data on Neon left with MediSync's sector set to `healthtech` and AgroLink's `sector` **null**. `seedDemoStartup` has an `if (existing) return;` guard, so the sectors Task 5 added to the seed spec do not backfill onto startups that already exist — set them via the API or reseed.
+- Demo data on Neon left with MediSync's sector set to `healthtech` and AgroLink's `sector` **null** at the time of writing. The final review caught that `seedDemoStartup`'s `if (existing) return;` guard meant the sectors Task 5 added to the seed spec would never reach an existing database, making the whole sector-aware feature invisible on the machine you demo from. Fixed in `0f82b00`: the guard now fills `sector` with `??=` before returning, so a **null** sector is backfilled on the next boot while a deliberately-set one is never overwritten. AgroLink picks up `agritech` on the next `pnpm dev`.
 - The pre-existing `readiness_evaluations` rows were **not** backfilled (out of scope, per spec); they still hold pre-fix composites.

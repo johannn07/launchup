@@ -807,8 +807,8 @@ The four objectives come from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (
 
 | Objective | Status |
 |---|---|
-| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🟡 RAG implemented (corpus seeded, deterministic rubric lookup working); validator is a stub |
-| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟢 Tiers, gap analysis, and sector-aware weighted scoring all built — components built; differentiation itself did not improve, see §6.3 |
+| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🟡 RAG implemented (corpus seeded, deterministic rubric lookup working); validator built but scope-limited — checks retrieval confidence and declared length only, not groundedness (see TODO_CHECKLIST §0 1c) |
+| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟢 Tiers, gap analysis, and sector-aware weighted scoring all built — components built; differentiation itself did **not** improve, see §7.4 |
 | 3. Multimodal intake (handwriting OCR, sketch recognition) | 🟡 OCR partial; canvas-section recognition minimal |
 | 4. Leniency bias correction (adversarial prompting, normalization) | 🟡 Normalization + audit trail built; prompting is post-hoc review, not adversarial |
 
