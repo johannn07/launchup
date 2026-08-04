@@ -1,0 +1,554 @@
+{
+  "generatedAt": "2026-08-04T15:28:46.276Z",
+  "genModel": "gemini-3.6-flash",
+  "embedModel": "gemini-embedding-2",
+  "reps": 3,
+  "corpusRows": 54,
+  "floor": 0.78,
+  "fingerprints": {
+    "levels|baseline": "a9502f4cb258",
+    "rna|baseline": "267997de0a08",
+    "fabrication|baseline": "1139754e8b2c",
+    "levels|sdd-semantic": "cf38a1166b86",
+    "rna|sdd-semantic": "d0f7287897a8",
+    "fabrication|sdd-semantic": "fe4de6f3f58f",
+    "levels|deviation-deterministic": "4102609c8e00",
+    "rna|deviation-deterministic": "b32bf70f8d83",
+    "fabrication|deviation-deterministic": "6e83605be117",
+    "levels|deviation-titles": "55ab0905a0ae",
+    "rna|deviation-titles": "b32bf70f8d83",
+    "fabrication|deviation-titles": "6e83605be117"
+  },
+  "results": {
+    "baseline": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "sdd-semantic": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "deviation-deterministic": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "deviation-titles": {
+      "startups": {
+        "AgroLink PH": {
+          "retrieved": [
+            {
+              "key": "trl-2",
+              "readinessType": "Technology",
+              "level": 2,
+              "title": "TRL 2 — Technology concept formulated",
+              "content": "Once basic principles are observed, practical applications can be speculated upon, but they remain analytic; no experimental proof or detailed analysis yet supports the invention. For a startup, this looks like a named product concept and an architecture sketch describing how the underlying principle would solve a specific problem, backed by rough back-of-envelope reasoning rather than any built code or lab result.",
+              "keyTerms": [
+                "concept formulated",
+                "speculative application",
+                "architecture sketch",
+                "no experimental proof"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "trl-3",
+              "readinessType": "Technology",
+              "level": 3,
+              "title": "TRL 3 — Experimental proof of concept",
+              "content": "Active research and development is initiated, including analytical and laboratory studies to physically validate the analytical predictions of separate elements of the technology. For a startup, this means a scoped experiment or a proof-of-concept script has produced a recorded result showing the core mechanism functions in isolation, even though no components have been integrated into a working prototype.",
+              "keyTerms": [
+                "proof of concept",
+                "analytical validation",
+                "isolated mechanism",
+                "recorded result",
+                "lab study"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "mrl-2",
+              "readinessType": "Market",
+              "level": 2,
+              "title": "MRL 2 — Target segment identified via secondary research",
+              "content": "A target market segment has been named and described using secondary sources — industry reports, competitor research, published market sizing — but the team still has not had a single conversation with a real prospective buyer. Evidence is a desk-research document identifying the segment and its estimated size, not any direct signal from the market itself.",
+              "keyTerms": [
+                "target segment",
+                "secondary research",
+                "desk research",
+                "market sizing",
+                "no direct buyer signal"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "mrl-3",
+              "readinessType": "Market",
+              "level": 3,
+              "title": "MRL 3 — Informal problem interviews",
+              "content": "The team has held informal conversations with prospective buyers — problem interviews or casual conversations at events — surfacing anecdotal interest, but no prospect has made any commitment. Evidence is a set of interview notes or call logs showing a handful of conversations, with reactions recorded but no willingness-to-pay signal.",
+              "keyTerms": [
+                "problem interviews",
+                "anecdotal interest",
+                "informal conversations",
+                "no commitment"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-1",
+              "readinessType": "Regulatory",
+              "level": 1,
+              "title": "RRL 1 — No regulatory analysis",
+              "content": "No analysis has been done of which laws, regulations, or licensing regimes apply to the product or its operation; the regulatory landscape is entirely unknown to the team. Evidence at this level is the absence of any regulatory review — no memo, no advisor engaged, no list of candidate rules.",
+              "keyTerms": [
+                "no regulatory analysis",
+                "unknown requirements",
+                "unassessed compliance risk"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-2",
+              "readinessType": "Regulatory",
+              "level": 2,
+              "title": "RRL 2 — Regulatory domain identified",
+              "content": "The team has identified which regulatory domain and which oversight body plausibly governs the product — for example, data protection, financial services, or medical device rules — but has not obtained any formal legal assessment of what specifically applies. Evidence is an internal note naming the likely regulator or regulatory area, based on the team's own research rather than counsel.",
+              "keyTerms": [
+                "regulatory domain identified",
+                "oversight body",
+                "informal assessment"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-1",
+              "readinessType": "Acceptance",
+              "level": 1,
+              "title": "ARL 1 — Adoption assumed",
+              "content": "Adoption is assumed rather than observed: the team believes users will want the product but no user has interacted with it in any form. Evidence is limited to an internal persona description with no demo, no mockup review, and no recorded user reaction.",
+              "keyTerms": [
+                "adoption assumed",
+                "no user exposure",
+                "untested persona"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-2",
+              "readinessType": "Acceptance",
+              "level": 2,
+              "title": "ARL 2 — Adoption hypothesis documented",
+              "content": "An adoption hypothesis has been written down, naming a specific target user persona and the behavior change expected of them, but no member of that persona group has yet seen the product in any form. Evidence is a documented persona and adoption hypothesis, with no demo or user session on record.",
+              "keyTerms": [
+                "adoption hypothesis",
+                "target persona",
+                "no demo conducted"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-2",
+              "readinessType": "Organizational",
+              "level": 2,
+              "title": "ORL 2 — Informal division of responsibilities",
+              "content": "Founders have informally divided responsibilities between themselves based on skill or interest, but nothing is written down and decisions are still made ad hoc rather than through any agreed process. Evidence is, at most, an informal verbal understanding of who handles what, with no written role description or org chart.",
+              "keyTerms": [
+                "informal division of labor",
+                "ad hoc decisions",
+                "no written roles"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-3",
+              "readinessType": "Organizational",
+              "level": 3,
+              "title": "ORL 3 — First non-founder contributor",
+              "content": "A first contributor beyond the founders — a contractor, advisor, or part-time hire — has joined the venture, but there is still no formal governance structure or documented operating process guiding how work happens. Evidence is a contract or engagement letter for the first non-founder contributor, with no accompanying process documentation.",
+              "keyTerms": [
+                "first non-founder hire",
+                "no formal governance",
+                "contractor engagement"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "irl-1",
+              "readinessType": "Investment",
+              "level": 1,
+              "title": "IRL 1 — No funding plan, founder time only",
+              "content": "No funding plan exists at all: the venture is running on founder time and personal resources with no target raise amount, no use-of-funds outline, and no investor contact of any kind. Evidence is simply the absence of any funding document or investor conversation.",
+              "keyTerms": [
+                "no funding plan",
+                "founder time only",
+                "no investor contact"
+              ],
+              "provenance": "authored",
+              "citation": null
+            },
+            {
+              "key": "irl-2",
+              "readinessType": "Investment",
+              "level": 2,
+              "title": "IRL 2 — Informal funding hypothesis",
+              "content": "An informal funding hypothesis has been noted — a general sense that a seed round will eventually be needed — but no target amount, use-of-funds outline, or investor list has been drafted. Evidence is, at most, a passing mention in founder notes rather than any funding document.",
+              "keyTerms": [
+                "informal funding hypothesis",
+                "no target amount",
+                "no investor list"
+              ],
+              "provenance": "authored",
+              "citation": null
+            }
+          ],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "AgroLink PH designed a mobile-first platform concept with SMS fallback and tested a paper prototype of the lot-aggregation flow with 3 cooperatives in 2025-09. Ana Beltran brings 4 years of backend engineering experience. The team needs to transition from paper prototyping to developing a working backend platform and SMS integration.",
+                "Market": "The target market comprises ~400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. The team interviewed 18 cooperatives in 2025-06 and secured a provisional agreement with one buyer in 2026-01, but has no revenue to date. The team needs to convert provisional interest into formal buyer commitments and establish a validated pricing structure.",
+                "Acceptance": "Field interviews were conducted with 18 cooperatives in 2025-06, followed by paper prototype testing with 3 cooperatives in 2025-09. The team needs to test functional software/SMS interfaces directly with cooperative officers to evaluate actual user adoption and operational workflow feasibility.",
+                "Organizational": "Founders Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer) committed full-time in 2026-01. Responsibilities remain informally divided, and no non-founder contributors exist. The team needs to formalize roles, governance procedures, and operational workflows.",
+                "Regulatory": "No regulatory analysis has been performed. No patents are filed, and the 'AgroLink PH' wordmark is not registered with IPOPHL. The team needs to conduct a regulatory review relevant to agricultural commerce/data and file for wordmark protection with IPOPHL.",
+                "Investment": "The venture relies entirely on founder time and personal resources, with zero revenue and no funding plan drafted. The team needs to define a clear funding hypothesis, project financial requirements, and outline a use-of-funds roadmap."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Current Status: Mobile-first platform concept with SMS fallback designed. Paper prototype of lot-aggregation flow tested with 3 cooperatives in September 2025. Technical capacity backed by Ana Beltran (4 years backend engineer). Needs: Transition from paper prototyping to building and testing working code scripts to validate backend core functions.",
+                "Market": "Current Status: Target segment defined as ~400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. Conducted 18 field interviews in June 2025 and secured a provisional agreement with 1 institutional buyer in January 2026. Zero revenue to date. Needs: Formalize commercial terms with the provisional buyer to secure initial paid commitments.",
+                "Acceptance": "Current Status: Conducted field interviews with 18 cooperatives in June 2025 and tested paper prototypes of the lot-aggregation flow with 3 cooperatives in September 2025. Needs: Expose cooperative officers and institutional buyers to working digital/SMS interface prototypes to observe and record real user adoption behavior.",
+                "Organizational": "Current Status: Two full-time founders as of January 2026 (Rafael Domingo: 6 years agricultural extension; Ana Beltran: 4 years backend engineer) operating under an informal division of responsibilities. Needs: Establish written role descriptions, formal governance processes, and onboard first non-founder contributors.",
+                "Regulatory": "Current Status: No regulatory review completed. No patents filed, and the AgroLink PH wordmark is not registered with IPOPHL. Needs: Identify applicable regulatory bodies and domain laws governing agricultural marketplace transactions, and initiate IPOPHL wordmark registration.",
+                "Investment": "Current Status: Venture relies strictly on founder time, with both founders committed full-time in January 2026. No revenue earned to date and no funding plan or investor contacts created. Needs: Formulate a formal funding plan, defining target raise requirements and use of funds."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "The architecture concept and mobile-first approach with SMS fallback were tested using a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025. Co-founder Ana Beltran brings 4 years of backend engineering experience. To advance, the team needs to move beyond paper testing to build and validate isolated functional software scripts and digital proof-of-concept components.",
+                "Market": "The target market includes ~400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. The team conducted field interviews with 18 cooperatives in June 2025 and secured a provisional agreement with one buyer in January 2026, though revenue remains at zero. Next steps require validating willingess-to-pay, expanding buyer conversations, and formalizing commercial agreements.",
+                "Acceptance": "User engagement has begun with 18 cooperative field interviews in June 2025 and testing a paper prototype with 3 cooperatives in September 2025. To progress, the team needs to document explicit adoption hypotheses for cooperative officers and institutional buyers, and run structured user testing on functional digital interfaces to observe actual behavior change.",
+                "Organizational": "As of January 2026, co-founders Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer) are committed full-time. They currently operate under an informal division of responsibilities. To advance, the team needs to document formal role definitions, set up governance processes, and engage first non-founder contributors or advisors.",
+                "Regulatory": "No regulatory analysis has been performed, no patents are filed, and the 'AgroLink PH' wordmark is not registered with IPOPHL. The team needs to identify relevant regulatory oversight bodies governing agricultural trading platforms and data, perform a regulatory analysis, and apply for wordmark registration.",
+                "Investment": "The venture relies entirely on founder time with zero revenue to date and no funding plan or investor outreach established. Next steps require drafting a formal funding hypothesis, determining target capital requirements, and creating a clear use-of-funds roadmap."
+              }
+            }
+          ],
+          "levelCalls": [
+            {
+              "byDim": {
+                "Technology": 3,
+                "Market": 4,
+                "Acceptance": 4,
+                "Organizational": 2,
+                "Regulatory": 1,
+                "Investment": 1
+              }
+            },
+            {
+              "byDim": {
+                "Technology": 3,
+                "Market": 4,
+                "Acceptance": 4,
+                "Organizational": 2,
+                "Regulatory": 1,
+                "Investment": 1
+              }
+            },
+            {
+              "byDim": {
+                "Technology": 3,
+                "Market": 4,
+                "Acceptance": 4,
+                "Organizational": 2,
+                "Regulatory": 1,
+                "Investment": 1
+              }
+            }
+          ],
+          "hallucCalls": []
+        },
+        "MediSync Cebu": {
+          "retrieved": [
+            {
+              "key": "trl-5",
+              "readinessType": "Technology",
+              "level": 5,
+              "title": "TRL 5 — Technology validated in relevant environment",
+              "content": "Fidelity of the integrated components increases significantly, and the basic technological components are combined with reasonably realistic supporting elements so the technology can be tested in a simulated environment. For a startup, this means the prototype runs against real customer data or in a staging environment that mirrors production, with results measured under near-real conditions even though it has not yet gone live for actual users.",
+              "keyTerms": [
+                "relevant environment",
+                "simulated conditions",
+                "staging environment",
+                "realistic data",
+                "near-real testing"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "trl-6",
+              "readinessType": "Technology",
+              "level": 6,
+              "title": "TRL 6 — Technology demonstrated in relevant environment",
+              "content": "A representative model or prototype system, well beyond the level tested for TRL 5, is tested in a relevant environment, going beyond laboratory testing to simulated operational conditions. A startup at this level has run a pilot with a small number of real customers in their own environment, delivering an end-to-end result and capturing structured feedback, though the deployment is limited in scale and duration.",
+              "keyTerms": [
+                "pilot deployment",
+                "representative prototype",
+                "end-to-end result",
+                "limited-scale trial",
+                "relevant environment"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "mrl-4",
+              "readinessType": "Market",
+              "level": 4,
+              "title": "MRL 4 — Structured customer discovery",
+              "content": "Customer discovery has been formalized: structured interviews have been run across multiple prospects using a consistent script, and a common pain point has been validated across that sample. Evidence is a discovery report summarizing interview themes across a named number of prospects, though no prospect has yet indicated a specific willingness to pay.",
+              "keyTerms": [
+                "customer discovery",
+                "structured interviews",
+                "validated pain point",
+                "discovery report"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "mrl-5",
+              "readinessType": "Market",
+              "level": 5,
+              "title": "MRL 5 — Paid pilots with named customers",
+              "content": "Demand has moved from stated interest to a financial commitment: the startup has run repeated paid pilots with named customers, each willing to pay for a defined trial period. Evidence is signed pilot agreements or purchase orders from more than one named customer, together with pilot usage or outcome data collected during the engagement.",
+              "keyTerms": [
+                "paid pilot",
+                "named customers",
+                "signed agreement",
+                "purchase order",
+                "willingness to pay"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-3",
+              "readinessType": "Regulatory",
+              "level": 3,
+              "title": "RRL 3 — Counsel engaged, preliminary opinion",
+              "content": "External legal or regulatory counsel has been engaged to map the applicable rules, and a preliminary opinion on requirements has been received, but no application or filing process has started. Evidence is an engagement letter or memo from counsel setting out the requirements the product is expected to need to satisfy.",
+              "keyTerms": [
+                "legal counsel engaged",
+                "preliminary opinion",
+                "applicable rules",
+                "no filing started"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-4",
+              "readinessType": "Regulatory",
+              "level": 4,
+              "title": "RRL 4 — Requirements checklist documented",
+              "content": "The specific permits, licenses, or certifications required have been identified and documented as a checklist against named standards, so the team knows exactly what must be obtained even though nothing has yet been submitted. Evidence is a requirements checklist naming each permit or certification and the standard it must meet.",
+              "keyTerms": [
+                "permit checklist",
+                "named standards",
+                "certification requirements",
+                "identified obligations"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-3",
+              "readinessType": "Acceptance",
+              "level": 3,
+              "title": "ARL 3 — Informal demo reactions",
+              "content": "The product concept has been shown to a handful of prospective users through informal demos, and their verbal reactions have been captured, but no behavior has actually been measured — reactions are qualitative impressions only. Evidence is a log of demo sessions with recorded verbal feedback from a small number of people.",
+              "keyTerms": [
+                "informal demo",
+                "qualitative reaction",
+                "verbal feedback",
+                "concept exposure"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-4",
+              "readinessType": "Acceptance",
+              "level": 4,
+              "title": "ARL 4 — Structured usability testing",
+              "content": "Structured usability or concept-testing sessions have been run with prospective users, collecting task-completion and satisfaction data, but every interaction has occurred under direct observation rather than independent use. Evidence is a usability test report with task-completion rates and satisfaction scores from a defined set of observed sessions.",
+              "keyTerms": [
+                "usability testing",
+                "task completion rate",
+                "satisfaction score",
+                "observed session"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-4",
+              "readinessType": "Organizational",
+              "level": 4,
+              "title": "ORL 4 — Initial role definitions and processes",
+              "content": "Initial role definitions have been drafted for the core team and the first process documentation exists — an onboarding guide, a basic decision log — and the venture is actively considering or has made its first full-time hire beyond the founders. Evidence is a written role-definition document and at least one basic process artifact such as an onboarding checklist.",
+              "keyTerms": [
+                "draft role definitions",
+                "first process documentation",
+                "onboarding guide",
+                "first full-time hire"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-5",
+              "readinessType": "Organizational",
+              "level": 5,
+              "title": "ORL 5 — Defined roles and basic governance",
+              "content": "The organization has defined roles across an org chart, a basic governance mechanism such as regular advisor or board check-ins is in place, and specific key hires needed for the next stage have been identified by name or role. Evidence is a written org chart, a recurring governance meeting on the calendar, and a hiring plan naming the next key roles.",
+              "keyTerms": [
+                "defined org chart",
+                "basic governance",
+                "key hire identified",
+                "recurring check-in"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "irl-3",
+              "readinessType": "Investment",
+              "level": 3,
+              "title": "IRL 3 — Funding plan drafted",
+              "content": "A funding plan has been drafted specifying a target raise amount and a rough use-of-funds breakdown, though the team has not yet held a single conversation with a potential investor. Evidence is a written funding plan document with a stated amount and a use-of-funds sketch.",
+              "keyTerms": [
+                "funding plan drafted",
+                "target raise amount",
+                "use of funds sketch"
+              ],
+              "provenance": "authored",
+              "citation": null
+            },
+            {
+              "key": "irl-4",
+              "readinessType": "Investment",
+              "level": 4,
+              "title": "IRL 4 — Initial investor conversations",
+              "content": "Initial investor conversations have taken place — warm-intro meetings or angel-network pitches — using a one-pager or deck, but no term sheet, commitment, or signed instrument has resulted from them. Evidence is a pitch deck circulated to named investors and a log of meetings held, with no signed agreement yet.",
+              "keyTerms": [
+                "initial investor meetings",
+                "pitch deck circulated",
+                "no commitment yet"
+              ],
+              "provenance": "authored",
+              "citation": null
+            }
+          ],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "MediSync Cebu progressed to TRL 6 following its 2025-02 pilot with 2 rural health units and 1 district hospital, expanding to 6 operational facilities by 2025-08. The system transmits referral records, bed availability, triage categories, and clinical history. To further advance technology readiness, the team needs to scale and validate full operational deployment across Cebu's remaining target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres.",
+                "Market": "The venture reached MRL 5 by securing paid facility subscriptions in 2025-08 and generating PHP 5,000 monthly recurring revenue by 2026-02. To advance market readiness, MediSync Cebu needs to expand paid subscriptions beyond the initial 6 facilities toward the remaining target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Acceptance": "Currently at ARL 3, the product concept replacing paper and phone referrals has been demonstrated in live environments across 6 facilities. To advance to ARL 4, the team needs to conduct structured usability testing with prospective health facility users, systematically capturing task-completion rates and user satisfaction scores during observed referral entry and bed-availability tracking.",
+                "Organizational": "At ORL 4, the team consists of 3 co-founders: Dr. Elena Reyes (public health), Marco Villanueva (health IT), and Joy Tabotabo (LGU administration). To reach ORL 5, the venture needs to formalize an org chart, establish recurring governance check-ins with advisors, and document a hiring plan identifying specific future key roles.",
+                "Regulatory": "MediSync Cebu is at RRL 3/4 with no patents and a pending trademark application filed with IPOPHL. To advance regulatory readiness, the startup needs to document a complete regulatory requirements checklist detailing health data privacy and LGU administrative compliance standards required for handling digital patient referral records.",
+                "Investment": "At IRL 3, the startup generates PHP 5,000 monthly recurring revenue as of 2026-02. To progress to IRL 4, MediSync Cebu needs to compile a formal pitch deck, share it with target investors, and maintain a log of initial investor pitch conversations."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "MediSync Cebu expanded its system from a 2025-02 pilot (2 RHUs, 1 district hospital) to 6 facilities by 2025-08, transmitting referral records, bed availability, and patient history. To advance technology readiness, the system needs full operational testing across the broader target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Market": "The venture secured paid facility subscriptions and reached PHP 5,000 monthly recurring revenue by 2026-02 across 6 facilities. To advance market readiness, the startup needs to expand signed paid engagements across its full target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres.",
+                "Acceptance": "While currently deployed in 6 operational facilities, initial user feedback relied on qualitative demo reactions. The startup needs to conduct structured usability testing sessions, measuring task-completion rates and user satisfaction among clinic and hospital staff handling referral transmissions.",
+                "Organizational": "The team expanded to 3 founders: Dr. Elena Reyes (public health), Marco Villanueva (health IT), and Joy Tabotabo (LGU administration) with initial role definitions. To advance organizational readiness, the startup needs to establish a formal org chart, regular governance mechanisms, and a clear hiring plan.",
+                "Regulatory": "External counsel was engaged for preliminary opinions, and a trademark application is pending with IPOPHL (no patents). The team needs to document a specific regulatory compliance checklist detailing required permits, data handling standards, and LGU healthcare rules.",
+                "Investment": "The team has a drafted funding plan detailing targets and use of funds, supported by PHP 5,000 monthly recurring revenue. To advance investment readiness, MediSync Cebu needs to prepare pitching materials and initiate documented investor conversations."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "MediSync Cebu demonstrated its referral record transmission system in pilots with 2 RHUs and 1 district hospital in Feb 2025, expanding to 6 facilities by Aug 2025. To advance, the startup needs to continue scaling and validating full system integration across the remaining target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Market": "MediSync Cebu achieved its first paid facility subscriptions in Aug 2025 and reached PHP 5,000 monthly recurring revenue by Feb 2026 across 6 facilities. To advance market readiness, the startup needs to expand signed paid pilot/subscription agreements across more of the 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu.",
+                "Acceptance": "Having captured qualitative user feedback from informal demos, MediSync Cebu needs to transition to structured usability testing (ARL 4). The team must conduct observed testing sessions with prospective clinical and administrative users, documenting quantitative task-completion rates and satisfaction scores for referral records and bed-availability tracking.",
+                "Organizational": "The venture expanded to 3 founders (Dr. Elena Reyes, Marco Villanueva, and Joy Tabotabo) with defined initial roles and basic process documentation. To reach ORL 5, MediSync Cebu needs to publish an organizational chart, establish a recurring governance check-in schedule, and create a hiring plan that names key positions needed for provincial expansion.",
+                "Regulatory": "MediSync Cebu engaged legal counsel for preliminary guidance and filed a pending trademark application with IPOPHL. To reach RRL 4, the startup must document a full regulatory requirements checklist detailing named health data privacy, public health, and LGU administrative compliance standards required to transmit patient records across Cebu facilities.",
+                "Investment": "MediSync Cebu has a written funding plan and reached PHP 5,000 monthly recurring revenue. To advance to IRL 4, the team needs to initiate formal outreach to prospective investors using a pitch deck, hold preliminary discussions, and maintain a log of investor meetings."
+              }
+            }
+          ],
+          "levelCalls": [
+            {
+              "byDim": {
+                "Technology": 9,
+                "Market": 5,
+                "Acceptance": 6,
+                "Organizational": 2,
+                "Regulatory": 5,
+                "Investment": 1
+              }
+            },
+            {
+              "byDim": {
+                "Technology": 9,
+                "Market": 5,
+                "Acceptance": 6,
+                "Organizational": 2,
+                "Regulatory": 1,
+                "Investment": 1
+              }
+            },
+            {
+              "byDim": {
+                "Technology": 9,
+                "Market": 5,
+                "Acceptance": 6,
+                "Organizational": 1,
+                "Regulatory": 1,
+                "Investment": 1
+              }
+            }
+          ],
+          "hallucCalls": []
+        }
+      },
+      "quotaHit": false
+    }
+  }
+}

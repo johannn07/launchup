@@ -289,10 +289,285 @@ the code):
   harness as SRS §2.2 evidence ("return null for unverifiable fields")
   even though it is saturated and discriminates nothing between arms.
 
-A rep is now **12 calls** (RNA + levels, × 2 startups × 3 arms), or **18**
-with `--with-fabrication-probe` added back in — against the same 20/day cap.
+A full rep is **2 calls per (arm, startup, probe)**. With five arms and two
+startups that is 20 calls — a whole day's cap — so full reps are no longer the
+normal way to run this. Use `--only-arm=` and `--only-probe=` to buy the cell
+you actually need; see below.
+
+### Result, 2026-08-04 — n=3 complete, and the volume hypothesis is refuted
+
+Three files: `2026-08-04-rep3-refill.json` (2 calls, filling the cell a 503 cost
+on 2026-08-03), `2026-08-04-titles-arm.json` (12 calls), `2026-08-04-bare-arm.json`
+(6 calls). 20/20 of the day's quota.
+
+**All five arms, n=3, pooled** — merge the six post-redesign files:
+
+| arm | levels block | MAE | exact | within1 |
+|---|---|---|---|---|
+| `baseline` | *none* | **0.78** | 44% | **30/36** |
+| `sdd-semantic` *(control — see below)* | *none* | 0.42 | 64% | 34/36 |
+| `deviation-deterministic` | 31,850 ch | 1.36 | 33% | 13/36 |
+| `deviation-titles` | 12,552 ch | 1.69 | 25% | 15/36 |
+| `deviation-bare` | 4,002 ch | 1.78 | 25% | 12/36 |
+
+**The recorded hypothesis is dead.** Since 2026-07-30 this file and
+`TODO_CHECKLIST.md` have carried: *"the levels probe hands corpus arms all 54
+rubric rows and that volume destabilises placement."* Two new arms test it as a
+ladder — `deviation-titles` drops each row's body, `deviation-bare` drops the
+provenance suffix too — holding level coverage fixed so exact placement stays
+reachable and the true level is still never leaked.
+
+An **87% cut in block size changes nothing** in aggregate. All three corpus arms
+sit in a band (MAE 1.36–1.78, within1 12–15/36) far below an arm given no rubric
+at all. Volume does not explain the net damage.
+
+**But the per-dimension breakdown shows two different effects, responding to
+volume in opposite ways.** Mean *signed* error, + meaning placed too high:
+
+| arm | Tech | Mark | Acce | Orga | Regu | Inve |
+|---|---|---|---|---|---|---|
+| `baseline` | +0.50 | +0.67 | +2.00 | **+0.67** | −0.17 | **+0.67** |
+| `sdd-semantic` | 0.00 | +0.17 | +1.33 | +0.50 | −0.33 | +0.17 |
+| `deviation-deterministic` | +1.00 | +1.83 | +2.17 | **−1.17** | −1.00 | **−1.00** |
+| `deviation-titles` | +2.50 | +1.50 | +3.00 | **−1.17** | −0.33 | **−1.00** |
+| `deviation-bare` | +2.50 | +2.00 | +3.00 | **−1.17** | −0.33 | **−1.00** |
+
+1. **Organizational and Investment are volume-invariant.** Every corpus arm sits
+   at −1.17 and −1.00 — identical to two decimals across the whole 87% cut —
+   while baseline places both *too high* at +0.67. The corpus flips the sign,
+   and the size of the flip does not care how much text is sent. That is the
+   signature of **rubric calibration**: those rungs demand more evidence than
+   the model's unaided prior. It is correctable in the corpus rows, per
+   dimension, and it is where the next work belongs.
+2. **Technology and Acceptance move the other way and *do* track volume**:
+   +1.00 → +2.50 and +2.17 → +3.00 as bodies are stripped. Removing text made
+   over-placement **worse**. A bare title — *"TRL 5 — Technology validated in
+   relevant environment"* — is an aspirational label with no criteria attached,
+   so the model assigns it freely; the body was the thing restraining it.
+
+So the honest statement is narrower than "volume destabilises placement" and
+narrower than "volume is irrelevant". Volume does not drive the net error, and
+cutting it is actively harmful on the dimensions where the body text was doing
+the constraining. The dominant, volume-insensitive term is per-dimension rubric
+calibration.
+
+**Why trimming *levels* would have been the wrong experiment.** Cutting to
+anchor rungs (1/5/9) would shrink the block far more — and remove the correct
+answer for any startup at level 2, 3 or 4. Placement would degrade for a reason
+unrelated to the hypothesis. Both new arms keep all 54 keys for exactly this
+reason.
+
+**What still cannot be concluded, and why.** `baseline` and `sdd-semantic` send
+**byte-identical** prompts (semantic retrieval returns nothing: 0/12 rubric,
+0/2 profile). Their spread is therefore pure sampling noise — and `sdd-semantic`
+"beats" `baseline` in **all three reps**, by 0.25–0.42 MAE. So *a consistent
+direction across three reps is not evidence of an effect here*: the null pair
+does it too, at a similar magnitude. Any argument of the form "the corpus arm
+lost 3/3, therefore it is real" is refuted by this study's own control.
+
+What survives that objection is `within1`, where the control pair differs by
+0, −2, −2 while the corpus arms differ from baseline by −7, −6, −4 — two to
+three times larger, every rep, non-overlapping. The corpus arms are not slightly
+miscalibrated; they miss by more than one level in roughly two thirds of
+placements against baseline's one sixth. MAE understates this because the
+ungrounded arms accumulate many small errors while the corpus arms make fewer,
+much larger ones.
+
+**Scope limit, stated plainly.** This is the *levels* probe, a harness
+construct. Production does not ask the model to assign readiness levels this
+way — mentors set them. So this is a direct negative result for Objective 1b's
+*assessment* claim and says nothing about RNA generation quality, where metric 2
+has been saturated at 0% on every arm and has never produced a signal.
+
+**Two data artifacts, recorded rather than hidden:** the refill re-ran the RNA
+probe for a cell that already had one, so `deviation-deterministic` reports 42
+RNA observations against 36 elsewhere (harmless — metric 2 is 0% universally and
+metrics 1 and 3 read `levelCalls` only); and `deviation-bare` has **no** metric-2
+data at all, because it was run `--only-probe=levels` deliberately.
+
+### `--only-probe=` — added 2026-08-04
+
+Metric 2 has been saturated at 0% on every arm since the 2026-07-30 redesign, so
+half of every rep bought nothing. `--only-probe=rna|levels` narrows which probes
+run, halving the cost of the only metric that discriminates. The bare arm cost
+**6 calls where it would have cost 12** — which is the only reason a third point
+on the volume ladder fit inside the day's cap.
+
+Exact names only, no prefix matching: there are two fixed values, so a prefix
+would buy nothing and could select the wrong one. An unrecognised name errors
+rather than being dropped — silently running fewer probes than asked for looks
+identical to a quota hit in the output.
+
+The wiring test asserts the call is **suppressed**, not filtered afterwards: an
+option that issued both calls and discarded one would leave every reporting test
+green while buying nothing.
+
+**Ambiguous `--only-arm` prefixes now error.** Adding `deviation-titles` made
+`--only-arm=deviation` match two arms, which would have silently run both and
+doubled the spend against a 20/day cap. Over-selection is as costly here as
+under-selection: the filter now refuses and names the candidates. An exact name
+always wins, so one arm's name prefixing another's never makes it unselectable.
+
+### Result, 2026-08-03 evening — rep 3, partial; metric 3 declared unresolvable
+
+`measurement/results/2026-08-03-rep3.json`. 11 of 12 calls landed. The twelfth
+failed on a **503 "high demand" — not a quota 429** — and it failed on the one
+cell that carries the finding: `deviation-deterministic / MediSync / levels`.
+
+**Two conclusions, and the second is the more useful one.**
+
+**1. Metric 1 separates the arms; metric 3 does not, and probably cannot at any
+N reachable on this quota.** `baseline` and `sdd-semantic` send byte-identical
+prompts, so every gap reading they produce is one draw from the same
+distribution. Six such draws now exist — 2.83, 1.67, 3.33 (baseline) and 2.33,
+1.83, 1.83 (sdd) — spanning **1.67 to 3.33, a spread of 1.66 gap points.** The
+corpus arm's pooled deficit is −1.19. **The deficit is smaller than the control
+arms' own spread**, so metric 3 cannot resolve it. The 2026-07-29 "±1.0 noise
+floor" was an underestimate, and the n=2 section below quoting a 0.17 control
+spread was a small-sample artifact — it grew to 0.61 with one more rep, which is
+exactly what a single paired difference of two means was warned not to support.
+
+Metric 1 behaves the opposite way. Per-rep MAE: baseline 0.67 / 0.75 / 0.92,
+sdd 0.42 / 0.33 / 0.50, deviation 1.50 / 1.33 / (rep 3 incomplete). The
+deviation readings sit outside the baseline range and the ranges do not overlap.
+**Report metric 1; treat metric 3 as unresolved and say why.**
+
+**2. The AgroLink half of the reproducibility finding now holds three times.**
+Corpus-arm deltas on AgroLink: `+0 +2 +3 +0 +0 +0`, `+0 +2 +2 +0 +0 +0`,
+`+0 +1 +2 +0 +0 +0` — Market and Acceptance pushed up, the other four exact,
+three reps running. The MediSync half (the −2 collapse on O/R/I) still rests on
+two observations, because rep 3 is precisely the one that 503'd.
+
+**The missing cell biases the pooled numbers in the corpus arm's favour, so do
+not quote the n=3 pooled MAE.** Adding rep 3 moved deviation's pooled MAE from
+1.42 to **1.23** — not because the arm improved, but because rep 3 contributed
+6 AgroLink calls (its low-error startup) and 0 MediSync calls (where all of its
+error is). Deviation's pool is now 18 AgroLink / 12 MediSync against baseline's
+18 / 18. **The balanced n=2 figure below is the like-for-like comparison.**
+Metric 3 is barely affected by the same imbalance (deviation's AgroLink mean
+moves 2.25 → 2.17, shifting the gap by 0.09), but metric 3 is unresolvable
+anyway.
+
+**Next:** one run to fill the missing `deviation / MediSync / levels` cell —
+now **2 calls rather than a 12-call rep**, see below.
+
+### Cell filtering and 503 retry — added 2026-08-03 in response to the above
+
+Two harness gaps the partial rep exposed, both now closed (26 new tests, all
+four guards mutation-verified):
+
+**`--only-arm=` / `--only-startup=`** narrow which cells run. Case-insensitive
+prefix match, comma-separated for several, so the space in `MediSync Cebu`
+never needs quoting:
+
+```bash
+node measurement/measure-grounding.js --only-arm=deviation \
+  --only-startup=MediSync --out=measurement/results/<date>-refill.json
+```
+
+A filter matching nothing **hard-errors before any network call** and lists the
+real names, rather than falling through to the full 12-call run — the same
+reasoning as `validateArgs`' refusal to fall through on an empty `--merge`.
+Unselected arms still get an empty results entry, so reports and `--merge` stay
+well-formed.
+
+**A filtered file is a partial rep.** Its own tables show n=0 for everything
+unselected; `--merge` it with a full run rather than reading it alone.
+
+**Transient 503s are now retried** — 3 attempts at 15s then 30s. A 503 is the
+model being busy; a **429 is never retried**, because the daily cap does not
+reopen for ~24h and a retry loop would only burn wall-clock to earn another
+429. That separation is the whole point, and it is the one guard that needed a
+dedicated test: a plain 429 body contains neither `503` nor `UNAVAILABLE`, so
+removing the quota check passed every other test. The test that pins it uses a
+body naming both.
+
+### Result, 2026-08-03 — second rep, n=2 pooled
+
+`measurement/results/2026-08-03-rep2.json`, all 12 calls, no quota hit on the
+generation endpoint. Pooled with the 2026-07-30 rep below via
+`--merge`; all nine (metric, arm) fingerprint groups matched, so both reps
+pool. **n=2.**
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — level-placement MAE (lower better) | 0.71 | 0.38 | **1.42** |
+| 1 — exact placements | 11/24 | 16/24 | 8/24 |
+| 1 — within one rung | 21/24 | 23/24 | **8/24** |
+| 2 — stage-inappropriate rate (lower better) | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.25 | 2.08 | **1.33** |
+
+**The headline change is not the pooled means — it is that the corpus arm's
+error turned out to be reproducible.** Per-dimension signed deltas against
+seeded truth, both reps:
+
+| MediSync (truth) | T5 | M4 | A3 | O4 | R3 | I3 |
+|---|---|---|---|---|---|---|
+| deterministic, rep 1 | +2 | +2 | +2 | −3 | −2 | −2 |
+| deterministic, rep 2 | +2 | +2 | +2 | −2 | −2 | −2 |
+| baseline, rep 1 | +1 | +1 | +3 | 0 | 0 | +1 |
+| baseline, rep 2 | 0 | 0 | +2 | 0 | −1 | +1 |
+
+The corpus arm returns nearly the same wrong placement twice; `baseline` moves
+around more between reps than the corpus arm does. **So the working hypothesis
+recorded below — that 54 rubric rows *destabilise* placement — is not what the
+data shows, and is retracted.** The corpus arm is, if anything, the *more*
+stable of the two. What it does is **displace placement systematically**:
+on the mid-stage startup, +2 on Technology/Market/Acceptance and −2 on
+Organizational/Regulatory/Investment, in both reps. On AgroLink the same upward
+push appears on Market (+2.0) and Acceptance (+2.5) while the other four sit
+exact — the bottom three are already at level 1 and cannot collapse further, so
+the downward half of the pattern is only observable on MediSync.
+
+That distinction matters because the two defects have different fixes.
+Instability would be a prompt-volume problem. A reproducible per-dimension
+displacement points at the **rubric text's own calibration**: the rungs for
+O/R/I appear to demand more evidence than the model's unaided prior, and those
+for T/M/A less. That is measurable per dimension and correctable in the corpus
+rows, and it is a live hypothesis rather than a demonstrated cause.
+
+**The `within one rung` row is the sharpest single number here.** Baseline
+lands within one rung 21/24 times; the corpus arm 8/24 — and its exact count is
+also 8, so **every non-exact corpus placement is off by more than one rung.**
+The error is large-grained, not a drift.
+
+**Separate finding, not a corpus effect: every arm overshoots Acceptance.**
+Pooled mean signed delta on Acceptance is +1.0 to +2.5 for *all three* arms on
+*both* startups — including the two that receive no rubric text at all. Since it
+is present in the controls it cannot be attributed to the corpus, and because it
+lands on every arm roughly equally it inflates all three MAEs without biasing
+the between-arm contrast. The likeliest explanations are the seeded Acceptance
+ground truth being set too low, or the seeded documents carrying more adoption
+evidence than their assigned ARL rung implies. Worth checking against
+`seed-demo-full.js` before the Acceptance ground truth is used for anything
+else.
+
+**Metrics 1 and 3 are still one finding read two ways, not two.** Both derive
+from the same `levelCalls` array; the displacement pattern above mechanically
+raises MAE *and* compresses the early-vs-mid gap (it lifts AgroLink's Market and
+Acceptance while lowering MediSync's O/R/I). Do not present them as
+corroborating each other.
+
+**Noise floor at n=2.** `baseline` vs `sdd-semantic` remains the control — the
+two send byte-identical prompts, re-verified this rep by diffing the assembled
+prompts from `--dry-run` (identical, same md5). Their pooled spread is 0.33 MAE
+and 0.17 gap points. Note this is still a single paired difference of two means,
+not a variance estimate; it does not license an "N× the noise" multiplier. Note
+also that `sdd-semantic` scored better than `baseline` on metric 1 in *both*
+reps — with byte-identical prompts that is a coin flip landing the same way
+twice, and it is a useful reminder of how little a consistent direction proves
+at n=2.
+
+**Still not established.** Whether the corpus helps or harms *in production*.
+Every number here comes from the levels probe, which hands corpus arms all 54
+rubric rows; production's RNA path retrieves 12 (current rung + next). The
+displacement is a property of the corpus text as read under the probe's
+conditions. A third rep is still worth running for metric 3, whose per-arm
+rep-to-rep swing (baseline 2.83 → 1.67) remains comparable to the effect.
 
 ### Result, 2026-07-30 — the first clean rep
+
+*Pooled into the n=2 result above; kept for the per-rep detail.*
 
 `measurement/results/2026-07-30-redesign-rep1.json`. All 12 calls completed,
 no quota hit. **This is the first rep in which the arms differ only by the
@@ -342,10 +617,13 @@ inflation:
 | deterministic | 7 | 6 | 5 | **1** | **1** | **1** |
 
 The deterministic arm overshoots on three dimensions and collapses the other
-three to level 1. **Working hypothesis: the levels probe hands corpus arms all
+three to level 1. ~~Working hypothesis: the levels probe hands corpus arms all
 54 rubric rows, and that volume destabilises placement rather than grounding
-it.** That is a property of the measurement instrument's confound-2 fix, not of
-the shipped product — production's levels never come from this probe.
+it.~~ **Retracted by the second rep** — the corpus arm reproduced this pattern
+almost exactly, and reproducibility is the opposite of destabilisation. See the
+n=2 section above. The probe-vs-production caveat still stands: this is a
+property of the measurement instrument's confound-2 fix, and production's levels
+never come from this probe.
 
 This also demonstrates why metric 1 uses absolute error. MediSync's
 deterministic deltas are `+2 +2 +2 −3 −2 −2`: a signed mean of **−0.17**, which

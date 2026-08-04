@@ -524,6 +524,113 @@ The window resets at **15:00 Philippine time** (midnight US Pacific). A rep is 1
 
 Before that, the quota-free ladder worth running locally: `pnpm test:measurement` proves the parts, `--dry-run` shows the real assembled prompts, `--merge` reproduces the result tables. None spends generation quota.
 
+## Rep 2 — the corpus arm's error is reproducible, not noisy — 2026-08-03
+
+Master already carries all the measurement work (`measure/grounding-arms`, `feat/rag-corpus`, `fix/auth-guards` are all merged; only the disposable `backup/rag-corpus-preflight` is unmerged). So the top open item was the one both files named: **more reps**. Rep 2 ran, all 12 calls, no generation quota hit. Raw records at `backend/measurement/results/2026-08-03-rep2.json`.
+
+### Preflight, all quota-free, all green
+
+64/64 measurement tests; Step A reproduced exactly (deterministic 12/12, the code's semantic substitute 0/12, SDD §3.2's profile query 0/2); `--dry-run` showed `baseline`/`sdd` retrieving 0 rows and the corpus arm 12 for the RNA probe and 54 for the levels probe.
+
+**The `--dry-run` also earned its keep a second way.** Running it twice back-to-back exhausted the *embedding* per-minute quota (`EmbedContentRequestsPerMinutePerUserPerProjectPerModel-FreeTier`, 100/min — a different quota from the 20/day generation cap), so Step A 429'd inside the measured run. That did **not** invalidate anything, and checking why is the point: `deterministic` is an exact `(readinessType, level)` key lookup that touches no embedding endpoint. Confirmed from the results file — the corpus arm retrieved `trl-2,trl-3,…` for AgroLink (actual level 2) and `trl-5,trl-6,…` for MediSync (actual level 5), the correct 12 keys each. Verified rather than assumed, because "the arm silently ran empty" is exactly the failure this harness has hit before.
+
+### n=2 pooled
+
+| metric (direction) | baseline | sdd-semantic | deviation-deterministic |
+|---|---|---|---|
+| 1 — placement MAE (lower better) | 0.71 | 0.38 | **1.42** |
+| 1 — within one rung | 21/24 | 23/24 | **8/24** |
+| 2 — stage-inappropriate rate | 0% | 0% | 0% |
+| 3 — differentiation gap (higher better) | 2.25 | 2.08 | **1.33** |
+
+**The headline is not the means — it is the reproducibility.** MediSync's per-dimension signed deltas for the corpus arm are `+2 +2 +2 −3 −2 −2` in rep 1 and `+2 +2 +2 −2 −2 −2` in rep 2. Meanwhile `baseline` wobbles more between reps than the corpus arm does (AgroLink `T2 M2 A2` → `T3 M3 A3`).
+
+**That retracts the recorded working hypothesis.** "The levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement" cannot be right — the corpus arm is the *more* stable of the two. It **displaces placement systematically**: up 2 rungs on Technology/Market/Acceptance, down 2 on Organizational/Regulatory/Investment. On AgroLink only the upward half is visible (Market +2.0, Acceptance +2.5, the rest exact) because its bottom three dimensions are already at level 1 and cannot collapse further.
+
+This is a better defect to have found. Instability would be a prompt-volume problem with no clean fix; a reproducible per-dimension displacement points at **the rubric text's own calibration** — the O/R/I rungs appear to demand more evidence than the model's unaided prior, the T/M/A rungs less — which is measurable per dimension and correctable in the corpus rows. Hypothesis, not demonstrated cause.
+
+`within one rung` is the sharpest number: baseline 21/24, corpus 8/24 — and the corpus arm's *exact* count is also 8, so **every non-exact corpus placement is off by more than one rung.** Large-grained displacement, not drift.
+
+### Three things checked rather than assumed
+
+1. **`baseline` and `sdd-semantic` really are byte-identical.** `sdd` beat `baseline` on metric 1 in *both* reps, which looked like a signal. Diffed the two assembled prompts out of `--dry-run`: identical, same md5. So it is a coin flip landing the same way twice — and a useful calibration of how little a consistent direction proves at n=2.
+2. **Every arm overshoots Acceptance** (+1.0 to +2.5 pooled, both startups), *including* the two arms that receive no rubric text. So it is not a corpus effect — it points at the seeded Acceptance ground truth or at the seeded documents carrying more adoption evidence than their assigned ARL rung implies. Inflates all three MAEs about equally, so it does not bias the between-arm contrast. Worth checking against `seed-demo-full.js`.
+3. **`--merge results/*.json` works on this machine.** The final review's `fs.globSync` fix is confirmed on Windows/Git Bash, and the fingerprint guard refuses the superseded `2026-07-29-rep1.json` with an explicit per-group "Not pooled" list rather than silently averaging two probe designs together. Pooled numbers identical to the explicit file list.
+
+### What is and isn't established
+
+Metrics 1 and 3 are still **one finding read two ways** — both come off the same `levelCalls` array, and the displacement pattern mechanically raises MAE *and* compresses the early-vs-mid gap. Not corroboration.
+
+Not established: **whether the corpus helps or harms in production.** Every number here comes from the levels probe, which hands corpus arms all 54 rubric rows; production's RNA path retrieves 12 (current rung + next). And metric 3's per-arm rep-to-rep swing (baseline 2.83 → 1.67) is still comparable to the effect being measured.
+
+### Next step
+
+**Rep 3, after 15:00 PH today.** 8 of the current window's 20 calls remain and a rep costs 12. A partial run now would spend all 8 inside `baseline`+`sdd` and add nothing to the corpus arm, biasing the pool toward the controls — worth *not* doing. Note rep 2 ran at 01:15 on 08-03 and therefore drew on the **08-02** window; the reset is 15:00 PH.
+
+```
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-08-03-rep3.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
+
+Then, newly indicated by this rep rather than by speculation: **a per-dimension calibration pass over the rubric text**, targeting the O/R/I rungs that read stricter than the model's prior and the T/M/A rungs that read looser. That is a corpus-content change, and it is the first time the measurement has pointed at one.
+
+---
+
+## Rep 3 — partial (503), and metric 3 is retired as unresolvable — 2026-08-03 evening
+
+Ran at 18:11 PH, after the 15:00 reset. **11 of 12 calls landed.** The twelfth failed on a transient **503 "This model is currently experiencing high demand"** — *not* a quota 429 — and it hit `deviation-deterministic / MediSync / levels`, the single cell that carries the whole finding. Raw records at `backend/measurement/results/2026-08-03-rep3.json`.
+
+### The useful result is a negative one about the instrument
+
+**Metric 3 cannot resolve the corpus effect, and I don't think more reps will fix it.** `baseline` and `sdd-semantic` send byte-identical prompts, so every gap reading they produce is a draw from one distribution. Three reps give six such draws:
+
+| | rep 1 | rep 2 | rep 3 |
+|---|---|---|---|
+| baseline gap | 2.83 | 1.67 | 3.33 |
+| sdd-semantic gap | 2.33 | 1.83 | 1.83 |
+
+That spans **1.67 to 3.33 — 1.66 gap points between identical prompts.** The corpus arm's pooled deficit is −1.19, i.e. *smaller than the control arms' own spread*. The 2026-07-29 "±1.0 noise floor" was an underestimate, and the 0.17 control spread I recorded at n=2 last night was a small-sample artifact — it grew to 0.61 with one more rep. That is precisely the failure the README warned against when it retracted the "~3× the noise" multiplier: a single paired difference of two means is one number, not a distribution. I reproduced the same mistake at n=2 and the third rep caught it.
+
+**Metric 1 behaves the opposite way and is the metric to report.** Per-rep MAE — baseline 0.67 / 0.75 / 0.92, sdd 0.42 / 0.33 / 0.50, deviation 1.50 / 1.33 / (incomplete). The deviation readings sit outside the baseline range with no overlap.
+
+### The reproducibility finding, one rep stronger and one rep short
+
+AgroLink's corpus-arm deltas now run three-for-three: `+0 +2 +3 +0 +0 +0`, `+0 +2 +2 +0 +0 +0`, `+0 +1 +2 +0 +0 +0` — Market and Acceptance pushed up, the other four exact. The MediSync half (the −2 collapse on O/R/I) still rests on two observations, because rep 3 is exactly the one that 503'd.
+
+### Do not quote the n=3 pooled MAE
+
+Adding rep 3 moved the corpus arm's pooled MAE from 1.42 to **1.23** — and that looks like improvement but is not. Rep 3 contributed 6 AgroLink calls (its low-error startup) and 0 MediSync calls (where all its error lives), so deviation's pool is now 18 AgroLink / 12 MediSync against baseline's 18 / 18. **The missing cell biases the corpus arm's headline number in its own favour.** The balanced n=2 figure, **1.42**, is the like-for-like comparison. Metric 3 is barely touched by the same imbalance (deviation's AgroLink mean moves 2.25 → 2.17, shifting the gap 0.09) but it is unresolvable regardless.
+
+The merge output is honest about this on its face — it prints `MediSync n = 12` next to `AgroLink n = 18` — but the pooled MAE column does not, so it is worth stating in words.
+
+### Harness gap this exposed
+
+**There is no `--only=arm/startup` filter**, so refilling one failed cell costs a full 12-call rep. A one-call retry was impossible. That is the highest-value addition to the harness right now, and it is cheap: the loop already iterates arm × startup.
+
+Also worth noting: **a 503 is not a 429.** The harness stops cleanly on quota, but a transient 503 spends the attempt and produces the same partial-cell outcome without the day being over. A bounded retry on 503 specifically would likely have saved this rep.
+
+### Next step
+
+One full rep to fill the missing `deviation / MediSync / levels` cell — **after 15:00 PH tomorrow (2026-08-04)**. Roughly 8 calls remain in the current window, and a rep needs 12; a partial run now would again spend everything on `baseline` + `sdd` before reaching the corpus arm.
+
+```
+node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-08-04-rep4.json
+node measurement/measure-grounding.js --merge measurement/results/*.json
+```
+
+### Both harness gaps closed, same session
+
+Built TDD (tests written and watched fail before any implementation), then mutation-tested. **91 measurement tests, up from 64.** Jest unchanged at the documented 167 passing / 2 failing.
+
+- **`--only-arm=` / `--only-startup=`** — case-insensitive prefix match, comma-separated, so `MediSync Cebu`'s space never needs quoting. Refilling tomorrow's missing cell is now **2 calls instead of 12**. A filter matching nothing **hard-errors before any network call** and lists the real names; verified live (`exit=1`, Step A never ran). Unselected arms keep an empty results entry so reports and `--merge` stay well-formed.
+- **Bounded 503 retry** — 3 attempts at 15s then 30s. **429 is never retried**, because the daily cap does not reopen for ~24h.
+
+**The mutation pass earned its keep, exactly as it did on the last measurement branch.** Four guards were mutated; three broke tests immediately. The fourth — the `is429` early-return inside `isRetryableServerError` — **passed with the guard removed**, because a real 429 body contains neither `503` nor `UNAVAILABLE`, so nothing I had written could tell the difference. It was a decorative guard. The test that now kills it uses a body naming both codes, which is the only case where the precedence is load-bearing. Written after the mutation revealed the hole, and confirmed to fail without the guard.
+
+Verified end to end without spending generation quota: `--only-arm=deviation --only-startup=MediSync --dry-run` assembles exactly one cell (12 rubric rows for the RNA probe, 54 for the levels probe) and reports no quota spent.
+
+**Caveat recorded in the README:** a filtered file is a partial rep — its own tables read n=0 for everything unselected, so it must be `--merge`d with a full run rather than read alone.
+
 ## Output validation layer (Objective 1c) — built, live-verified, and a fix wave — 2026-08-04
 
 Branch `feat/output-validation`, off `master` at `e9d391c`, 17 commits, **nothing pushed**. Spec `docs/superpowers/specs/2026-08-03-output-validation-design.md`, plan `docs/superpowers/plans/2026-08-03-output-validation.md`, executed as 5 subagent tasks with an independent review after each, then a live-verification step, then a final whole-branch review, then this fix wave.
@@ -582,6 +689,8 @@ New test in `roadblock.service.spec.ts` proves the roadblock verdict is computed
 - Two design decisions (RNS correlation-key uniqueness, stale verdicts on edit) remain open, on purpose, for John to decide — see above. Not coded around.
 
 Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
+
+---
 
 ## Sector-aware weighted readiness scoring (Objective 2b) — built and live-verified — 2026-08-04
 
@@ -655,3 +764,79 @@ select "w0".* from "weight_profiles" as "w0"
 - **216 passing / 1 failing** (`pnpm test`) — the 1 is the documented pre-existing `AiService › passes valid task responses through unchanged`, untouched by this branch. `pnpm build` clean.
 - Demo data on Neon left with MediSync's sector set to `healthtech` and AgroLink's `sector` **null** at the time of writing. The final review caught that `seedDemoStartup`'s `if (existing) return;` guard meant the sectors Task 5 added to the seed spec would never reach an existing database, making the whole sector-aware feature invisible on the machine you demo from. Fixed in `0f82b00`: the guard now fills `sector` with `??=` before returning, so a **null** sector is backfilled on the next boot while a deliberately-set one is never overwritten. AgroLink picks up `agritech` on the next `pnpm dev`.
 - The pre-existing `readiness_evaluations` rows were **not** backfilled (out of scope, per spec); they still hold pre-fix composites.
+## Grounding measurement — n=3 complete, volume hypothesis refuted, displacement confirmed — 2026-08-04
+
+Branch `measure/grounding-rep2`, 3 commits (`8ee0d13`, `e838e87`, `93f6d19`), nothing pushed. 20/20 of the day's `gemini-3.6-flash` quota spent.
+
+### What ran
+
+A 2-call refill of the cell a 503 cost on 2026-08-03, then two new arms testing the standing hypothesis. **n=3 is now complete and balanced** (deviation 18/18 against baseline's 18/18), which discharges the "do not quote the pooled MAE" caveat the checklist carried — the like-for-like figure is **1.36** against baseline's **0.78**.
+
+### The volume hypothesis is refuted, and this time by experiment
+
+Since 2026-07-30 the docs carried *"the levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement."* The checklist had already retracted it at n=2 on the grounds that *"reproducibility is the opposite of destabilisation"* — a reasonable argument but not a test, since a volume effect would reproduce too. `measurement/README.md` still carried the un-retracted version, which is the one this session set out to test.
+
+Two new arms make it a ladder, holding level coverage fixed so exact placement stays reachable and the true level is still never leaked:
+
+| arm | levels block | MAE | within1 |
+|---|---|---|---|
+| `baseline` | none | 0.78 | 30/36 |
+| `deviation-deterministic` | 31,850 ch | 1.36 | 13/36 |
+| `deviation-titles` | 12,552 ch | 1.69 | 15/36 |
+| `deviation-bare` | 4,002 ch | 1.78 | 12/36 |
+
+An **87% cut in block size leaves aggregate placement flat and bad.** Trimming *levels* instead would have been the wrong experiment — it removes the correct answer for any startup at level 2-4, degrading placement for an unrelated reason.
+
+### The per-dimension breakdown is where the finding actually lives
+
+Two effects were hiding inside one MAE number, and they respond to volume in opposite directions:
+
+- **Organizational and Investment are volume-invariant.** Every corpus arm sits at -1.17 and -1.00 signed error, identical to two decimals across the whole cut, while baseline places both *too high* at +0.67. The corpus flips the sign and the flip does not care how much text is sent. This is the displacement hypothesis confirmed on a far stronger basis than the n=2 reproducibility argument: the effect survives an 87% change in everything except the rubric's meaning. It is per-dimension and therefore correctable in the corpus rows.
+- **Technology and Acceptance move the other way and do track volume**: +1.00 to +2.50 and +2.17 to +3.00 as bodies are stripped. Removing text made over-placement *worse* — a bare title is an aspirational label with no criteria attached. So do not "fix" this by shortening the rubric; the body was the restraint.
+
+### The control keeps earning its keep
+
+`baseline` and `sdd-semantic` send byte-identical prompts, and `sdd-semantic` "beats" baseline in **all three reps**. So a consistent direction across three reps is *not* evidence of an effect in this study — the null pair does it too, at similar magnitude. Any "the corpus arm lost 3/3, therefore it is real" argument is refuted by the study's own control. What survives is `within1`, where the control pair differs by 0/-2/-2 while the corpus arms differ from baseline by -7/-6/-4.
+
+### Harness changes
+
+- **`--only-probe=<rna|levels>`.** Metric 2 has been saturated at 0% on every arm since the 2026-07-30 redesign, so half of every rep bought nothing. Narrowing halves the cost of the only discriminating metric, and is the sole reason a third ladder point fit in one window (6 calls where it would have been 12). The wiring test asserts the call is *suppressed*, not filtered afterwards.
+- **Ambiguous `--only-arm` prefixes now hard-error.** Adding a fourth arm made `--only-arm=deviation` match two, which would have silently run both and doubled the spend against a 20/day cap. Over-selection is as costly here as under-selection. Exact names always win, so one arm's name prefixing another's never makes it unselectable.
+- **Three separate renderers, deliberately not one parameterised function.** Every `(metric, arm)` fingerprint hashes `renderRubricBlock`'s source, so editing it in place would have stopped three reps of collected data from pooling. Verified before and after each change that all pre-existing fingerprints stayed byte-identical — 9 for the titles arm, 12 for the bare arm.
+- **A `--dry-run` divergence, caught and fixed.** The dry-run path rendered the ladder independently of the live path, so the first arm to differ made `--dry-run` print a prompt the run would not send — defeating the only quota-free way to check a prompt before paying for it. Both now go through one helper.
+- Harness tests 91 to 103.
+
+### Limits to quote
+
+Every number is the **levels probe**, a harness construct: production does not ask the model to assign readiness levels, mentors set them. This is a direct negative result for Objective 1b's *assessment* claim and says nothing about RNA generation quality, where metric 2 has never produced a signal on any arm. Two data artifacts recorded rather than hidden: the refill re-ran an RNA probe that already existed, so `deviation-deterministic` shows 42 RNA observations against 36 elsewhere (harmless — metrics 1 and 3 read `levelCalls` only); and `deviation-bare` has no metric-2 data at all, having been run `--only-probe=levels` deliberately.
+
+### Next
+
+Not more reps and not another arm — **edit the O/R/I rubric rows** so their evidence bar matches the seeded ground truth, then re-run `deviation-deterministic` alone at `--only-probe=levels --reps=3` (6 calls). The corpus edit changes the content hash, so the recalibrated arm will correctly refuse to pool with these runs; that is the fingerprint guard working as designed.
+
+---
+
+## Session close-out — 2026-08-04
+
+Three work streams. Detail is in the three entries above; this is state and handoff only.
+
+| stream | outcome | where it lives |
+|---|---|---|
+| Output validation (1c) | merged | `master` via PR #18 |
+| Sector-aware weighted scoring (2b) | merged | `master` via PR #19 |
+| Grounding measurement, n=3 + volume ladder | **not merged** | `measure/grounding-rep2`, 8 commits ahead, unpushed |
+
+### A branch-hygiene problem worth not repeating
+
+`measure/grounding-rep2` forked from `master` at `e9d391c` and sat there through **two** merges (PR #18, PR #19). By the time today's measurement write-up was appended, its copies of `SESSION_NOTES.md`, `TODO_CHECKLIST.md` and `PROJECT_OVERVIEW.md` were two work streams stale — so the write-up landed on a version of the checklist that still described 1c as a stub.
+
+Merged `master` in and resolved it (`9a18a2a`). Both conflicts were the same shape: **each branch held the current version of a different row.** The checklist's 1b row was current on the measurement branch and stale on master; its 1c row was the reverse. Resolution was "best of both", not "take one side". Session-log entries were re-sorted chronologically, since the auto-merge had left 1c sitting before two 2026-08-03 entries.
+
+The lesson is cheap: **a long-lived measurement branch that edits shared docs should merge `master` before writing to them**, not after. Verified after the merge: 216 passing / 1 failing (the pre-existing `AiService` case), 103/103 measurement tests, `pnpm build` clean.
+
+### What is genuinely open
+
+1. **The O/R/I rubric recalibration** — the substantive next step, described at the end of the grounding entry above. 6 calls, one window.
+2. **`measure/grounding-rep2` is unpushed** and has no PR. It is now up to date with `master`, so it can be merged whenever the recalibration work is either done or explicitly deferred.
+3. **Deferred from the 2b final review, not blocking:** the mixed-scale `readiness_evaluations` rows (16 legacy rows scored under ÷5 sitting beside new ÷9 rows, with one admin action relabelling across both — a database cleanup, not a code change), and the tier-threshold recalibration left deliberately open at `TODO_CHECKLIST.md` §3.
+4. **Flagged in passing, unrelated to any of the above:** `backend/src/mikro-orm.config.ts` disables TLS certificate verification against Neon (`rejectUnauthorized: false`). Neon uses a public CA, so this is probably just tightenable.

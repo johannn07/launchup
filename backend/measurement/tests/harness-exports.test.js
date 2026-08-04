@@ -22,7 +22,7 @@ test('exposes the constants later tasks depend on', () => {
   assert.equal(m.GEN_MODEL, 'gemini-3.6-flash');
   assert.equal(m.RUBRICS.length, 54);
   assert.equal(Object.keys(m.STARTUPS).length, 2);
-  assert.equal(m.ARMS.length, 3);
+  assert.equal(m.ARMS.length, 5);
 });
 
 test('exposes the pure helpers', () => {
