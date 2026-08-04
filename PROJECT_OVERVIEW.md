@@ -558,9 +558,11 @@ weight_profiles                        weight-profile.entity.ts
 | `regulatory` | **R** — Regulatory | 0.10 |
 | `funding` | **I** — Investment | 0.08 |
 
+These default weights are authored, with no external source (`readiness.weights.ts`) — unlike the RAG corpus, no provenance citation applies here.
+
 Three things to know:
 - The 6 score dimensions are **relabelings** of readiness types, and the mapping is not intuitive (`team ← Acceptance`, `traction ← Organizational`).
-- Weights are **not hardcoded any more**. `WeightProfileService.resolve(sector, businessModel)` walks a three-step cascade — `(sector, businessModel)` → `(sector, null)` → the global `(null, null)` row — and falls back to the `DEFAULT_WEIGHTS` constants only if the table is empty. Profiles that are missing a dimension or don't sum to 1.0 (±0.001) are skipped with a warning rather than applied. `tier_configs.weights` was **deleted**: it was keyed per *tier*, so a startup crossing a tier boundary would have had its weights swapped underneath it, making the composite non-monotonic.
+- Weights are **not hardcoded any more**. `WeightProfileService.resolve(sector, businessModel)` walks a four-step cascade — `(sector, businessModel)` → `(sector, null)` → the global `(null, null)` row → the `DEFAULT_WEIGHTS` constants — falling through to `DEFAULT_WEIGHTS` if nothing in the table validates. Profiles that are missing a dimension or don't sum to 1.0 (±0.001) are skipped with a warning rather than applied. `tier_configs.weights` was **deleted**: it was keyed per *tier*, so a startup crossing a tier boundary would have had its weights swapped underneath it, making the composite non-monotonic.
 - Levels score as a fraction of **9** (`MAX_LEVEL`), matching the 1–9 rubric. This was previously clamped to 0–5 and divided by 5, which inflated every score.
 - Tier thresholds come from `tier_configs` if any rows exist, otherwise fall back to hardcoded Strong/Ready/Emerging/Developing/Early at 85/70/55/40/25 (`:159-180`). **This is what `/admin/tiers` edits.**
 - Calling `GET /readiness/:startupId` **writes** a new `readiness_evaluations` row plus gap rows every single time (`:196-241`) — it's a read endpoint with a side effect, so this table grows on every page view.
@@ -806,7 +808,7 @@ The four objectives come from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (
 | Objective | Status |
 |---|---|
 | 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🟡 RAG implemented (corpus seeded, deterministic rubric lookup working); validator is a stub |
-| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟢 Tiers, gap analysis, and sector-aware weighted scoring all built |
+| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟢 Tiers, gap analysis, and sector-aware weighted scoring all built — components built; differentiation itself did not improve, see §6.3 |
 | 3. Multimodal intake (handwriting OCR, sketch recognition) | 🟡 OCR partial; canvas-section recognition minimal |
 | 4. Leniency bias correction (adversarial prompting, normalization) | 🟡 Normalization + audit trail built; prompting is post-hoc review, not adversarial |
 

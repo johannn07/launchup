@@ -589,13 +589,13 @@ Branch `feat/weighted-scoring`, off `master` at `f3a2c24`. Spec and plan in `.su
 
 ### What was built
 
-`weight_profiles` (`sector?`, `businessModel?`, `weights` json) + `WeightProfileService.resolve(sector, businessModel)`, which walks a three-step cascade: `(sector, businessModel)` -> `(sector, null)` -> the global `(null, null)` row. `Startup` gained `sector` and `businessModel`. The scorer reads the resolved vector instead of five `const` declarations.
+`weight_profiles` (`sector?`, `businessModel?`, `weights` json) + `WeightProfileService.resolve(sector, businessModel)`, which walks a four-step cascade: `(sector, businessModel)` -> `(sector, null)` -> the global `(null, null)` row -> `DEFAULT_WEIGHTS`. `Startup` gained `sector` and `businessModel`. The scorer reads the resolved vector instead of five `const` declarations.
 
 ### Four decisions, and why
 
 1. **Weights keyed by sector/business model, not by tier.** The checklist's original instruction was to read weights from `TierConfig.weights`. That column was keyed per **tier**, which is the wrong axis: a startup crossing a tier boundary would have had its entire weight vector swapped underneath it, so the composite could *fall* as a dimension improved. A readiness score that is non-monotonic in its own inputs is indefensible. Weights must key off something intrinsic to the startup, not off its current score. `TierConfig.weights` was **deleted** rather than left as a decoy.
 2. **Regulatory added as the sixth scored dimension.** Founders answer Regulatory questions and mentors grade Regulatory rubrics; none of it reached the score before. Weights rebalanced to still sum to 1.0.
-3. **Invalid profiles fall through — they don't throw and don't apply.** A profile missing a dimension, or not summing to 1.0 within ±0.001, is skipped with a logged warning and the cascade continues. `DEFAULT_WEIGHTS` is the floor when the table is empty; returning zeros would be a silent scoring failure.
+3. **Invalid profiles fall through — they don't throw and don't apply.** A profile missing a dimension, or not summing to 1.0 within ±0.001, is skipped with a logged warning and the cascade continues. `DEFAULT_WEIGHTS` is the floor if nothing in the table validates; returning zeros would be a silent scoring failure.
 4. **Score as a fraction of 9, not 5.** See below.
 
 ### The ÷5 inflation finding — the correction *narrows* the spread
@@ -647,7 +647,7 @@ select "w0".* from "weight_profiles" as "w0"
 
 - **`pnpm dev` would not compile, and no test caught it.** Task 4's deletion of `TierConfig.weights` left three writes to that property in `backend/seed-dummy.ts`, a tracked root-level script outside `src/`. `nest start --watch` reported `Found 3 errors` and the server never started. Jest only compiles spec-reachable files, so a green 216-test suite coexisted with a backend that could not boot. Fixed by removing the three vestigial `weights:` lines. This is the exact failure mode this repo keeps hitting: green mocks, broken reality.
 - **`tier_configs` is empty on Neon**, so the hardcoded 85/70/55/40/25 ladder is what actually runs. Since scores now sit lower after the ÷9 correction, those thresholds are effectively harsher than before — a deliberate calibration question, not a bug, and flagged as such in the checklist rather than quietly retuned.
-- **`backend/update-demo-tiers.js` is now stale** — it carries its own copy of the old five-dimension weights and the `/5` divisor, so it computes pre-fix numbers. Left alone (out of scope) but noted.
+- **`backend/update-demo-tiers.js` deleted (final review, 2026-08-04)** — it carried its own copy of the old five-dimension weights and the `/5` divisor, and rewrote `startup_readiness_level` rows to targets that contradicted the seeder. Running it would have silently invalidated the 17/41 figures this branch's fixtures and docs depend on.
 - Three stale documentation claims corrected, all verified rather than assumed: the clamp item's differentiation rationale, the 2b item's "read weights from `TierConfig`" instruction, and §4's note that the orphaned `recommendations` table "drops itself on the next boot" — it does not exist on Neon at all, so there is no pending action.
 
 ### State at end of session
