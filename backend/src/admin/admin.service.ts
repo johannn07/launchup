@@ -201,7 +201,7 @@ export class AdminService {
     return this.em.find(TierConfig, {}, { orderBy: { id: 'ASC' } });
   }
 
-  async upsertTierConfigs(configs: { tierLabel: string; threshold: number; weights?: Record<string, number> }[]) {
+  async upsertTierConfigs(configs: { tierLabel: string; threshold: number }[]) {
     // Replace-all rather than diffing — the editor always posts the full set.
     const existing = await this.em.find(TierConfig, {});
     for (const e of existing) {
@@ -214,7 +214,6 @@ export class AdminService {
       const ent = this.em.create(TierConfig, {
         tierLabel: cfg.tierLabel,
         threshold: cfg.threshold,
-        weights: cfg.weights ?? null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
