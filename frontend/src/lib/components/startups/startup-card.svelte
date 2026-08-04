@@ -59,14 +59,6 @@
     statusMap[startup?.qualificationStatus] ?? statusMap[1]
   );
 
-  const readinessWeightMap: Record<string, number> = {
-    Acceptance: 0.3,
-    Market: 0.25,
-    Technology: 0.2,
-    Organizational: 0.15,
-    Investment: 0.1
-  };
-
   const getTierLabel = (startupData: any) => {
     if (startupData?.qualificationStatus !== QualificationStatus.QUALIFIED) {
       return 'Pending';

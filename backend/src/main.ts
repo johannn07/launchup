@@ -229,8 +229,12 @@ async function seedDemoStartup(
 ) {
   const existing = await em.findOne(Startup, { name: spec.name });
   if (existing) {
-    // Never rewrites an existing startup. If an older boot left one owned by a
-    // staff account, run `node seed-demo-full.js` to repair it.
+    // Never rewrites an existing startup's edited fields. If an older boot left
+    // one owned by a staff account, run `node seed-demo-full.js` to repair it.
+    // Filling a still-null sector is consistent with that contract — it's not
+    // overwriting anyone's edit, just applying the value a pre-sector boot skipped.
+    existing.sector ??= spec.sector;
+    await em.flush();
     console.log(`${spec.name} already exists id=`, existing.id);
     return;
   }
