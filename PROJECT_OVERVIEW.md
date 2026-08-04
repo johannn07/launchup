@@ -270,7 +270,7 @@ Every `/admin/*` route is double-guarded: `frontend/src/routes/(app)/admin/+layo
 | `/admin/users` | `admin/users/` | All users sorted by id | Create (any role), edit, delete |
 | `/admin/startups` | `admin/startups/` | All startups + all users (for owner assignment) | Create, edit, delete |
 | `/admin/assessments` | `admin/assessments/` | Assessment items grouped by type (`GET /assessments/grouped`) | Create/update/delete assessment items |
-| `/admin/tiers` | `admin/tiers/` | `TierConfig` rows — label, threshold, dimension weights | `POST /admin/tiers/update` (upsert) |
+| `/admin/tiers` | `admin/tiers/` | `TierConfig` rows — label and threshold (the dimension-weights field was removed; weights live in `weight_profiles`) | `POST /admin/tiers/update` (upsert) |
 | `/admin/ocr-documents` | `admin/ocr-documents/` | OCR'd uploads with extracted text, per-field confidence, sketch detection | Flag legibility / override sketch detection |
 | `/admin/ai/bias-audits` | `admin/ai/bias-audits/` | `AiBiasAudit` rows — raw vs corrected score, deviation, flag | Override a corrected score with written justification |
 
@@ -541,23 +541,29 @@ readiness_evaluations                  readiness-evaluation.entity.ts
     1─∞ readiness_gaps (dimensionKey, score, tierThreshold, shortfall)
 
 tier_configs                           tier-config.entity.ts
-  tierLabel, threshold, weights(json)
+  tierLabel, threshold
+
+weight_profiles                        weight-profile.entity.ts
+  sector?, businessModel?, weights(json), timestamps
 ```
 
 **How scoring works** (`backend/src/readiness/readiness.service.ts`) — worth understanding because the naming is misleading:
 
-| Score dimension | Reads readiness type | Weight |
+| Score dimension | Reads readiness type | Default weight |
 |---|---|---|
-| `team` | **A** — Acceptance | 0.30 |
-| `market` | **M** — Market | 0.25 |
-| `product` | **T** — Technology | 0.20 |
-| `traction` | **O** — Organizational | 0.15 |
-| `funding` | **I** — Investment | 0.10 |
-| — | **R — Regulatory is not scored at all** | 0.00 |
+| `team` | **A** — Acceptance | 0.28 |
+| `market` | **M** — Market | 0.22 |
+| `product` | **T** — Technology | 0.18 |
+| `traction` | **O** — Organizational | 0.14 |
+| `regulatory` | **R** — Regulatory | 0.10 |
+| `funding` | **I** — Investment | 0.08 |
+
+These default weights are authored, with no external source (`readiness.weights.ts`) — unlike the RAG corpus, no provenance citation applies here.
 
 Three things to know:
-- The 5 score dimensions are **relabelings** of readiness types, and the mapping is not intuitive (`team ← Acceptance`, `traction ← Organizational`).
-- Levels are **clamped to 0–5** (`:129`) even though `readiness_levels.level` runs 1–9, so levels 6–9 all score identically.
+- The 6 score dimensions are **relabelings** of readiness types, and the mapping is not intuitive (`team ← Acceptance`, `traction ← Organizational`).
+- Weights are **not hardcoded any more**. `WeightProfileService.resolve(sector, businessModel)` walks a four-step cascade — `(sector, businessModel)` → `(sector, null)` → the global `(null, null)` row → the `DEFAULT_WEIGHTS` constants — falling through to `DEFAULT_WEIGHTS` if nothing in the table validates. Profiles that are missing a dimension or don't sum to 1.0 (±0.001) are skipped with a warning rather than applied. `tier_configs.weights` was **deleted**: it was keyed per *tier*, so a startup crossing a tier boundary would have had its weights swapped underneath it, making the composite non-monotonic.
+- Levels score as a fraction of **9** (`MAX_LEVEL`), matching the 1–9 rubric. This was previously clamped to 0–5 and divided by 5, which inflated every score.
 - Tier thresholds come from `tier_configs` if any rows exist, otherwise fall back to hardcoded Strong/Ready/Emerging/Developing/Early at 85/70/55/40/25 (`:159-180`). **This is what `/admin/tiers` edits.**
 - Calling `GET /readiness/:startupId` **writes** a new `readiness_evaluations` row plus gap rows every single time (`:196-241`) — it's a read endpoint with a side effect, so this table grows on every page view.
 
@@ -741,8 +747,8 @@ This is the most serious category. Full per-controller audit is in §5.4.
 - **`recommendations` vs `ai_recommendations`** — two tables, overlapping purpose, written by different services.
 - **`RnsStatus` vs `Status`** — the same seven-state workflow defined twice, once integer-backed and once string-backed.
 - **README says `DISQUALIFIED`** is a qualification status; the enum has no such value — it has `COMPLETED` instead.
-- **Regulatory readiness is collected but never scored** (§6.3).
-- **Readiness scores clamp to 0–5 while levels run 1–9** (`readiness.service.ts:129`), so a level-9 startup scores identically to a level-5 one — which undermines readiness differentiation.
+- ~~**Regulatory readiness is collected but never scored**~~ — fixed (2026-08-04); it is the sixth scored dimension (§6.3).
+- ~~**Readiness scores clamp to 0–5 while levels run 1–9**~~ — fixed (2026-08-04); scores are now a fraction of 9. Note this **narrowed** the demo spread rather than widening it: the AgroLink/MediSync gap went from 44 points to 24, because dividing by 5 was inflating both scores (§6.3).
 - **`GET /readiness/:startupId` writes on read**, adding 6+ rows per page view and growing `readiness_evaluations` unboundedly.
 
 ### 7.5 Unfinished / orphaned UI
@@ -801,8 +807,8 @@ The four objectives come from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (
 
 | Objective | Status |
 |---|---|
-| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🟡 RAG implemented (corpus seeded, deterministic rubric lookup working); validator is a stub |
-| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟡 Tiers + gap analysis built; sector-aware weights not |
+| 1. Reduce hallucination (prompt templates, **RAG**, output validation) | 🟡 RAG implemented (corpus seeded, deterministic rubric lookup working); validator built but scope-limited — checks retrieval confidence and declared length only, not groundedness (see TODO_CHECKLIST §0 1c) |
+| 2. Readiness differentiation (tiers, weighted scoring, gap analysis) | 🟢 Tiers, gap analysis, and sector-aware weighted scoring all built — components built; differentiation itself did **not** improve, see §7.4 |
 | 3. Multimodal intake (handwriting OCR, sketch recognition) | 🟡 OCR partial; canvas-section recognition minimal |
 | 4. Leniency bias correction (adversarial prompting, normalization) | 🟡 Normalization + audit trail built; prompting is post-hoc review, not adversarial |
 
@@ -812,7 +818,7 @@ Three findings the scaffolding hides:
   - **Provenance:** only the 9 Technology rows are transcribed from a public standard (EU Horizon Europe TRL / ISO 16290:2013). 36 rows (Market/Acceptance/Organizational/Regulatory) are authored against BRLa's published framework; the 9 Investment/IRL rows have no external source.
   - **Not measured:** whether the corpus reduces hallucination. The `gemini-3.6-flash` free tier (20 requests/day) has blocked the three-arm measurement (~54 needed).
 - **`OutputValidatorService` and `RecommendationStorageService` are stubs** — every method body is a `// TODO`. `validateEach()` returns `isValid: true` unconditionally; `saveRecommendations()` does nothing.
-- **The scored dimensions don't match the specification.** All three documents specify TRL, MRL, **RRL**, ARL, ORL. The code scores Technology, Market, Acceptance, Organizational, and **Investment** — omitting Regulatory, adding Investment (`readiness.service.ts:38-73`).
+- **The scored dimensions now cover the specification, plus one.** All three documents specify TRL, MRL, **RRL**, ARL, ORL. As of 2026-08-04 the code scores all five — Regulatory included — **and** Investment, a sixth dimension the source documents don't list. The remaining gap is the extra dimension, not a missing one; either justify Investment's inclusion or drop it.
 
 ### Infrastructure the documents leave open
 

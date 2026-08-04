@@ -29,7 +29,7 @@
     },
     {
       title: 'Dynamic Tiers',
-      description: 'Configure threshold & mathematical weights for startup tiers',
+      description: 'Configure thresholds for startup tiers',
       href: '/admin/tiers',
       icon: Layers,
       color: 'text-amber-500'

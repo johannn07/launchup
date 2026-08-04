@@ -582,3 +582,76 @@ New test in `roadblock.service.spec.ts` proves the roadblock verdict is computed
 - Two design decisions (RNS correlation-key uniqueness, stale verdicts on edit) remain open, on purpose, for John to decide — see above. Not coded around.
 
 Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
+
+## Sector-aware weighted readiness scoring (Objective 2b) — built and live-verified — 2026-08-04
+
+Branch `feat/weighted-scoring`, off `master` at `f3a2c24`. Spec and plan in `.superpowers/sdd/2026-08-04-readiness-weighted-scoring/`, executed as 6 tasks. Nothing pushed.
+
+### What was built
+
+`weight_profiles` (`sector?`, `businessModel?`, `weights` json) + `WeightProfileService.resolve(sector, businessModel)`, which walks a four-step cascade: `(sector, businessModel)` -> `(sector, null)` -> the global `(null, null)` row -> `DEFAULT_WEIGHTS`. `Startup` gained `sector` and `businessModel`. The scorer reads the resolved vector instead of five `const` declarations.
+
+### Four decisions, and why
+
+1. **Weights keyed by sector/business model, not by tier.** The checklist's original instruction was to read weights from `TierConfig.weights`. That column was keyed per **tier**, which is the wrong axis: a startup crossing a tier boundary would have had its entire weight vector swapped underneath it, so the composite could *fall* as a dimension improved. A readiness score that is non-monotonic in its own inputs is indefensible. Weights must key off something intrinsic to the startup, not off its current score. `TierConfig.weights` was **deleted** rather than left as a decoy.
+2. **Regulatory added as the sixth scored dimension.** Founders answer Regulatory questions and mentors grade Regulatory rubrics; none of it reached the score before. Weights rebalanced to still sum to 1.0.
+3. **Invalid profiles fall through — they don't throw and don't apply.** A profile missing a dimension, or not summing to 1.0 within ±0.001, is skipped with a logged warning and the cascade continues. `DEFAULT_WEIGHTS` is the floor if nothing in the table validates; returning zeros would be a silent scoring failure.
+4. **Score as a fraction of 9, not 5.** See below.
+
+### The ÷5 inflation finding — the correction *narrows* the spread
+
+The old code clamped levels to 0–5 and divided by 5, so any level ≥5 read as 100%. The checklist filed this under "undermines differentiation" and implied fixing it would widen the gap between startups. **It does the opposite.** Dividing by 5 inflated both scores, and inflated the *stronger* startup more, because it had more dimensions at or above the clamp. Measured on the demo pair:
+
+| | old (clamp 5, ÷5, 5 dims) | new (clamp 9, ÷9, 6 dims) |
+|---|---|---|
+| AgroLink PH | 32 | 17 |
+| MediSync Cebu | 76 | 41 |
+| **gap** | **44** | **24** |
+
+So this is a **correctness** fix — a level-9 startup no longer scores identically to a level-5 one — and it costs differentiation rather than buying it. Both `TODO_CHECKLIST.md` and `PROJECT_OVERVIEW.md` were corrected to say so; the previous framing would have had someone cite this as a differentiation win in front of a panel.
+
+### The measured sector effect is about one point, and that is arithmetic, not a bug
+
+Switching MediSync from the global profile to healthtech moved its composite **41 -> 40**. That is the honest size of the effect, and it is expected: a weighted mean only diverges from an unweighted one in proportion to the **spread of its inputs**. MediSync's per-dimension percentages are 33/44/56/44/33/33 — a 23-point spread clustered around the middle — so redistributing weight across near-equal values has almost nothing to redistribute. Sector weighting would move the needle on a startup that is genuinely lopsided (say 90% product, 10% regulatory); it cannot manufacture separation between two startups that are each internally flat.
+
+**2b is therefore a correctness and configurability deliverable, not a differentiation win.** That is consistent with §5's earlier finding that the *model* was the binding constraint on differentiation, not the formula.
+
+### Live verification against Neon — PASSED
+
+Real server, real Neon, authenticated as `admin@launchup.local`. Not mocks.
+
+- **Schema landed.** `updateSchema()` created `weight_profiles` (`sector`/`business_model` nullable text, `weights` jsonb) and added `startups.sector` / `startups.business_model`. `tier_configs.weights` is **gone**. Boot logged `Seeded weight profiles: created=3 updated=0`.
+- **Four composites, all as hand-predicted:**
+
+| startup | sector | composite | tier |
+|---|---|---|---|
+| 1 AgroLink PH (A1 M2 T2 O2 R1 I1) | null | **17** | Early |
+| 2 MediSync Cebu (A3 M4 T5 O4 R3 I3) | null -> global profile | **41** | Developing |
+| 2 MediSync Cebu | `healthtech` | **40** | Developing |
+| 2 MediSync Cebu | `fintech` (no profile) | **41** | Developing |
+
+  Both startups return six dimensions including `regulatory`. `PATCH /startups/2` with a `sector` body returned 200 and the sector persisted, which also proves the DTO whitelist fix end to end.
+
+- **The null-matching proof needed strengthening.** The plan treated `fintech -> 41` as proof that MikroORM issues `IS NULL` for `findOne({ sector: null })` against real Postgres. It isn't sufficient on its own: `DEFAULT_WEIGHTS` in code is **numerically identical** to the seeded global row, so 41 is equally consistent with "IS NULL matched row 1" and "IS NULL silently failed and we fell back to the constant". Closed with a read-only probe running the same `em.findOne` against Neon with query logging:
+
+```
+select "w0".* from "weight_profiles" as "w0"
+  where "w0"."sector" is null and "w0"."business_model" is null limit $1   -- 1 result (id=1)
+select "w0".* from "weight_profiles" as "w0"
+  where "w0"."sector" = $1 and "w0"."business_model" is null limit $2      -- 'fintech' -> 0 results
+```
+
+  So the fall-through genuinely reads the DB row, not the constant. Worth recording, because the identical-values coincidence would have hidden a broken cascade indefinitely.
+
+### Along the way
+
+- **`pnpm dev` would not compile, and no test caught it.** Task 4's deletion of `TierConfig.weights` left three writes to that property in `backend/seed-dummy.ts`, a tracked root-level script outside `src/`. `nest start --watch` reported `Found 3 errors` and the server never started. Jest only compiles spec-reachable files, so a green 216-test suite coexisted with a backend that could not boot. Fixed by removing the three vestigial `weights:` lines. This is the exact failure mode this repo keeps hitting: green mocks, broken reality.
+- **`tier_configs` is empty on Neon**, so the hardcoded 85/70/55/40/25 ladder is what actually runs. Since scores now sit lower after the ÷9 correction, those thresholds are effectively harsher than before — a deliberate calibration question, not a bug, and flagged as such in the checklist rather than quietly retuned.
+- **`backend/update-demo-tiers.js` deleted (final review, 2026-08-04)** — it carried its own copy of the old five-dimension weights and the `/5` divisor, and rewrote `startup_readiness_level` rows to targets that contradicted the seeder. Running it would have silently invalidated the 17/41 figures this branch's fixtures and docs depend on.
+- Three stale documentation claims corrected, all verified rather than assumed: the clamp item's differentiation rationale, the 2b item's "read weights from `TierConfig`" instruction, and §4's note that the orphaned `recommendations` table "drops itself on the next boot" — it does not exist on Neon at all, so there is no pending action.
+
+### State at end of session
+
+- **216 passing / 1 failing** (`pnpm test`) — the 1 is the documented pre-existing `AiService › passes valid task responses through unchanged`, untouched by this branch. `pnpm build` clean.
+- Demo data on Neon left with MediSync's sector set to `healthtech` and AgroLink's `sector` **null** at the time of writing. The final review caught that `seedDemoStartup`'s `if (existing) return;` guard meant the sectors Task 5 added to the seed spec would never reach an existing database, making the whole sector-aware feature invisible on the machine you demo from. Fixed in `0f82b00`: the guard now fills `sector` with `??=` before returning, so a **null** sector is backfilled on the next boot while a deliberately-set one is never overwritten. AgroLink picks up `agritech` on the next `pnpm dev`.
+- The pre-existing `readiness_evaluations` rows were **not** backfilled (out of scope, per spec); they still hold pre-fix composites.

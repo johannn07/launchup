@@ -19,7 +19,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { ActivityLog } from '../entities/activity-log.entity';
 import { JwtGuard, AdminGuard } from '../auth/guard';
 import { TierConfig } from '../entities/tier-config.entity';
-import { IsArray, IsObject, IsString, IsNumber, ValidateNested, IsOptional } from 'class-validator';
+import { IsArray, IsString, IsNumber, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class TierConfigItemDto {
@@ -28,10 +28,6 @@ class TierConfigItemDto {
 
   @IsNumber()
   threshold!: number;
-
-  @IsObject()
-  @IsOptional()
-  weights?: Record<string, number>;
 }
 
 class TierConfigUpdateDto {
@@ -149,7 +145,7 @@ export class AdminController {
     if (!Array.isArray(body)) {
       throw new BadRequestException('Expected an array of tier configs');
     }
-    const sanitized = body.map((b: any) => ({ tierLabel: String(b.tierLabel), threshold: Number(b.threshold), weights: b.weights ?? null }));
+    const sanitized = body.map((b: any) => ({ tierLabel: String(b.tierLabel), threshold: Number(b.threshold) }));
     return this.adminService.upsertTierConfigs(sanitized);
   }
 
