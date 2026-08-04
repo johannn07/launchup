@@ -75,6 +75,58 @@ test('derived levels stay on the 1-9 rubric scale and permissive is never lower'
   }
 });
 
+/**
+ * The reference-free check is only sound while its premise holds. If a document
+ * is ever edited to mention hiring, counsel or funding, the ceilings stop being
+ * ceilings and every rate computed from them is wrong.
+ */
+test('the artifact classes claimed absent really are absent from both documents', () => {
+  assert.strictEqual(A.verifyAbsences(A.loadDocuments()), true);
+});
+
+test('verifyAbsences fails when a claimed-absent token is present', () => {
+  assert.throws(
+    () => A.verifyAbsences({ 'AgroLink PH': 'the team engaged external counsel' }),
+    /counsel/,
+  );
+});
+
+/** Generous ceilings are the point: a close reading must not be load-bearing. */
+test('hard-absence ceilings sit above what the documents support', () => {
+  for (const [dim, spec] of Object.entries(A.HARD_ABSENCES)) {
+    for (const startup of Object.keys(A.DERIVED)) {
+      assert.ok(
+        spec.ceiling >= A.DERIVED[startup][dim].permissive,
+        `${startup}/${dim}: ceiling ${spec.ceiling} is stricter than the permissive reading`,
+      );
+    }
+  }
+});
+
+test('unsupported placements are counted over every arm and every hard-absence cell', () => {
+  const counts = A.unsupportedPlacements(A.loadCalls());
+  assert.strictEqual(Object.keys(counts).length, 5, 'expected all five arms');
+  // 3 reps x 2 startups x 3 dimensions.
+  for (const [arm, a] of Object.entries(counts)) {
+    assert.strictEqual(a.checked, 18, `${arm} checked ${a.checked}, expected 18`);
+    assert.ok(a.unsupported <= a.checked);
+  }
+});
+
+/**
+ * Pins the boundary. `ceiling` means "supported up to and including", so a
+ * placement AT it must not be counted. Written after a mutation to `>=` passed
+ * every other test in this file while silently inflating all five arms' rates.
+ */
+test('a placement exactly at the ceiling is supported; one rung above is not', () => {
+  const at = { Organizational: 2, Regulatory: 2, Investment: 2 };
+  const above = { Organizational: 3, Regulatory: 3, Investment: 3 };
+  const call = (byDim) => ({ arm: 'x', startup: 'AgroLink PH', byDim });
+
+  assert.strictEqual(A.unsupportedPlacements([call(at)]).x.unsupported, 0);
+  assert.strictEqual(A.unsupportedPlacements([call(above)]).x.unsupported, 3);
+});
+
 /** The superseded pre-redesign file must stay out, as the fingerprint guard has it. */
 test('the pre-redesign results file is excluded from the pool', () => {
   assert.ok(

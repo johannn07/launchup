@@ -894,3 +894,23 @@ The volume finding is unchanged in direction: stripping the rubric bodies still 
 - Measurement tests 103 → **108**, all passing. `TODO_CHECKLIST.md` §0 carries a hold marker so nobody quotes the retired conclusion or starts the O/R/I rubric edit on the old premise.
 - **The seeded levels are the live demo data, not only harness fixtures** — `seed-demo-full.js` and `main.ts`'s seeder write the same contradicted values, so the app's demo startups disagree with their own capsule proposals. Agreed to fix once the reference is settled, so it is done once.
 - Quota note: the window resets 15:00 PH and 2026-08-04 was spent 20/20, so no generation calls were available this session. None were needed.
+
+### Adjudicated it myself, and then stopped relying on it — same day
+
+Asked to adjudicate the 12 cells rather than wait. Did, and the reference is committed with its provenance stated in the file header — but the more useful outcome is that adjudicating it exposed why a model-set reference cannot carry the positive claim: **an adjudicator reading the document with the full rubric ladder in front of it is approximately the `deviation-deterministic` condition.** Agreement with that arm would be near-circular. My earlier derivation has that problem plus knowledge of the results.
+
+So the claim was restated in a form needing no reference. Three rungs require an artifact class **neither document mentions anywhere** — ORL 3+ a non-founder contributor, RRL 3+ counsel engaged, IRL 3+ a written funding plan — so any placement above them asserts evidence that does not exist, whatever the true level is. The absences are asserted at run time (`verifyAbsences`) rather than trusted, and the ceilings are one rung more generous than the documents support, making the rates a lower bound.
+
+| arm | asserts absent evidence | rate |
+|---|---|---|
+| `baseline` | 11/18 | **61%** |
+| `sdd-semantic` *(control)* | 10/18 | 56% |
+| `deviation-deterministic` | **0/18** | **0%** |
+| `deviation-titles` | 1/18 | 6% |
+| `deviation-bare` | 1/18 | 6% |
+
+Baseline puts MediSync's Investment at 4–5 for a document with no funding token of any kind. **This is an unsupported-claim rate measured directly against the source document** — Objective 1b's actual claim, and an Objective 4 leniency result — and it is the strongest number the grounding study has produced, precisely because it survives the reference being contested. Directional: silent on under-placement.
+
+**A mutation pass earned its keep again.** Changing `placed > spec.ceiling` to `>=` passed all nine tests while silently inflating every arm's rate. The test written to kill it pins the boundary directly (at the ceiling = supported, one rung above = not) and was confirmed to fail against the mutant and pass against the original. Measurement tests 108 → **113**.
+
+What still needs a human reference: whether the corpus places *closer to the true level*. The blind worksheet stands for that.

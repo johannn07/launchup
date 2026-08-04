@@ -36,14 +36,28 @@ const SEEDED = {
 };
 
 /**
- * Derived by one rule applied to every cell: the level is the highest whose core
- * condition the document supports.
+ * provenance: model-adjudicated, post-hoc. Read this before quoting anything
+ * scored against it.
  *
- * `strict` = the condition is stated outright. `permissive` = it is entailed by
- * something stated. They differ on four cells; both are reported because the
- * choice between them is a judgement call and the conclusion should not rest on
- * it. `quote` is the document text the level is read from, so any cell can be
- * checked without re-reading the rubric.
+ * Set by Claude from the documents and the rubric ladders, by one rule applied
+ * to every cell: the level is the highest whose core condition the document
+ * supports. `strict` = stated outright, `permissive` = entailed by something
+ * stated. They differ on four cells; both are reported because the choice is a
+ * judgement call and no conclusion should rest on it. `quote` is the document
+ * text the level is read from, so any cell is checkable without the rubric.
+ *
+ * Two limits, and they are not symmetric:
+ *   - It is sound for RETIRING the old conclusion. That rests on CONTRADICTIONS
+ *     below — the seeded level's own rubric text negated by a document sentence
+ *     — which holds however these cells are set.
+ *   - It CANNOT establish that a corpus arm places better. An adjudicator
+ *     reading the document with the full rubric ladder in front of it is
+ *     approximately the deviation-deterministic condition, so agreement with
+ *     that arm is close to circular. It was also set after the results were
+ *     known. Use HARD_ABSENCES for any claim about which arm is better.
+ *
+ * A human-set reference would break the circularity: data/ground-truth-
+ * adjudication.md is the blind worksheet for that.
  */
 const DERIVED = {
   'AgroLink PH': {
@@ -64,6 +78,45 @@ const DERIVED = {
   },
 };
 
+/**
+ * Reference-free check, and the only part of this file that can support a claim
+ * about which arm is better.
+ *
+ * Every reference here — seeded, derived, or hand-adjudicated — is contestable,
+ * and a model-set one is worse than contestable: an adjudicator reading the
+ * document with the full rubric ladder in front of it is approximately the
+ * deviation-deterministic condition, so its agreement with that arm proves
+ * nothing. This check needs no reference. Some rungs require an artifact class
+ * the document never mentions at all, so any placement at or above them asserts
+ * evidence that does not exist, whatever the true level is.
+ *
+ * `ceiling` is deliberately generous — one rung above what the document
+ * supports — so the finding does not depend on a close reading. `absentTokens`
+ * is asserted against the document at run time, not trusted.
+ *
+ * Directional on purpose: it catches over-placement into absent evidence and is
+ * silent on under-placement.
+ */
+const HARD_ABSENCES = {
+  Organizational: {
+    ceiling: 2,
+    requires: 'ORL 3+ requires a non-founder contributor under contract; ORL 4+ adds written role definitions and a first full-time hire beyond the founders.',
+    // "full-time" is excluded: AgroLink uses it of its founders, not of a hire.
+    absentTokens: ['employee', 'hire', 'hired', 'staff', 'contractor', 'advisor', 'consultant', 'org chart', 'board'],
+  },
+  Regulatory: {
+    ceiling: 2,
+    requires: 'RRL 3+ requires external counsel engaged and a preliminary opinion received.',
+    // "trademark"/"IPOPHL" are present in both documents but are IP, not product regulation.
+    absentTokens: ['counsel', 'lawyer', 'legal', 'regulator', 'regulatory', 'compliance', 'license', 'licence', 'permit', 'certification', 'accredit'],
+  },
+  Investment: {
+    ceiling: 2,
+    requires: 'IRL 3+ requires a written funding plan with a stated target raise and use of funds.',
+    absentTokens: ['funding', 'investor', 'invest', 'raise', 'round', 'seed', 'grant', 'angel', 'term sheet', 'SAFE', 'capital', 'valuation', 'burn', 'runway'],
+  },
+};
+
 /** Cells where the seeded level's own rubric text is contradicted by the document. */
 const CONTRADICTIONS = [
   ['MediSync Cebu', 'Market', 'MRL 4: "no prospect has yet indicated a specific willingness to pay"', 'PHP 5,000 monthly recurring revenue'],
@@ -72,6 +125,51 @@ const CONTRADICTIONS = [
   ['MediSync Cebu', 'Technology', 'TRL 5: "has not yet gone live for actual users"', 'paid subscriptions at 6 live facilities'],
   ['AgroLink PH', 'Acceptance', 'ARL 1: "no user has interacted with the product in any form"', 'paper prototype tested with 3 cooperatives'],
 ];
+
+/** The two documents, read from the harness so they cannot drift from it. */
+function loadDocuments() {
+  const src = fs.readFileSync(path.join(__dirname, 'measure-grounding.js'), 'utf8');
+  const out = {};
+  for (const name of Object.keys(SEEDED)) {
+    const m = src.match(new RegExp(`'${name}':\\s*\\{\\s*\\n\\s*doc: \`([\\s\\S]*?)\`,`));
+    if (!m) throw new Error(`could not extract document for ${name}`);
+    out[name] = m[1];
+  }
+  return out;
+}
+
+/** Fails loudly if a token claimed absent actually appears — assert, don't trust. */
+function verifyAbsences(docs) {
+  const violations = [];
+  for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {
+    for (const [startup, doc] of Object.entries(docs)) {
+      const text = doc.toLowerCase();
+      for (const token of spec.absentTokens) {
+        if (text.includes(token.toLowerCase())) violations.push(`${startup}/${dim}: "${token}" is present`);
+      }
+    }
+  }
+  if (violations.length) throw new Error(`HARD_ABSENCES is wrong:\n  ${violations.join('\n  ')}`);
+  return true;
+}
+
+/** Placements at or above a rung whose required evidence the document lacks. */
+function unsupportedPlacements(calls) {
+  const byArm = {};
+  for (const call of calls) {
+    const a = (byArm[call.arm] ||= { unsupported: 0, checked: 0, detail: [] });
+    for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {
+      const placed = call.byDim[dim];
+      if (typeof placed !== 'number') continue;
+      a.checked++;
+      if (placed > spec.ceiling) {
+        a.unsupported++;
+        a.detail.push(`${call.startup}/${dim}=${placed}`);
+      }
+    }
+  }
+  return byArm;
+}
 
 function reference(name) {
   if (name === 'seeded') return SEEDED;
@@ -177,8 +275,27 @@ function main() {
     table(`Scored against: ${ref}`, scored);
     signedTable(`Scored against: ${ref}`, scored);
   }
+
+  const docs = loadDocuments();
+  verifyAbsences(docs);
+  console.log('\n---\n');
+  console.log('## Reference-free: placements asserting evidence the document does not contain\n');
+  console.log('Verified at run time that none of the required artifact classes appear in either document.');
+  console.log('Ceilings are one rung more generous than the documents support, so this is a lower bound.\n');
+  for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {
+    console.log(`- **${dim}** — unsupported above ${spec.ceiling}. ${spec.requires}`);
+  }
+  console.log('\n| arm | unsupported | of | rate |');
+  console.log('|---|---|---|---|');
+  for (const [arm, a] of Object.entries(unsupportedPlacements(calls))) {
+    console.log(`| ${arm} | ${a.unsupported} | ${a.checked} | ${(100 * a.unsupported / a.checked).toFixed(0)}% |`);
+  }
+  console.log('\nThis is directional: it catches over-placement into absent evidence and says nothing about under-placement.');
 }
 
 if (require.main === module) main();
 
-module.exports = { SEEDED, DERIVED, reference, loadCalls, score, DIMENSIONS, RESULT_FILES };
+module.exports = {
+  SEEDED, DERIVED, HARD_ABSENCES, reference, loadCalls, score, DIMENSIONS, RESULT_FILES,
+  loadDocuments, verifyAbsences, unsupportedPlacements,
+};
