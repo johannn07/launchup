@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const path = require('path');
 
 const A = require(path.resolve(__dirname, '../audit-ground-truth.js'));
+const W = require(path.resolve(__dirname, '../build-adjudication-worksheet.js'));
 
 const DIMS = A.DIMENSIONS;
 
@@ -125,6 +126,42 @@ test('a placement exactly at the ceiling is supported; one rung above is not', (
 
   assert.strictEqual(A.unsupportedPlacements([call(at)]).x.unsupported, 0);
   assert.strictEqual(A.unsupportedPlacements([call(above)]).x.unsupported, 3);
+});
+
+/**
+ * The blind worksheet's only job is to leak nothing. If a seeded level or an
+ * arm name reaches it, whoever fills it in is anchored and the reference it
+ * produces is worth no more than the one it replaces.
+ */
+test('the blind worksheet leaks no reference and no arm output', () => {
+  const blind = W.render(false);
+  for (const arm of ['baseline', 'sdd-semantic', 'deviation-deterministic', 'deviation-titles', 'deviation-bare']) {
+    assert.ok(!blind.includes(arm), `blind worksheet names the arm "${arm}"`);
+  }
+  assert.ok(!blind.includes('MAE'), 'blind worksheet quotes a score');
+  for (const startup of Object.keys(A.SEEDED)) {
+    for (const dim of DIMS) {
+      const cell = A.DERIVED[startup][dim];
+      assert.ok(!blind.includes(cell.why), `blind worksheet contains the derived rationale for ${startup}/${dim}`);
+    }
+  }
+  // Both documents must survive, or there is nothing to adjudicate from.
+  for (const doc of Object.values(A.loadDocuments())) assert.ok(blind.includes(doc));
+});
+
+test('the filled worksheet carries every cell and banners its provenance', () => {
+  const filled = W.render(true);
+  assert.match(filled, /Model-adjudicated, not human-set/);
+  assert.match(filled, /cannot establish that a corpus arm places better/);
+  for (const startup of Object.keys(A.DERIVED)) {
+    for (const dim of DIMS) {
+      const cell = A.DERIVED[startup][dim];
+      assert.ok(filled.includes(`"${cell.quote}"`), `filled worksheet is missing the quote for ${startup}/${dim}`);
+      assert.ok(filled.includes(cell.why), `filled worksheet is missing the rationale for ${startup}/${dim}`);
+    }
+  }
+  // Empty table cells would mean a silently unfilled row.
+  assert.ok(!filled.includes('| | | |'), 'filled worksheet still has a blank row');
 });
 
 /** The superseded pre-redesign file must stay out, as the fingerprint guard has it. */
