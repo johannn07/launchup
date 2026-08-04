@@ -43,7 +43,10 @@ test('a startup filter narrows startups and leaves arms whole', () => {
 });
 
 test('both filters together select exactly one cell — the 2026-08-03 case', () => {
-  const sel = selectCells('deviation', 'MediSync', ARMS, STARTUP_NAMES);
+  // Ran as --only-arm=deviation on 2026-08-03/04, when that prefix was still
+  // unique. deviation-titles now shares it, so the recorded invocation is
+  // spelled in full here — the cell it selects is unchanged.
+  const sel = selectCells('deviation-deterministic', 'MediSync', ARMS, STARTUP_NAMES);
   assert.deepEqual(sel.errors, []);
   assert.deepEqual(
     sel.arms.map((a) => a.name),
@@ -53,13 +56,36 @@ test('both filters together select exactly one cell — the 2026-08-03 case', ()
 });
 
 test('matching is a case-insensitive prefix, so shell-friendly short forms work', () => {
-  const sel = selectCells('DEVIATION', 'medisync', ARMS, STARTUP_NAMES);
+  const sel = selectCells('SDD', 'medisync', ARMS, STARTUP_NAMES);
   assert.deepEqual(sel.errors, []);
   assert.deepEqual(
     sel.arms.map((a) => a.name),
-    ['deviation-deterministic'],
+    ['sdd-semantic'],
   );
   assert.deepEqual(sel.startups, ['MediSync Cebu']);
+});
+
+test('an ambiguous prefix errors rather than silently running both arms', () => {
+  // Over-selection costs quota exactly as under-selection costs data: at a
+  // 20/day cap, a prefix quietly expanding to two arms doubles the spend.
+  const sel = selectCells('deviation', null, ARMS, STARTUP_NAMES);
+  assert.equal(sel.arms.length, 0, 'nothing may be selected on an ambiguous filter');
+  assert.equal(sel.errors.length, 1);
+  assert.match(sel.errors[0], /ambiguous/);
+  // Names both candidates, so the operator can retype without reading the source.
+  assert.match(sel.errors[0], /deviation-deterministic/);
+  assert.match(sel.errors[0], /deviation-titles/);
+});
+
+test('an exact name wins over a prefix that also matches a longer arm', () => {
+  // Without the exact-match precedence, an arm whose full name prefixes another
+  // would be permanently unselectable.
+  const sel = selectCells('deviation-titles', null, ARMS, STARTUP_NAMES);
+  assert.deepEqual(sel.errors, []);
+  assert.deepEqual(
+    sel.arms.map((a) => a.name),
+    ['deviation-titles'],
+  );
 });
 
 test('a comma-separated list selects several, in the harness’s own order', () => {

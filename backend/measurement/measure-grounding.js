@@ -247,6 +247,18 @@ const ARMS = [
   { name: 'baseline', ragCorpus: false, rubricMode: null },
   { name: 'sdd-semantic', ragCorpus: true, rubricMode: 'semantic' },
   { name: 'deviation-deterministic', ragCorpus: true, rubricMode: 'deterministic' },
+  // Identical to deviation-deterministic on the RNA probe; on the levels probe
+  // it renders the same 54 rows as titles only. Level coverage is unchanged, so
+  // exact placement stays reachable and nothing leaks — only the bodies drop.
+  // Isolates "too much text" from "the ladder itself", which trimming levels
+  // could not: dropping levels removes the right answer.
+  //
+  // Measured, not estimated: the levels prompt goes 31,850 -> 12,552 chars, a
+  // 61% cut rather than the order of magnitude a body-length estimate suggests.
+  // The residue is repeated citation boilerplate — the same BRLa attribution on
+  // all 36 framework-derived rows — which is now ~80% of the block. If this arm
+  // shows no effect, strip citations next; that is the remaining volume.
+  { name: 'deviation-titles', ragCorpus: true, rubricMode: 'deterministic', levelsRubricScope: 'full-ladder-titles-only' },
 ];
 
 const cos = (a, b) => {
@@ -359,13 +371,35 @@ function selectCells(armFilter, startupFilter, arms, startupNames) {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
-    const unmatched = entries.filter(
-      (e) => !candidates.some((c) => nameOf(c).toLowerCase().startsWith(e.toLowerCase())),
-    );
+    const matchesFor = (e) => {
+      const lower = e.toLowerCase();
+      // An exact name always wins, so one arm's name being another's prefix
+      // never makes it unselectable.
+      const exact = candidates.filter((c) => nameOf(c).toLowerCase() === lower);
+      if (exact.length) return exact;
+      return candidates.filter((c) => nameOf(c).toLowerCase().startsWith(lower));
+    };
+
+    const unmatched = entries.filter((e) => matchesFor(e).length === 0);
     if (unmatched.length) {
       errors.push(
         `--only-${label}=${filter} matched no ${label}: ${unmatched.map((u) => `"${u}"`).join(', ')}. ` +
           `Available: ${candidates.map(nameOf).join(', ')}.`,
+      );
+      return [];
+    }
+
+    // Over-selection is as costly as under-selection here: silently expanding a
+    // prefix to two arms doubles the calls spent against a 20/day cap. Refuse
+    // and name the candidates rather than guessing which was meant.
+    const ambiguous = entries.filter((e) => matchesFor(e).length > 1);
+    if (ambiguous.length) {
+      errors.push(
+        `--only-${label}=${filter} is ambiguous: ` +
+          ambiguous
+            .map((a) => `"${a}" matches ${matchesFor(a).map(nameOf).join(', ')}`)
+            .join('; ') +
+          `. Use the full name.`,
       );
       return [];
     }
@@ -574,6 +608,39 @@ function renderRubricBlock(rows) {
 }
 
 /**
+ * Same rows, same header, same numbering — bodies dropped.
+ *
+ * Deliberately a separate function rather than an option on renderRubricBlock:
+ * every (metric, arm) fingerprint hashes renderRubricBlock's source, so editing
+ * it in place would change all nine existing fingerprints and stop three reps
+ * of collected data from pooling. See lib/fingerprint.js.
+ */
+/**
+ * The one place an arm's levels-ladder rendering is chosen.
+ *
+ * Both the live run and --dry-run go through this. They rendered the ladder
+ * independently before, and the first arm to differ made --dry-run print a
+ * prompt the live run would not send — which defeats the only quota-free way
+ * to check a prompt before spending on it.
+ */
+function renderLevelsBlockFor(arm, ladder) {
+  return arm.levelsRubricScope === 'full-ladder-titles-only'
+    ? renderTitlesOnlyBlock(ladder)
+    : renderRubricBlock(ladder);
+}
+
+function renderTitlesOnlyBlock(rows) {
+  if (!rows.length) return '';
+  const body = rows
+    .map((r, i) => {
+      const source = r.citation ? ` [${r.provenance ?? 'unattributed'} - ${r.citation}]` : r.provenance ? ` [${r.provenance}]` : '';
+      return `${i + 1}. ${r.title}${source}`;
+    })
+    .join('\n');
+  return `\n--- Verified Readiness Rubrics (authoritative) ---\n${body}\n`;
+}
+
+/**
  * Retrieval is deterministic, so it is computed once per (arm, startup) and
  * reused across reps rather than re-run for no informational gain.
  *
@@ -747,7 +814,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
       // (Step A: 0/12), making it a null-condition replicate of baseline —
       // kept deliberately as a noise control, not a third condition.
       const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
-      levelBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(ladder));
+      levelBlocks.set(`${arm.name}|${startupName}`, renderLevelsBlockFor(arm, ladder));
       results[arm.name].startups[startupName] = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
     }
   }
@@ -1018,6 +1085,7 @@ function currentFingerprints() {
       // to the builders' own .toString() above - see lib/fingerprint.js's header.
       readinessLevelBlock: readinessLevelBlock.toString(),
       renderRubricBlock: renderRubricBlock.toString(),
+      renderTitlesOnlyBlock: renderTitlesOnlyBlock.toString(),
       fullLadderRubrics: fullLadderRubrics.toString(),
     },
     arms: ARMS,
@@ -1203,7 +1271,7 @@ if (require.main === module) {
           const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
           const rnaBlock = renderRubricBlock(retrieved);
           const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
-          const levelBlock = renderRubricBlock(ladder);
+          const levelBlock = renderLevelsBlockFor(arm, ladder);
           console.log(`\n${'='.repeat(78)}\n${arm.name} / ${startupName}\n${'='.repeat(78)}`);
           console.log(`retrieved for RNA probe: ${retrieved.length} rows; levels probe: ${ladder.length} rows`);
           console.log(`\n----- RNA PROMPT -----\n${rnaPrompt(startup.doc, rnaBlock, startup.levels)}`);

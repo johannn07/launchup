@@ -67,7 +67,10 @@ function fingerprintMap(spec) {
     // A corpus-less arm gets no rubric on either probe, so scope and corpus
     // changes cannot affect it. 'none'/null is what lets its old data keep
     // pooling across both a ladder change and a corpus edit.
-    const levelsScope = arm.ragCorpus ? levelsRubricScope : 'none';
+    // An arm may override the ladder's rendering scope (see deviation-titles).
+    // Arms without an override keep the spec-level default, so their hashes are
+    // untouched by the introduction of a new arm.
+    const levelsScope = arm.ragCorpus ? (arm.levelsRubricScope ?? levelsRubricScope) : 'none';
     const rnaScope = arm.ragCorpus ? rnaRubricScope : 'none';
     const corpusHashForArm = arm.ragCorpus ? corpusHash : null;
 
@@ -79,6 +82,11 @@ function fingerprintMap(spec) {
       scope: levelsScope,
       rubricMode: arm.rubricMode,
       corpusHash: corpusHashForArm,
+      // Only hashed for arms that actually use the alternate renderer.
+      // JSON.stringify drops undefined keys, so every other arm's material —
+      // and therefore its hash — is byte-identical to before this existed.
+      titlesRendererSrc:
+        levelsScope === 'full-ladder-titles-only' ? sources.renderTitlesOnlyBlock : undefined,
     });
     out[`rna|${arm.name}`] = hash({
       src: sources.rna,

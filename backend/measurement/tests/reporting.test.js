@@ -58,7 +58,7 @@ test('metric 3 still reports the early-vs-mid gap', () => {
 test('an arm that never ran reports n=0 rather than undefined', () => {
   const s = H.summarizeResults(results({ agroAssigned: {}, mediAssigned: {}, agroRna: {} }));
   for (const key of ['metric1', 'metric2', 'metric3']) {
-    assert.equal(s[key].length, 3, `${key} must have a row for every arm`);
+    assert.equal(s[key].length, 4, `${key} must have a row for every arm`);
     const row = s[key].find((r) => r.arm === 'deviation-deterministic');
     assert.ok(row, 'the unreached arm still needs a row');
   }

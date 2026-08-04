@@ -1,0 +1,254 @@
+{
+  "generatedAt": "2026-08-04T15:00:01.486Z",
+  "genModel": "gemini-3.6-flash",
+  "embedModel": "gemini-embedding-2",
+  "reps": 1,
+  "corpusRows": 54,
+  "floor": 0.78,
+  "fingerprints": {
+    "levels|baseline": "a9502f4cb258",
+    "rna|baseline": "267997de0a08",
+    "fabrication|baseline": "1139754e8b2c",
+    "levels|sdd-semantic": "cf38a1166b86",
+    "rna|sdd-semantic": "d0f7287897a8",
+    "fabrication|sdd-semantic": "fe4de6f3f58f",
+    "levels|deviation-deterministic": "4102609c8e00",
+    "rna|deviation-deterministic": "b32bf70f8d83",
+    "fabrication|deviation-deterministic": "6e83605be117"
+  },
+  "results": {
+    "baseline": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "sdd-semantic": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "deviation-deterministic": {
+      "startups": {
+        "MediSync Cebu": {
+          "retrieved": [
+            {
+              "key": "trl-5",
+              "readinessType": "Technology",
+              "level": 5,
+              "title": "TRL 5 — Technology validated in relevant environment",
+              "content": "Fidelity of the integrated components increases significantly, and the basic technological components are combined with reasonably realistic supporting elements so the technology can be tested in a simulated environment. For a startup, this means the prototype runs against real customer data or in a staging environment that mirrors production, with results measured under near-real conditions even though it has not yet gone live for actual users.",
+              "keyTerms": [
+                "relevant environment",
+                "simulated conditions",
+                "staging environment",
+                "realistic data",
+                "near-real testing"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "trl-6",
+              "readinessType": "Technology",
+              "level": 6,
+              "title": "TRL 6 — Technology demonstrated in relevant environment",
+              "content": "A representative model or prototype system, well beyond the level tested for TRL 5, is tested in a relevant environment, going beyond laboratory testing to simulated operational conditions. A startup at this level has run a pilot with a small number of real customers in their own environment, delivering an end-to-end result and capturing structured feedback, though the deployment is limited in scale and duration.",
+              "keyTerms": [
+                "pilot deployment",
+                "representative prototype",
+                "end-to-end result",
+                "limited-scale trial",
+                "relevant environment"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "mrl-4",
+              "readinessType": "Market",
+              "level": 4,
+              "title": "MRL 4 — Structured customer discovery",
+              "content": "Customer discovery has been formalized: structured interviews have been run across multiple prospects using a consistent script, and a common pain point has been validated across that sample. Evidence is a discovery report summarizing interview themes across a named number of prospects, though no prospect has yet indicated a specific willingness to pay.",
+              "keyTerms": [
+                "customer discovery",
+                "structured interviews",
+                "validated pain point",
+                "discovery report"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "mrl-5",
+              "readinessType": "Market",
+              "level": 5,
+              "title": "MRL 5 — Paid pilots with named customers",
+              "content": "Demand has moved from stated interest to a financial commitment: the startup has run repeated paid pilots with named customers, each willing to pay for a defined trial period. Evidence is signed pilot agreements or purchase orders from more than one named customer, together with pilot usage or outcome data collected during the engagement.",
+              "keyTerms": [
+                "paid pilot",
+                "named customers",
+                "signed agreement",
+                "purchase order",
+                "willingness to pay"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-3",
+              "readinessType": "Regulatory",
+              "level": 3,
+              "title": "RRL 3 — Counsel engaged, preliminary opinion",
+              "content": "External legal or regulatory counsel has been engaged to map the applicable rules, and a preliminary opinion on requirements has been received, but no application or filing process has started. Evidence is an engagement letter or memo from counsel setting out the requirements the product is expected to need to satisfy.",
+              "keyTerms": [
+                "legal counsel engaged",
+                "preliminary opinion",
+                "applicable rules",
+                "no filing started"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-4",
+              "readinessType": "Regulatory",
+              "level": 4,
+              "title": "RRL 4 — Requirements checklist documented",
+              "content": "The specific permits, licenses, or certifications required have been identified and documented as a checklist against named standards, so the team knows exactly what must be obtained even though nothing has yet been submitted. Evidence is a requirements checklist naming each permit or certification and the standard it must meet.",
+              "keyTerms": [
+                "permit checklist",
+                "named standards",
+                "certification requirements",
+                "identified obligations"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-3",
+              "readinessType": "Acceptance",
+              "level": 3,
+              "title": "ARL 3 — Informal demo reactions",
+              "content": "The product concept has been shown to a handful of prospective users through informal demos, and their verbal reactions have been captured, but no behavior has actually been measured — reactions are qualitative impressions only. Evidence is a log of demo sessions with recorded verbal feedback from a small number of people.",
+              "keyTerms": [
+                "informal demo",
+                "qualitative reaction",
+                "verbal feedback",
+                "concept exposure"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-4",
+              "readinessType": "Acceptance",
+              "level": 4,
+              "title": "ARL 4 — Structured usability testing",
+              "content": "Structured usability or concept-testing sessions have been run with prospective users, collecting task-completion and satisfaction data, but every interaction has occurred under direct observation rather than independent use. Evidence is a usability test report with task-completion rates and satisfaction scores from a defined set of observed sessions.",
+              "keyTerms": [
+                "usability testing",
+                "task completion rate",
+                "satisfaction score",
+                "observed session"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-4",
+              "readinessType": "Organizational",
+              "level": 4,
+              "title": "ORL 4 — Initial role definitions and processes",
+              "content": "Initial role definitions have been drafted for the core team and the first process documentation exists — an onboarding guide, a basic decision log — and the venture is actively considering or has made its first full-time hire beyond the founders. Evidence is a written role-definition document and at least one basic process artifact such as an onboarding checklist.",
+              "keyTerms": [
+                "draft role definitions",
+                "first process documentation",
+                "onboarding guide",
+                "first full-time hire"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-5",
+              "readinessType": "Organizational",
+              "level": 5,
+              "title": "ORL 5 — Defined roles and basic governance",
+              "content": "The organization has defined roles across an org chart, a basic governance mechanism such as regular advisor or board check-ins is in place, and specific key hires needed for the next stage have been identified by name or role. Evidence is a written org chart, a recurring governance meeting on the calendar, and a hiring plan naming the next key roles.",
+              "keyTerms": [
+                "defined org chart",
+                "basic governance",
+                "key hire identified",
+                "recurring check-in"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "irl-3",
+              "readinessType": "Investment",
+              "level": 3,
+              "title": "IRL 3 — Funding plan drafted",
+              "content": "A funding plan has been drafted specifying a target raise amount and a rough use-of-funds breakdown, though the team has not yet held a single conversation with a potential investor. Evidence is a written funding plan document with a stated amount and a use-of-funds sketch.",
+              "keyTerms": [
+                "funding plan drafted",
+                "target raise amount",
+                "use of funds sketch"
+              ],
+              "provenance": "authored",
+              "citation": null
+            },
+            {
+              "key": "irl-4",
+              "readinessType": "Investment",
+              "level": 4,
+              "title": "IRL 4 — Initial investor conversations",
+              "content": "Initial investor conversations have taken place — warm-intro meetings or angel-network pitches — using a one-pager or deck, but no term sheet, commitment, or signed instrument has resulted from them. Evidence is a pitch deck circulated to named investors and a log of meetings held, with no signed agreement yet.",
+              "keyTerms": [
+                "initial investor meetings",
+                "pitch deck circulated",
+                "no commitment yet"
+              ],
+              "provenance": "authored",
+              "citation": null
+            }
+          ],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "The system was piloted in 2025-02 across 2 rural health units and 1 district hospital, expanding to 6 facilities by 2025-08 to transmit structured referral records with bed-availability status, triage category, and history (TRL 6). To advance, MediSync Cebu needs to validate scalable system infrastructure to support the full target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres.",
+                "Market": "Market readiness reached MRL 5 as paid facility subscriptions began in 2025-08, achieving PHP 5,000 monthly recurring revenue by 2026-02 across 6 facilities. To advance, MediSync Cebu needs to expand financial commitments across the remaining target market of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Acceptance": "Acceptance readiness started at ARL 3 with informal demos and has progressed to active use in 6 facilities. To formally advance acceptance, MediSync Cebu needs structured usability testing (ARL 4) capturing task-completion rates and satisfaction scores under direct observation with rural health unit and hospital staff.",
+                "Organizational": "Organizational readiness is grounded in 3 founders: Dr. Elena Reyes (9 years provincial public health), Marco Villanueva (7 years health IT), and Joy Tabotabo (5 years LGU administration) at ORL 4. To reach ORL 5, the team needs a formal written org chart, regular governance meetings on the calendar, and a defined hiring plan for future key roles.",
+                "Regulatory": "Regulatory readiness is marked by a trademark application filed with IPOPHL (pending) and no patents, building from RRL 3. To advance to RRL 4, MediSync Cebu needs to document a complete regulatory requirements checklist detailing applicable health data and LGU compliance standards for provincial clinic referrals.",
+                "Investment": "Building from IRL 3 (funding plan drafted), MediSync Cebu generates PHP 5,000 in monthly recurring revenue. To advance investment readiness to IRL 4, the startup needs to circulate a pitch deck to named investors and log initial investor conversations."
+              }
+            }
+          ],
+          "levelCalls": [
+            {
+              "byDim": {
+                "Technology": 7,
+                "Market": 6,
+                "Acceptance": 5,
+                "Organizational": 2,
+                "Regulatory": 1,
+                "Investment": 1
+              }
+            }
+          ],
+          "hallucCalls": []
+        }
+      },
+      "quotaHit": false
+    }
+  }
+}
