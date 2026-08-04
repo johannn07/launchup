@@ -101,13 +101,25 @@ describe('WeightProfileService.resolve', () => {
   });
 
   it('accepts a sum within floating-point tolerance of 1.0', async () => {
-    // 0.28 + 0.22 + 0.18 + 0.14 + 0.10 + 0.08 does not sum to exactly 1 in
-    // IEEE 754. An exact === 1 check would reject the default profile itself.
-    const service = new WeightProfileService(emWith([{ id: 1, sector: null, businessModel: null, weights: DEFAULT_WEIGHTS }]));
+    // Deliberately NOT DEFAULT_WEIGHTS: resolve() falls through to
+    // DEFAULT_WEIGHTS as its own floor when nothing validates, so seeding the
+    // profile with DEFAULT_WEIGHTS would make this pass even if validate()
+    // wrongly rejected it. This set sums to 0.9999999999999999 in IEEE 754
+    // (verified via `node -e`), not 1, so it only passes if the tolerance
+    // check is actually forgiving float error rather than requiring exact ===.
+    const TOLERANCE_PROFILE = {
+      team: 0.3,
+      market: 0.2,
+      product: 0.2,
+      traction: 0.1,
+      regulatory: 0.1,
+      funding: 0.1,
+    };
+    const service = new WeightProfileService(emWith([{ id: 1, sector: null, businessModel: null, weights: TOLERANCE_PROFILE }]));
 
     const weights = await service.resolve(null, null);
 
-    expect(weights).toEqual(DEFAULT_WEIGHTS);
+    expect(weights).toEqual(TOLERANCE_PROFILE);
   });
 });
 
