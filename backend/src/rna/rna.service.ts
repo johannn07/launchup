@@ -1,4 +1,4 @@
-import { EntityManager } from '@mikro-orm/core';
+import { EntityManager, wrap } from '@mikro-orm/core';
 import {
   BadRequestException,
   Injectable,
@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { Startup } from 'src/entities/startup.entity';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
@@ -13,9 +14,9 @@ import { AiService } from 'src/ai/ai.service';
 import { RagQueryService } from './rag-query.service';
 import { GroundedPromptBuilderService } from './grounded-prompt-builder.service';
 import { OutputValidatorService } from './output-validator.service';
-import { RecommendationStorageService } from './recommendation-storage.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { RNA_MAX_LENGTH } from './rna.constants';
 
 @Injectable()
 export class RnaService {
@@ -25,18 +26,55 @@ export class RnaService {
     private readonly ragQueryService: RagQueryService,
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService,
     private readonly outputValidatorService: OutputValidatorService,
-    private readonly recommendationStorageService: RecommendationStorageService,
     private readonly aiRunService: AiRunService,
   ) {}
 
-  async getRNAbyId(startupId: number) {
-    return await this.em.find(
+  // Explicit return type: `wrap().toObject()`'s inferred type references
+  // MikroORM's internal `__loadedType`, which TS can't name in the .d.ts
+  // (declaration: true), so tsc build fails without this annotation.
+  async getRNAbyId(startupId: number): Promise<Record<string, unknown>[]> {
+    const rnas = await this.em.find(
       StartupRNA,
       { startup: startupId },
-      {
-        populate: ['readinessLevel'],
-      },
+      { populate: ['readinessLevel', 'generationRun'] },
     );
+
+    const runIds = [
+      ...new Set(
+        rnas
+          .map((r) => r.generationRun?.id)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+
+    // Correlation key is (generationRun.id, dimensionKey) — filter to RNA so
+    // a startup's RNS recommendations against the same run don't cross in.
+    const recs = runIds.length
+      ? await this.em.find(AiRecommendation, {
+          generationRun: { $in: runIds },
+          recommendationKind: 'RNA',
+        })
+      : [];
+
+    const byKey = new Map(
+      recs.map((rec) => [`${rec.generationRun?.id}|${rec.dimensionKey}`, rec]),
+    );
+
+    return rnas.map((r) => {
+      const rec = r.generationRun
+        ? byKey.get(`${r.generationRun.id}|${r.readinessLevel.readinessType}`)
+        : undefined;
+      // generationRun is only needed to build the join key above — drop it
+      // rather than ship AiGenerationRun internals (model, config, tokens) to
+      // the client.
+      const { generationRun: _generationRun, ...base } = wrap(r).toObject();
+      return {
+        ...base,
+        validationStatus: rec?.validationStatus ?? null,
+        confidenceStatus: rec?.confidenceStatus ?? null,
+        validationNotes: rec?.notes ?? null,
+      };
+    });
   }
 
   async create(dto: CreateStartupRnaDto) {
@@ -166,7 +204,7 @@ export class RnaService {
       }
       prompt = `${basePrompt}\n\nTASK: Generate a Readiness and Needs Assessment (RNA) for: ${readinessLevelsWithoutRNA
         .map((srl) => srl.readinessLevel.readinessType)
-        .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max 500 chars)}]`;
+        .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max ${RNA_MAX_LENGTH} chars)}]`;
     }
 
     const generatedRNAs = await this.aiService.generateRNAsFromPrompt(ctx, prompt);
@@ -195,13 +233,20 @@ export class RnaService {
         await this.em.persist(newRNA);
         createdRNAs.push(newRNA);
 
+        const verdict = this.outputValidatorService.validate({
+          content: newRNA.rna,
+          retrievalLowConfidence: ragContext.lowConfidence,
+          maxLength: RNA_MAX_LENGTH,
+        });
+
         await this.aiService.recordAiRecommendation({
           startupId: startup.id,
           dimensionKey: matchingReadinessLevel.readinessLevel.readinessType,
           recommendationKind: 'RNA',
           content: newRNA.rna,
-          validationStatus: 'validated',
-          confidenceStatus: 'high-confidence',
+          validationStatus: verdict.validationStatus,
+          confidenceStatus: verdict.confidenceStatus,
+          notes: verdict.notes,
           generationRun: ctx.run,
         });
       }

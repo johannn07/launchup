@@ -18,12 +18,15 @@ import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { RoadblockChatHistory } from 'src/entities/roadblock-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { OutputValidatorService } from '../rna/output-validator.service';
+import { ROADBLOCK_MAX_LENGTH } from './roadblock.constants';
 
 @Injectable()
 export class RoadblockService {
   constructor(
     private readonly em: EntityManager,
     private readonly aiService: AiService,
+    private readonly outputValidatorService: OutputValidatorService,
     private readonly aiRunService: AiRunService,
   ) {}
 
@@ -201,7 +204,7 @@ export class RoadblockService {
         It should consist of description, fix, and riskNumber which should be an integer from 1 to 5.
         JSON format: [{"description": "", "fix": "", "riskNumber": (number)}]
         Requirement note:
-        - description and fix have 500 max length
+        - description and fix have ${ROADBLOCK_MAX_LENGTH} max length
         - return an empty list if no roadblock exists.
         `;
 
@@ -245,13 +248,23 @@ export class RoadblockService {
       await this.em.persistAndFlush(roadblock);
       roadblocks.push(roadblock);
 
+      const recommendationContent = `${data.description}\n\nFix: ${data.fix}`;
+      const verdict = this.outputValidatorService.validate({
+        content: recommendationContent,
+        // This path never queries RAG, so there is no retrieval-confidence
+        // signal to report.
+        retrievalLowConfidence: false,
+        maxLength: ROADBLOCK_MAX_LENGTH,
+      });
+
       await this.aiService.recordAiRecommendation({
         startupId: startup.id,
         dimensionKey: 'roadblock',
         recommendationKind: 'Roadblock',
-        content: `${data.description}\n\nFix: ${data.fix}`,
-        validationStatus: 'validated',
-        confidenceStatus: 'high-confidence',
+        content: recommendationContent,
+        validationStatus: verdict.validationStatus,
+        confidenceStatus: verdict.confidenceStatus,
+        notes: verdict.notes,
         generationRun: ctx.run,
       });
 

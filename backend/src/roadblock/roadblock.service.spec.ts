@@ -4,6 +4,8 @@ import { Startup } from 'src/entities/startup.entity';
 import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { Roadblock } from 'src/entities/roadblock.entity';
+import { OutputValidatorService } from 'src/rna/output-validator.service';
+import { ROADBLOCK_MAX_LENGTH } from './roadblock.constants';
 
 // A *real* AiRunService over a stub EntityManager. An earlier round of this
 // fix passed while the row stayed startup_id NULL, precisely because the
@@ -90,7 +92,12 @@ describe('RoadblockService.generateRoadblocks provenance', () => {
 
     const ctx = buildCtx();
     const { aiRunService } = buildAiRunService();
-    const service = new RoadblockService(em as any, aiService as any, aiRunService);
+    const service = new RoadblockService(
+      em as any,
+      aiService as any,
+      new OutputValidatorService(),
+      aiRunService,
+    );
 
     // The controller already attributed ctx.run.startup at begin() time from
     // dto.startupId; simulate that here.
@@ -123,6 +130,100 @@ describe('RoadblockService.generateRoadblocks provenance', () => {
     // generateRoadblocks never touches ctx.run.startup — attribution stays
     // whatever the controller set from dto.startupId.
     expect(ctx.run.startup).toBe(startup);
+  });
+});
+
+describe('RoadblockService.generateRoadblocks output validation (Objective 1c)', () => {
+  const runGenerate = async (description: string, fix: string) => {
+    const startup = buildStartup();
+    const created: any[] = [];
+    const em = buildEm(startup, created);
+
+    const aiService = {
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+      generateRoadblocksFromPrompt: jest
+        .fn()
+        .mockResolvedValue([{ description, fix, riskNumber: 4 }]),
+      reviewBiasScore: jest
+        .fn()
+        .mockResolvedValue({ correctedScore: 4, biasFlagged: false, justification: '' }),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      recordBiasAudit: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const ctx = buildCtx();
+    const { aiRunService } = buildAiRunService();
+    const service = new RoadblockService(
+      em as any,
+      aiService as any,
+      new OutputValidatorService(),
+      aiRunService,
+    );
+    ctx.run.startup = startup;
+
+    await service.generateRoadblocks(
+      { startupId: 1, no_of_roadblocks_to_create: 1, debug: false } as any,
+      ctx,
+    );
+    return aiService;
+  };
+
+  // Helpers duplicated from the provenance describe block above — kept local
+  // so this block doesn't depend on execution order.
+  function buildStartup(overrides: Record<string, any> = {}) {
+    return {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: { title: 't' },
+      user: { id: 5 },
+      ...overrides,
+    } as any;
+  }
+
+  function buildEm(startup: any, created: any[]) {
+    return {
+      findOneOrFail: jest.fn((entity: any, where: any) => {
+        if (entity === Startup) {
+          if (where.id === startup.id) return Promise.resolve(startup);
+          return Promise.reject(new Error(`Startup ${where.id} not found`));
+        }
+        return Promise.reject(new Error(`Unexpected findOneOrFail(${entity})`));
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === Rns) return Promise.resolve([]);
+        if (entity === Initiative) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+      persistAndFlush: jest.fn((entity) => {
+        created.push(entity);
+        return Promise.resolve(undefined);
+      }),
+    };
+  }
+
+  it('records a validated, high-confidence verdict for well-formed content', async () => {
+    const aiService = await runGenerate('No traction yet.', 'Run pilots.');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ validationStatus: 'validated', confidenceStatus: 'high-confidence' }),
+    );
+  });
+
+  it('flags recommendation content longer than the declared 500-character limit', async () => {
+    // Proves the verdict is computed, not the hardcoded literal this branch replaces.
+    const aiService = await runGenerate('x'.repeat(ROADBLOCK_MAX_LENGTH + 100), 'Run pilots.');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        validationStatus: 'flagged',
+        notes: expect.stringContaining('500'),
+      }),
+    );
+  });
+
+  it('always reports high confidence, since this path never queries RAG', async () => {
+    const aiService = await runGenerate('No traction yet.', 'Run pilots.');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ confidenceStatus: 'high-confidence' }),
+    );
   });
 });
 
@@ -180,7 +281,12 @@ describe('RoadblockService.refineRoadblock provenance', () => {
 
     const ctx = refineCtx();
     const { aiRunService, forkedEm } = buildAiRunService();
-    const service = new RoadblockService(em as any, aiService as any, aiRunService);
+    const service = new RoadblockService(
+      em as any,
+      aiService as any,
+      {} as any, // OutputValidatorService, unused by refineRoadblock
+      aiRunService,
+    );
 
     const result = await service.refineRoadblock(30, [], 'Make it sharper', ctx);
 
@@ -219,7 +325,12 @@ describe('RoadblockService.refineRoadblock provenance', () => {
 
     const ctx = refineCtx();
     const { aiRunService, forkedEm } = buildAiRunService();
-    const service = new RoadblockService(em as any, aiService as any, aiRunService);
+    const service = new RoadblockService(
+      em as any,
+      aiService as any,
+      {} as any, // OutputValidatorService, unused by refineRoadblock
+      aiRunService,
+    );
 
     await expect(
       service.refineRoadblock(30, [], 'Make it sharper', ctx),
@@ -245,7 +356,12 @@ describe('RoadblockService.refineRoadblock provenance', () => {
 
     const ctx = buildCtx();
     const { aiRunService, forkedEm } = buildAiRunService();
-    const service = new RoadblockService(em as any, aiService as any, aiRunService);
+    const service = new RoadblockService(
+      em as any,
+      aiService as any,
+      {} as any, // OutputValidatorService, unused by refineRoadblock
+      aiRunService,
+    );
 
     await expect(
       service.refineRoadblock(999, [], 'Make it sharper', ctx),

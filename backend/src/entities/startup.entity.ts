@@ -19,7 +19,6 @@ import { StartupReadinessLevel } from './startup-readiness-level.entity';
 import { UratQuestionAnswer } from './urat-question-answer.entity';
 import { CalculatorQuestionAnswer } from './calculator-question-answer.entity';
 import { StartupWaitlistMessage } from './startup-waitlist-message.entity';
-import { Recommendation } from './recommendation.entity';
 import { RagRetrievalLog } from './rag-retrieval-log.entity';
 import { ReadinessEvaluation } from './readiness-evaluation.entity';
 
@@ -83,9 +82,6 @@ export class Startup {
 
   @OneToMany(() => StartupWaitlistMessage, (message) => message.startup)
   waitlistMessages = new Collection<StartupWaitlistMessage>(this);
-
-  @OneToMany(() => Recommendation, (recommendation) => recommendation.startup)
-  recommendations = new Collection<Recommendation>(this);
 
   @OneToMany(() => RagRetrievalLog, (log) => log.startup)
   ragRetrievalLogs = new Collection<RagRetrievalLog>(this);
