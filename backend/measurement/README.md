@@ -289,8 +289,124 @@ the code):
   harness as SRS §2.2 evidence ("return null for unverifiable fields")
   even though it is saturated and discriminates nothing between arms.
 
-A rep is now **12 calls** (RNA + levels, × 2 startups × 3 arms), or **18**
-with `--with-fabrication-probe` added back in — against the same 20/day cap.
+A full rep is **2 calls per (arm, startup, probe)**. With five arms and two
+startups that is 20 calls — a whole day's cap — so full reps are no longer the
+normal way to run this. Use `--only-arm=` and `--only-probe=` to buy the cell
+you actually need; see below.
+
+### Result, 2026-08-04 — n=3 complete, and the volume hypothesis is refuted
+
+Three files: `2026-08-04-rep3-refill.json` (2 calls, filling the cell a 503 cost
+on 2026-08-03), `2026-08-04-titles-arm.json` (12 calls), `2026-08-04-bare-arm.json`
+(6 calls). 20/20 of the day's quota.
+
+**All five arms, n=3, pooled** — merge the six post-redesign files:
+
+| arm | levels block | MAE | exact | within1 |
+|---|---|---|---|---|
+| `baseline` | *none* | **0.78** | 44% | **30/36** |
+| `sdd-semantic` *(control — see below)* | *none* | 0.42 | 64% | 34/36 |
+| `deviation-deterministic` | 31,850 ch | 1.36 | 33% | 13/36 |
+| `deviation-titles` | 12,552 ch | 1.69 | 25% | 15/36 |
+| `deviation-bare` | 4,002 ch | 1.78 | 25% | 12/36 |
+
+**The recorded hypothesis is dead.** Since 2026-07-30 this file and
+`TODO_CHECKLIST.md` have carried: *"the levels probe hands corpus arms all 54
+rubric rows and that volume destabilises placement."* Two new arms test it as a
+ladder — `deviation-titles` drops each row's body, `deviation-bare` drops the
+provenance suffix too — holding level coverage fixed so exact placement stays
+reachable and the true level is still never leaked.
+
+An **87% cut in block size changes nothing** in aggregate. All three corpus arms
+sit in a band (MAE 1.36–1.78, within1 12–15/36) far below an arm given no rubric
+at all. Volume does not explain the net damage.
+
+**But the per-dimension breakdown shows two different effects, responding to
+volume in opposite ways.** Mean *signed* error, + meaning placed too high:
+
+| arm | Tech | Mark | Acce | Orga | Regu | Inve |
+|---|---|---|---|---|---|---|
+| `baseline` | +0.50 | +0.67 | +2.00 | **+0.67** | −0.17 | **+0.67** |
+| `sdd-semantic` | 0.00 | +0.17 | +1.33 | +0.50 | −0.33 | +0.17 |
+| `deviation-deterministic` | +1.00 | +1.83 | +2.17 | **−1.17** | −1.00 | **−1.00** |
+| `deviation-titles` | +2.50 | +1.50 | +3.00 | **−1.17** | −0.33 | **−1.00** |
+| `deviation-bare` | +2.50 | +2.00 | +3.00 | **−1.17** | −0.33 | **−1.00** |
+
+1. **Organizational and Investment are volume-invariant.** Every corpus arm sits
+   at −1.17 and −1.00 — identical to two decimals across the whole 87% cut —
+   while baseline places both *too high* at +0.67. The corpus flips the sign,
+   and the size of the flip does not care how much text is sent. That is the
+   signature of **rubric calibration**: those rungs demand more evidence than
+   the model's unaided prior. It is correctable in the corpus rows, per
+   dimension, and it is where the next work belongs.
+2. **Technology and Acceptance move the other way and *do* track volume**:
+   +1.00 → +2.50 and +2.17 → +3.00 as bodies are stripped. Removing text made
+   over-placement **worse**. A bare title — *"TRL 5 — Technology validated in
+   relevant environment"* — is an aspirational label with no criteria attached,
+   so the model assigns it freely; the body was the thing restraining it.
+
+So the honest statement is narrower than "volume destabilises placement" and
+narrower than "volume is irrelevant". Volume does not drive the net error, and
+cutting it is actively harmful on the dimensions where the body text was doing
+the constraining. The dominant, volume-insensitive term is per-dimension rubric
+calibration.
+
+**Why trimming *levels* would have been the wrong experiment.** Cutting to
+anchor rungs (1/5/9) would shrink the block far more — and remove the correct
+answer for any startup at level 2, 3 or 4. Placement would degrade for a reason
+unrelated to the hypothesis. Both new arms keep all 54 keys for exactly this
+reason.
+
+**What still cannot be concluded, and why.** `baseline` and `sdd-semantic` send
+**byte-identical** prompts (semantic retrieval returns nothing: 0/12 rubric,
+0/2 profile). Their spread is therefore pure sampling noise — and `sdd-semantic`
+"beats" `baseline` in **all three reps**, by 0.25–0.42 MAE. So *a consistent
+direction across three reps is not evidence of an effect here*: the null pair
+does it too, at a similar magnitude. Any argument of the form "the corpus arm
+lost 3/3, therefore it is real" is refuted by this study's own control.
+
+What survives that objection is `within1`, where the control pair differs by
+0, −2, −2 while the corpus arms differ from baseline by −7, −6, −4 — two to
+three times larger, every rep, non-overlapping. The corpus arms are not slightly
+miscalibrated; they miss by more than one level in roughly two thirds of
+placements against baseline's one sixth. MAE understates this because the
+ungrounded arms accumulate many small errors while the corpus arms make fewer,
+much larger ones.
+
+**Scope limit, stated plainly.** This is the *levels* probe, a harness
+construct. Production does not ask the model to assign readiness levels this
+way — mentors set them. So this is a direct negative result for Objective 1b's
+*assessment* claim and says nothing about RNA generation quality, where metric 2
+has been saturated at 0% on every arm and has never produced a signal.
+
+**Two data artifacts, recorded rather than hidden:** the refill re-ran the RNA
+probe for a cell that already had one, so `deviation-deterministic` reports 42
+RNA observations against 36 elsewhere (harmless — metric 2 is 0% universally and
+metrics 1 and 3 read `levelCalls` only); and `deviation-bare` has **no** metric-2
+data at all, because it was run `--only-probe=levels` deliberately.
+
+### `--only-probe=` — added 2026-08-04
+
+Metric 2 has been saturated at 0% on every arm since the 2026-07-30 redesign, so
+half of every rep bought nothing. `--only-probe=rna|levels` narrows which probes
+run, halving the cost of the only metric that discriminates. The bare arm cost
+**6 calls where it would have cost 12** — which is the only reason a third point
+on the volume ladder fit inside the day's cap.
+
+Exact names only, no prefix matching: there are two fixed values, so a prefix
+would buy nothing and could select the wrong one. An unrecognised name errors
+rather than being dropped — silently running fewer probes than asked for looks
+identical to a quota hit in the output.
+
+The wiring test asserts the call is **suppressed**, not filtered afterwards: an
+option that issued both calls and discarded one would leave every reporting test
+green while buying nothing.
+
+**Ambiguous `--only-arm` prefixes now error.** Adding `deviation-titles` made
+`--only-arm=deviation` match two arms, which would have silently run both and
+doubled the spend against a 20/day cap. Over-selection is as costly here as
+under-selection: the filter now refuses and names the candidates. An exact name
+always wins, so one arm's name prefixing another's never makes it unselectable.
 
 ### Result, 2026-08-03 evening — rep 3, partial; metric 3 declared unresolvable
 

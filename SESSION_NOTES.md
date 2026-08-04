@@ -634,3 +634,53 @@ Built TDD (tests written and watched fail before any implementation), then mutat
 Verified end to end without spending generation quota: `--only-arm=deviation --only-startup=MediSync --dry-run` assembles exactly one cell (12 rubric rows for the RNA probe, 54 for the levels probe) and reports no quota spent.
 
 **Caveat recorded in the README:** a filtered file is a partial rep — its own tables read n=0 for everything unselected, so it must be `--merge`d with a full run rather than read alone.
+
+## Grounding measurement — n=3 complete, volume hypothesis refuted, displacement confirmed — 2026-08-04
+
+Branch `measure/grounding-rep2`, 3 commits (`8ee0d13`, `e838e87`, `93f6d19`), nothing pushed. 20/20 of the day's `gemini-3.6-flash` quota spent.
+
+### What ran
+
+A 2-call refill of the cell a 503 cost on 2026-08-03, then two new arms testing the standing hypothesis. **n=3 is now complete and balanced** (deviation 18/18 against baseline's 18/18), which discharges the "do not quote the pooled MAE" caveat the checklist carried — the like-for-like figure is **1.36** against baseline's **0.78**.
+
+### The volume hypothesis is refuted, and this time by experiment
+
+Since 2026-07-30 the docs carried *"the levels probe hands corpus arms all 54 rubric rows and that volume destabilises placement."* The checklist had already retracted it at n=2 on the grounds that *"reproducibility is the opposite of destabilisation"* — a reasonable argument but not a test, since a volume effect would reproduce too. `measurement/README.md` still carried the un-retracted version, which is the one this session set out to test.
+
+Two new arms make it a ladder, holding level coverage fixed so exact placement stays reachable and the true level is still never leaked:
+
+| arm | levels block | MAE | within1 |
+|---|---|---|---|
+| `baseline` | none | 0.78 | 30/36 |
+| `deviation-deterministic` | 31,850 ch | 1.36 | 13/36 |
+| `deviation-titles` | 12,552 ch | 1.69 | 15/36 |
+| `deviation-bare` | 4,002 ch | 1.78 | 12/36 |
+
+An **87% cut in block size leaves aggregate placement flat and bad.** Trimming *levels* instead would have been the wrong experiment — it removes the correct answer for any startup at level 2-4, degrading placement for an unrelated reason.
+
+### The per-dimension breakdown is where the finding actually lives
+
+Two effects were hiding inside one MAE number, and they respond to volume in opposite directions:
+
+- **Organizational and Investment are volume-invariant.** Every corpus arm sits at -1.17 and -1.00 signed error, identical to two decimals across the whole cut, while baseline places both *too high* at +0.67. The corpus flips the sign and the flip does not care how much text is sent. This is the displacement hypothesis confirmed on a far stronger basis than the n=2 reproducibility argument: the effect survives an 87% change in everything except the rubric's meaning. It is per-dimension and therefore correctable in the corpus rows.
+- **Technology and Acceptance move the other way and do track volume**: +1.00 to +2.50 and +2.17 to +3.00 as bodies are stripped. Removing text made over-placement *worse* — a bare title is an aspirational label with no criteria attached. So do not "fix" this by shortening the rubric; the body was the restraint.
+
+### The control keeps earning its keep
+
+`baseline` and `sdd-semantic` send byte-identical prompts, and `sdd-semantic` "beats" baseline in **all three reps**. So a consistent direction across three reps is *not* evidence of an effect in this study — the null pair does it too, at similar magnitude. Any "the corpus arm lost 3/3, therefore it is real" argument is refuted by the study's own control. What survives is `within1`, where the control pair differs by 0/-2/-2 while the corpus arms differ from baseline by -7/-6/-4.
+
+### Harness changes
+
+- **`--only-probe=<rna|levels>`.** Metric 2 has been saturated at 0% on every arm since the 2026-07-30 redesign, so half of every rep bought nothing. Narrowing halves the cost of the only discriminating metric, and is the sole reason a third ladder point fit in one window (6 calls where it would have been 12). The wiring test asserts the call is *suppressed*, not filtered afterwards.
+- **Ambiguous `--only-arm` prefixes now hard-error.** Adding a fourth arm made `--only-arm=deviation` match two, which would have silently run both and doubled the spend against a 20/day cap. Over-selection is as costly here as under-selection. Exact names always win, so one arm's name prefixing another's never makes it unselectable.
+- **Three separate renderers, deliberately not one parameterised function.** Every `(metric, arm)` fingerprint hashes `renderRubricBlock`'s source, so editing it in place would have stopped three reps of collected data from pooling. Verified before and after each change that all pre-existing fingerprints stayed byte-identical — 9 for the titles arm, 12 for the bare arm.
+- **A `--dry-run` divergence, caught and fixed.** The dry-run path rendered the ladder independently of the live path, so the first arm to differ made `--dry-run` print a prompt the run would not send — defeating the only quota-free way to check a prompt before paying for it. Both now go through one helper.
+- Harness tests 91 to 103.
+
+### Limits to quote
+
+Every number is the **levels probe**, a harness construct: production does not ask the model to assign readiness levels, mentors set them. This is a direct negative result for Objective 1b's *assessment* claim and says nothing about RNA generation quality, where metric 2 has never produced a signal on any arm. Two data artifacts recorded rather than hidden: the refill re-ran an RNA probe that already existed, so `deviation-deterministic` shows 42 RNA observations against 36 elsewhere (harmless — metrics 1 and 3 read `levelCalls` only); and `deviation-bare` has no metric-2 data at all, having been run `--only-probe=levels` deliberately.
+
+### Next
+
+Not more reps and not another arm — **edit the O/R/I rubric rows** so their evidence bar matches the seeded ground truth, then re-run `deviation-deterministic` alone at `--only-probe=levels --reps=3` (6 calls). The corpus edit changes the content hash, so the recalibrated arm will correctly refuse to pool with these runs; that is the fingerprint guard working as designed.
