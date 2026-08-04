@@ -6,9 +6,10 @@ import { Sector } from '../../entities/enums/sector.enum';
 import { BusinessModel } from '../../entities/enums/business-model.enum';
 
 describe('UpdateStartupDto', () => {
-  // whitelist: true strips unknown properties, so a field missing from the DTO
-  // is discarded with no error. These assertions are the only thing standing
-  // between that and a PATCH that silently ignores sector.
+  // validateSync's whitelist option strips any property without a class-validator
+  // decorator. Passing { whitelist: true } here reproduces what the global
+  // ValidationPipe does on every request, so if sector/businessModel lost their
+  // decorators, validateSync would delete them from dto and this test would fail.
   it('keeps sector and businessModel after whitelisting', () => {
     const dto = plainToInstance(
       UpdateStartupDto,
@@ -16,9 +17,9 @@ describe('UpdateStartupDto', () => {
       { excludeExtraneousValues: false },
     );
 
+    expect(validateSync(dto, { whitelist: true })).toHaveLength(0);
     expect(dto.sector).toBe(Sector.Healthtech);
     expect(dto.businessModel).toBe(BusinessModel.B2B);
-    expect(validateSync(dto)).toHaveLength(0);
   });
 
   it('rejects a sector outside the taxonomy', () => {
@@ -32,7 +33,7 @@ describe('UpdateStartupDto', () => {
   it('allows both fields to be omitted', () => {
     const dto = plainToInstance(UpdateStartupDto, { name: 'AgroLink PH' });
 
-    expect(validateSync(dto)).toHaveLength(0);
+    expect(validateSync(dto, { whitelist: true })).toHaveLength(0);
     expect(dto.sector).toBeUndefined();
   });
 });
