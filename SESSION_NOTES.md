@@ -840,3 +840,57 @@ The lesson is cheap: **a long-lived measurement branch that edits shared docs sh
 2. **`measure/grounding-rep2` is unpushed** and has no PR. It is now up to date with `master`, so it can be merged whenever the recalibration work is either done or explicitly deferred.
 3. **Deferred from the 2b final review, not blocking:** the mixed-scale `readiness_evaluations` rows (16 legacy rows scored under ÷5 sitting beside new ÷9 rows, with one admin action relabelling across both — a database cleanup, not a code change), and the tier-threshold recalibration left deliberately open at `TODO_CHECKLIST.md` §3.
 4. **Flagged in passing, unrelated to any of the above:** `backend/src/mikro-orm.config.ts` disables TLS certificate verification against Neon (`rejectUnauthorized: false`). Neon uses a public CA, so this is probably just tightenable.
+
+---
+
+## Ground-truth audit — metric 1's reference is broken, and the finding inverts — 2026-08-05
+
+Branch `measure/ground-truth-audit`, off `master` at `2fa24a9`. Nothing pushed. **No quota spent** — everything below re-scores runs already collected.
+
+The session started on the checklist's stated next step: recalibrate the O/R/I rubric rows so their evidence bar matches the seeded ground truth. Before editing the corpus, the ground truth itself was checked against the documents. It does not survive the check.
+
+### The reference is contradicted by its own documents
+
+Metric 1 scores placement against the seeded `StartupReadinessLevel` rows. Those came from the demo seeder, written for the UI, and were never derived from the capsule documents the model is shown. `metrics.js:14` justifies them as *"independent of the prompt"* — which is true, and a sound fix for a real problem (a rubric-similarity metric would just reward parroting). But independence and correctness are different properties, and only the first was ever secured.
+
+Five cells are negated by their own document, checkable without any judgement call:
+
+| startup | dim | seeded level's own rubric text | the document |
+|---|---|---|---|
+| MediSync | Market 4 | "no prospect has yet indicated a specific willingness to pay" | PHP 5,000 monthly recurring revenue |
+| MediSync | Organizational 4 | "first full-time hire beyond the founders" | "team grew to 3 founders" |
+| MediSync | Investment 3 | "a written funding plan document with a stated amount" | no funding activity mentioned |
+| MediSync | Technology 5 | "has not yet gone live for actual users" | paid subscriptions at 6 live facilities |
+| AgroLink | Acceptance 1 | "no user has interacted with the product in any form" | paper prototype tested with 3 cooperatives |
+
+### Re-scoring the same 30 calls reverses the direction
+
+`measurement/audit-ground-truth.js` pools the same six result files and scores every arm against three references. It **reproduces the published seeded figures exactly** (0.78 / 0.42 / 1.36 / 1.69 / 1.78 MAE, within1 30/34/13/15/12), which is the point — the pooling and scoring agree with the harness, so what changes under a different reference is the reference and not a bug here. That reproduction is now a test.
+
+| arm | MAE vs seeded | vs doc-strict | vs doc-permissive |
+|---|---|---|---|
+| `baseline` | 0.78 | 0.97 | 1.17 |
+| `sdd-semantic` *(null control)* | 0.42 | 0.89 | 1.14 |
+| `deviation-deterministic` | 1.36 | **0.28** | **0.19** |
+| `deviation-titles` | 1.69 | 0.72 | 0.58 |
+| `deviation-bare` | 1.78 | 0.81 | 0.50 |
+
+Within one rung, corpus arm: 13/36 → **36/36**. Robust to both derivation rules.
+
+**The O/R/I "displacement" was the corpus correcting baseline, not drifting from truth.** Against the document-derived reference, baseline over-places Organizational **+1.67**, Regulatory **+0.83** and Investment **+1.67** — it puts MediSync's Investment at 4–5 ("initial investor conversations", "angel funding secured") for a document that mentions no investor contact anywhere, and Organizational at 4–5 for three founders and no employees. The corpus arm sits at −0.17 / 0.00 / 0.00. That is the Objective 1b claim, and it doubles as an Objective 4 leniency result.
+
+A second signal, independent of any single cell: `baseline` and `sdd-semantic` send byte-identical prompts, so they should score alike. Under the seeded reference they differ by 0.36 MAE; under the derived references, by 0.08 and 0.03.
+
+### Two things that cut against a clean win
+
+1. **The reference was derived after the results were known.** Real researcher-degrees-of-freedom exposure, not argued away. It is enough to retire the negative conclusion — the five contradictions stand on their own — and not enough to license the positive one. Hence the blind worksheet rather than a rewrite.
+2. **The corpus induced a fabrication on the RNA probe.** Where the level is *supplied* rather than inferred, the corpus arm wrote *"The venture has drafted a funding plan (IRL 3)"* — asserting the rubric's evidence requirement as a fact. A wrong supplied level turns rubric text into fabricated evidence, and the 0/15 fabrication probe does not catch this class. Worth a probe of its own.
+
+The volume finding is unchanged in direction: stripping the rubric bodies still sends MediSync to TRL 9 on every rep. The bodies are load-bearing restraint. What changes is the framing — 0.28 → 0.81 is a near-tripling, where 1.36 → 1.78 read as flat-and-bad.
+
+### Where it stands
+
+- `measurement/build-adjudication-worksheet.js` generates `measurement/data/ground-truth-adjudication.md` — the two documents and the rubric ladders verbatim from the corpus, with the seeded levels, the derived reference and every arm's output deliberately withheld. John sets the 12 cells blind; that removes the post-hoc objection.
+- Measurement tests 103 → **108**, all passing. `TODO_CHECKLIST.md` §0 carries a hold marker so nobody quotes the retired conclusion or starts the O/R/I rubric edit on the old premise.
+- **The seeded levels are the live demo data, not only harness fixtures** — `seed-demo-full.js` and `main.ts`'s seeder write the same contradicted values, so the app's demo startups disagree with their own capsule proposals. Agreed to fix once the reference is settled, so it is done once.
+- Quota note: the window resets 15:00 PH and 2026-08-04 was spent 20/20, so no generation calls were available this session. None were needed.
