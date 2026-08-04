@@ -113,6 +113,12 @@ describe('ReadinessService', () => {
 
     expect(underDefault.compositeScore).toBe(20);
     expect(underHealthtech.compositeScore).toBe(29);
+
+    // weightRationale must reflect the resolved profile, not just the composite.
+    const defaultRegulatory = underDefault.weightRationale.find((item) => item.key === 'regulatory');
+    const healthtechRegulatory = underHealthtech.weightRationale.find((item) => item.key === 'regulatory');
+    expect(defaultRegulatory?.weight).toBe(0.1);
+    expect(healthtechRegulatory?.weight).toBe(0.2);
   });
 
   it('passes the startup sector to the weight resolver', async () => {
