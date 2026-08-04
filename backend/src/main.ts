@@ -12,6 +12,9 @@ import { QualificationStatus } from './entities/enums/qualification-status.enum'
 import { Role } from './entities/enums/role.enum';
 import { ReadinessType } from './entities/enums/readiness-type.enum';
 import { EmbeddingIndexService } from './ai/embedding-index.service';
+import { WeightProfile } from './entities/weight-profile.entity';
+import { SEED_WEIGHT_PROFILES } from './readiness/readiness.weights';
+import { Sector } from './entities/enums/sector.enum';
 
 async function ensureUser(
   em: EntityManager,
@@ -33,6 +36,34 @@ async function ensureUser(
     em.persist(user);
   }
   return user;
+}
+
+// Idempotent: matches on (sector, businessModel) and rewrites the weights, so
+// editing SEED_WEIGHT_PROFILES takes effect on the next boot.
+async function seedWeightProfiles(orm: MikroORM) {
+  const em = orm.em.fork();
+  let created = 0;
+  let updated = 0;
+
+  for (const spec of SEED_WEIGHT_PROFILES) {
+    const existing = await em.findOne(WeightProfile, {
+      sector: spec.sector,
+      businessModel: spec.businessModel,
+    });
+
+    if (existing) {
+      existing.weights = spec.weights;
+      existing.updatedAt = new Date();
+      updated += 1;
+      continue;
+    }
+
+    em.persist(em.create(WeightProfile, { ...spec, createdAt: new Date(), updatedAt: new Date() }));
+    created += 1;
+  }
+
+  await em.flush();
+  console.log(`Seeded weight profiles: created=${created} updated=${updated}`);
 }
 
 async function seedLocalDemoData(orm: MikroORM) {
@@ -193,6 +224,7 @@ async function seedDemoStartup(
     mentor: User;
     links: Record<string, unknown>;
     levels: [ReadinessType, number][];
+    sector: Sector;
   },
 ) {
   const existing = await em.findOne(Startup, { name: spec.name });
@@ -210,6 +242,7 @@ async function seedDemoStartup(
     dataPrivacy: true,
     eligibility: true,
     links: JSON.stringify(spec.links),
+    sector: spec.sector,
   });
   em.persist(startup);
   await em.flush();
@@ -256,6 +289,7 @@ async function seedDemoStartups(
     founder: agroFounder,
     mentor: mentorUser,
     links: { team: '2 founders', revenue: 0, sector: 'agritech' },
+    sector: Sector.Agritech,
     levels: [
       [ReadinessType.T, 2],
       [ReadinessType.M, 2],
@@ -272,6 +306,7 @@ async function seedDemoStartups(
     founder: mediFounder,
     mentor: mentorUser,
     links: { team: '3 founders', revenue: 5000, sector: 'healthtech' },
+    sector: Sector.Healthtech,
     levels: [
       [ReadinessType.T, 5],
       [ReadinessType.M, 4],
@@ -335,6 +370,7 @@ async function bootstrap() {
 
   const orm = app.get(MikroORM);
   await orm.getSchemaGenerator().updateSchema();
+  await seedWeightProfiles(orm);
   await seedLocalDemoData(orm);
   await backfillRagEmbeddings(app);
 
