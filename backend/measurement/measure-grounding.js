@@ -107,7 +107,38 @@ const MERGE_FILES = MERGE_ARGS.flatMap((pattern) =>
 const KNOWN_EXACT_FLAGS = new Set([
   '--retrieval-only', '--dry-run', '--with-fabrication-probe', '--fingerprint', '--merge',
 ]);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe='];
+
+const ALL_PROBES = ['rna', 'levels'];
+
+/**
+ * Which generation probes to run. Exact names only — unlike arms and startups
+ * there are two fixed values, so a prefix match would buy nothing and could
+ * silently select the wrong one.
+ *
+ * Returns { probes, errors }. An unrecognised name errors rather than being
+ * dropped: silently running fewer probes than asked for looks identical to a
+ * quota hit in the output.
+ */
+function selectProbes(filter) {
+  if (filter == null) return { probes: ALL_PROBES, errors: [] };
+  const entries = String(filter).split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (!entries.length) {
+    return { probes: [], errors: [`--only-probe=${filter} named no probe. Available: ${ALL_PROBES.join(', ')}.`] };
+  }
+  const unknown = entries.filter((e) => !ALL_PROBES.includes(e));
+  if (unknown.length) {
+    return {
+      probes: [],
+      errors: [
+        `--only-probe=${filter} is not a probe: ${unknown.map((u) => `"${u}"`).join(', ')}. ` +
+          `Available: ${ALL_PROBES.join(', ')}.`,
+      ],
+    };
+  }
+  // Canonical order, so a filtered run's call order matches an unfiltered one's.
+  return { probes: ALL_PROBES.filter((p) => entries.includes(p)), errors: [] };
+}
 
 /**
  * Pure validation over raw CLI args plus the glob-resolved --merge list.
@@ -135,7 +166,7 @@ function validateArgs(argv, mergeFiles) {
         errors.push(
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
             '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
-            '--only-arm=<names>, --only-startup=<names>, --merge <files...>.',
+            '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, --merge <files...>.',
         );
       }
     } else {
@@ -259,6 +290,12 @@ const ARMS = [
   // all 36 framework-derived rows — which is now ~80% of the block. If this arm
   // shows no effect, strip citations next; that is the remaining volume.
   { name: 'deviation-titles', ragCorpus: true, rubricMode: 'deterministic', levelsRubricScope: 'full-ladder-titles-only' },
+  // Titles with the provenance/citation suffix removed as well. deviation-titles
+  // only reached 12,552 chars because the same BRLa attribution repeats on all
+  // 36 framework-derived rows — ~80% of that block is boilerplate the model
+  // cannot use. This is the floor of the volume ladder: the same 54 keys, the
+  // same level coverage, nothing but the level names.
+  { name: 'deviation-bare', ragCorpus: true, rubricMode: 'deterministic', levelsRubricScope: 'full-ladder-bare-titles' },
 ];
 
 const cos = (a, b) => {
@@ -624,9 +661,21 @@ function renderRubricBlock(rows) {
  * to check a prompt before spending on it.
  */
 function renderLevelsBlockFor(arm, ladder) {
-  return arm.levelsRubricScope === 'full-ladder-titles-only'
-    ? renderTitlesOnlyBlock(ladder)
-    : renderRubricBlock(ladder);
+  if (arm.levelsRubricScope === 'full-ladder-titles-only') return renderTitlesOnlyBlock(ladder);
+  if (arm.levelsRubricScope === 'full-ladder-bare-titles') return renderBareTitlesBlock(ladder);
+  return renderRubricBlock(ladder);
+}
+
+/**
+ * Titles with no body and no provenance suffix. Separate from
+ * renderTitlesOnlyBlock for the same reason that one is separate from
+ * renderRubricBlock: both are hashed into live fingerprints, so editing either
+ * in place would strand already-collected data. See lib/fingerprint.js.
+ */
+function renderBareTitlesBlock(rows) {
+  if (!rows.length) return '';
+  const body = rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n');
+  return `\n--- Verified Readiness Rubrics (authoritative) ---\n${body}\n`;
 }
 
 function renderTitlesOnlyBlock(rows) {
@@ -767,6 +816,11 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
     withFabrication = WITH_FABRICATION,
     report = true,
     pacingMs = DELAY_MS,
+    // Metric 2 has been saturated at 0% on every arm since the 2026-07-30
+    // redesign, so half of each rep's calls buy nothing. Narrowing to the
+    // levels probe doubles the reps a day's cap affords for the only metric
+    // that discriminates.
+    probes = ['rna', 'levels'],
   } = opts;
 
   const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
@@ -774,7 +828,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
 
   if (report) {
     console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
-    const callsPerCell = withFabrication ? 3 : 2;
+    const callsPerCell = (withFabrication ? 1 : 0) + probes.length;
     const perRep = arms.length * selectedStartups.length * callsPerCell;
     console.log(
       `reps=${reps}, ${perRep} calls per rep (${reps * perRep} total) ` +
@@ -828,7 +882,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
         const cell = results[arm.name].startups[startupName];
 
         // --- RNA generation (metric 1) ---
-        try {
+        if (probes.includes('rna')) try {
           const out = await attempt(callFn, ai, rnaPrompt(startup.doc, rnaBlock, startup.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna`);
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
@@ -858,7 +912,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
         if (pacingMs) await sleep(pacingMs);
 
         // --- Levels (metric 3) ---
-        try {
+        if (probes.includes('levels')) try {
           const out = await attempt(callFn, ai, levelsPrompt(startup.doc, levelBlock), retry, `${arm.name} / ${startupName} / rep ${rep} / levels`);
           const payload = extractJsonPayload(out.text);
           const parsed = payload ? JSON.parse(payload) : null;
@@ -1086,6 +1140,7 @@ function currentFingerprints() {
       readinessLevelBlock: readinessLevelBlock.toString(),
       renderRubricBlock: renderRubricBlock.toString(),
       renderTitlesOnlyBlock: renderTitlesOnlyBlock.toString(),
+      renderBareTitlesBlock: renderBareTitlesBlock.toString(),
       fullLadderRubrics: fullLadderRubrics.toString(),
     },
     arms: ARMS,
@@ -1234,8 +1289,9 @@ if (require.main === module) {
       ARMS,
       Object.keys(STARTUPS),
     );
-    if (selection.errors.length) {
-      for (const e of selection.errors) console.error(e);
+    const probeSelection = selectProbes(flagValue('only-probe'));
+    if (selection.errors.length || probeSelection.errors.length) {
+      for (const e of [...selection.errors, ...probeSelection.errors]) console.error(e);
       process.exit(1);
     }
 
@@ -1285,6 +1341,7 @@ if (require.main === module) {
     const results = await runGenerationArms(ai, corpusVecs, {
       arms: selection.arms,
       startupNames: selection.startups,
+      probes: probeSelection.probes,
     });
     if (OUT_FILE) writeResults(OUT_FILE, results);
   })().catch((e) => {
@@ -1319,6 +1376,7 @@ module.exports = {
   currentFingerprints,
   validateArgs,
   selectCells,
+  selectProbes,
   isRetryableServerError,
   is429,
   withRetry,

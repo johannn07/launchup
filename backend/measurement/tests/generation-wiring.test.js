@@ -44,9 +44,50 @@ test('a filtered run generates only for the selected cell', async () => {
   });
 
   // 2 calls: the RNA probe and the levels probe. The 2026-08-03 refill needed
-  // only the second, but one cell is the smallest unit the loop runs.
+  // only the second; --only-probe now makes that reachable (see below).
   assert.equal(prompts.length, 2, `expected 2 calls for one cell, got ${prompts.length}`);
   assert.deepEqual(Object.keys(results['deviation-deterministic'].startups), ['MediSync Cebu']);
+});
+
+test('--only-probe suppresses the call, it does not merely filter the report', async () => {
+  // The whole point is spending fewer requests against a 20/day cap. A probes
+  // option that still issued both calls and dropped one afterwards would leave
+  // every reporting test green while buying nothing.
+  const prompts = [];
+  const results = await runGenerationArms(aiThatMustNotBeUsed, null, {
+    arms: DEVIATION,
+    startupNames: ['MediSync Cebu'],
+    reps: 1,
+    report: false,
+    pacingMs: 0,
+    probes: ['levels'],
+    callFn: async (_ai, prompt) => {
+      prompts.push(prompt);
+      return okResponse;
+    },
+  });
+
+  assert.equal(prompts.length, 1, `levels-only must cost 1 call, got ${prompts.length}`);
+  const cell = results['deviation-deterministic'].startups['MediSync Cebu'];
+  assert.equal(cell.rnaCalls.length, 0, 'the RNA probe must not have run');
+  assert.equal(cell.levelCalls.length, 1, 'the levels probe must still have run');
+});
+
+test('probes defaults to both, so an unfiltered run is unchanged', async () => {
+  const prompts = [];
+  await runGenerationArms(aiThatMustNotBeUsed, null, {
+    arms: DEVIATION,
+    startupNames: ['MediSync Cebu'],
+    reps: 1,
+    report: false,
+    pacingMs: 0,
+    callFn: async (_ai, prompt) => {
+      prompts.push(prompt);
+      return okResponse;
+    },
+  });
+
+  assert.equal(prompts.length, 2, 'omitting probes must not change existing behaviour');
 });
 
 test('unselected arms still get a results entry, so reports and merge stay well-formed', () => {

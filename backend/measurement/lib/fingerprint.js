@@ -87,6 +87,8 @@ function fingerprintMap(spec) {
       // and therefore its hash — is byte-identical to before this existed.
       titlesRendererSrc:
         levelsScope === 'full-ladder-titles-only' ? sources.renderTitlesOnlyBlock : undefined,
+      bareRendererSrc:
+        levelsScope === 'full-ladder-bare-titles' ? sources.renderBareTitlesBlock : undefined,
     });
     out[`rna|${arm.name}`] = hash({
       src: sources.rna,

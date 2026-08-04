@@ -151,3 +151,51 @@ test('--only-arm with a space instead of "=" is caught like --out and --reps', (
   assert.ok(positional, `expected an error naming "deviation", got ${JSON.stringify(errs)}`);
   assert.match(positional, /Did you mean "--only-arm=deviation"/);
 });
+
+// --------------------------------------------------------------------------
+// selectProbes — narrowing which generation probes run.
+// --------------------------------------------------------------------------
+
+const { selectProbes } = require(HARNESS);
+
+test('no probe filter runs both probes, in canonical order', () => {
+  assert.deepEqual(selectProbes(null), { probes: ['rna', 'levels'], errors: [] });
+});
+
+test('a probe filter narrows to exactly that probe', () => {
+  assert.deepEqual(selectProbes('levels'), { probes: ['levels'], errors: [] });
+});
+
+test('probe order follows the harness, not the order typed', () => {
+  // Matches selectCells' rule: a filtered run's call order must match an
+  // unfiltered run's, so results stay comparable across invocations.
+  assert.deepEqual(selectProbes('levels,rna').probes, ['rna', 'levels']);
+});
+
+test('probe matching is case-insensitive and tolerates whitespace', () => {
+  assert.deepEqual(selectProbes(' LEVELS , rna ').probes, ['rna', 'levels']);
+});
+
+test('an unknown probe errors rather than silently running fewer', () => {
+  // Silently dropping an unrecognised name looks identical to a quota hit in
+  // the output: a lower n= with no explanation.
+  const sel = selectProbes('level');
+  assert.equal(sel.probes.length, 0);
+  assert.equal(sel.errors.length, 1);
+  assert.match(sel.errors[0], /not a probe/);
+  assert.match(sel.errors[0], /rna, levels/);
+});
+
+test('an empty probe filter errors rather than selecting everything', () => {
+  const sel = selectProbes('  ');
+  assert.equal(sel.probes.length, 0);
+  assert.equal(sel.errors.length, 1);
+});
+
+test('the CLI accepts --only-probe', () => {
+  assert.deepEqual(validateArgs(['--only-probe=levels'], []), []);
+});
+
+test('--only-probe with a space instead of "=" is caught like the other value flags', () => {
+  assert.ok(validateArgs(['--only-probe', 'levels'], []).length > 0);
+});
