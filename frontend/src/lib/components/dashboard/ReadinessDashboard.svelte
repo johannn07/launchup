@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
 
   type Dimension = {
-    key: 'team' | 'market' | 'product' | 'traction' | 'funding';
+    key: 'team' | 'market' | 'product' | 'traction' | 'regulatory' | 'funding';
     label: string;
     score: number;
     percent: number;
@@ -80,7 +80,7 @@
         <p class="text-xs uppercase tracking-[0.24em] text-teal-200/80">Startup Readiness</p>
         <h2 class="mt-2 text-2xl font-black">Readiness dashboard</h2>
         <p class="mt-1 max-w-2xl text-sm text-slate-200/90">
-          A weighted view across team, market, product, traction, and funding so the strongest gaps are obvious at a glance.
+          A weighted view across team, market, product, traction, regulatory, and funding so the strongest gaps are obvious at a glance.
         </p>
       </div>
       <div class="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white/90">

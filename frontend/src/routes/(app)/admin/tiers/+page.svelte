@@ -3,21 +3,17 @@
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
   import { PUBLIC_API_URL } from '$env/static/public';
-  import { Layers, Plus, Save, Trash2, Settings2, Code, Loader2, Check } from 'lucide-svelte';
+  import { Layers, Plus, Save, Trash2, Settings2, Loader2, Check } from 'lucide-svelte';
 
   import { toast } from 'svelte-sonner';
 
   export let data: { tiers: any[]; access: string };
-  // Store the string representation of weights for editing
-  let tiers = (data.tiers ?? []).map(t => ({
-    ...t,
-    weightsStr: t.weights ? JSON.stringify(t.weights, null, 2) : ''
-  }));
+  let tiers = (data.tiers ?? []).map(t => ({ ...t }));
   let saving = false;
   let saveSuccess = false;
 
   function addTier() {
-    tiers = [...tiers, { tierLabel: 'New', threshold: 0, weights: null, weightsStr: '' }];
+    tiers = [...tiers, { tierLabel: 'New', threshold: 0 }];
   }
 
   function removeTier(i: number) {
@@ -28,17 +24,7 @@
     saving = true;
     saveSuccess = false;
     try {
-      const payload = tiers.map(t => {
-        let w = null;
-        if (t.weightsStr && t.weightsStr.trim().length > 0) {
-          try {
-            w = JSON.parse(t.weightsStr);
-          } catch(e) {
-            throw new Error(`Invalid JSON in weights for ${t.tierLabel}`);
-          }
-        }
-        return { tierLabel: t.tierLabel, threshold: Number(t.threshold), weights: w };
-      });
+      const payload = tiers.map(t => ({ tierLabel: t.tierLabel, threshold: Number(t.threshold) }));
 
       const res = await fetch(`${PUBLIC_API_URL}/admin/tiers/update`, {
         method: 'POST',
@@ -70,7 +56,7 @@
         Dynamic Tiers
       </h1>
       <p class="mt-2 text-muted-foreground">
-        Configure thresholds and mathematical weights for startup classification tiers.
+        Configure thresholds for startup classification tiers.
       </p>
     </div>
     <div class="flex gap-2">
@@ -114,14 +100,13 @@
           <tr class="bg-muted/40 border-b border-border/50">
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground w-[20%]">Label</th>
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground w-[20%]">Threshold</th>
-            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Weights (JSON)</th>
             <th class="px-6 py-4 text-right font-semibold text-muted-foreground w-[10%]">Actions</th>
           </tr>
         </thead>
         <tbody>
           {#if tiers.length === 0}
             <tr>
-              <td colspan="4" class="px-6 py-16 text-center text-muted-foreground">
+              <td colspan="3" class="px-6 py-16 text-center text-muted-foreground">
                 <div class="flex flex-col items-center justify-center space-y-4">
                   <div class="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center border border-border/50">
                     <Layers class="h-8 w-8 text-muted-foreground/40" />
@@ -139,12 +124,6 @@
                 </td>
                 <td class="px-6 py-4">
                   <Input type="number" bind:value={t.threshold} class="bg-background/50" />
-                </td>
-                <td class="px-6 py-4">
-                  <div class="relative">
-                    <Code class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/50" />
-                    <Input bind:value={t.weightsStr} placeholder={`{"engagement":0.5}`} class="bg-background/50 pl-9 font-mono text-xs" />
-                  </div>
                 </td>
                 <td class="px-6 py-4 text-right">
                   <Button

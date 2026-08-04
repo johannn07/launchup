@@ -19,9 +19,10 @@ import { StartupReadinessLevel } from './startup-readiness-level.entity';
 import { UratQuestionAnswer } from './urat-question-answer.entity';
 import { CalculatorQuestionAnswer } from './calculator-question-answer.entity';
 import { StartupWaitlistMessage } from './startup-waitlist-message.entity';
-import { Recommendation } from './recommendation.entity';
 import { RagRetrievalLog } from './rag-retrieval-log.entity';
 import { ReadinessEvaluation } from './readiness-evaluation.entity';
+import { Sector } from './enums/sector.enum';
+import { BusinessModel } from './enums/business-model.enum';
 
 @Entity({ tableName: 'startups' })
 export class Startup {
@@ -51,6 +52,14 @@ export class Startup {
 
   @Property()
   eligibility: boolean = false;
+
+  // Null resolves through the weight-profile cascade to a less specific
+  // profile, ending at the in-code defaults.
+  @Enum({ items: () => Sector, nullable: true })
+  sector?: Sector | null;
+
+  @Enum({ items: () => BusinessModel, nullable: true })
+  businessModel?: BusinessModel | null;
 
   @OneToOne(() => CapsuleProposal, (capsule) => capsule.startup, {
     nullable: true,
@@ -83,9 +92,6 @@ export class Startup {
 
   @OneToMany(() => StartupWaitlistMessage, (message) => message.startup)
   waitlistMessages = new Collection<StartupWaitlistMessage>(this);
-
-  @OneToMany(() => Recommendation, (recommendation) => recommendation.startup)
-  recommendations = new Collection<Recommendation>(this);
 
   @OneToMany(() => RagRetrievalLog, (log) => log.startup)
   ragRetrievalLogs = new Collection<RagRetrievalLog>(this);

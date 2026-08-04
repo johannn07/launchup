@@ -8,6 +8,8 @@ import {
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer'; // Re-added Transform
 import { QualificationStatus } from '../../entities/enums/qualification-status.enum';
+import { Sector } from '../../entities/enums/sector.enum';
+import { BusinessModel } from '../../entities/enums/business-model.enum';
 
 export class UpdateStartupDto {
   @IsString()
@@ -56,4 +58,12 @@ export class UpdateStartupDto {
   @IsBoolean()
   @IsOptional()
   eligibility?: boolean;
+
+  @IsEnum(Sector)
+  @IsOptional()
+  sector?: Sector;
+
+  @IsEnum(BusinessModel)
+  @IsOptional()
+  businessModel?: BusinessModel;
 }

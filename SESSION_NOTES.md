@@ -524,10 +524,6 @@ The window resets at **15:00 Philippine time** (midnight US Pacific). A rep is 1
 
 Before that, the quota-free ladder worth running locally: `pnpm test:measurement` proves the parts, `--dry-run` shows the real assembled prompts, `--merge` reproduces the result tables. None spends generation quota.
 
-Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
-
----
-
 ## Rep 2 — the corpus arm's error is reproducible, not noisy — 2026-08-03
 
 Master already carries all the measurement work (`measure/grounding-arms`, `feat/rag-corpus`, `fix/auth-guards` are all merged; only the disposable `backup/rag-corpus-preflight` is unmerged). So the top open item was the one both files named: **more reps**. Rep 2 ran, all 12 calls, no generation quota hit. Raw records at `backend/measurement/results/2026-08-03-rep2.json`.
@@ -635,6 +631,139 @@ Verified end to end without spending generation quota: `--only-arm=deviation --o
 
 **Caveat recorded in the README:** a filtered file is a partial rep — its own tables read n=0 for everything unselected, so it must be `--merge`d with a full run rather than read alone.
 
+## Output validation layer (Objective 1c) — built, live-verified, and a fix wave — 2026-08-04
+
+Branch `feat/output-validation`, off `master` at `e9d391c`, 17 commits, **nothing pushed**. Spec `docs/superpowers/specs/2026-08-03-output-validation-design.md`, plan `docs/superpowers/plans/2026-08-03-output-validation.md`, executed as 5 subagent tasks with an independent review after each, then a live-verification step, then a final whole-branch review, then this fix wave.
+
+### What was built
+
+`OutputValidatorService.validate({ content, retrievalLowConfidence, maxLength? })` (`rna/output-validator.service.ts`) replaces three stub methods (`validateEach()`, `flagInconsistencies()`, `markUnverifiable()`) and the dead `recommendation-storage.service.ts` + `recommendation.entity.ts`, both deleted along with the orphaned `recommendations` table (see below). It checks exactly two things:
+
+1. **Retrieval confidence** — `ragContext.lowConfidence`, a signal RAG already computed and the code was throwing away.
+2. **Length** — whether the generated text is empty/whitespace, or longer than the limit the prompt itself declared to the model. The validator never invents a constraint the model wasn't told about; `maxLength` is optional in the interface for exactly that reason.
+
+Both feed a verdict (`validationStatus: 'validated' | 'flagged'`, `confidenceStatus: 'high-confidence' | 'low-confidence'`, `notes`) written to `ai_recommendations` in place of the previous hardcoded `'validated'` / `'high-confidence'` literals, and exposed on the RNA/RNS list payloads as `validationStatus` / `confidenceStatus` / `validationNotes`.
+
+**Scope decisions, and why:**
+
+- **Groundedness/fabrication and stage-appropriateness checks were deliberately left out.** Both probes from the grounding-measurement work (`measurement/`) came back saturated — 0/15 fabrication, 0% stage-inappropriate output at n=3 — so there was no observed failure mode to build a check against. This is genuinely a length-and-confidence validator, not "full output validation" against the SDD's Validated/Flagged/Low-Confidence badge concept, and both `TODO_CHECKLIST.md` and this entry say so plainly rather than overclaiming.
+- **No model-judged validation** — deterministic checks only, so the validator's own behaviour is testable without a live Gemini call.
+- **Two constants, not one shared limit.** `RNA_MAX_LENGTH`, `RNS_MAX_LENGTH`, and now `ROADBLOCK_MAX_LENGTH` are separate 500-char constants, each interpolated into its own prompt and passed to its own `validate()` call — deliberately not unified, because they're separate contracts to separate prompts that have no reason to move together.
+
+### Live verification (plan Step 6, controller-owned) — PASSED
+
+Against the running server and real Neon, not mocks: `GET /rna?startupId=1|2` and `GET /rns?startupId=1|2`, authenticated.
+
+- All three fields present on both payloads (`validationStatus`/`confidenceStatus`/`validationNotes`).
+- `generationRun` not present on either payload — a leak fix (see below) holds on real data, not just mocked EntityManagers.
+- Frontend keys (`id`/`rna`/`isAiGenerated`/`readinessLevel`, etc.) survive `wrap().toObject()` serialization, which mocks can't exercise.
+- Startup 2's RNA rows, which have no `generationRun`, correctly return `null` for all three verdict fields — the null-vs-verdict distinction only mocks couldn't prove.
+
+**Honesty note, worth repeating here because it's easy to misread from the data alone:** startup 1's rows read back `'validated'` / `'high-confidence'` — but those are *pre-existing* rows written by the old hardcoded literals before this branch existed, not evidence the validator ran. Only newly generated rows carry a computed verdict. There is no backfill, by design (per spec) — retroactively computing a verdict for text nobody validated at generation time would be fabricating provenance, not recovering it.
+
+### Along the way
+
+- A genuine spec defect, caught by review and verified by the controller: the design doc claimed the RNS prompt declares no length limit. It does — both branches say so (`rns.service.ts`, "max length of 500 characters" / "max length of 500"). The design *rule* (never enforce an undeclared limit) was never wrong; the *fact* it was applied to was. Fixed before Task 3 finished: RNS now passes `RNS_MAX_LENGTH`.
+- Task 4 caught the RNA list payload spreading the entire `AiGenerationRun` (model, config snapshot, tokens, error) into the response — the plan's own reference snippet did this. Fixed to select only the three verdict fields, mirroring the pattern `getStartupRns` already used.
+- Task 5 hit the documented `pnpm lint` trap (TODO_CHECKLIST §4): a subagent ran it, `eslint --fix` touched 265 files, 80 with real content changes. Caught before commit — `git status` showed the 4 intended files only were staged, everything else was discarded with `git restore .`, and the suite was re-verified after.
+
+### Final whole-branch review and this fix wave
+
+11 findings on the completed branch. Two are real design decisions, escalated to John rather than patched:
+
+- **The RNS correlation key `(generationRun, dimensionKey)` is not unique** when `no_of_tasks_to_create` produces more than one task per dimension per run — `rns.service.ts`'s lookup `Map` keeps only the last, so a flagged task can be invisible in the payload. A proper fix needs an artifact FK on `ai_recommendations`, which isn't available at record time (persist-then-flush) — a schema change, not a patch.
+- **The verdict goes stale** if `update()` or `refineRna()` later rewrites an artifact's text — the recommendation row still reflects the original generation. Fixing this is a design choice (revalidate on write vs. null the stale verdict), not a bug fix.
+
+The rest — a genuinely missed writer and four documentation defects — got fixed in this wave:
+
+- **`roadblock.service.ts` was a third hardcoded writer the spec's own final-verification grep didn't catch**, because the spec assumed only two generation call sites (RNA, RNS) existed. Wired up the same way: `RoadblockModule` now imports `RnaModule` for `OutputValidatorService`, a new `ROADBLOCK_MAX_LENGTH = 500` constant replaces the bare literal in the prompt, and the verdict is computed against the same text passed to `recordAiRecommendation` (`description` + `fix` concatenated). `retrievalLowConfidence` is hardcoded `false` with a comment explaining why — this path never queries RAG, so there is no low-confidence signal to report; that's an honest absence, not a shortcut. Grep gate (`validationStatus: 'validated'` outside spec files, outside the validator's own return statement) now passes clean.
+- Fixed the design doc's self-contradiction (it corrected the RNS-maxLength premise in one section and then repeated the stale version two sections later), the matching stale justification in a test comment, `TODO_CHECKLIST.md §0` still calling 1c a stub and citing three deleted methods, and a false claim that `updateSchema()` doesn't drop tables (verified against the installed `@mikro-orm/knex@6.5.4`: `updateSchema()` with no options defaults `safe = false, dropTables = true`, so the orphaned `recommendations` table drops itself on the next boot — no manual `DROP TABLE` needed).
+- Also corrected the design doc's field-name claim (`notes` → `validationNotes`, matching what both payloads actually emit) and marked the `TODO_CHECKLIST.md` 1c item done, with the same "not full output validation" and "no backfill" caveats stated above.
+
+New test in `roadblock.service.spec.ts` proves the roadblock verdict is computed rather than hardcoded (an over-500-char recommendation is recorded `flagged`), following the fixture style already used in `rns.service.spec.ts`'s output-validation describe block.
+
+### State at end of session
+
+- 190 passing / 2 failing (`pnpm test`) — the 2 are the documented pre-existing pair (`ReadinessService › returns a weighted score…`, `AiService › passes valid task responses through unchanged`), unchanged by this branch. `pnpm build` clean.
+- Grep gate `validationStatus: 'validated'` outside spec files now matches only `output-validator.service.ts`'s own return statement.
+- Two design decisions (RNS correlation-key uniqueness, stale verdicts on edit) remain open, on purpose, for John to decide — see above. Not coded around.
+
+Optional and deferred: the **`baseline-no-levels` fourth arm**, which would isolate whether metric 2's 0%-everywhere is the levels block rather than the corpus. Costs 2 calls per rep; only worth it if that distinction needs defending.
+
+---
+
+## Sector-aware weighted readiness scoring (Objective 2b) — built and live-verified — 2026-08-04
+
+Branch `feat/weighted-scoring`, off `master` at `f3a2c24`. Spec and plan in `.superpowers/sdd/2026-08-04-readiness-weighted-scoring/`, executed as 6 tasks. Nothing pushed.
+
+### What was built
+
+`weight_profiles` (`sector?`, `businessModel?`, `weights` json) + `WeightProfileService.resolve(sector, businessModel)`, which walks a four-step cascade: `(sector, businessModel)` -> `(sector, null)` -> the global `(null, null)` row -> `DEFAULT_WEIGHTS`. `Startup` gained `sector` and `businessModel`. The scorer reads the resolved vector instead of five `const` declarations.
+
+### Four decisions, and why
+
+1. **Weights keyed by sector/business model, not by tier.** The checklist's original instruction was to read weights from `TierConfig.weights`. That column was keyed per **tier**, which is the wrong axis: a startup crossing a tier boundary would have had its entire weight vector swapped underneath it, so the composite could *fall* as a dimension improved. A readiness score that is non-monotonic in its own inputs is indefensible. Weights must key off something intrinsic to the startup, not off its current score. `TierConfig.weights` was **deleted** rather than left as a decoy.
+2. **Regulatory added as the sixth scored dimension.** Founders answer Regulatory questions and mentors grade Regulatory rubrics; none of it reached the score before. Weights rebalanced to still sum to 1.0.
+3. **Invalid profiles fall through — they don't throw and don't apply.** A profile missing a dimension, or not summing to 1.0 within ±0.001, is skipped with a logged warning and the cascade continues. `DEFAULT_WEIGHTS` is the floor if nothing in the table validates; returning zeros would be a silent scoring failure.
+4. **Score as a fraction of 9, not 5.** See below.
+
+### The ÷5 inflation finding — the correction *narrows* the spread
+
+The old code clamped levels to 0–5 and divided by 5, so any level ≥5 read as 100%. The checklist filed this under "undermines differentiation" and implied fixing it would widen the gap between startups. **It does the opposite.** Dividing by 5 inflated both scores, and inflated the *stronger* startup more, because it had more dimensions at or above the clamp. Measured on the demo pair:
+
+| | old (clamp 5, ÷5, 5 dims) | new (clamp 9, ÷9, 6 dims) |
+|---|---|---|
+| AgroLink PH | 32 | 17 |
+| MediSync Cebu | 76 | 41 |
+| **gap** | **44** | **24** |
+
+So this is a **correctness** fix — a level-9 startup no longer scores identically to a level-5 one — and it costs differentiation rather than buying it. Both `TODO_CHECKLIST.md` and `PROJECT_OVERVIEW.md` were corrected to say so; the previous framing would have had someone cite this as a differentiation win in front of a panel.
+
+### The measured sector effect is about one point, and that is arithmetic, not a bug
+
+Switching MediSync from the global profile to healthtech moved its composite **41 -> 40**. That is the honest size of the effect, and it is expected: a weighted mean only diverges from an unweighted one in proportion to the **spread of its inputs**. MediSync's per-dimension percentages are 33/44/56/44/33/33 — a 23-point spread clustered around the middle — so redistributing weight across near-equal values has almost nothing to redistribute. Sector weighting would move the needle on a startup that is genuinely lopsided (say 90% product, 10% regulatory); it cannot manufacture separation between two startups that are each internally flat.
+
+**2b is therefore a correctness and configurability deliverable, not a differentiation win.** That is consistent with §5's earlier finding that the *model* was the binding constraint on differentiation, not the formula.
+
+### Live verification against Neon — PASSED
+
+Real server, real Neon, authenticated as `admin@launchup.local`. Not mocks.
+
+- **Schema landed.** `updateSchema()` created `weight_profiles` (`sector`/`business_model` nullable text, `weights` jsonb) and added `startups.sector` / `startups.business_model`. `tier_configs.weights` is **gone**. Boot logged `Seeded weight profiles: created=3 updated=0`.
+- **Four composites, all as hand-predicted:**
+
+| startup | sector | composite | tier |
+|---|---|---|---|
+| 1 AgroLink PH (A1 M2 T2 O2 R1 I1) | null | **17** | Early |
+| 2 MediSync Cebu (A3 M4 T5 O4 R3 I3) | null -> global profile | **41** | Developing |
+| 2 MediSync Cebu | `healthtech` | **40** | Developing |
+| 2 MediSync Cebu | `fintech` (no profile) | **41** | Developing |
+
+  Both startups return six dimensions including `regulatory`. `PATCH /startups/2` with a `sector` body returned 200 and the sector persisted, which also proves the DTO whitelist fix end to end.
+
+- **The null-matching proof needed strengthening.** The plan treated `fintech -> 41` as proof that MikroORM issues `IS NULL` for `findOne({ sector: null })` against real Postgres. It isn't sufficient on its own: `DEFAULT_WEIGHTS` in code is **numerically identical** to the seeded global row, so 41 is equally consistent with "IS NULL matched row 1" and "IS NULL silently failed and we fell back to the constant". Closed with a read-only probe running the same `em.findOne` against Neon with query logging:
+
+```
+select "w0".* from "weight_profiles" as "w0"
+  where "w0"."sector" is null and "w0"."business_model" is null limit $1   -- 1 result (id=1)
+select "w0".* from "weight_profiles" as "w0"
+  where "w0"."sector" = $1 and "w0"."business_model" is null limit $2      -- 'fintech' -> 0 results
+```
+
+  So the fall-through genuinely reads the DB row, not the constant. Worth recording, because the identical-values coincidence would have hidden a broken cascade indefinitely.
+
+### Along the way
+
+- **`pnpm dev` would not compile, and no test caught it.** Task 4's deletion of `TierConfig.weights` left three writes to that property in `backend/seed-dummy.ts`, a tracked root-level script outside `src/`. `nest start --watch` reported `Found 3 errors` and the server never started. Jest only compiles spec-reachable files, so a green 216-test suite coexisted with a backend that could not boot. Fixed by removing the three vestigial `weights:` lines. This is the exact failure mode this repo keeps hitting: green mocks, broken reality.
+- **`tier_configs` is empty on Neon**, so the hardcoded 85/70/55/40/25 ladder is what actually runs. Since scores now sit lower after the ÷9 correction, those thresholds are effectively harsher than before — a deliberate calibration question, not a bug, and flagged as such in the checklist rather than quietly retuned.
+- **`backend/update-demo-tiers.js` deleted (final review, 2026-08-04)** — it carried its own copy of the old five-dimension weights and the `/5` divisor, and rewrote `startup_readiness_level` rows to targets that contradicted the seeder. Running it would have silently invalidated the 17/41 figures this branch's fixtures and docs depend on.
+- Three stale documentation claims corrected, all verified rather than assumed: the clamp item's differentiation rationale, the 2b item's "read weights from `TierConfig`" instruction, and §4's note that the orphaned `recommendations` table "drops itself on the next boot" — it does not exist on Neon at all, so there is no pending action.
+
+### State at end of session
+
+- **216 passing / 1 failing** (`pnpm test`) — the 1 is the documented pre-existing `AiService › passes valid task responses through unchanged`, untouched by this branch. `pnpm build` clean.
+- Demo data on Neon left with MediSync's sector set to `healthtech` and AgroLink's `sector` **null** at the time of writing. The final review caught that `seedDemoStartup`'s `if (existing) return;` guard meant the sectors Task 5 added to the seed spec would never reach an existing database, making the whole sector-aware feature invisible on the machine you demo from. Fixed in `0f82b00`: the guard now fills `sector` with `??=` before returning, so a **null** sector is backfilled on the next boot while a deliberately-set one is never overwritten. AgroLink picks up `agritech` on the next `pnpm dev`.
+- The pre-existing `readiness_evaluations` rows were **not** backfilled (out of scope, per spec); they still hold pre-fix composites.
 ## Grounding measurement — n=3 complete, volume hypothesis refuted, displacement confirmed — 2026-08-04
 
 Branch `measure/grounding-rep2`, 3 commits (`8ee0d13`, `e838e87`, `93f6d19`), nothing pushed. 20/20 of the day's `gemini-3.6-flash` quota spent.

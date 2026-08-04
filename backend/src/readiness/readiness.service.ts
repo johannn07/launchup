@@ -5,24 +5,17 @@ import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.enti
 import { ReadinessEvaluation } from 'src/entities/readiness-evaluation.entity';
 import { ReadinessGap } from 'src/entities/readiness-gap.entity';
 import { TierConfig } from 'src/entities/tier-config.entity';
+import { Startup } from 'src/entities/startup.entity';
+import { DEFAULT_WEIGHTS, DimensionKey } from './readiness.weights';
+import { WeightProfileService } from './weight-profile.service';
 
-// Weights are ordered by how hard each dimension is to fix later: team and
-// market are the slowest to change, product is iterable, and traction and
-// funding are lagging signals that early-stage startups can be promising
-// without. TierConfig.weights does not override these — see TODO_CHECKLIST.
-const TEAM_WEIGHT = 0.3;
-const MARKET_WEIGHT = 0.25;
-const PRODUCT_WEIGHT = 0.2;
-const TRACTION_WEIGHT = 0.15;
-const FUNDING_WEIGHT = 0.1;
-
-type DimensionKey = 'team' | 'market' | 'product' | 'traction' | 'funding';
+// The rubric runs 1-9 for every dimension; scores are a fraction of 9.
+const MAX_LEVEL = 9;
 
 type ReadinessDimension = {
   key: DimensionKey;
   label: string;
   readinessType: ReadinessType;
-  weight: number;
   rationale: string;
 };
 
@@ -31,35 +24,36 @@ const READINESS_DIMENSIONS: ReadinessDimension[] = [
     key: 'team',
     label: 'Team',
     readinessType: ReadinessType.A,
-    weight: TEAM_WEIGHT,
     rationale: 'Team readiness is weighted highest because execution quality is the main multiplier for the rest of the startup.',
   },
   {
     key: 'market',
     label: 'Market',
     readinessType: ReadinessType.M,
-    weight: MARKET_WEIGHT,
     rationale: 'Market readiness is critical because clear demand is the strongest proof that the opportunity is worth pursuing.',
   },
   {
     key: 'product',
     label: 'Product',
     readinessType: ReadinessType.T,
-    weight: PRODUCT_WEIGHT,
     rationale: 'Product readiness is important, but it can move quickly once the team and market are clear.',
   },
   {
     key: 'traction',
     label: 'Traction',
     readinessType: ReadinessType.O,
-    weight: TRACTION_WEIGHT,
     rationale: 'Traction differentiates the startup stage and validates momentum, but it should not overshadow fit signals.',
+  },
+  {
+    key: 'regulatory',
+    label: 'Regulatory',
+    readinessType: ReadinessType.R,
+    rationale: 'Regulatory readiness gates market entry in licensed sectors, so it carries more weight for health and finance startups than elsewhere.',
   },
   {
     key: 'funding',
     label: 'Funding',
     readinessType: ReadinessType.I,
-    weight: FUNDING_WEIGHT,
     rationale: 'Funding supports execution capacity, but it is treated as a supporting signal rather than the core score.',
   },
 ];
@@ -96,13 +90,16 @@ export type ReadinessScoreResponse = {
 export class ReadinessService {
   private readonly logger = new Logger(ReadinessService.name);
 
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    private readonly weightProfiles: WeightProfileService,
+  ) {}
 
-  getWeightRationale() {
+  getWeightRationale(weights: Record<DimensionKey, number> = DEFAULT_WEIGHTS) {
     return READINESS_DIMENSIONS.map((dimension) => ({
       key: dimension.key,
       label: dimension.label,
-      weight: dimension.weight,
+      weight: weights[dimension.key],
       rationale: dimension.rationale,
     }));
   }
@@ -121,10 +118,17 @@ export class ReadinessService {
       }
     }
 
+    const startup = await this.em.findOne(Startup, { id: startupId });
+    const weights = await this.weightProfiles.resolve(
+      startup?.sector ?? null,
+      startup?.businessModel ?? null,
+    );
+
     const dimensions = READINESS_DIMENSIONS.map((dimension) => {
-      const score = Math.max(0, Math.min(5, levelByType.get(dimension.readinessType) ?? 0));
-      const percent = Math.round((score / 5) * 100);
-      const weightedScore = Number(((percent / 100) * dimension.weight * 100).toFixed(2));
+      const score = Math.max(0, Math.min(MAX_LEVEL, levelByType.get(dimension.readinessType) ?? 0));
+      const percent = Math.round((score / MAX_LEVEL) * 100);
+      const weight = weights[dimension.key];
+      const weightedScore = Number(((percent / 100) * weight * 100).toFixed(2));
 
       return {
         key: dimension.key,
@@ -132,7 +136,7 @@ export class ReadinessService {
         readinessType: dimension.readinessType,
         score,
         percent,
-        weight: dimension.weight,
+        weight,
         weightedScore,
         rationale: dimension.rationale,
       };
@@ -200,7 +204,7 @@ export class ReadinessService {
       tierLabel,
       dimensions,
       recommendations,
-      weightRationale: this.getWeightRationale(),
+      weightRationale: this.getWeightRationale(weights),
     };
 
     try {

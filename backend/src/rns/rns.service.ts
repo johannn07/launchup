@@ -18,8 +18,11 @@ import { AiService } from 'src/ai/ai.service';
 import { RnsChatHistory } from 'src/entities/rns-chat-history.entity';
 import { RagQueryService } from '../rna/rag-query.service';
 import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
+import { OutputValidatorService } from '../rna/output-validator.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
+import { RNS_MAX_LENGTH } from './rns.constants';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 
 @Injectable()
 export class RnsService {
@@ -28,6 +31,7 @@ export class RnsService {
     private readonly aiService: AiService,
     private readonly ragQueryService: RagQueryService,                // new
     private readonly groundedPromptBuilderService: GroundedPromptBuilderService, // new
+    private readonly outputValidatorService: OutputValidatorService,
     private readonly aiRunService: AiRunService,
   ) {}
 
@@ -35,25 +39,54 @@ export class RnsService {
     const rns = await this.em.find(
       Rns,
       { startup: { id: startupId } },
-      { populate: ['assignee', 'targetLevel'] },
+      { populate: ['assignee', 'targetLevel', 'generationRun'] },
     );
 
-    return rns.map((r: Rns) => ({
-      id: r.id,
-      priorityNumber: r.priorityNumber,
-      description: r.description,
-      targetLevelId: r.targetLevel.id,
-      isAiGenerated: r.isAiGenerated,
-      status: r.status,
-      requestedStatus: r.requestedStatus,
-      approvalStatus: r.approvalStatus,
-      readinessType: r.readinessType,
-      startup: r.startup.id,
-      assignee: r.assignee,
-      targetLevelScore: r.getTargetLevelScore(),
-      clickedByMentor: r.clickedByMentor,
-      clickedByStartup: r.clickedByStartup,
-    }));
+    const runIds = [
+      ...new Set(
+        rns
+          .map((r) => r.generationRun?.id)
+          .filter((id): id is number => id != null),
+      ),
+    ];
+
+    // Correlation key is (generationRun.id, dimensionKey) — filter to RNS so
+    // a startup's RNA recommendations against the same run don't cross in.
+    const recs = runIds.length
+      ? await this.em.find(AiRecommendation, {
+          generationRun: { $in: runIds },
+          recommendationKind: 'RNS',
+        })
+      : [];
+
+    const byKey = new Map(
+      recs.map((rec) => [`${rec.generationRun?.id}|${rec.dimensionKey}`, rec]),
+    );
+
+    return rns.map((r: Rns) => {
+      const rec = r.generationRun
+        ? byKey.get(`${r.generationRun.id}|${r.readinessType}`)
+        : undefined;
+      return {
+        id: r.id,
+        priorityNumber: r.priorityNumber,
+        description: r.description,
+        targetLevelId: r.targetLevel.id,
+        isAiGenerated: r.isAiGenerated,
+        status: r.status,
+        requestedStatus: r.requestedStatus,
+        approvalStatus: r.approvalStatus,
+        readinessType: r.readinessType,
+        startup: r.startup.id,
+        assignee: r.assignee,
+        targetLevelScore: r.getTargetLevelScore(),
+        clickedByMentor: r.clickedByMentor,
+        clickedByStartup: r.clickedByStartup,
+        validationStatus: rec?.validationStatus ?? null,
+        confidenceStatus: rec?.confidenceStatus ?? null,
+        validationNotes: rec?.notes ?? null,
+      };
+    });
   }
 
   async createRns(dto: CreateRnsDto) {
@@ -277,7 +310,7 @@ Requirements:
 - target_level is an integer from 1 to 9
 - the tasks should help increase the level of the ${readinessType} readiness type from its current level
 - target_level must not exceed 9
-- description has a max length of 500 characters
+- description has a max length of ${RNS_MAX_LENGTH} characters
 `;
 
     let prompt: string;
@@ -316,7 +349,7 @@ Requirement note:
 - target_level is from 1-9
 - make sure that the tasks will increase the level(target_level) of the specified readiness level type from the initial readiness level type
 - target_level should not exceed to 9
-- description has a max length of 500
+- description has a max length of ${RNS_MAX_LENGTH}
       `;
     }
 
@@ -379,13 +412,20 @@ Requirement note:
         this.em.persist(newRns);
         createdRns.push(newRns);
 
+        const verdict = this.outputValidatorService.validate({
+          content: task.description,
+          retrievalLowConfidence: ragContext.lowConfidence,
+          maxLength: RNS_MAX_LENGTH,
+        });
+
         await this.aiService.recordAiRecommendation({
           startupId: startup.id,
           dimensionKey: readinessType,
           recommendationKind: 'RNS',
           content: task.description,
-          validationStatus: 'validated',
-          confidenceStatus: 'high-confidence',
+          validationStatus: verdict.validationStatus,
+          confidenceStatus: verdict.confidenceStatus,
+          notes: verdict.notes,
           generationRun: ctx.run,
         });
 

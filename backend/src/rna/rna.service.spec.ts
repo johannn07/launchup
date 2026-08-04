@@ -3,6 +3,8 @@ import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
+import { OutputValidatorService } from './output-validator.service';
 
 // `generateRNA` always queries queryVectorDatabase but only calls
 // buildGroundedPrompt when `!ragContext.lowConfidence`. These tests take the
@@ -106,8 +108,7 @@ describe('RnaService.generateRNA provenance', () => {
       aiService as any,
       ragQueryService as any,
       {} as any, // GroundedPromptBuilderService, unused on this fallback path
-      {} as any, // OutputValidatorService, unused by generateRNA
-      {} as any, // RecommendationStorageService, unused by generateRNA
+      new OutputValidatorService(),
       buildAiRunService().aiRunService,
     );
 
@@ -202,7 +203,6 @@ describe('RnaService.generateRNA rubric-mode fallback (Finding 1)', () => {
       ragQueryService as any,
       {} as any,
       {} as any,
-      {} as any,
       buildAiRunService().aiRunService,
     );
 
@@ -279,7 +279,6 @@ describe('RnaService.refineRna provenance', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       aiRunService,
     );
 
@@ -294,5 +293,271 @@ describe('RnaService.refineRna provenance', () => {
       { startup: startup.id },
     );
     expect(result.refinedRna).toBe('New, punchier RNA description');
+  });
+});
+
+describe('RnaService.generateRNA output validation (Objective 1c)', () => {
+  // Returns the aiService mock so each test can assert on it. `rna` is the
+  // text the model is pretended to have produced.
+  const runGenerate = async (rna: string) => {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: { title: 't', description: 'd' },
+    };
+    const readinessLevel = { id: 100, readinessType: 'Technology', level: 3 };
+    const startupReadinessLevel = { id: 200, readinessLevel };
+    const persisted: any[] = [];
+
+    const em = {
+      findOne: jest.fn((entity: any) =>
+        Promise.resolve(entity === Startup ? startup : null),
+      ),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([]);
+        if (entity === StartupReadinessLevel)
+          return Promise.resolve([startupReadinessLevel]);
+        return Promise.resolve([]);
+      }),
+      persist: jest.fn((e) => {
+        persisted.push(e);
+        return e;
+      }),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const aiService = {
+      generateRNAsFromPrompt: jest
+        .fn()
+        .mockResolvedValue([{ readiness_level_type: 'Technology', rna }]),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+    };
+
+    const ragQueryService = {
+      // lowConfidence: true is what makes this the low-confidence case, and it
+      // also routes generateRNA down its fallback prompt branch.
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnaService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any, // GroundedPromptBuilderService, unused on the fallback path
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    await service.generateRNA(1, ctx);
+    return aiService;
+  };
+
+  it('records low-confidence when retrieval was low-confidence, not the literal', async () => {
+    const aiService = await runGenerate('Validate demand with 10 interviews.');
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confidenceStatus: 'low-confidence',
+        validationStatus: 'validated',
+        notes: null,
+      }),
+    );
+  });
+
+  it('flags an RNA longer than the 500 characters the prompt declares', async () => {
+    const aiService = await runGenerate('x'.repeat(600));
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        validationStatus: 'flagged',
+        notes: expect.stringContaining('500'),
+      }),
+    );
+  });
+});
+
+describe('RnaService.getRNAbyId verdict join (Task 5)', () => {
+  // `wrap(r).toObject()` returns `r` itself when `r` isn't a live MikroORM
+  // entity (no `__helper`), so these mock rows need their own `toObject` —
+  // the same shape a real hydrated entity's would produce.
+  const buildRow = (overrides: Record<string, any>) => ({
+    id: 1,
+    rna: 'Validate demand with 10 interviews.',
+    isAiGenerated: true,
+    startup: { id: 1 },
+    readinessLevel: { readinessType: 'Technology', level: 3 },
+    generationRun: undefined,
+    toObject() {
+      const { toObject, ...rest } = this;
+      return rest;
+    },
+    ...overrides,
+  });
+
+  it('returns null verdict fields for rows with no generation run', async () => {
+    const row = buildRow({ generationRun: undefined });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result.validationStatus).toBeNull();
+    expect(result.confidenceStatus).toBeNull();
+  });
+
+  it('joins the recorded verdict onto the matching generated row, filtered to RNA (would catch a dropped recommendationKind filter)', async () => {
+    const row = buildRow({
+      generationRun: { id: 7 },
+      readinessLevel: { readinessType: 'Technology', level: 3 },
+    });
+
+    // Same (generationRun.id, dimensionKey) key, but recorded under 'RNS' —
+    // a startup has both kinds against the same run. If the join query
+    // dropped its `recommendationKind: 'RNA'` filter, this row would leak in
+    // and (being inserted second, so it wins the Map's overwrite) flip the
+    // asserted status.
+    const rnaRec = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNA',
+      validationStatus: 'flagged',
+      confidenceStatus: 'high-confidence',
+      notes: 'too long',
+    };
+    const rnsRecSameKey = {
+      generationRun: { id: 7 },
+      dimensionKey: 'Technology',
+      recommendationKind: 'RNS',
+      validationStatus: 'validated',
+      confidenceStatus: 'high-confidence',
+      notes: null,
+    };
+
+    const em = {
+      find: jest.fn((entity: any, filter?: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) {
+          const all = [rnaRec, rnsRecSameKey];
+          const filtered = filter?.recommendationKind
+            ? all.filter((r) => r.recommendationKind === filter.recommendationKind)
+            : all;
+          return Promise.resolve(filtered);
+        }
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result.validationStatus).toBe('flagged');
+  });
+
+  it('still returns the fields the frontend already consumes', async () => {
+    const row = buildRow({ generationRun: undefined });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: expect.anything(),
+        rna: expect.anything(),
+        isAiGenerated: expect.anything(),
+        readinessLevel: expect.anything(),
+      }),
+    );
+  });
+
+  it('does not leak the populated AiGenerationRun onto the payload', async () => {
+    // Populated with the shape a real AiGenerationRun carries — model, the
+    // resolved pipeline config, timing, token counts — none of which belongs
+    // on a client-facing RNA row. `generationRun` is populated only so the
+    // join key above can read `.id`; it must not survive into the response.
+    const row = buildRow({
+      generationRun: {
+        id: 7,
+        model: 'gemini-2.5-flash-lite',
+        config: { temperature: 0, grounding: true },
+        status: 'completed',
+        latencyMs: 812,
+        promptTokens: 500,
+        completionTokens: 120,
+        error: null,
+      },
+    });
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([row]);
+        if (entity === AiRecommendation) return Promise.resolve([]);
+        return Promise.resolve([]);
+      }),
+    };
+
+    const service = new RnaService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+
+    const [result] = await service.getRNAbyId(1);
+    expect(result).not.toHaveProperty('generationRun');
   });
 });

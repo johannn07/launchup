@@ -12,21 +12,18 @@ async function seed() {
   em.create(TierConfig, {
     tierLabel: 'Bronze',
     threshold: 30,
-    weights: { team: 0.2, market: 0.2, product: 0.6 },
     createdAt: new Date(),
     updatedAt: new Date()
   });
   em.create(TierConfig, {
     tierLabel: 'Silver',
     threshold: 60,
-    weights: { team: 0.3, market: 0.3, product: 0.4 },
     createdAt: new Date(),
     updatedAt: new Date()
   });
   em.create(TierConfig, {
     tierLabel: 'Gold',
     threshold: 85,
-    weights: { team: 0.4, market: 0.4, product: 0.2 },
     createdAt: new Date(),
     updatedAt: new Date()
   });

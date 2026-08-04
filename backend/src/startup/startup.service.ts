@@ -517,6 +517,9 @@ export class StartupService {
     if (dto.universityName !== undefined)
       startup.universityName = dto.universityName;
     if (dto.eligibility !== undefined) startup.eligibility = dto.eligibility;
+    if (dto.sector !== undefined) startup.sector = dto.sector;
+    if (dto.businessModel !== undefined)
+      startup.businessModel = dto.businessModel;
 
     await this.em.flush();
     return startup;
