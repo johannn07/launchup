@@ -979,3 +979,48 @@ The corpus arm is *exactly* right on Organizational, Regulatory and Investment a
 Also fixed: the metric 1 table still printed "(vs seeded ground truth)" after the reference was corrected. Now reads "(vs the document-derived reference)".
 
 **Limits, unchanged and still the ones to quote:** this is the *levels* probe, a harness construct — production does not ask the model to assign readiness levels, mentors set them. n=3, two startups, one model. It is a direct positive result for Objective 1b's *assessment* claim and still says nothing about RNA generation quality.
+
+---
+
+## Session close-out — 2026-08-05
+
+One work stream, and it inverted the headline result of Objective 1b. Detail is in the four entries above; this is state and handoff.
+
+**The session did not do the work it set out to do, and that was the right outcome.** The top open item prescribed editing the O/R/I rubric rows so their evidence bar matched the seeded ground truth. Checking that ground truth first — before spending anything on the corpus edit — showed the ground truth was the broken thing. Everything below follows from that one check.
+
+| stream | outcome | where |
+|---|---|---|
+| Ground-truth audit | seeded reference refuted; historical runs re-scored | `measurement/audit-ground-truth.js` |
+| Reference-free unsupported-claim rate | baseline **61%**, corpus **0%** | same file, `HARD_ABSENCES` |
+| Demo levels corrected + de-duplicated | applied to Neon, 8 rows | `src/demo-readiness-levels.ts` |
+| Measurement vs the corrected reference | corpus **0.22** MAE vs baseline **0.69** | `results/2026-08-05-corrected-reference.json` |
+| Docs rewritten, hold lifted | 1b is now a positive result | `TODO_CHECKLIST.md` §0, `measurement/README.md`, `CLAUDE.md`, `PROJECT_OVERVIEW.md` |
+
+### State
+
+- Branch **`measure/ground-truth-audit`**, 6 commits ahead of `master` (`2fa24a9`), 16 files, **+2094 / −112**, **nothing pushed**, working tree clean.
+- Measurement tests **117/117** (103 at session start). Jest **216 passing / 1 failing** — the documented pre-existing `AiService › passes valid task responses through unchanged`. `pnpm build` clean.
+- Neon demo data corrected: AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`. Composites moved **17 → 26** and **40 → 41**.
+- Day's quota: 18 of 20 spent, all on the one run.
+
+### The methodological lesson, which outlasts the numbers
+
+A reference can be *independent of the prompt* and still be *wrong*, and `lib/metrics.js` secured only the first while the study assumed both. Three reps across five arms agreed in direction for a week — not because the effect was real, but because the reference was consistently wrong. **Agreement across reps tests sampling noise, not the reference.** The study's own null control had been quietly reporting this: two byte-identical prompts differed by 0.36 MAE under the seeded reference and by 0.03–0.08 under a document-derived one.
+
+The durable fix is not the corrected numbers, it is that the load-bearing claim no longer needs a reference at all. `HARD_ABSENCES` scores placements against artifact classes the documents never mention, asserts those absences at run time rather than trusting a hand-written list, and sets ceilings one rung generous so the rates are lower bounds.
+
+### What is genuinely open
+
+1. **The branch is unpushed and has no PR.** It is the only stream from this session, and it touches shared docs plus live demo data, so it should not sit long. Needs the usual merge / push-and-PR / keep-as-is decision.
+2. **RNA generation quality is still unmeasured** — the real remaining gap for 1b. Every figure this session is the *levels* probe, a harness construct; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. This needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
+3. **A fabrication mechanism worth its own probe.** On the RNA probe, where the level is *supplied* rather than inferred, the corpus made the model assert the rubric's evidence requirement as fact (*"The venture has drafted a funding plan (IRL 3)"*). A wrong supplied level turns rubric text into fabricated evidence. The 0/15 fabrication probe does not catch this class, and production supplies mentor-set levels — so this is the one finding this session that points at a *risk* in the shipped path.
+4. **A human reference would still strengthen the placement claim.** The blind worksheet is regenerable (`node measurement/build-adjudication-worksheet.js`, no flag). Not blocking: the 61%/0% result does not depend on it.
+5. **Deferred, unchanged:** mixed-scale `readiness_evaluations` rows now also hold pre-correction composites; tier thresholds still uncalibrated against the ÷9 scores (`TODO_CHECKLIST.md` §3); `mikro-orm.config.ts` disables TLS verification against Neon.
+
+### Next step
+
+**Decide the branch, then pick up item 3 above** — the supplied-level fabrication probe. It is the highest-value measurement left: it targets the production path rather than a harness construct, it tests a risk rather than a benefit, and it is the one place this session's evidence points against the corpus.
+
+### Operational note — the scheduled task did not work
+
+A one-shot scheduled task was created for 15:07 PH (quota reset). It **fired** (`lastRunAt` recorded) and started its MCP servers, but never ran the command: no results file, no commit, no `measure-grounding` process. The run was done manually instead, after confirming no measurement process was alive and no quota had been spent — a live run racing a scheduled one would have double-spent a 20/day cap. **Do not assume a fired scheduled task did its work; check for the artifact.**
