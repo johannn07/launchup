@@ -1017,7 +1017,7 @@ function summarizeResults(results) {
   for (const arm of ARMS) {
     const armResult = results[arm.name] || { startups: {} };
 
-    // --- Metric 1: level-placement accuracy vs seeded ground truth ---
+    // --- Metric 1: level-placement accuracy vs the document-derived reference ---
     let n = 0, exact = 0, within1 = 0, errSum = 0;
     for (const [startupName, cell] of Object.entries(armResult.startups)) {
       const truth = STARTUPS[startupName].levels;
@@ -1098,7 +1098,7 @@ function summarizeResults(results) {
 function printReports(results) {
   const s = summarizeResults(results);
 
-  console.log('\n--- Metric 1: level-placement accuracy (vs seeded ground truth) ---');
+  console.log('\n--- Metric 1: level-placement accuracy (vs the document-derived reference) ---');
   console.log('(mean absolute error between the assigned level and the startup\'s actual level; lower is better)\n');
   console.table(s.metric1);
 

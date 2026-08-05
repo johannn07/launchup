@@ -941,3 +941,41 @@ MediSync barely moves because the T/M/A rises and the O/R/I falls nearly cancel 
 **Two pre-existing guards failed on the change, which is them working.** One restated the old levels; it became the source-parsing cross-check above. The other used AgroLink Market 4 as an "off by 2" fixture, which is off by 1 against the corrected truth — changed to 5 so the arithmetic the test asserts is unchanged. A vacuity assertion in the new parser also caught a real bug immediately: the non-greedy regex stopped at the first tuple and parsed one level instead of six.
 
 Suites: measurement **117/117**; jest **216 passing / 1 failing**, the documented pre-existing `AiService` case. `pnpm build` clean.
+
+### The measurement ran against the corrected reference — 2026-08-05, 15:30
+
+18/18 calls, no 429, no 503. `measurement/results/2026-08-05-corrected-reference.json`. Arms: `baseline`, `sdd-semantic`, `deviation-deterministic`; levels probe only; n=3, 36 observations per arm, balanced.
+
+**The scheduled task did not do this.** It fired at 15:07:48 and brought up its MCP servers, but never ran the command — no results file, no commit, no `measure-grounding` process. Checked before launching manually, specifically so a live run and a scheduled one could not double-spend the 20/day cap. Nothing indicates quota was consumed by it.
+
+**This is the first measurement scored against a reference fixed *before* the generations existed**, so unlike the 2026-08-05 re-scoring it is not exposed to the post-hoc objection.
+
+| arm | MAE | exact | within 1 |
+|---|---|---|---|
+| `baseline` | 0.69 | 20/36 (56%) | 29/36 |
+| `sdd-semantic` *(null control)* | 0.94 | 15/36 (42%) | 28/36 |
+| `deviation-deterministic` | **0.22** | **28/36 (78%)** | **36/36** |
+
+**Read it against the control, not against baseline alone.** `baseline` and `sdd-semantic` send byte-identical prompts, so their difference is noise: 0.25 MAE, and **1** on `within1`. The corpus arm beats baseline by 0.47 MAE — 1.9x that spread — and by **7** on `within1`, against a control spread of 1. `within1` is the discriminating number, as it was at n=3 on the old data.
+
+**Per-dimension signed error (+ = placed too high) is where the mechanism shows:**
+
+| arm | Tech | Mark | Acce | Orga | Regu | Inve |
+|---|---|---|---|---|---|---|
+| `baseline` | +0.33 | +0.00 | +0.00 | **+1.67** | **+0.67** | **+1.17** |
+| `sdd-semantic` | +0.00 | −0.33 | −0.33 | **+1.33** | **+0.83** | **+1.83** |
+| `deviation-deterministic` | +0.50 | +0.83 | +0.00 | **0.00** | **0.00** | **0.00** |
+
+The corpus arm is *exactly* right on Organizational, Regulatory and Investment across all 36 observations, while both corpus-free arms over-place them by +0.67 to +1.83. This prospectively reproduces the reference-free unsupported-claim result (baseline 61% asserting absent evidence, corpus 0%) — the same three dimensions, by the same mechanism, on fresh generations.
+
+**The corpus arm's remaining error is reference ambiguity, not model error.** Its whole residual is Technology +0.50 and Market +0.83, and it places MediSync at `T7 M6` on all three reps — which is exactly the *permissive* reading of those two cells. Scored against permissive instead of strict: corpus **0.19**, baseline 0.94. So the direction is robust to the strict/permissive choice, and the corpus arm sits inside the band between the two readings.
+
+**Metric 3 remains unresolvable and should not be quoted.** Gaps: baseline 1.94, sdd-semantic 2.56, corpus 1.56. The byte-identical control pair differs by **0.62**, larger than the corpus arm's 0.38 deficit against baseline. Same conclusion as 2026-08-03 — this metric cannot separate these arms.
+
+**Metric 2 is n/a**, not 0%: the run was `--only-probe=levels`, so no RNA was generated to score.
+
+**The fingerprint guard was verified, not assumed.** `--merge measurement/results/*.json` refuses the new file on all 15 (metric, arm) pairs with the exact hashes recorded before and after the correction (e.g. `levels|baseline: 9a33522237d3 vs a9502f4cb258`). The new run therefore stands alone, correctly, and the historical n=3 set is closed. An earlier check of this appeared to show only the 2026-07-29 file being refused — that was a truncated `head -20`, not the guard.
+
+Also fixed: the metric 1 table still printed "(vs seeded ground truth)" after the reference was corrected. Now reads "(vs the document-derived reference)".
+
+**Limits, unchanged and still the ones to quote:** this is the *levels* probe, a harness construct — production does not ask the model to assign readiness levels, mentors set them. n=3, two startups, one model. It is a direct positive result for Objective 1b's *assessment* claim and still says nothing about RNA generation quality.
