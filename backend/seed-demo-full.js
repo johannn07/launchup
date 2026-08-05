@@ -31,6 +31,17 @@ const fs = require('fs');
 const DIST = fs.existsSync(`${__dirname}/dist/src/mikro-orm.config.js`) ? './dist/src' : './dist';
 const req = (p) => require(`${DIST}/${p}`);
 
+// --check-levels reports the readiness-level corrections and exits without
+// writing anything at all. The demo database is shared, so "what would this
+// change" has to be answerable without changing it.
+//
+// Deliberately not called --dry-run: it does not make the whole seeder dry, and
+// a flag that writes six other kinds of row while claiming to be a dry run is
+// worse than no flag. It short-circuits before any other step.
+const CHECK_LEVELS_ONLY = process.argv.includes('--check-levels');
+
+const { DEMO_READINESS_LEVELS, SEEDED_LEVEL_REMARK } = req('demo-readiness-levels');
+
 const ormConfigModule = req('mikro-orm.config');
 const ormConfig = ormConfigModule.default || ormConfigModule;
 
@@ -155,6 +166,76 @@ const ASSESSMENTS = [
   { type: 'Investment', answerType: 2, name: 'How are operations funded today?', description: 'Founder capital, grants, revenue, or external investment.' },
 ];
 
+/**
+ * Repoints demo readiness levels at the values derived from the capsule
+ * proposals. main.ts's `if (existing) return;` means a cold-boot fix never
+ * reaches a database that already holds these startups, so the repair lives
+ * here.
+ *
+ * Only rewrites rows still carrying the seeder's own remark. A row a mentor has
+ * graded says so in its remark, and silently replacing a rating with a seed
+ * value would be worse than leaving it stale.
+ *
+ * `write: false` reports and touches nothing — no persist, no flush.
+ */
+async function correctReadinessLevels(em, entities, write) {
+  const { Startup, StartupReadinessLevel, ReadinessLevel } = entities;
+  let changed = 0;
+  let skipped = 0;
+
+  for (const [name, spec] of Object.entries(DEMO_READINESS_LEVELS)) {
+    const startup = await em.findOne(Startup, { name });
+    if (!startup) continue;
+
+    const srls = await em.find(
+      StartupReadinessLevel,
+      { startup: startup },
+      { populate: ['readinessLevel'] },
+    );
+    const seededRemark = SEEDED_LEVEL_REMARK(name);
+
+    for (const [readinessType, wanted] of spec) {
+      const row = srls.find((s) => s.readinessLevel.readinessType === readinessType);
+      if (!row) {
+        console.log(`  ${name}: ${readinessType} has no row - boot the backend first`);
+        continue;
+      }
+      const current = row.readinessLevel.level;
+      if (current === wanted) continue;
+
+      if (row.remark !== seededRemark) {
+        console.log(`  ${name}: ${readinessType} ${current} -> ${wanted} SKIPPED (remark is not the seeded one, treating as a real rating)`);
+        skipped += 1;
+        continue;
+      }
+      if (!write) {
+        console.log(`  ${name}: ${readinessType} ${current} -> ${wanted} (would change)`);
+        changed += 1;
+        continue;
+      }
+
+      let target = await em.findOne(ReadinessLevel, { readinessType, level: wanted });
+      if (!target) {
+        target = em.create(ReadinessLevel, {
+          level: wanted,
+          name: `Seeded ${readinessType} level ${wanted}`,
+          readinessType,
+        });
+        em.persist(target);
+        await em.flush();
+      }
+      row.readinessLevel = target;
+      row.updatedAt = new Date();
+      console.log(`  ${name}: ${readinessType} ${current} -> ${wanted}`);
+      changed += 1;
+    }
+  }
+
+  if (write) await em.flush();
+  console.log(`readiness levels: ${changed} ${write ? 'corrected' : 'would change'}, ${skipped} left alone`);
+  return { changed, skipped };
+}
+
 async function run() {
   const { User } = req('entities/user.entity');
   const { Startup } = req('entities/startup.entity');
@@ -173,6 +254,15 @@ async function run() {
   });
   const orm = await MikroORM.init(cfg);
   const em = orm.em.fork();
+
+  // Short-circuits before step 1, so --check-levels cannot write anything at
+  // all — not even the 6x9 grid the normal run would top up.
+  if (CHECK_LEVELS_ONLY) {
+    console.log('--check-levels: reporting only, nothing will be written\n');
+    await correctReadinessLevels(em, { Startup, StartupReadinessLevel, ReadinessLevel }, false);
+    await orm.close(true);
+    return;
+  }
 
   // 1. Full 6x9 grid - generateTasks skips any task whose target level has no
   //    ReadinessLevel row, so a partial grid silently drops output.
@@ -263,6 +353,10 @@ async function run() {
     }
   }
   await em.flush();
+
+  // 3b. Correct readiness levels seeded before they were derived from the
+  //     capsule proposals.
+  await correctReadinessLevels(em, { Startup, StartupReadinessLevel, ReadinessLevel }, true);
 
   // 4. MediSync only — AgroLink stays empty so RNA generation is testable
   //    (it only generates for readiness types with no RNA yet).

@@ -914,3 +914,30 @@ Baseline puts MediSync's Investment at 4–5 for a document with no funding toke
 **A mutation pass earned its keep again.** Changing `placed > spec.ceiling` to `>=` passed all nine tests while silently inflating every arm's rate. The test written to kill it pins the boundary directly (at the ceiling = supported, one rung above = not) and was confirmed to fail against the mutant and pass against the original. Measurement tests 108 → **113**.
 
 What still needs a human reference: whether the corpus places *closer to the true level*. The blind worksheet stands for that.
+
+### Demo levels corrected to the strict column — same day
+
+John adjudicated by choosing the **strict** reading, so the corrected levels are AgroLink `T2 M3 A3 O2 R1 I1` and MediSync `T6 M5 A5 O2 R1 I1`.
+
+**The duplication was the actual bug, so that got fixed first.** `main.ts` and the harness each held their own copy of these levels, and `seed-demo-full.js` held none — which is how the app and the study drifted apart unnoticed. New `src/demo-readiness-levels.ts` is the single source; `main.ts` imports it, `seed-demo-full.js` requires it from `dist`, and a measurement test **parses the TS source** and fails if the harness and the seeder disagree. That test replaced one that simply restated the numbers a third time. Mutation-checked: changing the seeder's TRL 6 to 7 fails it.
+
+**Repair path, because a cold-boot fix never reaches an existing database.** `seedDemoStartup` returns early on `if (existing)`, so editing the constant alone would have left every already-seeded Neon branch wrong. `seed-demo-full.js` now repoints the rows — but only rows still carrying the seeder's own remark, since a graded row says so in its remark and replacing a mentor's rating with a seed value would be worse than leaving it stale.
+
+**`--check-levels`, deliberately not `--dry-run`.** The flag reports and exits *before step 1*, so it writes nothing at all. Naming it `--dry-run` would have been a lie: the seeder's other six steps would still have written rows. Caught while writing it, not after.
+
+Applied to Neon: **8 rows changed, 0 skipped**; re-running reports 0. Verified by querying `startups_readiness_level` directly rather than trusting the script's own report — all 12 rows match the strict column.
+
+**Composites moved**, computed from the live rows with the scorer's own `team→A, market→M, product→T, traction→O, regulatory→R, funding→I` mapping. The mapping is validated rather than assumed: it reproduces the previously documented AgroLink 17 and MediSync-healthtech 40 exactly from the old levels.
+
+| startup | before | after |
+|---|---|---|
+| AgroLink PH (global profile) | 17 | **26** — crosses the 25 tier threshold |
+| MediSync Cebu (healthtech) | 40 | **41** |
+
+MediSync barely moves because the T/M/A rises and the O/R/I falls nearly cancel under healthtech weights. `readiness_evaluations` still holds pre-correction composites — the same un-backfilled-rows item already open from the 2b work.
+
+**Fingerprint consequence, and it is correct.** Levels sit inside `common`, so all 15 fingerprints changed; runs collected before the correction will refuse to pool with runs after it, because the RNA prompt genuinely changed. `audit-ground-truth.js`'s `SEEDED` stays **frozen** at the old values — that is what the collected runs were scored against, and the reproduction test only reproduces against the reference that produced it. A test asserts `SEEDED` does *not* track the harness, so a well-meaning sync cannot land quietly.
+
+**Two pre-existing guards failed on the change, which is them working.** One restated the old levels; it became the source-parsing cross-check above. The other used AgroLink Market 4 as an "off by 2" fixture, which is off by 1 against the corrected truth — changed to 5 so the arithmetic the test asserts is unchanged. A vacuity assertion in the new parser also caught a real bug immediately: the non-greedy regex stopped at the first tuple and parsed one level instead of six.
+
+Suites: measurement **117/117**; jest **216 passing / 1 failing**, the documented pre-existing `AiService` case. `pnpm build` clean.

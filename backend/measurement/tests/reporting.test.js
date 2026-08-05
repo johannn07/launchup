@@ -21,9 +21,9 @@ function results({ agroAssigned, mediAssigned, agroRna }) {
 }
 
 test('metric 1 scores level placement against the seeded ground truth', () => {
-  // AgroLink truth is T2 M2 A1 O2 R1 I1. Assign T2 (exact) and M4 (off by 2).
+  // AgroLink truth is T2 M3 A3 O2 R1 I1. Assign T2 (exact) and M5 (off by 2).
   const s = H.summarizeResults(results({
-    agroAssigned: { Technology: 2, Market: 4 },
+    agroAssigned: { Technology: 2, Market: 5 },
     mediAssigned: {},
     agroRna: {},
   }));

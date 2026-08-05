@@ -29,7 +29,17 @@ const RESULT_FILES = [
   '2026-08-04-bare-arm.json',
 ];
 
-/** The reference metric 1 has used since the 2026-07-30 redesign. */
+/**
+ * FROZEN. The reference metric 1 used from the 2026-07-30 redesign until it was
+ * corrected on 2026-08-05 — the values the runs in results/ were actually
+ * scored against.
+ *
+ * Do NOT update these to match measure-grounding.js. They deliberately no
+ * longer agree with it: this file re-scores historical runs, and the
+ * reproduction test below pins the published figures, which only reproduce
+ * against the reference that produced them. A test asserts the divergence so a
+ * well-meaning sync cannot land silently.
+ */
 const SEEDED = {
   'AgroLink PH': { Technology: 2, Market: 2, Acceptance: 1, Organizational: 2, Regulatory: 1, Investment: 1 },
   'MediSync Cebu': { Technology: 5, Market: 4, Acceptance: 3, Organizational: 4, Regulatory: 3, Investment: 3 },

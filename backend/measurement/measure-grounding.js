@@ -242,7 +242,20 @@ const { levelPlacement, stageAppropriateness, differentiationGap } = require(
 const { isStageInappropriate } = require(path.join(__dirname, 'lib/stage-markers.js'));
 
 // Documents are measure-differentiation.js's verbatim early/mid pair; levels
-// are the real StartupReadinessLevel rows seedDemoStartups writes, not a guess.
+// mirror src/demo-readiness-levels.ts, the rows seedDemoStartups writes.
+//
+// They serve two roles at once: metric 1's ground truth, and the
+// `Initial Readiness Level` block fed INTO the RNA prompt. Corrected 2026-08-05
+// - the previous values were demo fixtures that contradicted these very
+// documents in ten of twelve cells, so metric 1 was scoring placement against a
+// reference the source text refutes. Derivation per cell, with the document
+// phrase each was read from, is in data/ground-truth-adjudication.md.
+//
+// This changes `common`, so every fingerprint changes and runs collected before
+// the correction will refuse to pool with runs after it. That is correct: the
+// RNA prompt itself changed. audit-ground-truth.js keeps the OLD values, frozen
+// deliberately, because that is what the already-collected runs were scored
+// against.
 const STARTUPS = {
   'AgroLink PH': {
     doc: `Title: AgroLink PH: Cooperative Market Access Platform
@@ -254,7 +267,7 @@ Timeline: 2025-06 field interviews with 18 cooperatives. 2025-09 paper prototype
 Revenue: None to date.
 IP Status: No patents filed. The "AgroLink PH" wordmark has not been registered with IPOPHL.
 Team: Rafael Domingo (6 years agricultural extension officer), Ana Beltran (4 years backend engineer).`,
-    levels: { Technology: 2, Market: 2, Acceptance: 1, Organizational: 2, Regulatory: 1, Investment: 1 },
+    levels: { Technology: 2, Market: 3, Acceptance: 3, Organizational: 2, Regulatory: 1, Investment: 1 },
     present: ['target_cooperative_count', 'number_of_founders', 'cooperatives_in_prototype_test'],
     absent: ['monthly_burn_rate_php', 'lead_investor_name', 'date_of_incorporation'],
   },
@@ -268,7 +281,7 @@ Timeline: 2025-02 pilot with 2 rural health units and 1 district hospital. 2025-
 Revenue: PHP 5,000 monthly recurring.
 IP Status: No patents. Trademark application filed with IPOPHL, pending.
 Team: Dr. Elena Reyes (9 years provincial public health), Marco Villanueva (7 years health IT), Joy Tabotabo (5 years LGU administration).`,
-    levels: { Technology: 5, Market: 4, Acceptance: 3, Organizational: 4, Regulatory: 3, Investment: 3 },
+    levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 },
     present: ['rural_health_units_in_cebu', 'monthly_recurring_revenue_php', 'number_of_founders'],
     absent: ['monthly_burn_rate_php', 'lead_investor_name', 'date_of_incorporation'],
   },

@@ -164,6 +164,40 @@ test('the filled worksheet carries every cell and banners its provenance', () =>
   assert.ok(!filled.includes('| | | |'), 'filled worksheet still has a blank row');
 });
 
+/**
+ * SEEDED is frozen history, not a mirror of the harness. Syncing it to the
+ * corrected levels would silently rebase the published figures onto a reference
+ * that never produced them, and the reproduction test above would start failing
+ * for a reason nobody could locate.
+ */
+test('SEEDED stays frozen and does not track the corrected harness levels', () => {
+  const H = require(path.resolve(__dirname, '../measure-grounding.js'));
+  const live = H.STARTUPS;
+
+  assert.deepStrictEqual(A.SEEDED['MediSync Cebu'], {
+    Technology: 5, Market: 4, Acceptance: 3, Organizational: 4, Regulatory: 3, Investment: 3,
+  });
+  assert.notDeepStrictEqual(
+    A.SEEDED['MediSync Cebu'], live['MediSync Cebu'].levels,
+    'SEEDED has been synced to the harness — that rebases the published figures',
+  );
+});
+
+/**
+ * The corrected harness levels are the reference future runs are scored
+ * against, so they must be the ones derived from the documents.
+ */
+test('the harness now scores against the strict derived reference', () => {
+  const H = require(path.resolve(__dirname, '../measure-grounding.js'));
+  const strict = A.reference('strict');
+  for (const startup of Object.keys(strict)) {
+    assert.deepStrictEqual(
+      H.STARTUPS[startup].levels, strict[startup],
+      `${startup}: harness levels disagree with the strict derived reference`,
+    );
+  }
+});
+
 /** The superseded pre-redesign file must stay out, as the fingerprint guard has it. */
 test('the pre-redesign results file is excluded from the pool', () => {
   assert.ok(
