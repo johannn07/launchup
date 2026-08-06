@@ -388,3 +388,14 @@ test('"remains" is refused — it asserts nothing about existence', () => {
 test('"includes" is refused — a plan is not an artifact in existence', () => {
   assert.notEqual(classifyClause('The roadmap includes a contractor engagement', ORG), 'asserted');
 });
+
+// Constructed guard, not a dump fixture. `existing` is an attributive
+// adjective: it modifies a topic word rather than predicating existence of an
+// artifact, so it asserts nothing. This is the same failure the bare-copula
+// exclusion above exists to prevent.
+test('"existing" is refused — an attributive adjective asserts no artifact', () => {
+  assert.notEqual(
+    classifyClause('Existing investor sentiment remains cautious despite early traction.', INVEST),
+    'asserted',
+  );
+});

@@ -44,14 +44,17 @@ const IMPERATIVE =
  * is secured" matches `secured`, so no separate "is + X" alternative is needed.
  *
  * `exists` is the one existential added (measured 2026-08-06: "A basic funding
- * plan exists alongside PHP 5,000 MRR"). It is safe only because negation and
- * recommendation are tested first — "no funding plan exists" and "should exist"
- * both exit before this runs. `remains` and `includes` were considered and
- * REFUSED: "a permit remains outstanding" and "the roadmap includes a contractor
- * engagement" assert nothing, and neither has a measured instance.
+ * plan exists alongside PHP 5,000 MRR"). It is safe because it is a finite verb
+ * requiring the artifact as its subject, unlike `existing`, an attributive
+ * adjective. `existed` and `existing` were considered and REFUSED: "Existing
+ * investor sentiment remains cautious despite early traction" asserts nothing,
+ * and neither form has a measured instance. The gate against bare copulas
+ * ("investor interest is growing") does not protect against attributive usage,
+ * so the ordering argument for negation/recommendation precedence does not apply.
+ * `remains` and `includes` were also refused for lack of measured instances.
  */
 const ASSERTION =
-  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\b(?:exists?|existed|existing)\b|\bin\s+place\b|\bunder\s+contract\b/i;
+  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\b(?:exists?)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 
 /**
  * Multiword tokens like "term sheet" and "org chart" must match as phrases.
