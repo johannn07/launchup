@@ -391,7 +391,7 @@ is checkable rather than trusted.
 |---|---|
 | corpus-inflated ≫ baseline-inflated | The corpus converts a wrong supplied level into asserted evidence. A real risk in the shipped path. |
 | corpus-inflated ≈ baseline-inflated | The wrong level alone drives it; the corpus is not culpable. |
-| both ≈ 0 | No fabrication even under adversarial supply. |
+| both ≈ 0 | A one-rung supplied-level error did not induce detectable fabrication — not evidence about larger errors. |
 | `unclassified` large | The classifier is too weak to read any of the above — report that, do not quote a rate. |
 
 ### Result, 2026-08-05 — the reference was broken; corrected, and the direction reverses

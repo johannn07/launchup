@@ -188,7 +188,7 @@ Written before the run, not after. The study's own hard-won lesson is that agree
 |---|---|
 | corpus-inflated ≫ baseline-inflated | The corpus converts a wrong supplied level into asserted evidence. A real risk in the shipped path; 1c gains a failure mode to validate against. |
 | corpus-inflated ≈ baseline-inflated | The wrong number alone drives it; the corpus is not culpable. Bounds 1b. |
-| both ≈ 0 | No fabrication even under adversarial supply. 1c's groundedness exclusion becomes better-evidenced than today. |
+| both ≈ 0 | A one-rung supplied-level error did not induce detectable fabrication — not evidence about larger errors. 1c's groundedness exclusion gains evidence against a one-rung error, not against adversarial supply generally. |
 | `unclassified` large | The classifier is too weak to read any of the above. Report that; do not quote a rate. |
 
 All three substantive outcomes are publishable.
