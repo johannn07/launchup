@@ -55,6 +55,16 @@ const AND_CLAUSE =
   /\s+and\s+(?=(?:it\s+|they\s+|the\s+\w+\s+)?(?:should|must|need|needs|consider|begin|start|prioriti[sz]e|plan\s+to|aim\s+to|ought)\b|(?:(?:has|have|had|is|are|was|were)\s+)?(?:no|not|never)\b)/i;
 
 /**
+ * Sentence break, refusing abbreviation periods.
+ *
+ * `Dr.` is the measured case: an RNA read "led by 3 founders (Dr. Elena Reyes,
+ * ...)" and the split left a fragment starting mid-name, which no cue could
+ * classify. The rest are the same class and cost nothing.
+ */
+const SENTENCE_BREAK =
+  /(?<=[.!?])(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|Inc|Corp|Ltd|Co|St|No|vs|approx|Fig)\.)(?<!\b[A-Z]\.)(?<!\be\.g\.)(?<!\bi\.e\.)\s+|;\s*/;
+
+/**
  * Sentence boundaries, semicolons, comma-joined coordination, contrastive
  * conjunctions, and the coordinations that join two independent reports.
  *
@@ -67,7 +77,7 @@ const AND_CLAUSE =
  */
 function splitClauses(text) {
   return String(text)
-    .split(/(?<=[.!?])\s+|;\s*/)
+    .split(SENTENCE_BREAK)
     .flatMap((part) => part.split(/,\s+(?=(?:and|but|while|whereas|although|though)\b)/i))
     // A leading subordinator scopes its negation to its own clause: "While no
     // term sheet exists, the team has secured angel funding" asserts.
@@ -146,6 +156,7 @@ const CLASSIFIER_SOURCE = [
   IMPERATIVE.source,
   ASSERTION.source,
   AND_CLAUSE.source,
+  SENTENCE_BREAK.source,
   tokenRe.toString(),
   splitClauses.toString(),
   classifyClause.toString(),

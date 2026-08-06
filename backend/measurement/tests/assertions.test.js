@@ -262,3 +262,28 @@ test('a classifier edit moves the assertion fingerprint', () => {
   const edited = { ...spec, sources: { ...spec.sources, assertion: `${CLASSIFIER_SOURCE}|edited` } };
   assert.notEqual(fingerprintMap(spec)['assertion|baseline'], fingerprintMap(edited)['assertion|baseline']);
 });
+
+// --------------------------------------------------------------------------
+// Gap 4a, measured 2026-08-06. `Dr.` inside a founder name was read as a
+// sentence end, so the accompaniment clause reached classifyClause as a
+// fragment starting mid-name and could never be classified.
+// --------------------------------------------------------------------------
+
+test('an abbreviation period is not a sentence end', () => {
+  const clauses = splitClauses(
+    'Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor. To achieve ORL 4, the startup must draft formal role definitions.',
+  );
+  assert.equal(clauses.length, 2, 'split at "Dr." would give 3');
+  assert.match(clauses[0], /^Currently at ORL 3/);
+  assert.match(clauses[0], /alongside a first non-founder contributor\.$/);
+});
+
+test('a real sentence boundary still splits', () => {
+  const clauses = splitClauses('The venture has secured angel funding. No term sheet exists.');
+  assert.equal(clauses.length, 2);
+});
+
+test('a bare initial is not a sentence end', () => {
+  const clauses = splitClauses('Founders are E. Reyes and M. Villanueva of the venture.');
+  assert.equal(clauses.length, 1);
+});
