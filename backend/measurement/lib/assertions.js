@@ -70,50 +70,6 @@ const tokenRe = (token) =>
     'i',
   );
 
-/**
- * Accompaniment asserts existence without a verb: "led by 3 founders alongside
- * a first non-founder contributor" holds no possession and no achievement
- * participle, yet claims the contributor exists.
- *
- * `with` is deliberately absent. It is pervasive and un-restrictable —
- * "Currently at ORL 2 with founders committed full-time", "engage a contributor
- * with a formal agreement" — and it costs nothing measured, because the
- * `with` assertions the probe has actually caught were caught by their
- * participle (`engaged`, `drafted`).
- *
- * Global flag is required: assertsByAccompaniment uses matchAll.
- */
-const ACCOMPANIMENT =
-  /\b(?:alongside|along\s+with|together\s+with|accompanied\s+by|as\s+well\s+as)\b/gi;
-
-/**
- * The noun-phrase window between the preposition and the artifact it governs.
- * Admits "alongside a first non-founder contributor" (32) while refusing a
- * preposition that governs some earlier phrase. A constant, not a literal at the
- * call site, so a recalibration is one edit and shows up in CLASSIFIER_SOURCE.
- */
-const ACCOMPANIMENT_WINDOW = 40;
-
-/**
- * True when an artifact token is the object of an accompaniment preposition:
- * within ACCOMPANIMENT_WINDOW characters after it, with no punctuation between
- * that would put them in different phrases.
- */
-function assertsByAccompaniment(text, tokens) {
-  const preps = [...text.matchAll(ACCOMPANIMENT)].map((m) => m.index + m[0].length);
-  if (!preps.length) return false;
-  for (const token of tokens) {
-    const m = tokenRe(token).exec(text);
-    if (!m) continue;
-    for (const end of preps) {
-      if (m.index <= end) continue;
-      const span = text.slice(end, m.index);
-      if (span.length <= ACCOMPANIMENT_WINDOW && !/[,;()]/.test(span)) return true;
-    }
-  }
-  return false;
-}
-
 /** A coordinated clause that reports an absence: "and no investors...", "and has not...". */
 const AND_CLAUSE =
   /\s+and\s+(?=(?:it\s+|they\s+|the\s+\w+\s+)?(?:should|must|need|needs|consider|begin|start|prioriti[sz]e|plan\s+to|aim\s+to|ought)\b|(?:(?:has|have|had|is|are|was|were)\s+)?(?:no|not|never)\b)/i;
@@ -184,7 +140,7 @@ function classifyClause(clause, tokens, scope = '') {
   const gated = scope ? `${scope} ${text}` : text;
   if (NEGATION.test(gated)) return 'negated';
   if (RECOMMENDATION.test(gated) || IMPERATIVE.test(gated.trim())) return 'recommended';
-  if (ASSERTION.test(text) || assertsByAccompaniment(text, tokens)) return 'asserted';
+  if (ASSERTION.test(text)) return 'asserted';
   return 'unclassified';
 }
 
@@ -238,13 +194,10 @@ const CLASSIFIER_SOURCE = [
   RECOMMENDATION.source,
   IMPERATIVE.source,
   ASSERTION.source,
-  ACCOMPANIMENT.source,
-  String(ACCOMPANIMENT_WINDOW),
   AND_CLAUSE.source,
   SENTENCE_BREAK.source,
   CONTINUATION.source,
   tokenRe.toString(),
-  assertsByAccompaniment.toString(),
   splitClauses.toString(),
   classifyClause.toString(),
   scoreAssertedAbsences.toString(),
