@@ -10,10 +10,11 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | 🐞 **BUG** | Broken code with an unambiguous correct behaviour — just fix it |
 | ❓ **SCOPE** | Unfinished feature. Needs *your* decision: **fix it / cut it / leave it hidden**. |
 | 🧹 **DEBT** | Cleanup. No user-visible impact. |
+| 🎯 **DEMO** | Demo-critical. Breaks the live demo, or is a deletion that removes an easy line of panel questioning. Do these even if nothing else in §1–§5 gets done. |
 
 **Effort:** S ≈ under an hour · M ≈ half a day · L ≈ multiple days
 
-> **Suggested order:** §0 is the capstone itself and outranks everything else. Then §1 security → the §2 items your demo touches → §3 decisions → §4 last.
+> **Suggested order:** §0 is the capstone itself and outranks everything else. Then the 🎯 items below, then stop — see **Capstone triage**.
 
 ---
 
@@ -38,11 +39,46 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | Objective | Status |
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; 1a and 4b partial, 3b minimal, 3c and 4a are research tasks |
-| **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 6 P1 items open |
-| **Broken functionality (§2)** | In progress — 4 of 13 fixed; the readiness-level rubric submission is the highest-value remaining |
-| **Incomplete features (§3)** | Blocked — needs decision on 6 scope calls |
-| **Cleanup / tech debt (§4)** | Not started — 1 of 19 done |
-| **Infrastructure decisions (§5)** | In progress — storage and model settled; output caps, API-key format, and Docker open |
+| **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
+| **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
+| **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
+| **Cleanup / tech debt (§4)** | Not started — 1 of 19 done; 3 🎯 items, 15 deferred |
+| **Infrastructure decisions (§5)** | In progress — storage and model settled; 1 🎯 item, 3 deferred |
+
+---
+
+## Capstone triage — 2026-08-07
+
+**The decision:** finish §0, do the 🎯 items, cut §3 cleanly, defer the rest. Recorded so the cut is a choice rather than something that just didn't get done.
+
+**Why the boundary isn't simply "§0 only":** a panel judges §0 **through a live demo**, so anything that breaks the demo is a §0 risk wearing a §2 label — and several §1/§4 items are deletions that take minutes and remove an easy line of questioning.
+
+### 🎯 Demo-critical — do these even if nothing else does (~1 day, mostly deletions)
+
+| Item | § | Effort |
+|---|---|---|
+| Readiness-level rubric submission posts to endpoints that don't exist | 2 | M — **verify first**, may collapse to a deletion |
+| Verify the `GEMINI_API_KEY` format | 5 | S — cheapest catastrophic-risk removal on the list |
+| Elevate page queries a non-existent `/startup-rna/` | 2 | S |
+| Assessment preview dialog calls a non-existent `/fields` route | 2 | S |
+| Delete the raw-SQL debug endpoints | 1 | S — deletion |
+| Remove committed scratch files | 4 | S — deletion |
+| Delete the three orphaned Tab components (and their expired JWT literal) | 4 | S — deletion, closes two items |
+| Remove the Cebuano comment in `status.enum.ts` | 4 | trivial |
+
+### Judgement call — not automatic
+
+**IDOR ownership checks (§1, M).** Any logged-in founder can read any other startup's full record by changing a URL id. Worth doing *only* if your panel asks security questions. **If skipped, name it as known and scoped-out** — that answers far better than being surprised by it.
+
+### Deferred
+
+Everything in §1–§5 not marked 🎯 above. Each section carries a **Deferred** note recording what that means for it. Deferred means *decided not to do before submission*, not *forgotten* — the items stay with their full diagnosis so they survive the capstone.
+
+### Inside §0, if time is squeezed there too
+
+- **4b is the one to fix.** The objective specifies adversarial prompting that hunts unmet criteria *before* scoring; `reviewBiasScore()` is a post-hoc "correct only if inflated". Different mechanism, and these docs already say so — a panel reading the proposal against the code finds it. It is a **prompt change, not a system**: cheapest gap-to-credibility ratio left.
+- **3b is the one to descope explicitly.** The `sketchDetected`/`sketchConfidence`/`visionLabels` columns exist with no canvas-mapping logic. "We shipped OCR and instrumented the vision path; sketch-section mapping was scoped out" is defensible. 3c and 4a aren't code at all — they need datasets, so they are write-ups regardless.
+- **The position being protected is good, not desperate:** 1b, 1c, 2a, 2b, 2c and 4c are built and measured, and 1b has a reference-free result (baseline 61% unsupported claims vs corpus 0%).
 
 ---
 
@@ -59,10 +95,10 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **2b** Weighted composite scoring by sector / business model | 🟢 Built | `WeightProfileService.resolve()` cascade over `weight_profiles`, ending at `DEFAULT_WEIGHTS`. Six dimensions scored as a fraction of 9. Live-verified against Neon. **The sector effect is ~1 point** — a correctness and configurability deliverable, not a differentiation win. See §3 and §5 |
 | **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
 | **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
-| **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
+| **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal — **descope explicitly (2026-08-07)** | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic. Present as "OCR shipped and the vision path is instrumented; sketch-section mapping was scoped out" rather than leaving it ambiguous |
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
-| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated". The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism |
+| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled — **highest-value §0 item left (2026-08-07)** | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated". The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism, and a panel reading the proposal against the code finds it. **It is a prompt change, not a system** — cheapest gap-to-credibility ratio remaining |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
 ### Objective 1b — what was built and what it's worth
@@ -226,7 +262,9 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
 ### P1 — before any real deployment
 
-- [ ] 🔒 **SEC · M · Add ownership checks to startup detail endpoints (IDOR)**
+> **Deferred (2026-08-07)** except the 🎯 item below. IDOR is the judgement call — see **Capstone triage**. The rest are real pre-deployment work that a capstone demo does not reach.
+
+- [ ] 🔒 **SEC · M · Add ownership checks to startup detail endpoints (IDOR)** — *judgement call, see triage*
   `startup.controller.ts:135-137` (`GET /startups/:startupId`) and every sibling route are `JwtGuard`-only. Row-level filtering exists **only** in the list endpoint (`StartupService.getStartups()`).
   **Why it matters:** any logged-in founder can read any other startup's full record — capsule proposal, members, waitlist messages — by changing the id in the URL.
   **Fix:** a reusable guard or service helper asserting the requester owns / is a member of / mentors the startup, unless Manager or Admin.
@@ -239,7 +277,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 - [ ] 🔒 **SEC · S · Guard the remaining unauthenticated modules**
   ⚠️ **Probably already done** — the P0 guard fix above names exactly these six controllers (`readiness`, `progress`, `elevate`, `ocr`, `ai/baseline`, `ai/ai-metrics`) and was live-verified 2026-07-27. Confirm and close rather than re-doing.
 
-- [ ] 🔒 **SEC · S · Delete the raw-SQL debug endpoints**
+- [ ] 🎯 🔒 **SEC · S · Delete the raw-SQL debug endpoints**
   `startup.controller.ts:62` (`GET /startups/debug-evals`) and `admin.controller.ts:157` (`GET /admin/tiers/check-evals`) both execute hand-written SQL via `em.getConnection().execute()`. The first is reachable by any logged-in user and dumps every startup's score.
   **Fix:** delete both. Neither is called from the frontend (verified).
 
@@ -259,7 +297,9 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
 Each verified by reading **both** sides of the call.
 
-- [ ] 🐞 **BUG · M · Readiness-level rubric submission posts to two endpoints that don't exist** — *highest-value item in this section*
+> **Deferred (2026-08-07)** except the three 🎯 items. The deferred ones are real breakage on paths a capstone demo does not have to touch — but they are breakage, so they keep their full diagnosis.
+
+- [ ] 🎯 🐞 **BUG · M · Readiness-level rubric submission posts to two endpoints that don't exist** — *highest-value item in this section*
   `(app)/startups/[id]/readiness-level/+page.server.ts:64` posts to `/readiness-level-criterion-answers/bulk-create/` and `:78` to `/startup-readiness-levels/bulk-create/`. **Neither route exists.** The block sits in a `try` whose `catch` is empty (`:104`), so it fails silently, and on "success" it redirects to `/mentor/startups/qualified/:id` — also not a route.
   **Why it matters:** this is the mentor's core task and the gate for the entire coaching chain (`allow-rnas` depends on `StartupReadinessLevel` rows existing).
   **Fix:** confirm whether the working path is really `POST /readinesslevel/startup/:startupId/rate`, then rewrite or delete this action. Remove the empty `catch` either way.
@@ -268,7 +308,7 @@ Each verified by reading **both** sides of the call.
   `.../overview/members/+page.svelte:155` calls `axiosInstance.delete('/startups/remove-member/:memberId/')` with `{startupId}` in the body; the backend is `@Post('remove-member')` reading `userId` **and** `startupId` from the body (`startup.controller.ts:97-103`). Removing a member always fails.
   **Fix:** `axiosInstance.post('/startups/remove-member', { userId: memberId, startupId })`.
 
-- [ ] 🐞 **BUG · S · Assessment preview dialog calls a non-existent `/fields` route**
+- [ ] 🎯 🐞 **BUG · S · Assessment preview dialog calls a non-existent `/fields` route**
   `dashboard/sub/AssessmentPreviewDialog.svelte:30` fetches `/assessments/:id/fields`; no such route exists. The component *is* mounted (`QualifiedDialog` → `/applications`, `ApprovalDialog` → `Pending`/`Waitlisted`), so a Manager opening an applicant's assessment preview gets an empty or erroring dialog.
   **Fix:** point at `GET /assessments/:id`, or add the endpoint if per-field data is genuinely needed.
 
@@ -280,7 +320,7 @@ Each verified by reading **both** sides of the call.
   `(app)/admin/assessments/+page.server.ts:47` does `POST /assessments/types`; the backend only declares `@Get('types')`. Note `AssessmentType` is a **TypeScript enum**, not a table, so creating a type at runtime isn't possible without a schema change — this may be a ❓SCOPE item in disguise.
   **Fix:** decide whether types are fixed (remove the UI) or dynamic (new table + endpoints — that's L, not S).
 
-- [ ] 🐞 **BUG · S · Elevate page queries a non-existent `/startup-rna/` endpoint**
+- [ ] 🎯 🐞 **BUG · S · Elevate page queries a non-existent `/startup-rna/` endpoint**
   `.../overview/elevate/+page.svelte:71` calls `getData('/startup-rna/?startup_id=…')`; the real prefix is `/rna`. The RNA panel on the Elevate tab never populates.
   **Fix:** `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
 
@@ -322,9 +362,12 @@ Each verified by reading **both** sides of the call.
 
 ---
 
-## 3. Incomplete features — need a scope decision
+## 3. Incomplete features — decisions made 2026-08-07
 
-Each needs a *fix it / cut it / leave it hidden* call. For a capstone, "cut it cleanly" is usually stronger than "leave it half-built."
+> **Decided: cut, don't defer.** Deletion is *faster* than leaving these in place, and it removes a whole category of "why doesn't this work?" — half-built UI that calls endpoints which don't exist is the worst state to demo from. Three exceptions, called out per item:
+> - **Progress Report → re-enable, not cut.** It is fully working and the re-enable is a five-line uncomment.
+> - **The two output-validation design decisions → deferred, not cut.** They are decisions about built code, not unfinished features; nothing to delete.
+> - **Refresh-token flow → *leave* and document**, per the recommendation already in the item.
 
 - [ ] ❓ **SCOPE · L · Analytics and Cohorts pages have no backend at all**
   `(app)/analytics/+page.svelte:16,31,46` and `.../cohorts/+page.svelte:16,31,46` call `/analytics/startups/`, `/analytics/elevate-logs/`, `/cohorts`. **No analytics controller, no cohorts controller, no cohort entity.** Both pages are ~190 lines of finished UI, Manager-gated, commented out of the nav (`access.ts:104-113`).
@@ -370,11 +413,13 @@ Each needs a *fix it / cut it / leave it hidden* call. For a capstone, "cut it c
 
 ## 4. Cleanup / tech debt
 
-- [ ] 🧹 **DEBT · S · Three components carry a hardcoded, expired JWT from the previous team's app**
+> **Deferred (2026-08-07)** except the three 🎯 items, which are deletions a reviewer would notice. Everything else here is invisible to a panel and survives the capstone unchanged.
+
+- [ ] 🎯 🧹 **DEBT · S · Three components carry a hardcoded, expired JWT from the previous team's app**
   `admin/PendingTab.svelte:19`, `AcceptedTab.svelte:19`, `RatedTab.svelte` each declare `const access = 'eyJ...'` and send it as `Authorization: Bearer`. Decoded, it is a **Django SimpleJWT** token (`token_type`, `jti`, `user_id`) that **expired 2024-09-06** — a payload shape this backend has never issued.
   **Why it matters:** it looks like working auth and is not, which is how the "the frontend already sends Bearer tokens" assumption survived. *These three are also unimported, so deleting them resolves both items.*
 
-- [ ] 🧹 **DEBT · S · Delete three orphaned admin Tab components**
+- [ ] 🎯 🧹 **DEBT · S · Delete three orphaned admin Tab components**
   `PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — none imported anywhere (verified). `RatedTab.svelte` also calls `/readinesslevel/:id/calculator-final-scores/`, which doesn't exist. *Coupled to the "rate applicant" scope decision — resolve that first.*
 
 - [ ] 🧹 **DEBT · S · `GET /ocr/parse` reads an arbitrary server-side path**
@@ -407,11 +452,12 @@ Each needs a *fix it / cut it / leave it hidden* call. For a capstone, "cut it c
   Never referenced by any service or controller (verified): `MentorAssignment`, `ConsultationRequest`, `ScoringGuide`. Mentor assignment actually writes to the `startups`↔`users` pivot (`startup.service.ts:942-963`), so `MentorAssignment` is actively misleading — it looks like the source of truth and even has an `assignedBy` audit field the real path lacks.
   **Fix:** delete the entities and add a migration to drop the tables. *If the `assignedBy`/`isActive` audit trail is wanted, that's a ❓SCOPE item instead.*
 
-- [ ] 🧹 **DEBT · S · Consolidate duplicate enums**
-  `RnsStatus` (integer-backed) and `Status` (string-backed) define the same seven states. `Status` also carries a Cebuano comment (`// basin pwede sa RNS…`) that should go before submission.
+- [ ] 🧹 **DEBT · S · Consolidate duplicate enums** — *deferred, except one line*
+  🎯 **The Cebuano comment in `Status` (`// basin pwede sa RNS…`) goes before submission** — that part is trivial and demo-critical; the consolidation itself is deferred.
+  `RnsStatus` (integer-backed) and `Status` (string-backed) define the same seven states.
   *(The `recommendations` table half of this item is fully resolved — the entity and its service are deleted, and the table does not exist on Neon at all, verified 2026-08-04. No pending action.)*
 
-- [ ] 🧹 **DEBT · S · Remove committed scratch files**
+- [ ] 🎯 🧹 **DEBT · S · Remove committed scratch files**
   Tracked: `backend/test-login.js` (0 bytes), `frontend/fix-page.cjs`, `.../admin/assessments/+page.svelte.backup`, `.../admin/assessments/temp_fix.txt`, `chumcheck_2025-03-04_025337.sql` (561 KB). Untracked but in the repo root: `backend.zip` (116 MB), `frontend.zip` (84 MB) — gitignore or delete.
   **Why it matters:** `.backup` and `temp_fix.txt` files next to the code they patch are the first thing a reviewer notices.
 
@@ -451,6 +497,8 @@ Each needs a *fix it / cut it / leave it hidden* call. For a capstone, "cut it c
 ## 5. Infrastructure decisions (open questions)
 
 Neither the SRS nor the SDD names a storage vendor, a model version, or Docker — these are genuinely your call.
+
+> **Deferred (2026-08-07)** except the 🎯 API-key check. Storage and model are settled; output caps, `responseSchema` and Docker are all invisible to a panel.
 
 - [x] ✅ **SCOPE · S · File-storage provider** — *settled 2026-07-27: Supabase Storage*
   Cloudflare R2 was the original recommendation but requires a credit card even on the free tier. Supabase is S3-compatible, no card, ~1 GB free. Because `upload.service.ts` uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, the swap was config, not a rewrite.
@@ -505,7 +553,7 @@ Neither the SRS nor the SDD names a storage vendor, a model version, or Docker �
   **The decision:** if caps are wanted, choose a value **per call site** from the actual prompt shape and add a test per site that a realistic full-length response is not truncated. Do not reintroduce a blanket number. Note Gemini bills *thinking* tokens against `maxOutputTokens`, so a cap sized to the visible JSON can truncate before any answer is emitted.
   **Related under-count:** `ai_generation_runs.completion_tokens` sums only `candidatesTokenCount`, so recorded output spend is a floor. Fold in `thoughtsTokenCount` before using these columns for cost analysis (see §4).
 
-- [ ] ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
+- [ ] 🎯 ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
   The configured key starts with `AQ.Ab8RN6…`; AI Studio keys normally begin with `AIzaSy`. Confirm it is a valid AI Studio key and not a Vertex/OAuth credential, which `@google/genai` would need different auth for — a bad key makes every AI feature fail at demo time.
 
 - [ ] ❓ **SCOPE · S · Drop Docker, give each developer a Neon branch**
