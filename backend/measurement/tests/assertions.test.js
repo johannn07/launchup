@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 
-const { splitClauses, classifyClause, scoreAssertedAbsences } =
+const { splitClauses, classifyClause, scoreAssertedAbsences, CLASSIFIER_SOURCE } =
   require(path.resolve(__dirname, '../lib/assertions.js'));
 const { HARD_ABSENCES } = require(path.resolve(__dirname, '../lib/hard-absences.js'));
 
@@ -208,4 +208,42 @@ test('"and has not" starts a new clause; the assertion before it survives', () =
 // become two cue-less fragments and inflate the unclassified column for nothing.
 test('a coordinated noun phrase is not split', () => {
   assert.deepEqual(splitClauses('Engage counsel and compliance review'), ['Engage counsel and compliance review']);
+});
+
+// --------------------------------------------------------------------------
+// CLASSIFIER_SOURCE is what `assertion|*` hashes. A cue regex added to this
+// module but left out of it would leave the fingerprint unchanged, and
+// re-scored data would pool with data scored by the old classifier.
+// --------------------------------------------------------------------------
+
+test('CLASSIFIER_SOURCE carries every cue regex, every helper and the token matcher', () => {
+  // Plain substrings, each unique to one regex or helper.
+  const distinctive = {
+    NEGATION: '(?:absence|lack)\\s+of',
+    RECOMMENDATION: 'advis(?:e|ed|able)',
+    IMPERATIVE: 'formali[sz]e',
+    ASSERTION: 'under\\s+contract',
+    AND_CLAUSE: '(?:no|not|never)',
+    tokenRe: '(?:s|es)?',
+    splitClauses: 'whereas',
+    classifyClause: "'recommended'",
+    scoreAssertedAbsences: 'rnaByDim',
+  };
+  for (const [name, fragment] of Object.entries(distinctive)) {
+    assert.ok(
+      CLASSIFIER_SOURCE.includes(fragment),
+      `CLASSIFIER_SOURCE is missing ${name} (looked for ${fragment})`,
+    );
+  }
+});
+
+test('a classifier edit moves the assertion fingerprint', () => {
+  const { fingerprintMap } = require(path.resolve(__dirname, '../lib/fingerprint.js'));
+  const spec = {
+    common: {}, markers: [], rubrics: [],
+    sources: { rna: 'r', levels: 'l', fabrication: 'f', assertion: CLASSIFIER_SOURCE },
+    arms: [{ name: 'baseline', ragCorpus: false, rubricMode: null }],
+  };
+  const edited = { ...spec, sources: { ...spec.sources, assertion: `${CLASSIFIER_SOURCE}|edited` } };
+  assert.notEqual(fingerprintMap(spec)['assertion|baseline'], fingerprintMap(edited)['assertion|baseline']);
 });

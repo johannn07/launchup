@@ -1264,8 +1264,8 @@ function printReports(results) {
  */
 const { fingerprintMap } = require(path.join(__dirname, 'lib/fingerprint.js'));
 const { MARKERS } = require(path.join(__dirname, 'lib/stage-markers.js'));
-const { scoreAssertedAbsences } = require(path.join(__dirname, 'lib/assertions.js'));
-const { HARD_ABSENCES } = require(path.join(__dirname, 'lib/hard-absences.js'));
+const { scoreAssertedAbsences, CLASSIFIER_SOURCE } = require(path.join(__dirname, 'lib/assertions.js'));
+const { HARD_ABSENCES, verifyAbsences } = require(path.join(__dirname, 'lib/hard-absences.js'));
 
 function currentFingerprints() {
   return fingerprintMap({
@@ -1289,7 +1289,9 @@ function currentFingerprints() {
       renderTitlesOnlyBlock: renderTitlesOnlyBlock.toString(),
       renderBareTitlesBlock: renderBareTitlesBlock.toString(),
       fullLadderRubrics: fullLadderRubrics.toString(),
-      assertion: scoreAssertedAbsences.toString(),
+      // Not scoreAssertedAbsences.toString(): it contains neither the cue
+      // regexes nor the helpers it calls. See CLASSIFIER_SOURCE.
+      assertion: CLASSIFIER_SOURCE,
     },
     arms: ARMS,
     levelsRubricScope: 'full-ladder',

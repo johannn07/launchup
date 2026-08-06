@@ -131,4 +131,25 @@ function scoreAssertedAbsences(rnaByDim, absences) {
   return { observations };
 }
 
-module.exports = { splitClauses, classifyClause, scoreAssertedAbsences };
+/**
+ * What `assertion|*` hashes. `scoreAssertedAbsences.toString()` alone contained
+ * none of the cue regexes and neither helper it calls, so editing a cue — the
+ * likeliest future edit, and one this branch already made — left the
+ * fingerprint unchanged and let re-scored data pool with old data. Exactly the
+ * hazard lib/fingerprint.js's header documents for the prompt builders.
+ *
+ * Add any new regex or helper here at the same time you add it above.
+ */
+const CLASSIFIER_SOURCE = [
+  NEGATION.source,
+  RECOMMENDATION.source,
+  IMPERATIVE.source,
+  ASSERTION.source,
+  AND_CLAUSE.source,
+  tokenRe.toString(),
+  splitClauses.toString(),
+  classifyClause.toString(),
+  scoreAssertedAbsences.toString(),
+].join('\n');
+
+module.exports = { splitClauses, classifyClause, scoreAssertedAbsences, CLASSIFIER_SOURCE };

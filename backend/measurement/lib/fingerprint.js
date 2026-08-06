@@ -32,8 +32,13 @@ const hash = (material) =>
  * @param {Array}  [spec.rubrics]   the full RUBRICS corpus - one entry per row, each with at
  *                                  least title/content/keyTerms/key/readinessType/level
  * @param {object} spec.sources     { rna, levels, fabrication, readinessLevelBlock,
- *                                    renderRubricBlock, fullLadderRubrics } - prompt-builder
- *                                  and prompt-helper source text
+ *                                    renderRubricBlock, renderTitlesOnlyBlock,
+ *                                    renderBareTitlesBlock, fullLadderRubrics } - prompt-builder
+ *                                  and prompt-helper source text, plus optional
+ *                                  `assertion` (lib/assertions.js's CLASSIFIER_SOURCE,
+ *                                  the whole classifier - regexes included, not one
+ *                                  function's .toString()), which is what gates the
+ *                                  two assertion key families
  * @param {Array}  spec.arms        ARMS
  * @param {string} [spec.levelsRubricScope]  'full-ladder' | 'current-and-next' | 'none'
  * @param {string} [spec.rnaRubricScope]     'current-and-next' | 'none'
