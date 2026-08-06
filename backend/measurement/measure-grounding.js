@@ -902,6 +902,11 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
     conditions = ['truth'],
   } = opts;
 
+  // Metric 5's lower bound rests on these tokens being absent from the
+  // documents. The README and the metric-5 comment both say that is asserted at
+  // run time; before this line only audit-ground-truth.js asserted it.
+  verifyAbsences(Object.fromEntries(Object.entries(STARTUPS).map(([n, s]) => [n, s.doc])));
+
   const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
   const filtered = arms.length !== ARMS.length || startupNames.length !== Object.keys(STARTUPS).length;
 
@@ -1213,7 +1218,10 @@ function summarizeResults(results) {
         asserted: `${asserted}/${obs}`,
         'asserted %': obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
         mentioned: `${mentioned}/${obs}`,
-        unclassified,
+        // x/obs, never a bare 0: at obs=0 a bare 0 reads as "the classifier
+        // handled everything cleanly" for an arm that was never run — in the
+        // one column the design calls the honesty column.
+        unclassified: obs ? `${unclassified}/${obs}` : 'n/a',
       });
     }
   }
@@ -1301,6 +1309,29 @@ function currentFingerprints() {
   });
 }
 
+/**
+ * Every clause the classifier flagged, verbatim — the audit trail the lower-bound
+ * claim depends on being checkable rather than trusted. Pure and exported so the
+ * seven-field shape is tested, not merely produced.
+ */
+function flaggedClauses(results) {
+  const out = [];
+  for (const [armName, armResult] of Object.entries(results)) {
+    for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
+      for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[conditionField(condition)] || []).forEach((c, rep) => {
+          for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
+            for (const cl of o.clauses) {
+              out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+            }
+          }
+        });
+      }
+    }
+  }
+  return out;
+}
+
 function writeResults(file, results) {
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -1311,26 +1342,7 @@ function writeResults(file, results) {
     floor: FLOOR,
     fingerprints: currentFingerprints(),
     results,
-    // Audit trail for metric 5 — every clause the classifier flagged (asserted,
-    // mentioned, or unclassified), verbatim, so it is checkable rather than trusted.
-    flaggedClauses: (() => {
-      const out = [];
-      for (const [armName, armResult] of Object.entries(results)) {
-        for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
-          for (const condition of ALL_LEVEL_CONDITIONS) {
-            const field = condition === 'truth' ? 'assertionTruthCalls' : 'assertionInflatedCalls';
-            (cell[field] || []).forEach((c, rep) => {
-              for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
-                for (const cl of o.clauses) {
-                  out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
-                }
-              }
-            });
-          }
-        }
-      }
-      return out;
-    })(),
+    flaggedClauses: flaggedClauses(results),
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
@@ -1418,7 +1430,9 @@ function mergeRuns(files, arms) {
               rnaCalls: [], levelCalls: [], hallucCalls: [],
               assertionTruthCalls: [], assertionInflatedCalls: [],
             });
-          dst[field].push(...cell[field]);
+          // Defensive: a file carrying an assertion fingerprint but no assertion
+          // array (hand-edited, or written by a partial run) must not throw.
+          dst[field].push(...(cell[field] || []));
         }
         contributions[key] = (contributions[key] || []).concat(path.basename(file));
       }
@@ -1557,6 +1571,7 @@ module.exports = {
   summarizeResults,
   mergeRuns,
   currentFingerprints,
+  flaggedClauses,
   validateArgs,
   selectCells,
   selectProbes,

@@ -97,6 +97,71 @@ test('two pre-fingerprint files do not pool with each other either', () => {
   );
 });
 
+/** A run file carrying the two assertion key families and their call arrays. */
+function writeAssertionRun(name, { fp, truth, inflated, omitArrays = false }) {
+  const file = path.join(TMP, name);
+  const cell = { retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [] };
+  if (!omitArrays) {
+    cell.assertionTruthCalls = truth;
+    cell.assertionInflatedCalls = inflated;
+  }
+  fs.writeFileSync(file, JSON.stringify({
+    generatedAt: '2026-08-06T00:00:00Z',
+    genModel: 'gemini-3.6-flash',
+    embedModel: 'gemini-embedding-2',
+    corpusRows: 54,
+    floor: 0.78,
+    fingerprints: { 'assertion|baseline': fp, 'assertion-inflated|baseline': fp },
+    results: { baseline: { quotaHit: false, startups: { 'AgroLink PH': cell } } },
+  }, null, 2));
+  return file;
+}
+
+// Two conditions, two fields, one metric key each — pooling must keep them
+// separate and must sum rather than replace. Previously covered only by a
+// manual CLI run.
+test('pools the assertion call arrays across days without crossing conditions', () => {
+  const a = writeAssertionRun('assert-a.json', {
+    fp: 'A1',
+    truth: [{ byDim: { Investment: 'No funding plan exists.' } }],
+    inflated: [{ byDim: { Investment: 'The venture has drafted a funding plan.' } }],
+  });
+  const b = writeAssertionRun('assert-b.json', {
+    fp: 'A1',
+    truth: [{ byDim: { Investment: 'No investors approached.' } }],
+    inflated: [{ byDim: { Investment: 'Angel funding is secured.' } }],
+  });
+  const { merged } = H.mergeRuns([a, b], H.ARMS);
+  const cell = merged.baseline.startups['AgroLink PH'];
+  assert.equal(cell.assertionTruthCalls.length, 2);
+  assert.equal(cell.assertionInflatedCalls.length, 2);
+
+  const s = H.summarizeResults(merged);
+  assert.equal(s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'truth').asserted, '0/2');
+  assert.equal(s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'inflated').asserted, '2/2');
+});
+
+test('an assertion fingerprint with no call array does not throw', () => {
+  const a = writeAssertionRun('assert-ok.json', {
+    fp: 'A1', truth: [{ byDim: { Investment: 'No funding plan exists.' } }], inflated: [],
+  });
+  const broken = writeAssertionRun('assert-missing.json', { fp: 'A1', omitArrays: true });
+  const { merged } = H.mergeRuns([a, broken], H.ARMS);
+  assert.equal(merged.baseline.startups['AgroLink PH'].assertionTruthCalls.length, 1);
+});
+
+test('the two conditions never pool with each other', () => {
+  const a = writeAssertionRun('assert-cond-a.json', {
+    fp: 'A1', truth: [{ byDim: { Investment: 'x' } }], inflated: [],
+  });
+  const b = writeAssertionRun('assert-cond-b.json', {
+    fp: 'A2', truth: [{ byDim: { Investment: 'y' } }], inflated: [],
+  });
+  const { refusals } = H.mergeRuns([a, b], H.ARMS);
+  assert.ok(refusals.some((r) => r.startsWith('assertion|baseline')));
+  assert.ok(refusals.some((r) => r.startsWith('assertion-inflated|baseline')));
+});
+
 test('a legacy file sorted first does not block two compatible files from pooling', () => {
   // Regression: `--merge results/*.json` is the documented workflow, the shell
   // sorts by name, and the one real legacy file's date sorts first. If the
