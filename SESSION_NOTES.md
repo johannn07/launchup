@@ -236,15 +236,26 @@ The second reproduces the 2026-08-05 instance almost verbatim.
 
 **Process notes:** the 15 pinned fingerprints held across 22 commits, verified byte-identical rather than claimed. A subagent reported RED-phase test figures that were arithmetically impossible (131 + 8 = 132) — the code was fine, the transcript was reconstructed from memory. **Assume reconstruction whenever reported numbers don't reconcile.**
 
+### Documentation maintenance pass (same day, later)
+
+`SESSION_NOTES.md` 1106 → 262 lines, `TODO_CHECKLIST.md` 602 → 527 with a new **Objective | Status** table between "Recently completed" and §0. Sessions before 2026-08-04 compressed to outcome-only paragraphs; cross-session gotchas hoisted into one standing-notes block rather than re-narrated per session. All 48 open checklist items survive. Rules recorded in `CLAUDE.md` under **Documentation maintenance** so this happens proactively.
+
+Three checklist changes that are state claims, not wording:
+- **Closed two §5 items** the document already described as done — storage provider (code + credentials live-verified) and model selection (default raised and verified).
+- **Added three items previously buried in prose:** `responseSchema` (marked "still unaddressed" inside the model item), and the two 1c design decisions (RNS correlation-key uniqueness, stale verdicts on edit) that existed only in these notes.
+- **Failing-test count corrected to 216/1** from the 2026-08-04 notes — *not* from a run in this session.
+
+Branch `docs/trim-notes-and-status-table` (`5e844b0`), pushed, **PR not yet opened**.
+
 ---
 
 ## Open at end of 2026-08-06
 
-**Branches awaiting an integration decision (nothing pushed):**
-- `measure/grounding-rep2` — 8 commits, up to date with `master`.
-- `measure/ground-truth-audit` — 6 commits; touches shared docs *and* live demo data, so it shouldn't sit long.
-- `measure/supplied-level-fabrication` — 22 commits.
+**Branch state — verified with `git branch --no-merged master`, not transcribed.** Earlier notes claimed four measurement branches were unmerged and unpushed; **all four are merged** (`measure/grounding-arms`, `measure/grounding-rep2`, `measure/ground-truth-audit`, `measure/supplied-level-fabrication` — the last via PR #22). Only two branches are not in `master`:
+- `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
+
+**13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
 **Next step:** close the two measured classifier gaps (`exists` is absent from the assertion cue list; `splitClauses` yields subject-less fragments) and re-run at `--reps=2` on a fresh window, with AgroLink-side reps added — it contributed zero fabrications and it isn't yet clear whether that's a property of the document or of its lower levels. The re-run will correctly refuse to pool with 2026-08-06; that is the fingerprint guard working.
 
@@ -256,6 +267,7 @@ The second reproduces the 2026-08-05 instance almost verbatim.
 5. **`mikro-orm.config.ts` disables TLS verification against Neon** (`rejectUnauthorized: false`); Neon uses a public CA, so this is probably just tightenable.
 6. **One manual login + click-through of the auth-guard work is still owed** — browser automation could not drive the SvelteKit login form.
 7. **Check VS Code's `git.postCommitCommand`.** Two branches reached GitHub with no `git push` issued in-session; a `push`/`sync` setting would quietly defeat the local-first rule.
+8. **Two checklist claims need confirming rather than trusting.** §1's "Guard the remaining unauthenticated modules" names exactly the six controllers the P0 fix above says it guarded and live-verified — left open with a warning rather than ticked. And the 216 passing / 1 failing baseline was carried from the 2026-08-04 notes, not re-run.
 
 **Still unmeasured:** RNA *generation* quality. Every grounding figure is the levels probe; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. Needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
 
