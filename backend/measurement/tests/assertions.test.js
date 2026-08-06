@@ -1,8 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const fs = require('fs');
 
-const { splitClauses, classifyClause, scoreAssertedAbsences, CLASSIFIER_SOURCE } =
+const { splitClauses, classifyClause, scoreAssertedAbsences, CUES, CLASSIFIER_SOURCE } =
   require(path.resolve(__dirname, '../lib/assertions.js'));
 const { HARD_ABSENCES } = require(path.resolve(__dirname, '../lib/hard-absences.js'));
 
@@ -226,29 +227,45 @@ test('a coordinated noun phrase is not split', () => {
 });
 
 // --------------------------------------------------------------------------
-// CLASSIFIER_SOURCE is what `assertion|*` hashes. A cue regex added to this
-// module but left out of it would leave the fingerprint unchanged, and
-// re-scored data would pool with data scored by the old classifier.
+// CLASSIFIER_SOURCE is what `assertion|*` hashes. Building it from CUES makes a
+// forgotten regex impossible; these tests catch the other half — a regex
+// declared outside CUES entirely — and confirm every helper still lands in the
+// hash.
+//
+// This supersedes the old hand-maintained `distinctive`-substring test that
+// used to live here. That test's own name went false in Task 3: CONTINUATION
+// was added to the module but never added to the `distinctive` map, so a test
+// named "every cue regex" silently covered six of seven. A second hand-curated
+// list is the exact standing-instruction failure mode this task exists to
+// remove, so it is deleted rather than patched — the CUES-derived test below
+// cannot go stale the same way, because it walks CUES itself instead of a
+// second copy of the cue names.
 // --------------------------------------------------------------------------
 
-test('CLASSIFIER_SOURCE carries every cue regex, every helper and the token matcher', () => {
-  // Plain substrings, each unique to one regex or helper.
-  const distinctive = {
-    NEGATION: '(?:absence|lack)\\s+of',
-    RECOMMENDATION: 'advis(?:e|ed|able)',
-    IMPERATIVE: 'formali[sz]e',
-    ASSERTION: 'under\\s+contract',
-    AND_CLAUSE: '(?:no|not|never)',
-    tokenRe: '(?:s|es)?',
-    splitClauses: 'whereas',
-    classifyClause: "'recommended'",
-    scoreAssertedAbsences: 'rnaByDim',
-  };
-  for (const [name, fragment] of Object.entries(distinctive)) {
+test('every module-level constant is either a cue or a named non-cue', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '../lib/assertions.js'), 'utf8');
+  const NON_CUES = ['CLASSIFIER_SOURCE', 'CUES'];
+  const declared = [...src.matchAll(/^const ([A-Z][A-Z0-9_]*)\s*=/gm)].map((m) => m[1]);
+  assert.ok(declared.length >= 8, 'the scan found nothing — the regex stopped matching declarations');
+  for (const name of declared) {
     assert.ok(
-      CLASSIFIER_SOURCE.includes(fragment),
-      `CLASSIFIER_SOURCE is missing ${name} (looked for ${fragment})`,
+      Object.hasOwn(CUES, name) || NON_CUES.includes(name),
+      `${name} is a module constant in neither CUES nor NON_CUES, so it may be missing from CLASSIFIER_SOURCE`,
     );
+  }
+});
+
+test('CLASSIFIER_SOURCE carries every cue in CUES', () => {
+  for (const [name, re] of Object.entries(CUES)) {
+    assert.ok(CLASSIFIER_SOURCE.includes(re.source), `CLASSIFIER_SOURCE is missing ${name}`);
+  }
+});
+
+test('CLASSIFIER_SOURCE carries every helper, not just the cue regexes', () => {
+  // One distinctive substring per helper: tokenRe, splitClauses, classifyClause,
+  // scoreAssertedAbsences — the four .toString() entries alongside the cues.
+  for (const fragment of ['(?:s|es)?', 'whereas', "'recommended'", 'rnaByDim']) {
+    assert.ok(CLASSIFIER_SOURCE.includes(fragment), `CLASSIFIER_SOURCE is missing ${fragment}`);
   }
 });
 
