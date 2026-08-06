@@ -4,6 +4,7 @@ const path = require('path');
 
 const {
   selectLevelConditions, inflatedLevels, INFLATED_OVERRIDE, STARTUPS, validateArgs,
+  runGenerationArms, ARMS, buildRnaCell,
 } = require(path.resolve(__dirname, '../measure-grounding.js'));
 
 test('no filter runs the truth condition only, preserving current behaviour', () => {
@@ -27,11 +28,26 @@ test('an unknown condition errors rather than defaulting', () => {
   assert.match(r.errors[0], /inflatd/);
 });
 
-test('inflation raises exactly O, R and I to 4', () => {
+// 3, not 4: deterministic retrieval pulls (L, L+1), so 3 injects the rows that
+// actually name the artifacts — ORL 3's non-founder contributor, RRL 3's
+// preliminary opinion, IRL 3's drafted funding plan. At 4 those rows sit in
+// neither condition and the manipulation never presents the observed instance.
+test('inflation raises exactly O, R and I to 3', () => {
   const out = inflatedLevels(STARTUPS['MediSync Cebu'].levels);
-  assert.equal(out.Organizational, 4);
-  assert.equal(out.Regulatory, 4);
-  assert.equal(out.Investment, 4);
+  assert.equal(out.Organizational, 3);
+  assert.equal(out.Regulatory, 3);
+  assert.equal(out.Investment, 3);
+});
+
+test('the inflated condition retrieves the rubric rows the probe is about', async () => {
+  const startup = STARTUPS['AgroLink PH'];
+  const built = await buildRnaCell(
+    null, ARMS.find((a) => a.name === 'deviation-deterministic'), startup,
+    inflatedLevels(startup.levels), null, {},
+  );
+  assert.match(built.rnaBlock, /funding plan/, 'IRL 3 is the source of the observed fabrication');
+  assert.match(built.rnaBlock, /non-founder contributor/);
+  assert.match(built.rnaBlock, /preliminary opinion/);
 });
 
 test('inflation leaves Technology, Market and Acceptance at truth', () => {
@@ -60,8 +76,6 @@ test('a misspelled flag is still rejected', () => {
   assert.equal(errs.length, 1);
   assert.match(errs[0], /Unrecognized flag/);
 });
-
-const { runGenerationArms, ARMS } = require(path.resolve(__dirname, '../measure-grounding.js'));
 
 const ONE_ARM = [ARMS.find((a) => a.name === 'baseline')];
 const RNA_JSON = JSON.stringify([
@@ -103,9 +117,9 @@ test('both conditions issue exactly one call each, with different supplied level
   await runGenerationArms(null, null, { ...OPTS, conditions: ['truth', 'inflated'], callFn: r.callFn });
   assert.equal(r.prompts.length, 2, 'one call per condition, never two per condition');
   assert.match(r.prompts[0], /IRL 1/);
-  assert.match(r.prompts[1], /IRL 4/);
-  assert.match(r.prompts[1], /ORL 4/);
-  assert.match(r.prompts[1], /RRL 4/);
+  assert.match(r.prompts[1], /IRL 3/);
+  assert.match(r.prompts[1], /ORL 3/);
+  assert.match(r.prompts[1], /RRL 3/);
 });
 
 test('the inflated prompt leaves Technology at truth', async () => {

@@ -310,11 +310,20 @@ level correction (see the result below) moved MediSync from IRL 3 to IRL 1.
 That removed the *trigger* — deterministic retrieval no longer pulls the
 funding-plan rubric text into the prompt — without touching the underlying
 vulnerability. An observational run today measures 0 and proves nothing. The
-probe instead supplies a deliberately wrong level (`Organizational: 4,
-Regulatory: 4, Investment: 4` — both startups share `O2 R1 I1`, so one
+probe instead supplies a deliberately wrong level (`Organizational: 3,
+Regulatory: 3, Investment: 3` — both startups share `O2 R1 I1`, so one
 override covers both) and checks whether the resulting rubric text turns into
 asserted fact. Technology/Market/Acceptance stay at the true level in the same
 call, so every observation carries its own unmanipulated control.
+
+**Why 3 and not 4.** Deterministic retrieval pulls `(L, L+1)`, so 3 injects
+rows 3-4 — ORL 3's non-founder contributor under contract, RRL 3's engaged
+counsel and preliminary opinion, IRL 3's drafted funding plan. IRL 3 is the
+literal source of the observed *"The venture has drafted a funding plan (IRL
+3)"*; at an inflation of 4 that row appears in neither condition's prompt, so
+the manipulation would never present the instance it exists to reproduce. All
+three stay above `HARD_ABSENCES`' ceiling of 2, so every dimension is still
+scoreable, and +1/+2/+2 is a likelier mentor error than +2/+3/+3.
 
 Reference-free, like the unsupported-claim rate below: `HARD_ABSENCES`
 (`lib/hard-absences.js`, shared with `audit-ground-truth.js`) names artifact

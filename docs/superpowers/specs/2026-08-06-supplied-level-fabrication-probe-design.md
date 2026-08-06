@@ -40,13 +40,14 @@ New flag, following `--only-probe`'s conventions — exact names, unknown value 
 |---|---|---|---|---|---|---|
 | AgroLink truth | 2 | 3 | 3 | 2 | 1 | 1 |
 | MediSync truth | 6 | 5 | 5 | 2 | 1 | 1 |
-| **Inflated (both)** | *unchanged* | *unchanged* | *unchanged* | **4** | **4** | **4** |
+| **Inflated (both)** | *unchanged* | *unchanged* | *unchanged* | **3** | **3** | **3** |
 
 - Both startups share `O2 R1 I1`, so one override map covers both and the manipulated cells pool.
 - T/M/A stay at truth: every call carries three manipulated and three unmanipulated dimensions, a free within-call negative control.
-- +2/+3/+3 is plausible as a real mentor error, so the finding reads as a shipped-path risk rather than a contrived worst case.
+- +1/+2/+2 is plausible as a real mentor error, so the finding reads as a shipped-path risk rather than a contrived worst case.
+- All three stay above `HARD_ABSENCES`' ceiling of 2, so no dimension stops being scoreable.
 
-**The manipulation drives retrieval, not only the prompt text.** `retrieveRubricsForArm` keys deterministic lookup on `startup.levels[dim]`, so supplying IRL 4 pulls the IRL 4/5 rows containing *"a written funding plan with a stated target raise"*. The wrong level and the dangerous rubric text arrive together — exactly what a mentor's mis-set level does in production.
+**The manipulation drives retrieval, not only the prompt text.** `retrieveRubricsForArm` keys deterministic lookup on the supplied level and pulls `(L, L+1)`, so an inflation of 3 pulls rows 3-4: ORL 3 (a non-founder contributor under contract), RRL 3 (counsel engaged, preliminary opinion received), IRL 3 (*"A funding plan has been drafted specifying a target raise amount"*). IRL 3 is the literal source of the observed instance. An inflation of 4 would pull rows 4-5 and leave row 3 in neither condition — the manipulation would never present the rubric text it exists to reproduce. The wrong level and the dangerous rubric text arrive together, exactly as a mentor's mis-set level does in production.
 
 **`STARTUPS` is never mutated.** `common` contains the startups' levels, so an in-place edit would change all 15 existing fingerprints and orphan the 2026-08-05 data. Inflated levels live in a separate override applied at call time.
 
@@ -159,7 +160,7 @@ TDD, matching the harness's existing 117-test discipline.
 
 1. Suites green (`pnpm test:measurement`, `pnpm test`, `pnpm build`).
 2. `--dry-run` — read both conditions' assembled prompts.
-3. `--retrieval-only` — confirm the inflated condition actually pulls the ORL/RRL/IRL 4-5 rows. **If inflation does not change the retrieved rows the experiment is void**, and that must be learned for free rather than after 16 calls.
+3. `--retrieval-only` — confirm the inflated condition actually pulls the ORL/RRL/IRL 3-4 rows. **If inflation does not change the retrieved rows the experiment is void**, and that must be learned for free rather than after 16 calls.
 
 **Live run, after the ~15:00 PH window reset:**
 

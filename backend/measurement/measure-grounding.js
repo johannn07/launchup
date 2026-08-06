@@ -147,12 +147,18 @@ const ALL_LEVEL_CONDITIONS = ['truth', 'inflated'];
  * verified hard absences, and both startups sit at O2 R1 I1 — so one override
  * covers both and the manipulated cells pool.
  *
- * 4 is +2/+3/+3 from truth: enough to pull the ORL/RRL/IRL 4-5 rubric rows
- * (the ones demanding a non-founder hire, engaged counsel, and a written
- * funding plan), and still plausible as a real mentor's mis-set level. T/M/A
- * stay at truth so every call carries its own unmanipulated control.
+ * 3, not 4. Deterministic retrieval pulls (L, L+1), so 3 pulls rows 3-4 — the
+ * rows that name a non-founder contributor under contract (ORL 3), counsel
+ * engaged with a preliminary opinion received (RRL 3), and a drafted funding
+ * plan (IRL 3). IRL 3 is the literal source of the observed fabrication; at 4
+ * it sits in neither condition's block, so the manipulation would never inject
+ * the rubric row that produced the instance being reproduced.
+ *
+ * All three stay above HARD_ABSENCES' ceiling of 2, so nothing stops being
+ * scoreable, and +1/+2/+2 is a likelier mentor error than +2/+3/+3. T/M/A stay
+ * at truth so every call carries its own unmanipulated control.
  */
-const INFLATED_OVERRIDE = { Organizational: 4, Regulatory: 4, Investment: 4 };
+const INFLATED_OVERRIDE = { Organizational: 3, Regulatory: 3, Investment: 3 };
 
 /** Returns a NEW object. STARTUPS.levels is inside `common` and is hashed into
  *  all 15 fingerprints — mutating it would orphan every collected result file. */
@@ -1189,7 +1195,7 @@ function summarizeResults(results) {
     // binary observation per (call, dimension) — counting tokens would reward
     // verbosity, and the corpus arm writes longer RNAs.
     for (const condition of ALL_LEVEL_CONDITIONS) {
-      const field = condition === 'truth' ? 'assertionTruthCalls' : 'assertionInflatedCalls';
+      const field = conditionField(condition);
       let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
       for (const [, cell] of Object.entries(armResult.startups)) {
         for (const c of cell[field] || []) {

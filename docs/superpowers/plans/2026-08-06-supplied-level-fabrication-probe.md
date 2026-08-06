@@ -1,5 +1,9 @@
 # Supplied-Level Fabrication Probe Implementation Plan
 
+> **Superseded on one value:** `INFLATED_OVERRIDE` is **3**, not the 4 this plan
+> specifies throughout. 4 pulls rubric rows 4-5 and so never injects IRL 3, the
+> row the observed fabrication came from. See the spec's manipulation section.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Measure whether a wrong *supplied* readiness level turns retrieved rubric text into asserted evidence on production's RNA path.
