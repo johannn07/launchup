@@ -66,7 +66,7 @@ This change alone repairs mechanism 4's fragment.
 
 ### 2. `ASSERTION` gains existential predicates — one family only
 
-Add **`exists | exist | existed | existing`**.
+Add **`exists?`** — `exist` and `exists` only.
 
 Safe by ordering: `"No funding plan exists at all"` hits `NEGATION` first, and `"a funding plan should exist"` hits `RECOMMENDATION` first.
 

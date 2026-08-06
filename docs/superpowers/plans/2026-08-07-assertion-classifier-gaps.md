@@ -464,7 +464,7 @@ In `backend/measurement/lib/assertions.js`, extend `ASSERTION`'s participle grou
  * engagement" assert nothing, and neither has a measured instance.
  */
 const ASSERTION =
-  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\b(?:exists?|existed|existing)\b|\bin\s+place\b|\bunder\s+contract\b/i;
+  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\b(?:exists?)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 ```
 
 - [ ] **Step 4: Run the full measurement suite**
