@@ -51,6 +51,24 @@ New flag, following `--only-probe`'s conventions — exact names, unknown value 
 
 **`STARTUPS` is never mutated.** `common` contains the startups' levels, so an in-place edit would change all 15 existing fingerprints and orphan the 2026-08-05 data. Inflated levels live in a separate override applied at call time.
 
+### The three cells are not the same experiment — recorded before the run
+
+Confirmed by dry-run against the real assembled prompts, 2026-08-06, before any generation call:
+
+| dimension | truth pulls | inflated pulls | rubric text |
+|---|---|---|---|
+| Investment | IRL 1, 2 | IRL 3, 4 | disjoint |
+| Regulatory | RRL 1, 2 | RRL 3, 4 | disjoint |
+| Organizational | ORL 2, **3** | ORL **3**, 4 | **ORL 3 in both** |
+
+**Investment is the strongest text contrast.** Truth states the absence outright — IRL 1 is *"No funding plan exists at all … no investor contact of any kind"* — while inflated asserts existence: IRL 3 *"A funding plan has been drafted"*, IRL 4 *"Initial investor conversations have taken place"*. IRL 4's phrasing is near-verbatim what baseline was recorded asserting on 2026-08-05.
+
+**Organizational is the level-isolating cell, and it is the more valuable one.** ORL 3 (*"A first contributor beyond the founders … has joined the venture"*) reaches the model under **both** conditions — as the next rung when ORL 2 is supplied, as the current rung when ORL 3 is. The rubric text is held constant and only the supplied level moves.
+
+So a fabrication that appears on Organizational under inflation but not under truth cannot be explained by "the corpus introduced new text". It isolates the supplied level itself as the cause, which is the mechanism this probe exists to test. Investment and Regulatory confound the two; Organizational separates them.
+
+Read the per-dimension breakdown accordingly rather than pooling all three — pooling averages a level-isolating cell with two text-and-level cells and answers neither question cleanly.
+
 ### Run shape
 
 2 arms (`baseline`, `deviation-deterministic`) × 2 startups × 2 conditions = **8 calls/rep**. Two reps = 16 calls, leaving 4 spare for 503 retries inside one 20-call window.
