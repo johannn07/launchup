@@ -1226,6 +1226,8 @@ function printReports(results) {
  */
 const { fingerprintMap } = require(path.join(__dirname, 'lib/fingerprint.js'));
 const { MARKERS } = require(path.join(__dirname, 'lib/stage-markers.js'));
+const { scoreAssertedAbsences } = require(path.join(__dirname, 'lib/assertions.js'));
+const { HARD_ABSENCES } = require(path.join(__dirname, 'lib/hard-absences.js'));
 
 function currentFingerprints() {
   return fingerprintMap({
@@ -1249,10 +1251,13 @@ function currentFingerprints() {
       renderTitlesOnlyBlock: renderTitlesOnlyBlock.toString(),
       renderBareTitlesBlock: renderBareTitlesBlock.toString(),
       fullLadderRubrics: fullLadderRubrics.toString(),
+      assertion: scoreAssertedAbsences.toString(),
     },
     arms: ARMS,
     levelsRubricScope: 'full-ladder',
     rnaRubricScope: 'current-and-next',
+    absences: HARD_ABSENCES,
+    inflatedLevels: INFLATED_OVERRIDE,
   });
 }
 
@@ -1312,7 +1317,13 @@ function mergeRuns(files, arms) {
 
   const contributions = {};
   const refusals = [];
-  const FIELD = { levels: 'levelCalls', rna: 'rnaCalls', fabrication: 'hallucCalls' };
+  const FIELD = {
+    levels: 'levelCalls',
+    rna: 'rnaCalls',
+    fabrication: 'hallucCalls',
+    assertion: 'assertionTruthCalls',
+    'assertion-inflated': 'assertionInflatedCalls',
+  };
 
   for (const { file, data } of days) {
     for (const arm of arms) {
@@ -1344,9 +1355,8 @@ function mergeRuns(files, arms) {
             merged[arm.name].startups[startupName] ||
             (merged[arm.name].startups[startupName] = {
               retrieved: cell.retrieved,
-              rnaCalls: [],
-              levelCalls: [],
-              hallucCalls: [],
+              rnaCalls: [], levelCalls: [], hallucCalls: [],
+              assertionTruthCalls: [], assertionInflatedCalls: [],
             });
           dst[field].push(...cell[field]);
         }
