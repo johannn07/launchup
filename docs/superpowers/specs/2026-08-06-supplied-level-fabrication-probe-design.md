@@ -90,11 +90,19 @@ Precedence runs negation → recommendation → assertion, so an ambiguous claus
 
 Every flagged and unclassified clause is written verbatim into the results JSON with arm, startup, dimension and rep. The classifier is auditable after the fact, not taken on faith.
 
-**Both conservative choices point the same way.** `HARD_ABSENCES` already sets ceilings one rung more generous than the documents support; the classifier's precedence errs the same direction. `asserted` understates fabrication on both axes.
+**The lower-bound property is conditional, not automatic.** `HARD_ABSENCES`' ceilings are one rung more generous than the documents support and the classifier's precedence resolves ambiguity away from fabrication — both understate. But the token list runs the other way: `absentTokens` was authored as a *substring guard over the documents*, where breadth is a stronger guarantee, and reused as an artifact detector over generated text it fires on abstract usage. *"has compliance obligations"*, *"has limited runway"*, *"has significant regulatory exposure"* name no artifact and all scored `asserted`.
 
-### Known limitation
+So `asserted` is a lower bound only with the narrow `artifactTokens` list (`lib/hard-absences.js`), derived from the broad one by dropping topic words and adding multiword refinements. `verifyAbsences` keeps the broad list. Whatever residual over-count survives is auditable rather than assumed: `flaggedClauses` writes every flagged clause verbatim into the results JSON with arm, startup, condition, rep, dimension and class.
 
-Token-based detection misses paraphrase that avoids the vocabulary entirely — *"the team has brought in outside expertise"* dodges every Organizational token. `asserted` is a floor, not a census. This probe can under-report and **cannot prove the absence of fabrication**.
+### Known limitations
+
+Three under-count channels, all pushing the reported rate toward 0:
+
+1. **Paraphrase.** Detection is token-based, so text avoiding the vocabulary entirely is invisible — *"the team has brought in outside expertise"* dodges every Organizational token.
+2. **Morphology.** Token matching is stem-plus-optional-plural. Other inflections and compounds still escape.
+3. **Same-clause negation.** `NEGATION` has precedence, so a balanced sentence that collapses into one clause is scored `negated` even where it also asserts. `splitClauses` breaks on sentence and semicolon boundaries, comma-joined coordination, bare `but`/`though`/`while`, a leading subordinator's comma, and `and` before a modal or a negation — but not on every bare `and`, which would shred coordinated noun phrases into cue-less fragments. *"Assessment of X, absence of Y"* is the modal shape of an RNA, so this channel is probably larger than the paraphrase one.
+
+`asserted` is a floor, not a census. This probe can under-report and **cannot prove the absence of fabrication**.
 
 ## Shared constants
 
