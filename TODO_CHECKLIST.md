@@ -1,6 +1,6 @@
 # LaunchUp — Remaining Work Checklist
 
-Prioritized backlog derived from a full read of the codebase (see [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)), plus a second verification pass specifically hunting broken frontend→backend calls, missing guards, and dead code.
+Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)), plus a verification pass hunting broken frontend→backend calls, missing guards, and dead code.
 
 **Type legend**
 
@@ -8,7 +8,7 @@ Prioritized backlog derived from a full read of the codebase (see [PROJECT_OVERV
 |---|---|
 | 🔒 **SEC** | Security fix — do it regardless of scope decisions |
 | 🐞 **BUG** | Broken code with an unambiguous correct behaviour — just fix it |
-| ❓ **SCOPE** | Unfinished feature. Needs *your* decision: **fix it / cut it / leave it hidden**. Not a pure code fix. |
+| ❓ **SCOPE** | Unfinished feature. Needs *your* decision: **fix it / cut it / leave it hidden**. |
 | 🧹 **DEBT** | Cleanup. No user-visible impact. |
 
 **Effort:** S ≈ under an hour · M ≈ half a day · L ≈ multiple days
@@ -17,74 +17,93 @@ Prioritized backlog derived from a full read of the codebase (see [PROJECT_OVERV
 
 ---
 
-## Recently completed — AI pipeline configuration and run provenance
+## Recently completed
 
-Branch `feat/ai-config-flags-plan` (22 commits, not yet merged). This makes the baseline-vs-enhanced comparison *runnable and attributable*; it does not implement any missing objective.
+| Work | Where |
+|---|---|
+| AI pipeline config flags + per-run provenance (`ai_generation_runs`) | PR #7 |
+| RNS/RNA generation bug fixes | PR #8 |
+| Supabase storage + presigned uploads | PR #9 |
+| Model tiering (`gemini-3.6-flash`) + semantic RAG pipeline | PR #10 |
+| Verified-knowledge RAG corpus (64 rows, provenance-tagged) | PR #13 |
+| Security P0 — JWT secret, 11 unguarded controllers | PR #15 |
+| Output validation layer (1c), scope-limited | PR #18 |
+| Sector-aware weighted scoring (2b) + ÷9 correction | PR #19 |
+| Grounding measurement, ground-truth audit, fabrication probe | unmerged branches — see `SESSION_NOTES.md` |
 
-- **The model and all four pipeline enhancements are env-driven.** `AiConfigService` resolves `{ model, temperature, grounding, rag, biasReview, scoreNormalization }` from `GEMINI_MODEL`, `AI_TEMPERATURE`, `AI_GROUNDING_ENABLED`, `AI_RAG_ENABLED`, `AI_BIAS_REVIEW_ENABLED`, `AI_SCORE_NORMALIZATION_ENABLED`. The four booleans default to `true`, reproducing prior behaviour. Documented in `backend/.env.example`.
-- **Per-request override** via the `X-Ai-Pipeline-Config` header, gated on `AI_ALLOW_REQUEST_OVERRIDE` (defaults `false`) **and** a Manager/Admin caller. Safe-closed: because these controllers still have no `JwtGuard` (§1), `req.user` is always undefined, so every override is currently rejected with 403.
-- **Every AI generation opens an `ai_generation_runs` row** recording the resolved config, model, latency and status, and every generated artifact carries a `generation_run_id` FK. Eight operations — one generation plus one refine route per module across RNA, RNS, initiatives, roadblocks. Migration `Migration20260726120000_AiGenerationRuns.ts`.
-- **Score normalization is now independent of bias review.** It previously ran *inside* `reviewBiasScore()` and could not be exercised without it, so two of the four arms were unreachable.
-- **A real bug fix:** `temperature` and `maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them, with an `as any` hiding the type error. See §5 for what changed as a result — the temperature fix is a genuine behaviour change, not a no-op.
+---
 
-**Not done, deliberately:** live verification against a real database and a live Gemini call. Boot the backend, trigger one generation, and confirm a `completed` row appears with the expected `config` snapshot.
+## Status summary
+
+| Objective | Status |
+|---|---|
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; 1a and 4b partial, 3b minimal, 3c and 4a are research tasks |
+| **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 6 P1 items open |
+| **Broken functionality (§2)** | In progress — 4 of 13 fixed; the readiness-level rubric submission is the highest-value remaining |
+| **Incomplete features (§3)** | Blocked — needs decision on 6 scope calls |
+| **Cleanup / tech debt (§4)** | Not started — 1 of 19 done |
+| **Infrastructure decisions (§5)** | In progress — storage and model settled; output caps, API-key format, and Docker open |
 
 ---
 
 ## 0. Capstone objectives — actual implementation status
 
-Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against the code. **This is the section that determines whether you pass**, and several objectives are less built than the scaffolding suggests.
+Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against the code. **This is the section that determines whether you pass.**
 
 | Objective | Status | Evidence |
 |---|---|---|
 | **1a** Structured prompt template constraining output to DB fields | 🟡 Partial | `groundPrompt()` appends a fixed instruction string (`ai.service.ts:307`); `GroundedPromptBuilderService` exists. Toggleable via `AI_GROUNDING_ENABLED` |
-| **1b** RAG pipeline grounding calls in retrieved context | 🟢 **Corpus built, live-verified, and measured positive at n=3 (2026-08-05)** — the corpus arm places readiness levels at **0.22 MAE vs baseline's 0.69**, **36/36 within one rung vs 29/36**, and is *exactly* right on Organizational, Regulatory and Investment where both corpus-free arms inflate by +0.67 to +1.83. Read against the byte-identical null control, whose spread is 0.25 MAE / 1 rung. The reference-free figure is the one to quote: baseline asserts evidence absent from the source document in **61%** of checked placements, the corpus arm in **0%**. **This reverses the negative result this row carried from 2026-07-30 to 2026-08-04** — that was scored against demo fixtures contradicted by their own documents in ten of twelve cells. Limit: the *levels* probe only, so it is a result about **assessment**, not RNA generation quality. See the measurement item below and `measurement/README.md` | Real semantic retrieval since 2026-07-27: `gemini-embedding-2` at 768 dims, vectors in `vector_embeddings`, ranked by pgvector `<=>`, floor calibrated to 0.78. `AI_RAG_STRATEGY=keyword\|semantic` makes the old token-overlap path an explicit baseline arm rather than something mislabelled as RAG. The corpus is 54 readiness-rubric rows + 10 business-framework rows, **each carrying a `provenance` field** — only Technology/TRL is transcribed from a public standard, so read that field before calling any of this “externally validated”. `AI_RAG_CORPUS_ENABLED`/`AI_RAG_RUBRIC_MODE` gate it. Live-verified (Task 10, 2026-07-28) against the running server and real Neon: the corpus reaches the assembled prompt, and disabling it removes the rubric section. Measured 2026-08-05 (`measurement/results/2026-08-05-corrected-reference.json`) against a reference fixed **before** the generations existed, so it carries no post-hoc exposure. **Still open:** production's RNA path retrieves 12 rows (current rung + next), not the levels probe's 54, and metric 2 has never produced a signal on any arm — so RNA generation quality remains unmeasured and needs a harder probe, not more reps|
-| **1c** Output validation layer flagging inconsistent recs | 🟢 **Built, scope-limited** | `OutputValidatorService.validate()` checks two things: retrieval confidence (from `ragContext.lowConfidence`, a signal that was computed but previously discarded) and violations of the length limit each prompt already declares to the model. Wired into RNA, RNS, and roadblock generation. Groundedness and stage-appropriateness checks were deliberately excluded — both probes measured saturated (0/15 fabrication, 0% stage-inappropriate at n=3). Not backfilled onto pre-existing `ai_recommendations` rows. **The saturation rationale is now partly refuted (2026-08-06):** the supplied-level probe found a real fabrication mode on the *production* RNA path — the corpus arm asserts evidence absent from the document at 2/12 (hand-verified higher) under an inflated supplied level, while baseline is 0/12 under both conditions. 1c now has an observed failure mode to validate against, which is the bar this row set for adding a groundedness check. See the fabrication-probe item below |
+| **1b** RAG pipeline grounding calls in retrieved context | 🟢 **Built, live-verified, measured positive (2026-08-05)** | Corpus arm places readiness levels at **0.22 MAE vs baseline 0.69**, **36/36 within one rung vs 29/36**, and is *exactly* right on Organizational/Regulatory/Investment where both corpus-free arms inflate. Read against the byte-identical null control, whose spread is 0.25 MAE / 1 rung. **The reference-free figure is the one to quote:** baseline asserts evidence absent from the source document in **61%** of checked placements, the corpus arm in **0%**. This **reverses** the negative result carried 2026-07-30 → 2026-08-04, which was scored against demo fixtures contradicted by their own documents in ten of twelve cells. **Limit: the levels probe only** — a result about *assessment*, not RNA generation quality. Detail below and in `measurement/README.md` |
+| **1c** Output validation layer flagging inconsistent recs | 🟢 Built, scope-limited | `OutputValidatorService.validate()` checks retrieval confidence and declared length limits. Wired into RNA, RNS, roadblock generation. Groundedness and stage-appropriateness deliberately excluded on saturation grounds — **that rationale is now partly refuted**, see the fabrication probe below |
 | **2a** Multi-tier classification schema | 🟢 Built | `TierConfig` entity + `/admin/tiers` UI + threshold logic (`readiness.service.ts:159-180`) |
-| **2b** Weighted composite scoring **by sector / business model** | 🟢 **Built** | `WeightProfileService.resolve(sector, businessModel)` (`readiness/weight-profile.service.ts`) walks a four-step cascade — `(sector, businessModel)` → `(sector, null)` → the global `(null, null)` row → the `DEFAULT_WEIGHTS` constants — reading the new `weight_profiles` table; profiles missing a dimension or not summing to 1.0 (±0.001) are skipped with a warning, and `DEFAULT_WEIGHTS` is the floor if nothing in the table validates. `Startup` gained `sector` / `businessModel`. **Six** dimensions are now scored (Regulatory added) as a fraction of **9**, not 5. Three profiles seeded: global, agritech, healthtech. **Live-verified against Neon 2026-08-04:** AgroLink 17/Early; MediSync 41 under the global row, **40** under healthtech, and 41 again under `fintech` (no profile → falls through). **Be honest about the size of the effect:** sector weighting moves a real startup's composite by about **one point**. A weighted mean only diverges from an unweighted one in proportion to the spread of its inputs, and these startups' per-dimension percentages are tightly clustered (MediSync: 33/44/56/44/33/33), so re-distributing weight across near-equal values barely moves the total. This is a **correctness and configurability** deliverable, not a differentiation win — and see §5: measurement on 2026-07-27 showed the *model* was the binding constraint on differentiation, not the formula. |
+| **2b** Weighted composite scoring by sector / business model | 🟢 Built | `WeightProfileService.resolve()` cascade over `weight_profiles`, ending at `DEFAULT_WEIGHTS`. Six dimensions scored as a fraction of 9. Live-verified against Neon. **The sector effect is ~1 point** — a correctness and configurability deliverable, not a differentiation win. See §3 and §5 |
 | **2c** Gap analysis engine | 🟢 Built | `ReadinessGap` rows with per-dimension shortfall (`readiness.service.ts:225-240`) |
-| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`getCapsuleProposalInfoFromImage`, `ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
+| **3a** OCR of handwritten text | 🟡 Partial | Tesseract.js module + Gemini vision path (`ai.service.ts:445`); `OcrDocument` stores `fieldConfidence` |
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic |
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
-| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated." The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism. Toggleable via `AI_BIAS_REVIEW_ENABLED` |
-| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` table + `/admin/ai/bias-audits` review UI. Toggleable via `AI_SCORE_NORMALIZATION_ENABLED`, now **independent of 4b** — it previously ran inside `reviewBiasScore()` and could not be exercised without it |
+| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated". The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism |
+| **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
-### Objective 1b — RAG now exists; the corpus is what's left
+### Objective 1b — what was built and what it's worth
 
-- [x] ✅ **OBJECTIVE · L · Semantic retrieval pipeline** — done 2026-07-27, commits `4708a2e`, `5c390de`, and the strategy commit that follows them.
-  - **Embeddings are produced and stored.** `EmbeddingService` (`ai/embedding.service.ts`) calls `gemini-embedding-2` at 768 dimensions; `EmbeddingIndexService` writes `vector_embeddings` on every `recordRagContext`, plus a boot-time backfill for rows written before any of this existed. Verified against Neon: first vector stored at 768 dims, norm 1.0000.
-  - **Similarity is computed by pgvector, not JavaScript.** Both `AiService.retrieveSemantic` and `RagQueryService.queryVectorDatabase` order by `<=>` in SQL. The old code loaded every vector into Node — ~3KB transferred per candidate to pick three.
-  - **`vector_embeddings` was pinned to `vector(768)`.** It was a dimensionless `vector`, which pgvector cannot index at all. 768 rather than the native 3072 because hnsw/ivfflat refuse anything above 2000 dimensions (verified, not assumed).
-  - **`RagQueryService` was looking for a source type nothing writes** (`source_type = 'startup'`), so it returned `lowConfidence: true` on literally every call. It now reads the one real corpus and reaches startups through `rag_contexts.startup_id`.
-  - **Three arms, not two.** `AI_RAG_STRATEGY=keyword|semantic` sits alongside `AI_RAG_ENABLED`, so the comparison can separate "does retrieval help at all" from "does *semantic* retrieval beat the token matching that was already here". An unknown value is rejected at boot rather than defaulted, so a typo cannot mislabel an arm.
-  - **A startup can no longer retrieve itself.** Its own capsule proposal was previously eligible as a "verified prior profile" — the model reading its own input back as independent corroboration.
+- [x] ✅ **OBJECTIVE · L · Semantic retrieval pipeline** — done 2026-07-27
+  - `EmbeddingService` (`gemini-embedding-2`, 768 dims) + `EmbeddingIndexService` writing `vector_embeddings` on every `recordRagContext`, plus a boot-time backfill.
+  - Similarity computed by **pgvector `<=>` in SQL**, not JavaScript — the old code loaded every vector into Node to pick three.
+  - **`vector_embeddings` pinned to `vector(768)`.** It was a dimensionless `vector`, which pgvector cannot index at all; 768 rather than the native 3072 because hnsw/ivfflat refuse anything above 2000 (verified).
+  - **`RagQueryService` was looking for a source type nothing writes** (`source_type = 'startup'`), so it returned `lowConfidence: true` on literally every call.
+  - **Three arms, not two.** `AI_RAG_STRATEGY=keyword|semantic` alongside `AI_RAG_ENABLED`; an unknown value is rejected at boot so a typo cannot mislabel an arm.
+  - **A startup can no longer retrieve itself** — its own capsule proposal was eligible as a "verified prior profile".
 
-  **The arm comparison, measured** (`measurement/measure-retrieval.js`, 2026-07-27) — nine documents, three domains, each used as the query against the other eight, production scoring functions on both sides:
+  **Arm comparison** (`measurement/measure-retrieval.js`, nine documents, three domains):
 
   | arm | returned | correct | precision | top hit correct | same-domain recall |
   |---|---|---|---|---|---|
   | keyword | 27 | 15 | 56% | 7/9 | 15/18 (83%) |
   | semantic | 21 | 16 | **76%** | 8/9 | 16/18 (89%) |
 
-  Semantic returned **fewer** documents and still surfaced **more** correct ones — precision was not bought with recall. Keyword's `score > 0` floor admits anything sharing one token, so it returns a full top-3 for every query no matter how unrelated. Caveats are real and written up in `measurement/README.md`: the documents are composed rather than sampled, ground truth is domain membership rather than human relevance judgement, and N is 9. Enough to justify the default; not enough to publish as an effect size.
+  Semantic returned **fewer** documents and surfaced **more** correct ones, so precision was not bought with recall. Caveats in `measurement/README.md`: composed rather than sampled documents, ground truth is domain membership, N is 9.
 
-  **Similarity floor is calibrated, and the calibration matters.** `RAG_MIN_SIMILARITY = 0.78`, from `measurement/calibrate-similarity.js` (nine startups, three domains, 36 pairs). The distributions **overlap** — same-domain similarity runs as low as 0.7295, cross-domain as high as 0.8036 — so this is a trade-off, not a boundary: 0.78 keeps 8/9 true neighbours and leaks 11% of cross-domain pairs. A first guess of 0.70 leaked **78%** and let an agriculture startup through at 0.765 as context for a health platform. Re-run the calibration if the embedding model changes.
+  **`RAG_MIN_SIMILARITY = 0.78`**, calibrated over 36 pairs. The distributions **overlap** (same-domain down to 0.7295, cross-domain up to 0.8036), so this is a trade-off, not a boundary: keeps 8/9 true neighbours, leaks 11%. A first guess of 0.70 leaked **78%**. Re-run the calibration if the embedding model changes.
 
-- [x] ✅ **OBJECTIVE · M · Verified-knowledge corpus built (tasks 1-8, 2026-07-28) — `verifiedFrameworks`/`businessModels` are no longer hardcoded `[]`**
-  `rag_contexts` now holds two new populations beyond peer capsule proposals, seeded idempotently by `backend/seed-rag-corpus.js` (`RagCorpusSeederService`) and embedded the same way as everything else (`gemini-embedding-2`, 768 dims, `vector_embeddings`).
-  **What the corpus is, precisely — 64 rows total, every row carries a `provenance` field, none of it is silently mixed:**
-  - **54 `readiness_rubric` rows** — 9 per dimension × 6 dimensions (T/M/A/O/R/I), each row one level.
-    - **9 rows (`provenance: "standard"`, Technology/TRL only)** are transcribed from a public standard: the European Commission's Horizon Europe TRL definitions (consistent with ISO 16290:2013).
-    - **36 rows (`provenance: "framework-derived"`, Market/Acceptance/Organizational/Regulatory)** are authored specifically against BRLa's (Balanced Readiness Level assessment, *Technological Forecasting and Social Change*, 2021) published dimension framework and criteria — not transcribed from it, because BRLa defines the dimensions and criteria, not nine numbered level descriptions per dimension.
-    - **9 rows (`provenance: "authored"`, Investment/IRL)** are authored outright — IRL is not in BRLa or any cited standard; there was nothing external to derive them from.
-  - **10 `business_framework` rows** (Business Model Canvas, Lean Canvas, market sizing, unit economics, customer discovery, go-to-market, PH regulatory basics, IP basics, evidence standards, org design) — 3 `framework-derived` (attributed to Osterwalder & Pigneur, Maurya, and Blank, each citing a specific named work) and 7 `authored` (no external citation exists for that content). Market sizing and unit economics were retagged from `framework-derived` to `authored` after review found their citations named no specific framework ("Standard venture market-sizing practice", "Standard venture finance practice") — `framework-derived` requires citing a named published framework, which those two never did. a16z remains only as a `sourceUrl` on the unit-economics row, not as a cited framework author.
-  **So: of the 6 scored dimensions, only Technology (1 of 6) has externally-sourced level text.** This is the honest limit on any Objective 1b/4a claim — see `SESSION_NOTES.md`'s entry for this work.
-  **Live-verified end to end (Task 10, 2026-07-28):** booted the server clean, triggered a real generation (RNS, for AgroLink PH — see below for why RNA specifically wasn't the vehicle), and read the actual assembled prompt off a debug log. The `--- Verified Readiness Rubrics (authoritative) ---` section was present, containing the real TRL 2 and TRL 3 rubric text (AgroLink PH's actual Technology level and the level above) verbatim from the corpus. Restarting with `AI_RAG_CORPUS_ENABLED=false` and repeating removed that section entirely (the call fell back to the plain profile prompt). Both runs' `ai_generation_runs.config` snapshot recorded `ragCorpus`/`rubricMode` correctly (`true`/`"deterministic"` and `false`/`"deterministic"`), and the corpus-off generation's `rns` row carried the resulting `generation_run_id`. `node seed-rag-corpus.js` re-run against the now-live-used corpus reported `{ created: 0, updated: 0, unchanged: 64, embedded: 0 }`, confirming idempotency held up under real use, not just a fresh seed.
-  **A real defect found and fixed along the way (2026-07-28, commit `91da49d`):** `buildGroundedPrompt` printed retrieved similar-profile docs as id/similarity/metadata and never emitted their `content`, and business-framework docs were raw `JSON.stringify`'d objects — so retrieved text was never actually reaching either the RNA or the RNS generation prompt, regardless of what retrieval returned. This was never tracked as a checklist item before Task 10; it predates the corpus work and would have silently defeated it. Fixed as part of this plan, before the corpus existed to expose it.
-  **Why AgroLink PH's RNA generation wasn't the live-verification vehicle, as originally planned:** by the time Task 10 ran, AgroLink PH already had all 6 RNA dimensions filled (`generation_run_id=5`, from 2026-07-27 live-verification work that predates this plan) — so hitting `/rna/:id/generate-rna` short-circuits to `[]` before ever calling the RAG pipeline (verified live: it does, run id 10 opened and completed with an empty result and no rubric ever assembled). RNS generation for AgroLink PH (0 existing RNS rows) exercises the identical `RagQueryService.queryVectorDatabase` + `GroundedPromptBuilderService.buildGroundedPrompt` code RNA generation would have used, so the substitution changes nothing about what was verified — this is recorded so nobody re-reads "AgroLink is the startup seeded without RNAs" in an older note and gets confused by the current DB state.
+- [x] ✅ **OBJECTIVE · M · Verified-knowledge corpus** — done 2026-07-28. `verifiedFrameworks`/`businessModels` are no longer hardcoded `[]`.
 
-- [x] ✅ **OBJECTIVE · S · Grounding measurement — done 2026-08-05. The rubric corpus measurably improves readiness-level placement. The earlier negative result was an artifact of a broken reference, now corrected.**
+  64 rows in `rag_contexts`, seeded idempotently by `backend/seed-rag-corpus.js` (`RagCorpusSeederService`), embedded like everything else. **Every row carries a `provenance` field — read it before calling any of this externally validated:**
+  - **54 `readiness_rubric` rows** (9 levels × 6 dimensions):
+    - **9 `standard`** (Technology/TRL only) — transcribed from the EU Horizon Europe TRL definitions, consistent with ISO 16290:2013.
+    - **36 `framework-derived`** (Market/Acceptance/Organizational/Regulatory) — authored *against* BRLa (2021, *Technological Forecasting and Social Change*), not transcribed from it, because BRLa defines dimensions and criteria rather than nine numbered per-level descriptions.
+    - **9 `authored`** (Investment/IRL) — IRL is in neither BRLa nor any cited standard.
+  - **10 `business_framework` rows** — 3 `framework-derived` (Osterwalder & Pigneur, Maurya, Blank, each citing a named work), 7 `authored`. Market sizing and unit economics were retagged to `authored` after review found their citations named no framework at all.
+
+  **So only 1 of 6 scored dimensions has externally-sourced level text.** This is the honest limit on any 1b/4a claim.
+
+  **A real defect found along the way (`91da49d`):** `buildGroundedPrompt` printed retrieved docs as id/similarity/metadata and never emitted their `content` — **retrieved text was never reaching any prompt**, regardless of what retrieval returned. It predates the corpus work and would have silently defeated it.
+
+  **Live-verified 2026-07-28:** a real assembled prompt contained `--- Verified Readiness Rubrics (authoritative) ---` with TRL 2 and TRL 3 verbatim; `AI_RAG_CORPUS_ENABLED=false` removed the section entirely. Re-seeding reported all-unchanged.
+
+  ⚠️ **The business-framework channel retrieves nothing in practice.** It is always semantic and its top-2 never clears the 0.78 floor, so the 10 framework rows are seeded and embedded but reach no prompt — "64 rows grounding the model" is really 54. Three options: lower the floor for that channel alone, make it deterministic like rubrics, or drop the channel and the rows. Not a regression; it has never worked otherwise.
+
+- [x] ✅ **OBJECTIVE · S · Grounding measurement** — done 2026-08-05. **The rubric corpus measurably improves readiness-level placement.** The earlier negative result was an artifact of a broken reference.
 
   **The result** (`measurement/results/2026-08-05-corrected-reference.json`, n=3, 36 balanced observations per arm, levels probe, 18/18 calls):
 
@@ -94,7 +113,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   | `sdd-semantic` *(null control)* | 0.94 | 15/36 (42%) | 28/36 |
   | `deviation-deterministic` | **0.22** | **28/36 (78%)** | **36/36** |
 
-  **Read it against the control, never against baseline alone.** `baseline` and `sdd-semantic` send byte-identical prompts (semantic rubric retrieval returns 0 rows), so their difference *is* the noise floor: 0.25 MAE and **1** on `within1`. The corpus arm beats baseline by 0.47 MAE — 1.9× that spread — and by **7** on `within1` against a control spread of 1. `within1` is the discriminating number.
+  **Read it against the control, never against baseline alone.** `baseline` and `sdd-semantic` send byte-identical prompts (semantic rubric retrieval returns 0 rows), so their difference *is* the noise floor: 0.25 MAE, **1** on `within1`. The corpus arm beats baseline by 0.47 MAE — 1.9× that spread — and by **7** on `within1`. `within1` is the discriminating number.
 
   **The mechanism is per-dimension.** Mean signed error, + = placed too high:
 
@@ -104,9 +123,9 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   | `sdd-semantic` | +0.00 | −0.33 | −0.33 | **+1.33** | **+0.83** | **+1.83** |
   | `deviation-deterministic` | +0.50 | +0.83 | +0.00 | **0.00** | **0.00** | **0.00** |
 
-  The corpus arm is *exactly* right on Organizational, Regulatory and Investment across all 36 observations; both corpus-free arms inflate them. Its entire residual error is Technology and Market on MediSync, where it places `T7 M6` on all three reps — **exactly the permissive reading of those two cells**. Scored against permissive instead of strict: corpus **0.19**, baseline 0.94. The direction survives either reading, and the corpus arm sits inside the band between them.
+  Exactly right on O/R/I across all 36 observations. The whole residual is Technology and Market on MediSync, where it places `T7 M6` on all three reps — **exactly the permissive reading of those two cells**. Scored permissive: corpus **0.19**, baseline 0.94. The direction survives either reading.
 
-  **The strongest claim needs no reference at all.** Every reference is contestable and a *model*-set one is worse — an adjudicator reading the document with the full rubric ladder in front of it is approximately the `deviation-deterministic` condition, so its agreement with that arm is near-circular. So the claim was restated to depend only on the documents. Three rungs require an artifact class **neither document mentions anywhere**: ORL 3+ a non-founder contributor, RRL 3+ counsel engaged, IRL 3+ a written funding plan. `verifyAbsences` asserts those absences at run time rather than trusting the list, and the ceilings are one rung more generous than the documents support, so these are lower bounds:
+  **The strongest claim needs no reference at all.** Every reference is contestable and a *model*-set one is worse — an adjudicator reading the document with the full rubric ladder is approximately the `deviation-deterministic` condition, so agreement is near-circular. Three rungs require an artifact class **neither document mentions anywhere**: ORL 3+ a non-founder contributor, RRL 3+ counsel engaged, IRL 3+ a written funding plan. `verifyAbsences` asserts those absences at run time rather than trusting the list, and the ceilings are one rung more generous than the documents support, so these are lower bounds:
 
   | arm | placements asserting absent evidence | rate |
   |---|---|---|
@@ -116,38 +135,35 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   | `deviation-titles` | 1/18 | 6% |
   | `deviation-bare` | 1/18 | 6% |
 
-  Baseline places MediSync's Investment at 4–5 — *"initial investor conversations"*, *"angel funding secured"* — for a document containing no funding token of any kind. **This is an unsupported-claim rate measured directly against the source document**, which is Objective 1b's actual claim and doubles as an Objective 4 leniency result. Directional: it catches over-placement into absent evidence and is silent on under-placement.
+  Baseline places MediSync's Investment at 4–5 — *"initial investor conversations"*, *"angel funding secured"* — for a document containing no funding token of any kind. **This is an unsupported-claim rate measured directly against the source document**, which is Objective 1b's actual claim and doubles as an Objective 4 leniency result. Directional: silent on under-placement.
 
-  **What was retracted, and why it matters more than the numbers.** From 2026-07-30 to 2026-08-04 this item reported the opposite conclusion (corpus MAE 1.36 vs baseline 0.78) across three reps and five arms. All of it was scored against the seeded `StartupReadinessLevel` rows — demo fixtures written for the UI and never checked against the documents the model is shown. They are **contradicted by those documents in ten of twelve cells**, e.g. seeded Market 4 requires *"no prospect has yet indicated a specific willingness to pay"* beside a stated PHP 5,000 MRR; seeded Organizational 4 requires a *"first full-time hire beyond the founders"* beside *"team grew to 3 founders"*. `metrics.js` justified that reference as *"independent of the prompt"* — true, and a sound fix for a real problem, but independence and correctness are different properties and only the first was secured. **Three reps agreeing in direction is not evidence when the reference is wrong; they agreed because the reference was consistently wrong.**
+  **What was retracted, and why it matters more than the numbers.** From 2026-07-30 to 2026-08-04 this item reported the opposite conclusion (corpus 1.36 MAE vs baseline 0.78) across three reps and five arms. All of it was scored against the seeded `StartupReadinessLevel` rows — demo fixtures written for the UI, **contradicted by the model's own source documents in ten of twelve cells** (seeded Market 4 requires *"no prospect has yet indicated a specific willingness to pay"* beside a stated PHP 5,000 MRR; seeded Organizational 4 requires a *"first full-time hire beyond the founders"* beside *"team grew to 3 founders"*). `metrics.js` justified that reference as *"independent of the prompt"* — true, and a sound fix for a real problem, but independence and correctness are different properties and only the first was secured. **Three reps agreeing in direction is not evidence when the reference is wrong; they agreed because the reference was consistently wrong.**
 
-  **The reference is fixed in the app and the harness.** `src/demo-readiness-levels.ts` is the single source both seeders read (they previously held separate copies — that duplication is how they drifted), and a test parses the TS source so the harness and the app cannot move apart. AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`, derived per cell in `measurement/data/ground-truth-adjudication.md`. Applied to Neon: 8 rows changed, 0 skipped, re-run reports 0. Composites moved AgroLink **17 → 26** (crossing the 25 tier threshold) and MediSync **40 → 41**.
+  **The reference is fixed in the app and the harness.** `src/demo-readiness-levels.ts` is the single source both seeders read (they previously held separate copies — that duplication is how they drifted), and a test parses the TS source so harness and app cannot move apart. AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`, derived per cell in `measurement/data/ground-truth-adjudication.md`. Applied to Neon: 8 rows changed. Composites moved AgroLink **17 → 26** (crossing the 25 tier threshold) and MediSync **40 → 41**.
 
-  **Pooling:** levels sit inside `common`, so every fingerprint changed and the pre-correction runs are a closed historical set. Verified, not assumed — `--merge measurement/results/*.json` refuses the new file on all 15 (metric, arm) pairs. `audit-ground-truth.js`'s `SEEDED` is deliberately **frozen** at the old values with a test asserting it does not track the harness, because that is what the historical runs were scored against.
+  **Pooling:** levels sit inside `common`, so every fingerprint changed and the pre-correction runs are a closed historical set — verified, not assumed (`--merge` refuses the new file on all 15 (metric, arm) pairs). `audit-ground-truth.js`'s `SEEDED` is deliberately **frozen** at the old values, with a test asserting it does not track the harness.
 
-  **Settled earlier and still true — the SDD §3.2 deviation.** Neither mechanism retrieves this corpus: the code's `semantic` substitute (embedding the bare `readinessType` name) scores **0/12** correct-dimension, and SDD §3.2 as written (embedding the whole startup profile) scores **0/2**. `deterministic` scores 12/12 by construction. The shipped default is not a preference — it is the only one of the three that works at all.
+  **Settled and still true — the SDD §3.2 deviation.** Neither semantic mechanism retrieves this corpus: the code's substitute (embedding the bare `readinessType` name) scores **0/12** correct-dimension, and SDD §3.2 as written (embedding the whole startup profile) scores **0/2**. `deterministic` scores 12/12 by construction. The shipped default is not a preference — it is the only one of the three that works at all.
 
-  **Limits to quote, unchanged:**
-  - Every number is the **levels probe**, a harness construct. Production does not ask the model to assign readiness levels — mentors set them. This is a positive result for 1b's **assessment** claim and says nothing about RNA generation quality.
+  **Limits to quote:**
+  - Every number is the **levels probe**, a harness construct. Production does not ask the model to assign readiness levels — mentors set them. Positive for 1b's **assessment** claim; says nothing about RNA generation quality.
   - n=3, two startups, one model (`gemini-3.6-flash`), one 20/day window.
-  - Metric 3 (differentiation gap) **cannot resolve these arms and should not be quoted**: baseline 1.94, control 2.56, corpus 1.56 — the byte-identical control pair spread (0.62) exceeds the corpus arm's deficit against baseline (0.38).
-  - Metric 2 is **n/a, not 0%**, on this run — `--only-probe=levels` generated no RNA to score.
-  - **One caveat cutting the other way:** on the *RNA* probe, where the level is supplied rather than inferred, the corpus made the model assert the rubric's evidence requirement as fact (*"The venture has drafted a funding plan (IRL 3)"*). A wrong supplied level turns rubric text into fabricated evidence, and the fabrication probe does not catch that class.
+  - **Metric 3 (differentiation gap) cannot resolve these arms and should not be quoted** — the byte-identical control pair's spread (0.62) exceeds the corpus arm's deficit against baseline (0.38).
+  - Metric 2 is **n/a, not 0%** on this run — `--only-probe=levels` generated no RNA to score.
+  - **One caveat cutting the other way:** on the RNA probe, where the level is *supplied* rather than inferred, the corpus made the model assert the rubric's evidence requirement as fact. See the fabrication probe below.
 
-  **The O/R/I rubric recalibration this item used to prescribe is cancelled**, not deferred. It existed to make the corpus reproduce the seeded levels; those levels were the error, and O/R/I is now exactly right. Editing them would break what works.
+  **The O/R/I rubric recalibration this item used to prescribe is cancelled**, not deferred. It existed to make the corpus reproduce the seeded levels; those levels were the error, and O/R/I is now exactly right.
 
-  **What is genuinely still open:** whether the corpus helps on production's RNA path, which retrieves 12 rows (current rung + next) rather than the levels probe's 54, and where metric 2 has never produced a signal on any arm. That needs a harder probe, not more reps.
+  **Operational:** the free-tier window resets **15:00 Philippine time**. A filtered file is a partial rep — its tables read n=0 for everything unselected, so merge it rather than reading it alone.
 
-  **Operational:** the free-tier window resets **15:00 Philippine time** (midnight US Pacific); a run started before 15:00 draws on the *previous* window. A filtered file is a partial rep — its own tables read n=0 for everything unselected, so merge it rather than reading it alone. Full detail and caveats in `measurement/README.md`.
-  **Task 10 addendum (live verification, 2026-07-28):** confirmed against the *running server*, not just the standalone harness, that the shipped `deterministic` mode's rubric text reaches a real assembled prompt (RNS generation, AgroLink PH, TRL 2 + TRL 3 verbatim) and that `AI_RAG_CORPUS_ENABLED=false` removes it. This closes the "does the deviation even change the prompt" question but not the "does it change the model's output" question — the same `gemini-3.6-flash` daily quota blocked a live generation success on the corpus-on arm the same way it blocked Task 9 (one corpus-on RNS call did assemble the correct prompt and then hit the 429; a corpus-off call on the same day happened to succeed). **Metrics 1-3 were first measured on 2026-07-29 at n=1** — see the item above for the numbers and the four reasons they do not yet answer the question.
+- [x] ✅ **OBJECTIVE · M · Output validation layer (1c)** — done, scope-limited (`feat/output-validation`)
+  `OutputValidatorService.validate()` replaces the old stubs (`validateEach()`, `flagInconsistencies()`, `markUnverifiable()`) and the dead `recommendation-storage.service.ts`, both deleted. It checks (a) retrieval confidence from `ragContext.lowConfidence` — a signal already computed and previously discarded, and (b) whether generated content violates the length limit each prompt already declares to the model (`RNA_/RNS_/ROADBLOCK_MAX_LENGTH`, all 500). Wired into RNA, RNS and roadblock generation, writing a real verdict to `ai_recommendations`.
+  **Deliberately excluded:** groundedness/fabrication and stage-appropriateness checks — both probes measured saturated (0/15 fabrication, 0% stage-inappropriate at n=3), so there was no observed failure mode to validate against.
+  **Caveat:** **not backfilled.** Pre-existing rows keep the old hardcoded `'validated'`/`'high-confidence'` literals, so that status on an old row is not evidence the validator ran.
 
-- [x] ✅ **OBJECTIVE · M · Implement the output validation layer (1c)** — done, scope-limited (`feat/output-validation`)
-  `OutputValidatorService.validate()` (`rna/output-validator.service.ts`) replaces the old stub methods (`validateEach()`, `flagInconsistencies()`, `markUnverifiable()`) and the dead `recommendation-storage.service.ts`, both deleted. It checks two things: (a) retrieval confidence, sourced from `ragContext.lowConfidence` — a signal that was already computed but previously discarded; (b) whether the generated content violates the length limit each prompt already declares to the model (`RNA_MAX_LENGTH`, `RNS_MAX_LENGTH`, `ROADBLOCK_MAX_LENGTH`, all 500). Wired into RNA, RNS, and roadblock generation, all writing a real verdict to `ai_recommendations.validationStatus` / `.confidenceStatus` / `.notes` in place of the previous hardcoded literals.
-  **Deliberately excluded, not "full output validation":** groundedness/fabrication checking and stage-appropriateness checking. Both probes measured saturated — 0/15 fabrication and 0% stage-inappropriate output at n=3 — so there was no observed failure mode left to validate against.
-  **Caveat:** the verdict is **not backfilled** onto pre-existing `ai_recommendations` rows written before this branch — those keep the old hardcoded `'validated'` / `'high-confidence'` literals, so a `'validated'` status on an old row is not evidence the validator ran.
+- [x] ✅ **OBJECTIVE · M · Supplied-level fabrication probe (1b on the production path)** — built and run 2026-08-06. **The corpus arm is the only arm that asserts absent evidence, and a wrong supplied level is what triggers it.**
 
-- [x] ✅ **OBJECTIVE · M · Supplied-level fabrication probe (1b on the production path) — built and run 2026-08-06.** The corpus arm is the *only* arm that asserts absent evidence, and a wrong supplied level is what triggers it.
-
-  Every prior grounding number is the **levels** probe, where the model *infers* the level. Production does the opposite — mentors set levels and the RNA path consumes them. This probe measures that path. `--level-condition=truth|inflated|both` runs the RNA probe once per condition, inflating O/R/I to 3 while T/M/A stay at truth as a within-call control; `measurement/lib/assertions.js` scores each RNA per (call, dimension) for clauses that *assert* an absent artifact rather than correctly *recommend* it.
+  Every prior grounding number is the **levels** probe, where the model *infers* the level. Production does the opposite — mentors set levels and the RNA path consumes them. `--level-condition=truth|inflated|both` runs the RNA probe per condition, inflating O/R/I to 3 while T/M/A stay at truth as a within-call control; `measurement/lib/assertions.js` scores each RNA per (call, dimension) for clauses that *assert* an absent artifact rather than correctly *recommend* it.
 
   **Result** (`measurement/results/2026-08-06-supplied-level.json`, 16/16 calls, n=2):
 
@@ -160,431 +176,342 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
   **The wrong number alone does nothing** — baseline is 0/12 under both conditions. Both flagged clauses weld a fabricated artifact to a true document fact: *"Currently at RRL 3, with **legal counsel engaged** and a trademark application pending with IPOPHL"*, and *"Currently at IRL 3, with **a drafted funding plan** and PHP 5,000 in monthly recurring revenue"*. The second reproduces the 2026-08-05 instance almost verbatim.
 
-  **Reading `flaggedClauses` by hand raised the finding.** Two more genuine fabrications sat in `unclassified` — *"A basic funding plan **exists**…"* and *"…alongside a **first non-founder contributor**"* — missed because `exists` is not an assertion cue and clause fragments lose their subject. So the effect reproduced across **both** reps, and the measured 17% is a floor. The lower-bound property held; the audit dump is the only reason it is visible.
+  **Reading `flaggedClauses` by hand raised the finding.** Two more genuine fabrications sat in `unclassified` — *"A basic funding plan **exists**…"* and *"…alongside a **first non-founder contributor**"* — missed because `exists` is not an assertion cue and clause fragments lose their subject. The effect reproduced across **both** reps, and the measured 17% is a floor.
 
   **The strongest cell is Organizational**, because ORL 3 reaches the model under *both* conditions (truth pulls 2+3, inflated pulls 3+4). Same rubric text, only the supplied level differs: *"Needs: Advance to ORL 3 by engaging the first non-founder contributor"* under truth, asserted as present under inflation. **That rules out "the corpus added new text" as the explanation.** Investment and Regulatory confound level with text; Organizational separates them. Recorded in the spec *before* the run.
 
-  **Limits:** n=2, 16 calls, and **every fabrication came from MediSync** — AgroLink produced none. `unclassified` is 4/12 on corpus arms, and the design says do not quote a rate when that column is large. The Organizational finding is qualitative. Inflation is one rung above the ceiling, not two, so a null would have supported only "a one-rung error did not induce fabrication" — the interpretation table was rescoped for that before the run.
+  **Limits:** n=2, 16 calls, and **every fabrication came from MediSync** — AgroLink produced none. `unclassified` is 4/12 on corpus arms, and the design says do not quote a rate when that column is large. The Organizational finding is qualitative. Inflation is one rung above the ceiling, not two.
 
-  **Deliberately not done:** the classifier was not patched and this data not re-scored. That is the post-hoc move, and the fingerprint guard enforces it — editing the classifier changes the `assertion*` hash, so re-scored results refuse to pool. A fixed classifier means a fresh run as a separate experiment.
+  **Deliberately not done:** the classifier was not patched and this data not re-scored — that is the post-hoc move, and the fingerprint guard enforces it mechanically.
 
 - [ ] 🔬 **OBJECTIVE · S · Close the two measured classifier gaps, then re-run** — *next step for 1b*
-  Both are evidenced, not speculated: `exists` (and likely `remains`, `includes`) is absent from the assertion cue list, and `splitClauses` yields fragments whose subject is lost, so *"…Joy Tabotabo) alongside a first non-founder contributor"* scores `unclassified`. Each cost a real detection in the 2026-08-06 run.
-  Fix both, then re-run at `--reps=2` on a fresh window. The run will correctly refuse to pool with 2026-08-06 — that is the fingerprint guard working, not a problem. Worth adding AgroLink-side reps too: it contributed zero fabrications and it is not yet clear whether that is a property of the document or of its lower levels.
+  Both are evidenced, not speculated: `exists` (and likely `remains`, `includes`) is absent from the assertion cue list, and `splitClauses` yields fragments whose subject is lost. Each cost a real detection in the 2026-08-06 run.
+  Fix both, then re-run at `--reps=2` on a fresh window. The run will correctly refuse to pool with 2026-08-06 — that is the fingerprint guard working. Worth adding AgroLink-side reps: it contributed zero fabrications and it isn't clear whether that's a property of the document or of its lower levels.
 
-### Spec mismatch worth resolving now
+### Spec mismatch — resolved as documentation
 
-- [x] ✅ **OBJECTIVE · S · The scored dimensions don't match the specification — confirmed correct 2026-07-28; the repo's own `docs/SDD.md` was the thing that was wrong**
-  The source documents (`Team_07_LaunchUpEnhanced_Software Proposal.pdf` and the team's SRS/SDD, held in the capstone folder outside this repo) specify **five** dimensions: **TRL, MRL, RRL, ARL, ORL** (Technology, Market, **Regulatory**, Acceptance, Organizational). No IRL.
-  The code scores: Technology, Market, Acceptance, Organizational, **Investment** (`readiness.service.ts:38-73`).
-  So it **omits Regulatory (RRL), which is in the spec**, and **scores Investment (IRL), which is not**. The `ReadinessType` enum has all six.
-  **Correction (Task 10, 2026-07-28):** this item previously cited the repo's `docs/SDD.md` as agreeing with the source PDFs on five dimensions. It didn't — `docs/SDD.md`'s §3.3 actually read *"Compute sub-scores per readiness dimension (TRL, MRL, ARL, ORL, RRL, **IRL**)"*, six dimensions including Investment, which happens to match what the code does rather than what the real source documents specify. That 19/18-line `docs/SRS.md`/`docs/SDD.md` pair has been deleted (`git rm`, this task) rather than corrected, because a short in-repo summary that quietly disagrees with the actual source PDFs on the one fact a reviewer would check first is worse than no summary — see `SESSION_NOTES.md` for the reasoning.
-  **Why it matters:** a panel comparing the real SDD to a live demo will see five dimension labels that don't match the document. This is a ~10-line fix and it removes an easy line of questioning.
-  **Decision:** align the code to the spec (recommended), or amend the real documents to a six-dimension model and justify Investment's inclusion. Not fixed in code as part of this task — documentation-only pass.
+- [x] ✅ **OBJECTIVE · S · Scored dimensions vs the specification** — confirmed 2026-07-28; the repo's own `docs/SDD.md` was the thing that was wrong.
+  The source documents (proposal PDF + the team's SRS/SDD, held outside this repo) specify **five** dimensions: TRL, MRL, **RRL**, ARL, ORL. No IRL. The code scores six, the extra being Investment.
+  `docs/SDD.md` had claimed six including IRL — matching the code rather than the source — so that 19/18-line summary pair was **deleted** rather than corrected: a short in-repo summary that quietly disagrees with the source on the first fact a reviewer checks is worse than no summary.
+  **Decision still open in principle:** align the code to five dimensions, or amend the real documents to a six-dimension model and justify Investment's inclusion. A panel comparing the SDD to a live demo will see the mismatch.
 
-- [x] 🟢 **OBJECTIVE · M · Make composite weights configurable and sector-aware (2b)** — *done 2026-08-04*
-  Objective 2b requires weights that vary "depending on the startup's industry sector and business model type."
-  **Done:** new `weight_profiles` table (`sector?`, `businessModel?`, `weights` json) + `WeightProfileService.resolve()`'s four-step cascade (ending at `DEFAULT_WEIGHTS` if nothing in the table validates), `Startup.sector` / `Startup.businessModel`, six scored dimensions, and three seeded profiles. Shipped together with the clamp fix in §3.
-  **Correction to this item's original instruction.** It said to *"read weights from `TierConfig`"*. That was the wrong axis and was **not** done: `TierConfig.weights` was keyed per **tier**, so a startup crossing a tier boundary would have had its weight vector swapped underneath it — the composite could then *fall* as a dimension improved, which is non-monotonic and indefensible in a readiness score. Weights must be keyed by something intrinsic to the startup (sector / business model), not by its current score. The `TierConfig.weights` column has been **deleted** (`refactor(2b): drop TierConfig.weights`); the `/admin/tiers` UI now edits label and threshold only.
+- [x] 🟢 **OBJECTIVE · M · Sector-aware composite weights (2b)** — *done 2026-08-04*
+  New `weight_profiles` table (`sector?`, `businessModel?`, `weights` json) + `WeightProfileService.resolve()`'s four-step cascade ending at `DEFAULT_WEIGHTS`, `Startup.sector`/`.businessModel`, six scored dimensions, three seeded profiles. Shipped with the ÷9 clamp fix in §3.
+  **Correction to this item's original instruction.** It said to read weights from `TierConfig`. That was the wrong axis and was **not** done: `TierConfig.weights` was keyed per **tier**, so a startup crossing a boundary would have its weight vector swapped underneath it and the composite could *fall* as a dimension improved. The column was **deleted**; `/admin/tiers` now edits label and threshold only.
 
 ---
 
 ## 1. Security issues
 
-### P0 — do these first
+### P0
 
-- [x] 🔒 **SEC · S · Remove the hardcoded JWT secret fallback** — *fixed 2026-07-27, branch `fix/auth-guards`*
-  Both call sites now go through `requireJwtSecret()` (`backend/src/auth/jwt-secret.ts`), which throws at boot. The frontend's matching fallback in `hooks.server.ts` is gone too, checked at **module scope** — putting the throw at the point of verification would have been useless, because that code sits inside a `try` whose `catch` redirects to `/login`, so a misconfigured deployment would have presented as "your password is wrong".
-  **Also caught:** the old `||` treated a whitespace-only secret as valid and signed tokens with it. `requireJwtSecret` trims. Verified against all four cases (unset / empty / whitespace / real).
+- [x] 🔒 **SEC · S · Remove the hardcoded JWT secret fallback** — *fixed 2026-07-27*
+  Both call sites go through `requireJwtSecret()` (`backend/src/auth/jwt-secret.ts`), which throws at boot. The frontend's matching fallback is gone too, checked at **module scope** — putting the throw at the point of verification would have been useless, because that code sits inside a `try` whose `catch` redirects to `/login`, so a misconfigured deployment would have presented as "your password is wrong". The old `||` also treated a whitespace-only secret as valid; `requireJwtSecret` trims.
 
-- [x] 🔒 **SEC · M · Guard the coaching core** — *fixed 2026-07-27, branch `fix/auth-guards`*
-  Class-level `@UseGuards(JwtGuard)` on `rna`, `rns`, `initiative`, `roadblock`, `chat-history`, `readiness`, `progress`, `elevate`, `ocr`. `ai/metrics` and `ai/baseline` got `JwtGuard + AdminGuard` instead — `POST /ai/baseline/update` rewrites the distribution that score normalization (4c) measures against, so an ordinary user could have silently moved every normalized score in the study.
-  **The scope was wider than this item recorded.** It named 4 controllers; 11 were unguarded, including `readiness`, `progress`, `elevate`, `ocr` and both `ai/*` surfaces.
-  **Verified live:** all 11 return 401 with no credentials and authenticate with both a Bearer header and an `Access` cookie. `GET /` and `POST /auth/signin` still work unauthenticated.
+- [x] 🔒 **SEC · M · Guard the coaching core** — *fixed 2026-07-27*
+  Class-level `JwtGuard` on `rna`, `rns`, `initiative`, `roadblock`, `chat-history`, `readiness`, `progress`, `elevate`, `ocr`; `JwtGuard + AdminGuard` on `ai/metrics` and `ai/baseline` — `POST /ai/baseline/update` rewrites the distribution score normalization (4c) measures against.
+  **The scope was wider than this item recorded** — it named 4 controllers; 11 were unguarded.
+  **Verified live:** all 11 return 401 with no credentials and authenticate under both a Bearer header and an `Access` cookie.
 
-- [x] 🔒 **SEC · S · Un-comment the guard on chat history** — *fixed 2026-07-27* (same commit as above)
-
-- [ ] 🔒 **SEC · S · Decide the production cookie policy before deploying**
-  Guarding the controllers required the backend to accept the `Access` cookie, because it is `httpOnly` and the shared axios instance was sending **no credentials at all** — see the DEBT item below. That works locally: `localhost:5173` and `localhost:3000` are the *same site* (cookie "site" ignores the port), so `sameSite: 'strict'` permits it.
-  **It will not work deployed.** `launchup.vercel.app` → `launchup.onrender.com` are different sites, and the browser will not attach a `sameSite: 'strict'` cookie. The client-side calls will all 401.
-  **Decision needed:** either set `sameSite: 'none'; secure: true` on the login cookie (`routes/(auth)/login/+page.server.ts:50`) and accept the CSRF exposure that opens, or proxy client-side calls through SvelteKit server routes so they are same-origin. Not changed unilaterally — it is a real trade-off.
+- [x] 🔒 **SEC · S · Un-comment the guard on chat history** — *fixed 2026-07-27*
 
 - [x] 🔒 **SEC · S · Guard the file-upload endpoints** — *fixed 2026-07-27*
-  `backend/src/upload/upload.controller.ts` had no guard on `POST /upload/single` or `POST /upload/multiple`. `@UseGuards(JwtGuard)` now sits on the controller, so it covers the new presign routes too. **Verified live:** `/upload/presign`, `/upload/signed-url`, and `/upload/test-connection` all return 401 unauthenticated. `test-connection` no longer echoes the raw SDK error, which named the bucket and endpoint.
-  **Why it matters:** anyone on the internet can upload arbitrary files (up to 10 at a time) into the bucket at your cost.
-  **Correction (2026-07-27):** this item previously claimed there was "no file-type or size validation" — that is **wrong**. `upload.service.ts:174-194` `validateFile()` already enforces a 10 MB cap and an 8-entry MIME allowlist, and it runs before the object is written. The real gap is authentication only.
-  **Fix:** add `JwtGuard` to the controller. Note the allowlist trusts the client-supplied `file.mimetype`, so it stops honest mistakes, not a determined uploader — sniff the magic bytes if that matters. Also `GET /upload/test-connection` (`:19`) is unauthenticated and leaks bucket-reachability plus raw SDK error text.
+  `JwtGuard` on `upload.controller.ts`, covering the new presign routes. `test-connection` no longer echoes raw SDK error text naming the bucket and endpoint. Verified live: all three routes 401 unauthenticated.
+  **Correction:** this item previously claimed there was no file-type or size validation. Wrong — `validateFile()` already enforces a 10 MB cap and an 8-entry MIME allowlist before the object is written. The real gap was authentication only. Note the allowlist trusts client-supplied `file.mimetype`, so it stops honest mistakes, not a determined uploader.
+
+- [ ] 🔒 **SEC · S · Decide the production cookie policy before deploying** — **blocked, needs a decision**
+  Guarding the controllers required the backend to accept the `Access` cookie, because it is `httpOnly` and the shared axios instance sent **no credentials at all**. That works locally: `localhost:5173` and `localhost:3000` are the *same site* (cookie "site" ignores the port), so `sameSite: 'strict'` permits it.
+  **It will not work deployed.** `launchup.vercel.app` → `launchup.onrender.com` are different sites; the browser will not attach the cookie and every client-side call will 401.
+  **Decision:** either `sameSite: 'none'; secure: true` on the login cookie (`routes/(auth)/login/+page.server.ts:50`) and accept the CSRF exposure, or proxy client-side calls through SvelteKit server routes so they are same-origin.
 
 ### P1 — before any real deployment
 
 - [ ] 🔒 **SEC · M · Add ownership checks to startup detail endpoints (IDOR)**
-  `backend/src/startup/startup.controller.ts:135-137` (`GET /startups/:startupId`) and every sibling route are `JwtGuard`-only. Row-level filtering exists **only** in the list endpoint, `StartupService.getStartups()` (`backend/src/startup/startup.service.ts:43-82`).
-  **Why it matters:** any logged-in founder can read any other startup's full record — capsule proposal, members, waitlist messages — just by changing the id in the URL. Same for the readiness, RNA, and RNS endpoints once they're behind a guard.
-  **Fix:** a reusable guard or service helper that asserts the requester owns / is a member of / mentors the startup, unless their role is Manager or Admin.
-  *Depends on the guard work above.*
+  `startup.controller.ts:135-137` (`GET /startups/:startupId`) and every sibling route are `JwtGuard`-only. Row-level filtering exists **only** in the list endpoint (`StartupService.getStartups()`).
+  **Why it matters:** any logged-in founder can read any other startup's full record — capsule proposal, members, waitlist messages — by changing the id in the URL.
+  **Fix:** a reusable guard or service helper asserting the requester owns / is a member of / mentors the startup, unless Manager or Admin.
 
 - [ ] 🔒 **SEC · S · Restrict the admissions endpoints to Manager/Admin**
-  `POST /startups/:id/approve-applicant`, `PATCH /:id/waitlist-applicant`, `POST /:id/appoint-mentors`, `PATCH /:id/change-mentor`, `PATCH /:id/mark-complete` are all `JwtGuard`-only (`backend/src/startup/startup.controller.ts:30`).
-  **Why it matters:** any authenticated founder can approve their own application, assign themselves a mentor, and mark themselves complete. The UI hides these, but the API doesn't.
-  **Fix:** a `RolesGuard` + `@Roles(Role.Manager, Role.Admin)` decorator. `AdminGuard` (`backend/src/auth/guard/admin.guard.ts`) is a good template — generalize it rather than copying it.
+  `POST /startups/:id/approve-applicant`, `PATCH /:id/waitlist-applicant`, `POST /:id/appoint-mentors`, `PATCH /:id/change-mentor`, `PATCH /:id/mark-complete` are all `JwtGuard`-only (`startup.controller.ts:30`).
+  **Why it matters:** any authenticated founder can approve their own application, assign themselves a mentor, and mark themselves complete. The UI hides these; the API doesn't.
+  **Fix:** a `RolesGuard` + `@Roles(...)` decorator — generalize `AdminGuard` rather than copying it.
 
 - [ ] 🔒 **SEC · S · Guard the remaining unauthenticated modules**
-  All public today: `backend/src/readiness/readiness.controller.ts:4`, `backend/src/progress/progress.controller.ts:4`, `backend/src/elevate/elevate.controller.ts:14`, `backend/src/ocr/ocr.controller.ts:4`, `backend/src/ai/baseline.controller.ts:4`, `backend/src/ai/ai-metrics.controller.ts:4`.
-  **Why it matters:** leaks readiness scores and progress reports; `POST /ai/baseline/update` lets anyone rewrite the bias-normalization baseline that all AI scoring depends on.
-  **Fix:** `JwtGuard` on all; `AdminGuard` additionally on `POST /ai/baseline/update`.
+  ⚠️ **Probably already done** — the P0 guard fix above names exactly these six controllers (`readiness`, `progress`, `elevate`, `ocr`, `ai/baseline`, `ai/ai-metrics`) and was live-verified 2026-07-27. Confirm and close rather than re-doing.
 
 - [ ] 🔒 **SEC · S · Delete the raw-SQL debug endpoints**
-  `backend/src/startup/startup.controller.ts:62` (`GET /startups/debug-evals`) and `backend/src/admin/admin.controller.ts:157` (`GET /admin/tiers/check-evals`) both execute hand-written SQL via `em.getConnection().execute()`.
-  **Why it matters:** the first is reachable by any logged-in user and dumps every startup's score. Both are exactly the kind of thing a capstone panel will spot.
+  `startup.controller.ts:62` (`GET /startups/debug-evals`) and `admin.controller.ts:157` (`GET /admin/tiers/check-evals`) both execute hand-written SQL via `em.getConnection().execute()`. The first is reachable by any logged-in user and dumps every startup's score.
   **Fix:** delete both. Neither is called from the frontend (verified).
 
 - [ ] 🔒 **SEC · S · Align cookie lifetime with token lifetime**
-  Cookie `maxAge: 60 * 5 * 60` = **5 hours** (`frontend/src/routes/(auth)/login/+page.server.ts:54`, mirrored in `(auth-admin)/admin-login/+page.server.ts:57`) vs JWT `expiresIn: '24h'` (`backend/src/auth/auth.module.ts:19`).
-  **Why it matters:** two different session lengths, neither intentional. The 24h token stays valid for 19 hours after the browser stops sending it — so a leaked token outlives the visible session. Also see the matching bug in §2.
-  **Fix:** pick one duration and derive the other from it.
+  Cookie `maxAge` = **5 hours** (`(auth)/login/+page.server.ts:54`, mirrored in `(auth-admin)/admin-login/+page.server.ts:57`) vs JWT `expiresIn: '24h'` (`auth.module.ts:19`). The token stays valid for 19 hours after the browser stops sending it, so a leaked token outlives the visible session. See the matching bug in §2.
 
 - [ ] 🔒 **SEC · S · Fix `@GetUser('sub')`, which silently ignores its argument**
-  `backend/src/auth/decorator/get-user.decorator.ts:5-7` returns the whole `request.user` regardless of the key passed. So `updateProfile(userId, …)` at `backend/src/user/user.controller.ts:33` actually receives a full `User` entity, not a number.
-  **Why it matters:** it currently works only because MikroORM coerces an entity to its PK inside a filter. The signature lies, the types lie, and the next person to use this decorator with a key will get a silent wrong value.
-  **Fix:** honour the `data` argument (`return data ? request.user?.[data] : request.user`) and correct the call site — note `sub` is not a property of the `User` entity, so it should be `'id'`.
+  `auth/decorator/get-user.decorator.ts:5-7` returns the whole `request.user` regardless of the key passed, so `updateProfile(userId, …)` (`user.controller.ts:33`) receives a full `User` entity, not a number. It works only because MikroORM coerces an entity to its PK inside a filter.
+  **Fix:** `return data ? request.user?.[data] : request.user`, and correct the call site — `sub` is not a property of `User`, so it should be `'id'`.
 
 - [ ] 🔒 **SEC · S · Reconsider client-side role checking on the admin login**
-  `frontend/src/routes/(auth-admin)/admin-login/+page.server.ts:41-49` base64-decodes the JWT payload and rejects non-Admins *without verifying the signature*.
-  **Why it matters:** it runs server-side so it isn't directly exploitable, and `/admin/*` is separately guarded — but it reads as "we trust an unverified JWT," and a reviewer will flag it. Verify with `jose` (already a dependency) or just call a `/auth/me` endpoint.
+  `(auth-admin)/admin-login/+page.server.ts:41-49` base64-decodes the JWT payload and rejects non-Admins *without verifying the signature*. It runs server-side and `/admin/*` is separately guarded, so it isn't directly exploitable — but it reads as "we trust an unverified JWT". Verify with `jose` (already a dependency) or call a `/auth/me` endpoint.
 
 ---
 
 ## 2. Broken functionality
 
-Each of these was verified by reading **both** sides of the call.
+Each verified by reading **both** sides of the call.
 
-- [ ] 🐞 **BUG · M · Readiness-level rubric submission posts to two endpoints that don't exist**
-  `frontend/src/routes/(app)/startups/[id]/readiness-level/+page.server.ts:64` posts to `/readiness-level-criterion-answers/bulk-create/` and `:78` to `/startup-readiness-levels/bulk-create/`. **Neither route exists anywhere in the backend.** The whole block sits in a `try` whose `catch` is empty (`:104`), so it fails silently, and on "success" it redirects to `/mentor/startups/qualified/:id` — also not a route.
-  **Why it matters:** this is the mentor's core task and the gate for the entire coaching chain (`allow-rnas` depends on `StartupReadinessLevel` rows existing). If the working path is really `POST /readinesslevel/startup/:startupId/rate`, this legacy action is dead weight that will burn you in a demo.
-  **Fix:** confirm which path the UI actually uses, then rewrite or delete this action. Remove the empty `catch` either way — silent failure is what hid this.
-  *Highest-value item in this section.*
+- [ ] 🐞 **BUG · M · Readiness-level rubric submission posts to two endpoints that don't exist** — *highest-value item in this section*
+  `(app)/startups/[id]/readiness-level/+page.server.ts:64` posts to `/readiness-level-criterion-answers/bulk-create/` and `:78` to `/startup-readiness-levels/bulk-create/`. **Neither route exists.** The block sits in a `try` whose `catch` is empty (`:104`), so it fails silently, and on "success" it redirects to `/mentor/startups/qualified/:id` — also not a route.
+  **Why it matters:** this is the mentor's core task and the gate for the entire coaching chain (`allow-rnas` depends on `StartupReadinessLevel` rows existing).
+  **Fix:** confirm whether the working path is really `POST /readinesslevel/startup/:startupId/rate`, then rewrite or delete this action. Remove the empty `catch` either way.
 
 - [ ] 🐞 **BUG · S · Removing a team member uses the wrong verb and payload shape**
-  `frontend/src/routes/(app)/startups/[id]/overview/members/+page.svelte:155` calls `axiosInstance.delete('/startups/remove-member/:memberId/')` with `{startupId}` in the body. The backend is `@Post('remove-member')` reading `userId` **and** `startupId` from the body (`backend/src/startup/startup.controller.ts:97-103`).
-  **Why it matters:** wrong method *and* wrong shape — removing a member always fails.
+  `.../overview/members/+page.svelte:155` calls `axiosInstance.delete('/startups/remove-member/:memberId/')` with `{startupId}` in the body; the backend is `@Post('remove-member')` reading `userId` **and** `startupId` from the body (`startup.controller.ts:97-103`). Removing a member always fails.
   **Fix:** `axiosInstance.post('/startups/remove-member', { userId: memberId, startupId })`.
 
 - [ ] 🐞 **BUG · S · Assessment preview dialog calls a non-existent `/fields` route**
-  `frontend/src/lib/components/dashboard/sub/AssessmentPreviewDialog.svelte:30` fetches `/assessments/:id/fields`. No `fields` route exists in `backend/src/assessment/`.
-  **Why it matters:** this component *is* mounted — `QualifiedDialog` → `/applications` (Manager) and `ApprovalDialog` → `PendingDialog`/`WaitlistedDialog`. So a Manager opening an applicant's assessment preview gets an empty or erroring dialog.
+  `dashboard/sub/AssessmentPreviewDialog.svelte:30` fetches `/assessments/:id/fields`; no such route exists. The component *is* mounted (`QualifiedDialog` → `/applications`, `ApprovalDialog` → `Pending`/`Waitlisted`), so a Manager opening an applicant's assessment preview gets an empty or erroring dialog.
   **Fix:** point at `GET /assessments/:id`, or add the endpoint if per-field data is genuinely needed.
 
 - [ ] 🐞 **BUG · S · Re-uploading a capsule proposal during edit hits a commented-out endpoint**
-  `frontend/src/routes/(app)/startups/+page.server.ts:63` calls `PATCH /startups/:id/with-capsule-proposal`. The handler is commented out at `backend/src/startup/startup.controller.ts:231`.
-  **Why it matters:** editing a startup *and* attaching a new proposal PDF silently fails. Editing without a file works (different branch), so this is easy to miss in testing.
-  **Fix:** either restore the handler or route the file through `POST /startups/parse-capsule-proposal` + `PATCH /startups/:id/capsule-proposal`.
+  `(app)/startups/+page.server.ts:63` calls `PATCH /startups/:id/with-capsule-proposal`; the handler is commented out at `startup.controller.ts:231`. Editing *and* attaching a new proposal PDF silently fails; editing without a file works (different branch), so this is easy to miss.
+  **Fix:** restore the handler, or route the file through `POST /startups/parse-capsule-proposal` + `PATCH /startups/:id/capsule-proposal`.
 
 - [ ] 🐞 **BUG · S · Admin "create assessment type" posts to a GET-only route**
-  `frontend/src/routes/(app)/admin/assessments/+page.server.ts:47` does `POST /assessments/types`; the backend only declares `@Get('types')` (`backend/src/assessment/assessment.controller.ts:41`).
-  **Why it matters:** the action always 404s. Note `AssessmentType` is a **TypeScript enum** (`backend/src/entities/enums/assessment-type.enum.ts`), not a table — so "creating a type" at runtime isn't possible without a schema change. This may be a ❓SCOPE item in disguise.
-  **Fix:** decide whether types are fixed (remove the UI) or dynamic (needs a new table + endpoints — that's L, not S).
+  `(app)/admin/assessments/+page.server.ts:47` does `POST /assessments/types`; the backend only declares `@Get('types')`. Note `AssessmentType` is a **TypeScript enum**, not a table, so creating a type at runtime isn't possible without a schema change — this may be a ❓SCOPE item in disguise.
+  **Fix:** decide whether types are fixed (remove the UI) or dynamic (new table + endpoints — that's L, not S).
 
 - [ ] 🐞 **BUG · S · Elevate page queries a non-existent `/startup-rna/` endpoint**
-  `frontend/src/routes/(app)/startups/[id]/overview/elevate/+page.svelte:71` calls `getData('/startup-rna/?startup_id=…')`. The real prefix is `/rna` (`backend/src/rna/rna.controller.ts:15`).
-  **Why it matters:** the RNA panel on the Elevate tab never populates.
-  **Fix:** change to `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
-
-- [x] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can ever display them** — **FIXED** (`fix/rns-generation-bugs`, see DONE note below)
-  Confirmed live: generation succeeds, `ai_generation_runs` records a `completed` row, and `GET /rns/?startupId=10` returns six well-formed rows — yet the page renders nothing.
-  The RNS page has exactly two display surfaces and **both exclude AI output**: the kanban columns (`frontend/src/routes/(app)/startups/[id]/rns/+page.svelte:384-392`) and the table (`:690`) each filter `isAiGenerated === false`. Generated rows are written with `isAiGenerated: true`, so neither can ever show them.
-  The *acceptance* half exists — `addToRNS()` (`:187-228`) PATCHes a row to `isAiGenerated: false`, which is what makes it appear, and the `card` snippet (`:490`) already takes an `ai` flag and an `addToRns` handler that `RnsCard` renders as an add button. **What's missing is the pending-AI review list that would invoke it.** The snippet is only ever passed to `KanbanBoardNew` (`:670`), whose columns are themselves `isAiGenerated === false`, so the `ai = true` variant is unreachable.
-  **This is not new.** `git diff master..HEAD -- frontend/` for the AI-config branch is empty, and `getStartupRns` was not modified. Generation has presumably always written rows nothing displays.
-  **Why it matters:** every AI feature in the capstone demo — Objectives 1 and 4 both — produces output the user cannot see. It also silently inflates the DB: each generation adds rows that can never be reached or cleaned up from the UI.
-  **Same pattern, verify each:** `rna/+page.svelte:77`, `initiatives/+page.svelte:170,232,254,494,857`, `roadblocks/+page.svelte:657`, `progress-report/+page.svelte:220,259,299` all filter `isAiGenerated === false` too. Check whether *any* of them has a working review surface — if one does, copy it.
-  **DECIDED (2026-07-26): write generated rows with `isAiGenerated: false`** so they appear in the board and table alongside manual rows. Chosen over a dedicated AI-suggestions panel or a post-generation review dialog.
-  **Why this is now safe:** the usual objection is that flipping the flag destroys the ability to distinguish AI output from manual entry. That stopped being true with the provenance work — every AI-generated row carries a `generation_run_id` FK to `ai_generation_runs`, which records the operation, model and full pipeline config. Provenance no longer depends on `isAiGenerated`, so the flag becomes purely a display concern. Queries that need "AI rows only" should join on `generation_run_id IS NOT NULL` instead.
-  **What this trades away, knowingly:** the human-in-the-loop accept/discard step the SRS describes. Generated rows go live immediately, with no review gate. If a panel is wanted later, the pieces are still there — `addToRNS()` is the accept action, and the `card` snippet's `ai` variant already renders an add button.
-  **DONE (`fix/rns-generation-bugs`):** `rns.service.ts` `generateTasks` now sets `isAiGenerated = false` — **this is the only code change the fix required.** `initiative.service.ts` and `roadblock.service.ts` already wrote `false` at their creation sites; `rna.service.ts` deliberately still writes `true` (see the correction below). Not yet re-verified: `progress-report/+page.svelte:299` additionally filters `status === 7`, so that view may still look empty for unrelated reasons — check separately.
-  **Live-verified (2026-07-26, Neon + live Gemini):** RNS generation persisted row id 30 with `isAiGenerated = false` **and** `generation_run_id = 5`, so it passes the frontend filter while remaining provably AI. Roadblock and initiative generation likewise persisted `false` with a `generation_run_id`. The RNA path is **not** live-verified — see the caveat below.
-
-  ⚠️ **Two findings from live verification that qualify this decision:**
-  1. **The fix is not retroactive, and the backlog stays invisible.** 22 `rns` rows and 24 `rna` rows already in the DB have `is_ai_generated = true` with `generation_run_id IS NULL` (they predate the provenance work). They still fail the frontend's `isAiGenerated === false` filter, so **flipping the flag surfaces only newly generated rows** — the existing backlog remains permanently unreachable from the UI. If those rows matter, they need a one-off backfill (`UPDATE … SET is_ai_generated = false`); if they don't, they should be deleted.
-  2. **`generation_run_id IS NOT NULL` is *not* a complete "AI rows only" predicate.** This section previously recommended it as the replacement for `isAiGenerated`. It misses all 46 legacy AI rows above, which have the flag but no run FK. The two populations are disjoint: legacy AI rows have `is_ai_generated = true, generation_run_id IS NULL`; new AI rows have `is_ai_generated = false, generation_run_id IS NOT NULL`. Until the legacy rows are backfilled or purged, a correct "all AI rows" query needs **both**: `WHERE generation_run_id IS NOT NULL OR is_ai_generated = true`.
-
-  ❗ **CORRECTION — the RNA module was never affected by this bug, and the flip there was reverted.**
-  Verified in a real browser (logged in as Manager, `/startups/10/rna`): **the RNA page renders every row unfiltered** — `{#each $rnaQueries[1].data as rna}` at `rna/+page.svelte:255`, no `isAiGenerated` predicate. Legacy rows with `isAiGenerated: true` display perfectly well. The `rna/+page.svelte:77` hit listed above under "same pattern, verify each" is **inside `addToRNA()`**, the accept-action dedup lookup — not a display filter. That line was matched by grep and wrongly assumed to be the same bug.
-  Flipping RNA to `false` was therefore not merely unnecessary, it was **actively harmful**, for two reasons:
-  1. It erases the only UI provenance signal on an RNA — the dialog's "AI Generated: Yes/No" field (`view-edit-delete-ai-dialog.svelte:289`).
-  2. It creates a **self-delete**: `addToRNA()` looks up `data.find(d => d.isAiGenerated === false && same readinessType)` (`rna/+page.svelte:75-80`) to delete the superseded manual row. With generated rows written `false`, that lookup matches **the row being accepted itself** — so it `DELETE`s the row and then `PATCH`es a now-deleted id. Reachable from the Startup role (`view-edit-delete-dialog.svelte:108`).
-  `rna.service.ts` keeps `isAiGenerated = true`, with a comment recording why it deliberately differs from the other three generators. **RNS is the only module where the flip was needed** — its board and table filters are real, and its `addToRNS()` only PATCHes, with no self-matching lookup. `initiative`/`roadblock` already wrote `false`.
-  ✅ **All display surfaces now verified in the browser** (2026-07-26, against a freshly reseeded DB):
-
-  | Page | Filter real? | Generated rows render? |
-  |---|---|---|
-  | RNS (board + table) | ✅ Yes | ✅ Yes, after the flip |
-  | RNA | ❌ **No filter at all** | ✅ Always did — see the correction above |
-  | Initiatives (`:857`) | ✅ Yes | ✅ Yes — 2/2 rendered |
-  | Roadblocks (`:657`) | ✅ Yes | ✅ Yes — 2/2 rendered |
-  | Progress report (`:220`, `:259`) | ✅ Yes | ✅ Yes — RNS, initiatives, roadblocks all rendered |
-
-  **The `status === 7` filter at `progress-report:299` is not a bug.** It drives the *"RNS — Long Term"* section; `7` is the long-term status. It renders empty only because no seeded RNS has that status, which is correct behaviour, not a hidden-rows problem.
-
-  ⚠️ **Progress report is unreachable without a nav change.** With Progress Report commented out of `access.ts:36-40`, `/startups/:id/progress-report` does not merely lack a nav link — the route **redirects away** to the RNA page. The §3 "re-enable Progress Report" item is therefore a *prerequisite* for using the page at all, not a cosmetic nav tidy. Verified by temporarily uncommenting those five lines (reverted afterwards — the scope decision is still open): the page then rendered completely and correctly.
-
-- [x] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
-  `Rns.getTargetLevelScore()` now returns `this.targetLevel.level` directly; the stale hardcoded id→level map in `backend/src/utils.ts` (the only caller) has been deleted along with the file.
-  **Live-verified (2026-07-26):** `GET /rns?startupId=10` — all 6 previously-broken rows now return real levels, 0 rows return `-1`. The live data confirms the diagnosis exactly: id 9 = *Regulatory* level 3 (old map claimed Technology 9), id 11 = *Technology* level 8 (map claimed Market 2), id 23 = *Technology* level 3 (map claimed Acceptance 5), and id 71 is past the map's 54-entry ceiling entirely.
+  `.../overview/elevate/+page.svelte:71` calls `getData('/startup-rna/?startup_id=…')`; the real prefix is `/rna`. The RNA panel on the Elevate tab never populates.
+  **Fix:** `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
 
 - [ ] 🐞 **BUG · S · Approve-applicant is two non-transactional calls**
-  `frontend/src/routes/(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback between them.
-  **Why it matters:** if the second call fails, the startup is `QUALIFIED` with no mentor — it lands in a state no screen is designed to show, and the Manager gets no error.
-  **Fix:** either a single backend endpoint that does both in one `em.transactional()`, or handle the partial failure explicitly in the UI.
+  `(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback. If the second fails, the startup is `QUALIFIED` with no mentor — a state no screen is designed to show, and the Manager gets no error.
+  **Fix:** a single backend endpoint doing both in one `em.transactional()`, or explicit partial-failure handling in the UI.
 
 - [ ] 🐞 **BUG · S · `GET /readiness/:startupId` writes to the database on every read**
-  `backend/src/readiness/readiness.service.ts:196-241` persists a new `readiness_evaluations` row plus one `readiness_gaps` row per dimension on every call.
-  **Why it matters:** the table grows by 6 rows per page view. Any "evaluation history" feature built on it will be meaningless noise, and `readinessEvaluations` is eagerly populated in several `getStartups` queries — so payloads grow unboundedly too.
-  **Fix:** move persistence to the explicit `POST /readiness/score` endpoint and make the `GET` pure. *(Check `ReadinessDashboard.svelte` — it already calls `/readiness/score`, so the write may simply be redundant.)*
+  `readiness.service.ts:196-241` persists a new `readiness_evaluations` row plus one `readiness_gaps` row per dimension on every call — 6 rows per page view. Any "evaluation history" feature built on it is meaningless noise, and `readinessEvaluations` is eagerly populated in several `getStartups` queries, so payloads grow unboundedly.
+  **Fix:** move persistence to the explicit `POST /readiness/score` endpoint and make the `GET` pure. *(`ReadinessDashboard.svelte` already calls `/readiness/score`, so the write may simply be redundant.)*
 
 - [ ] 🐞 **BUG · S · Logout clears a `Refresh` cookie that is never set**
-  `frontend/src/routes/(auth)/logout/+page.server.ts:19-22`. The refresh interceptor in `frontend/src/lib/axios.ts:13-45` is fully commented out and no `/tokens/refresh/` endpoint exists.
-  **Why it matters:** harmless on its own, but it implies a refresh flow that doesn't exist. Combined with the 5h cookie, users are silently logged out mid-session with no renewal path.
-  **Fix:** delete the dead cookie clear, and decide whether refresh tokens are in scope (❓SCOPE if yes — that's M–L).
+  `(auth)/logout/+page.server.ts:19-22`. The refresh interceptor in `lib/axios.ts:13-45` is fully commented out and no `/tokens/refresh/` endpoint exists. Harmless alone, but it implies a refresh flow that doesn't exist — combined with the 5h cookie, users are silently logged out mid-session with no renewal path.
+  **Fix:** delete the dead cookie clear, and decide whether refresh tokens are in scope (❓SCOPE if yes — M–L).
 
-- [x] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
-  `initiative.service.ts` `generateInitiatives()` single-`rnsId` branch now also sets `initiative.requestedStatus = 1`, matching the bulk branch.
-  **Live-verified:** `POST /initiatives/generate-initiatives {"rnsId":30}` (the single-id branch specifically) created initiative id 14 with `requestedStatus: 1`, confirmed persisted via `GET /initiatives?startupId=10`.
+- [x] 🔴 **BUG · M · AI-generated RNS are persisted but no screen can display them** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
+  Both RNS display surfaces filtered `isAiGenerated === false` while generation wrote `true`. `rns.service.ts generateTasks` now writes `false` — **the only code change the fix required.** `initiative.service.ts` and `roadblock.service.ts` already wrote `false`.
+  **DECIDED (2026-07-26):** generated rows go straight into the board and table rather than into a review panel. Safe because provenance no longer depends on the flag — every AI row carries a `generation_run_id` FK recording operation, model and full pipeline config. **Knowingly traded away:** the human-in-the-loop accept/discard gate the SRS describes. The pieces remain if a panel is wanted later (`addToRNS()` is the accept action; the `card` snippet's `ai` variant renders an add button).
 
-- [x] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows correctly** — **FIXED & live-verified** (`fix/rns-generation-bugs`)
-  Added `roadblocks.push(roadblock);` after `persistAndFlush` inside the loop in `roadblock.service.ts`.
-  **Live-verified:** `POST /roadblocks/generate-roadblocks {"no_of_roadblocks_to_create":2}` returned a 2-element array (previously always `[]`), both rows persisted.
+  ❗ **CORRECTION — the RNA module was never affected, and the flip there was reverted.**
+  The RNA page renders every row unfiltered (`rna/+page.svelte:255`). The `rna/+page.svelte:77` hit is inside `addToRNA()` — an accept-action dedup lookup, not a display filter. Flipping RNA to `false` was **actively harmful**: it erases the dialog's "AI Generated" provenance field, and it makes `addToRNA()`'s `find(d => d.isAiGenerated === false && same type)` match **the row being accepted itself**, deleting it and then PATCHing a deleted id (reachable from the Startup role). `rna.service.ts` keeps `true`, with a comment recording why it differs from the other three generators.
+
+  ⚠️ **Two live-verification findings that qualify the decision:**
+  1. **The fix is not retroactive.** 22 `rns` + 24 `rna` rows predating the provenance work have `is_ai_generated = true` with `generation_run_id IS NULL`, so they stay permanently invisible. They need a one-off backfill or a purge. *(Largely moot — the 2026-07-26 DB wipe cleared them; re-check before relying on either statement.)*
+  2. **`generation_run_id IS NOT NULL` is not a complete "AI rows" predicate.** The two populations are disjoint, so a correct query needs `generation_run_id IS NOT NULL OR is_ai_generated = true`.
+
+  ✅ **All display surfaces browser-verified** (2026-07-26, fresh DB): RNS ✅ after the flip; RNA ✅ (no filter, always did); Initiatives 2/2; Roadblocks 2/2; Progress report all sections.
+  **`progress-report:299`'s `status === 7` filter is not a bug** — it drives the "RNS — Long Term" section and 7 *is* the long-term status.
+  ⚠️ **Progress report is unreachable, not merely unlinked.** With it commented out of `access.ts:36-40` the route **redirects away** to the RNA page, so the §3 re-enable is a prerequisite for using the page at all.
+
+- [x] 🐞 **BUG · S · `targetLevelScore` is `-1` on every RNS row** — **FIXED & live-verified**
+  `Rns.getTargetLevelScore()` returns `this.targetLevel.level` directly; the stale hardcoded id→level map in `backend/src/utils.ts` (its only caller) was deleted with the file. All 6 broken rows now return real levels.
+
+- [x] 🐞 **BUG · S · Bulk initiative generation sets `requestedStatus`, single generation doesn't** — **FIXED & live-verified**
+  The single-`rnsId` branch now sets `requestedStatus = 1`, matching the bulk branch.
+
+- [x] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows** — **FIXED & live-verified**
+  Added the missing `roadblocks.push(roadblock)` after `persistAndFlush`.
 
 ---
 
 ## 3. Incomplete features — need a scope decision
 
-These are **not** simple code fixes. Each needs a *fix it / cut it / leave it hidden* call from you. For a capstone, "cut it cleanly" is usually the stronger answer than "leave it half-built."
+Each needs a *fix it / cut it / leave it hidden* call. For a capstone, "cut it cleanly" is usually stronger than "leave it half-built."
 
 - [ ] ❓ **SCOPE · L · Analytics and Cohorts pages have no backend at all**
-  `frontend/src/routes/(app)/analytics/+page.svelte:16,31,46` and `.../cohorts/+page.svelte:16,31,46` call `/analytics/startups/`, `/analytics/elevate-logs/`, and `/cohorts`. **There is no analytics controller and no cohorts controller in the backend** — and no cohort entity either. Both pages are ~190 lines of finished UI, Manager-gated, and commented out of the nav (`frontend/src/lib/access.ts:104-113`).
-  **Decision:** *Cut* (delete both routes + nav entries — recommended, cohorts are a whole domain concept that doesn't exist), or *Fix* (build a cohort entity, controller, and aggregation service — this is genuinely large).
+  `(app)/analytics/+page.svelte:16,31,46` and `.../cohorts/+page.svelte:16,31,46` call `/analytics/startups/`, `/analytics/elevate-logs/`, `/cohorts`. **No analytics controller, no cohorts controller, no cohort entity.** Both pages are ~190 lines of finished UI, Manager-gated, commented out of the nav (`access.ts:104-113`).
+  **Decision:** *Cut* (delete both routes + nav entries — recommended; cohorts are a whole domain concept that doesn't exist), or *Fix* (cohort entity + controller + aggregation service — genuinely large).
 
 - [ ] ❓ **SCOPE · M · `ManageAssessmentTypes.svelte` is orphaned and every call in it is broken**
-  `frontend/src/lib/components/admin/assessment/ManageAssessmentTypes.svelte` — **not imported anywhere** (verified). All 8 fetches target `/assessment/*` (singular); the real prefix is `/assessments`, and no `fields` routes exist: `:39`, `:56`, `:64`, `:75`, `:85`, `:108`, `:114`, `:126`.
-  **Decision:** *Cut* (delete the file — recommended), or *Fix* (needs the dynamic assessment-type work from §2 first).
-  *Related to the "create assessment type" bug above — decide both together.*
-
-- [x] ✅ **SCOPE · S · Regulatory readiness is collected but never scored** — *fixed 2026-08-04*
-  Was: `ReadinessService` mapped only 5 of the 6 readiness types, so Regulatory (`ReadinessType.R`) had no weight and no dimension.
-  **Fixed** by the *Fix* option: `regulatory` is now the sixth scored dimension and the weights were rebalanced to still sum to 1.0 (default `0.10`; `0.20` under the seeded healthtech profile, `0.06` under agritech). Live-verified — `GET /readiness/1` and `/readiness/2` both return six dimensions including `regulatory`.
-  *Remaining spec mismatch is the opposite one now:* the source documents list five dimensions (TRL/MRL/RRL/ARL/ORL) and the code scores six, the extra being Investment. See §0.
-
-- [x] ✅ **SCOPE · S · Readiness scores are clamped to 0–5 but levels run 1–9** — *fixed 2026-08-04*
-  Was: `Math.min(5, …)` and `score / 5`, while `readiness_levels.level` is populated 1–9 and the rubric UI renders 9 levels. Now clamped to `MAX_LEVEL = 9` and divided by 9.
-  **Correction — this item's stated rationale was wrong.** It claimed the clamp "undermines differentiation" and implied fixing it would widen the spread between startups. **It does the opposite.** Dividing by 5 was *inflating* both scores (any level ≥5 read as 100%), and inflating the stronger startup more, because it had more dimensions at or above the clamp. Measured on the demo pair: the AgroLink/MediSync gap **fell from 44 points to 24** (AgroLink 32→17, MediSync 76→41). The old behaviour was a **correctness** bug — a level-9 startup scoring identically to a level-5 one — and that is the whole reason to fix it. Do not cite it as a differentiation win; differentiation got *narrower*, and honestly so, because the old numbers were wrong.
-  **Tier boundaries:** unchanged in code, and `tier_configs` is **empty** on Neon (verified 2026-08-04), so the hardcoded 85/70/55/40/25 ladder applies. Since scores now sit lower, those thresholds are harsher than they were — worth revisiting deliberately, but it is a threshold-calibration question, not a bug.
+  Not imported anywhere (verified). All 8 fetches target `/assessment/*` (singular); the real prefix is `/assessments`, and no `fields` routes exist.
+  **Decision:** *Cut* (recommended), or *Fix* (needs the dynamic assessment-type work from §2 first). *Decide together with the "create assessment type" bug.*
 
 - [ ] ❓ **SCOPE · S · Three finished features are hidden from navigation**
-  Commented out in `frontend/src/lib/access.ts`: Progress Report (`:36-40`), Analytics (`:104-108`), Cohorts (`:109-113`). Progress Report is fully working — UI plus `GET /progress/:startupId/progress-report`.
-  **Decision:** Progress Report looks like a *re-enable* (one line, and it works). Analytics/Cohorts fold into the first item in this section.
-  **Confirmed 2026-07-26:** commenting it out of `access.ts` doesn't just hide the nav link — `/startups/:id/progress-report` **redirects to the RNA page**, so the feature is entirely unreachable. Temporarily uncommenting `:36-40` was verified to make it render completely and correctly (all 6 RNAs, both RNS with correct target levels, both initiatives, both roadblocks) against live data. The re-enable really is a five-line uncomment with no other work required.
+  Commented out in `access.ts`: Progress Report (`:36-40`), Analytics (`:104-108`), Cohorts (`:109-113`).
+  **Confirmed 2026-07-26:** Progress Report is fully working (UI + `GET /progress/:startupId/progress-report`) and the re-enable really is a five-line uncomment — temporarily uncommenting rendered it completely and correctly against live data. Analytics/Cohorts fold into the first item above.
 
 - [ ] ❓ **SCOPE · M · "Rate applicant" was designed but never built**
-  `frontend/src/lib/components/admin/PendingTab.svelte:105-107` — a commented-out call to `/startups/:id/rate-applicant/` with the note *"COMMENT FOR NOW, NEED TO IMPLEMENT BACKEND FIRST."* The `RatedTab` component and a `rated` tab in `/applications` both exist.
-  **Why it matters:** there's a visible "rated" state in the admissions UI with no way to reach it.
+  `admin/PendingTab.svelte:105-107` — a commented-out call to `/startups/:id/rate-applicant/` noting *"NEED TO IMPLEMENT BACKEND FIRST"*. `RatedTab` and a `rated` tab in `/applications` both exist, so there's a visible state with no way to reach it.
   **Decision:** *Cut* the rated tab and the three orphaned Tab components, or *Fix* by building the scoring endpoint.
 
 - [ ] ❓ **SCOPE · M · `overview` module is an empty shell**
-  `backend/src/overview/overview.controller.ts` declares `@Controller('overview')` with **zero routes**, yet the module is imported in `backend/src/app.module.ts:69`. The frontend's four Overview tabs get their data from `/startups/:id` instead.
-  **Decision:** *Cut* the module (recommended — the tabs work without it), or *Fix* by moving the overview aggregation here.
+  `overview.controller.ts` declares `@Controller('overview')` with **zero routes**, yet the module is imported in `app.module.ts:69`. The frontend's four Overview tabs get their data from `/startups/:id`.
+  **Decision:** *Cut* (recommended — the tabs work without it), or *Fix* by moving overview aggregation here.
 
 - [ ] ❓ **SCOPE · L · No refresh-token flow**
   See the logout bug in §2. Deliberate omission or missing feature?
   **Decision:** *Leave* (document that sessions are fixed-length — fine for a capstone), or *Fix* (refresh endpoint + rotation + interceptor).
+
+- [ ] ❓ **SCOPE · M · RNS validation correlation key is not unique** — *open design decision from the 1c work*
+  `(generationRun, dimensionKey)` collides when `no_of_tasks_to_create` produces more than one task per dimension per run; `rns.service.ts`'s lookup `Map` keeps only the last, so a flagged task can be invisible in the payload. A proper fix needs an artifact FK on `ai_recommendations`, which isn't available at record time (persist-then-flush) — a schema change, not a patch.
+
+- [ ] ❓ **SCOPE · S · Validation verdicts go stale on edit** — *open design decision from the 1c work*
+  If `update()` or `refineRna()` later rewrites an artifact's text, the `ai_recommendations` row still reflects the original generation.
+  **Decision:** revalidate on write, or null the stale verdict.
+
+- [x] ✅ **SCOPE · S · Regulatory readiness is collected but never scored** — *fixed 2026-08-04*
+  `regulatory` is now the sixth scored dimension, weights rebalanced to sum to 1.0 (default `0.10`; `0.20` healthtech, `0.06` agritech). Live-verified — `GET /readiness/1` and `/2` both return six dimensions.
+  *The remaining spec mismatch is the opposite one now* — the source documents list five dimensions and the code scores six, the extra being Investment. See §0.
+
+- [x] ✅ **SCOPE · S · Readiness scores were clamped to 0–5 but levels run 1–9** — *fixed 2026-08-04*
+  Now clamped to `MAX_LEVEL = 9` and divided by 9.
+  **Correction — this item's stated rationale was wrong.** It claimed the clamp "undermines differentiation" and implied fixing it would widen the spread. **It does the opposite:** dividing by 5 inflated both scores (any level ≥5 read as 100%) and inflated the *stronger* startup more. The AgroLink/MediSync gap fell **44 → 24** (32→17, 76→41). This is a **correctness** fix — a level-9 startup no longer scores identically to a level-5 one. Do not cite it as a differentiation win.
+  **Tier boundaries unchanged, and `tier_configs` is empty on Neon** (verified 2026-08-04), so the hardcoded 85/70/55/40/25 ladder applies. Scores now sit lower, making those thresholds harsher — a deliberate calibration question left open.
 
 ---
 
 ## 4. Cleanup / tech debt
 
 - [ ] 🧹 **DEBT · S · Three components carry a hardcoded, expired JWT from the previous team's app**
-  `frontend/src/lib/components/admin/PendingTab.svelte:19`, `AcceptedTab.svelte:19`, `RatedTab.svelte` each declare `const access = 'eyJ...'` — a literal token string, and they send it as `Authorization: Bearer`. Decoded, it is a **Django SimpleJWT** token (`token_type`, `jti`, `user_id`, `user_type: "M"`) that **expired 2024-09-06**. This backend issues a different payload shape entirely (`sub`/`email`/`role`), so it could never have authenticated here.
-  **Why it matters:** it looks like working auth and is not, which is how the "the frontend already sends Bearer tokens" assumption survived. Anyone reading these files will draw the wrong conclusion about how the app authenticates. A committed token literal is also just bad practice, even a dead one.
-  *These three components are also unimported (see below), so deleting them resolves both.*
+  `admin/PendingTab.svelte:19`, `AcceptedTab.svelte:19`, `RatedTab.svelte` each declare `const access = 'eyJ...'` and send it as `Authorization: Bearer`. Decoded, it is a **Django SimpleJWT** token (`token_type`, `jti`, `user_id`) that **expired 2024-09-06** — a payload shape this backend has never issued.
+  **Why it matters:** it looks like working auth and is not, which is how the "the frontend already sends Bearer tokens" assumption survived. *These three are also unimported, so deleting them resolves both items.*
 
 - [ ] 🧹 **DEBT · S · Delete three orphaned admin Tab components**
-  `frontend/src/lib/components/admin/PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — **none are imported anywhere** (verified). `RatedTab.svelte` also calls `/readinesslevel/:id/calculator-final-scores/`, which doesn't exist (the real route is `/startups/:id/calculator-final-scores`).
-  *Coupled to the "rate applicant" scope decision — resolve that first.*
+  `PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — none imported anywhere (verified). `RatedTab.svelte` also calls `/readinesslevel/:id/calculator-final-scores/`, which doesn't exist. *Coupled to the "rate applicant" scope decision — resolve that first.*
 
 - [ ] 🧹 **DEBT · S · `GET /ocr/parse` reads an arbitrary server-side path**
-  `backend/src/ocr/ocr.controller.ts` takes a `file` query parameter and passes it straight to `parseImageFile`, with no confinement to an upload directory. It is now behind `JwtGuard`, which limits *who* can do it, but any authenticated user can still read files the server process can read.
-  Its own comment calls it a "Quick test endpoint". **Deleting it is probably the right fix**; otherwise resolve the path against a fixed root and reject anything that escapes.
+  `ocr.controller.ts` passes a `file` query parameter straight to `parseImageFile` with no confinement to an upload directory. It is behind `JwtGuard` now, so any *authenticated* user can read files the server process can read. Its own comment calls it a "Quick test endpoint" — deleting it is probably right; otherwise resolve against a fixed root and reject escapes.
 
 - [ ] 🧹 **DEBT · S · Delete `ReadinessCard.svelte`**
-  `frontend/src/lib/components/dashboard/ReadinessCard.svelte` — orphaned (verified). Note `ReadinessDashboard.svelte`, which it wraps, *is* used in three places, so delete only the card.
-
-- [x] 🐞 **BUG · S · The boot seeder gives startups to staff accounts and assigns no mentor** — *fixed*
-  `backend/src/main.ts` `seedDemoStartups()` set `user: managerUser` for AgroLink PH and `user: mentorUser` for MediSync Cebu — so a **Manager owned one startup and a Mentor owned the other**, while `demo@launchup.local` (the only `Startup`-role account) owned nothing. Neither startup got a `startups_mentors` row, so the seeded state showed a Manager running the whole coaching flow with no mentor involved — a workflow the SRS doesn't describe, and misleading in a demo or screenshot.
-  **Why it mattered beyond cosmetics:** any ownership/IDOR work in §1 would have been tested against data where the roles were already conflated, so a broken ownership check could look correct.
-  **Fix applied:** `seedLocalDemoData()` now also creates `founder.agrolink@launchup.local` (Rafael Domingo) and `founder.medisync@launchup.local` (Elena Reyes) as `Role.Startup`, and the two near-identical startup blocks were folded into a single `seedDemoStartup(em, spec)` helper that sets the founder as `user`, adds them to `members`, and adds `mentor@launchup.local` to `mentors`. Same accounts and emails `seed-demo-full.js` uses, so the two seeders now agree and the standalone script is a no-op on a fresh boot.
-  **Deliberately creation-only.** The `if (existing)` guard is kept, so the boot seeder never rewrites a startup it already created — auto-mutating ownership on every `pnpm dev` would be surprising, and other developers' Neon branches may hold intentional edits. Branches seeded by the old code keep the wrong shape until `node seed-demo-full.js` is run against them; the log line points at that.
-  **Verified** on a genuinely cold DB (throwaway `launchup_seedtest` on the same Neon instance, created with pgvector, booted, asserted, dropped): both startups took the create branch, owners are the two `Startup`-role founders, both have `mentor@launchup.local` in `startups_mentors`, and all three assertions — non-`Startup` owners, self-mentoring, mentorless startups — returned 0.
-  *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached — that shortcut is what left the startups mentorless in the first place.*
+  Orphaned (verified). Note `ReadinessDashboard.svelte`, which it wraps, *is* used in three places — delete only the card.
 
 - [ ] 🧹 **DEBT · S · `ai_generation_runs` cannot see thinking-token cost**
-  The table records `prompt_tokens` and `completion_tokens` but has no column for **thinking tokens**, which on `gemini-3.6-flash` are ~780 per call — more than twice the visible output. Since the default moved to a reasoning tier, the provenance table now systematically under-reports the true cost of every run, which matters for any "was the enhanced pipeline worth it?" comparison.
-  **Fix:** add a `thinking_tokens` column and populate it from `usageMetadata.thoughtsTokenCount`, which the SDK already returns. Cheap now; expensive to backfill once a study's worth of rows exists without it.
+  The table records `prompt_tokens`/`completion_tokens` but has no column for **thinking tokens**, ~780 per call on `gemini-3.6-flash` — more than twice the visible output. The provenance table systematically under-reports the true cost of every run, which matters for any "was the enhanced pipeline worth it?" comparison.
+  **Fix:** add `thinking_tokens`, populated from `usageMetadata.thoughtsTokenCount`. Cheap now; expensive to backfill once a study's worth of rows exists without it.
 
 - [ ] 🧹 **DEBT · S · `pnpm lint` is unusable because of a CRLF-vs-prettier conflict**
-  There is **no `.gitattributes`** and `core.autocrlf=true`, so files check out CRLF on Windows, while prettier (no `endOfLine` setting, therefore `"lf"`) flags **every line of every file** as `Delete ␍`. `ai-config.service.ts` + its spec alone account for 205 errors, and the repo-wide total is 727 — almost all of it this one rule. Real findings are buried, and `pnpm lint` runs `eslint --fix`, so anyone who runs it casually rewrites the entire `src/` tree.
-  **Fix:** add `.gitattributes` with `* text=auto eol=lf`, or set `"endOfLine": "auto"` in `.prettierrc`. Either drops the error count by roughly an order of magnitude and makes the linter worth running. Consider also splitting `lint` (check) from `lint:fix` so `--fix` is opt-in.
+  No `.gitattributes` and `core.autocrlf=true`, so files check out CRLF while prettier (defaulting to `"lf"`) flags **every line of every file** as `Delete ␍` — 727 errors repo-wide, almost all this one rule. Real findings are buried, and `pnpm lint` runs `eslint --fix`, so a casual run rewrites the entire `src/` tree.
+  **Fix:** `.gitattributes` with `* text=auto eol=lf`, or `"endOfLine": "auto"` in `.prettierrc`. Consider splitting `lint` (check) from `lint:fix`.
 
-- [ ] 🐞 **BUG · S · Two unit tests fail on `master` — the suite is red before anyone starts**
-  `pnpm test` is **74 passed / 2 failed** on a clean `master` checkout (verified 2026-07-27 by checking out `master` and re-running, so this is not from any feature branch). Both look like stale expectations rather than product defects, but a red baseline means nobody can tell a real regression from the noise.
-  - `src/ai/ai.service.spec.ts` › *"passes valid task responses through unchanged"* — the test's own context sets `scoreNormalization: true` and mocks `normalizeScore` to return `{ scaled: 5, z: 0 }`, so the service correctly emits `target_level_normalized: 5` plus `target_level_z: 0`. The assertion still expects `target_level_normalized: 3` and no `_z` field. **The expectation is wrong, not the code** — note the hand-edited comment on the line, which suggests it was patched without being run.
-  - `src/readiness/readiness.service.spec.ts` › *"returns a weighted score, tier, and prioritized recommendations"* — `expect(jest.fn()).toHaveBeenCalledTimes(1)` receives 2. Needs a look at whether the extra call is intended.
-  **Fix:** correct both expectations (or the code, if the second turns out to be a real double-call), then keep the suite green so CI is meaningful.
+- [ ] 🐞 **BUG · S · A unit test fails on `master` — the suite is red before anyone starts**
+  As of 2026-08-05: **216 passing / 1 failing**. The `ReadinessService › returns a weighted score…` failure was resolved by the 2b work; `AiService › passes valid task responses through unchanged` remains — the test's own context sets `scoreNormalization: true` and mocks `normalizeScore` to return `{ scaled: 5, z: 0 }`, so the service correctly emits `target_level_normalized: 5` plus `target_level_z: 0` while the assertion still expects `3` and no `_z`. **The expectation is wrong, not the code.**
+  **A second failure is a real regression.** Fix this one so the suite is a usable signal.
 
 - [ ] 🧹 **DEBT · S · Removing an uploaded file orphans the object in the bucket**
-  `FileUploadField.svelte`'s "Remove file" only rewrites the assessment's `answerValue` — it never deletes the stored object. `UploadService.deleteFile()` exists and works, but the only route that calls it is **commented out** (`backend/src/upload/upload.controller.ts`, the `@Delete(':key(*)')` block). So every removed or replaced attachment stays in storage forever, counting against the ~1 GB free tier with no way to find it from the app.
-  **Fix:** uncomment the delete route, put it behind `JwtGuard` (now on the controller), and have `removeUploadedFile()` call it with `file.key` before rewriting the answer. Ignore a 404 so a missing object doesn't block the UI. *Legacy rows store `url` rather than `key` and can't be resolved to an object — skip the delete for those.*
-  **Why it's worth doing now:** cheap while the storage code is fresh, and the alternative is a bucket nobody can safely clean because there's no record of which keys are still referenced.
+  `FileUploadField.svelte`'s "Remove file" only rewrites `answerValue`. `UploadService.deleteFile()` works, but the only route calling it is **commented out** (`upload.controller.ts`, the `@Delete(':key(*)')` block), so removed attachments stay in storage forever with nothing pointing at them.
+  **Fix:** uncomment the route (the controller now has `JwtGuard`) and have `removeUploadedFile()` call it with `file.key` before rewriting. Ignore a 404. *Legacy rows store `url` rather than `key` and can't be resolved — skip those.*
 
 - [ ] 🧹 **DEBT · S · The SQLite fallback in `mikro-orm.config.ts` does not work**
-  `backend/src/mikro-orm.config.ts:8` falls back to an in-memory SQLite DB when `DB_HOST` is unset, and `CLAUDE.md` describes it as "useful for quick local runs without Docker". It isn't — booting with `DB_HOST=` fails at connect with `Error: Could not locate the bindings file`, because `better-sqlite3`'s native bindings were never compiled for this install. **Verified** 2026-07-27.
-  Note also that `dotenv` never overrides a key already present in `process.env`, so `.env`'s `DB_HOST` always wins unless the variable is exported as an *empty string* — PowerShell's `$env:DB_HOST=''` deletes the variable rather than emptying it, so the fallback cannot be reached from PowerShell at all.
-  **Fix:** either make it work (`pnpm rebuild better-sqlite3`, and confirm the pgvector-typed entities can even be created under SQLite) or delete the branch and the `@mikro-orm/sqlite` dependency and correct `CLAUDE.md`. Deleting is probably right — the entity set now assumes Postgres.
+  `:8` falls back to in-memory SQLite when `DB_HOST` is unset, and `CLAUDE.md` describes it as a usable no-Docker path. It isn't — `better-sqlite3`'s native bindings were never compiled, so it dies at connect (verified 2026-07-27). Note `dotenv` never overrides an existing `process.env` key, and PowerShell's `$env:DB_HOST=''` *deletes* rather than empties, so the fallback is unreachable from PowerShell regardless.
+  **Fix:** make it work (`pnpm rebuild better-sqlite3`, and confirm pgvector-typed entities can even be created under SQLite) or delete the branch, the `@mikro-orm/sqlite` dependency, and the `CLAUDE.md` claim. Deleting is probably right — the entity set assumes Postgres.
 
 - [ ] 🧹 **DEBT · S · Drop three unused entities and their tables**
-  Never referenced by any service or controller (verified across the whole backend):
-  - `MentorAssignment` (`backend/src/entities/mentor-assignment.entity.ts`) — mentor assignment actually writes to the `startups`↔`users` pivot (`backend/src/startup/startup.service.ts:942-963). Misleading, because the entity looks like the source of truth and even has an `assignedBy` audit field the real path lacks.
-  - `ConsultationRequest` (`consultation-request.entity.ts`)
-  - `ScoringGuide` (`scoring-guide.entity.ts`)
-  **Fix:** delete the entities and add a migration to drop the tables. *If the `assignedBy`/`isActive` audit trail is actually wanted, that's a ❓SCOPE item instead — switch mentor assignment over to this entity.*
+  Never referenced by any service or controller (verified): `MentorAssignment`, `ConsultationRequest`, `ScoringGuide`. Mentor assignment actually writes to the `startups`↔`users` pivot (`startup.service.ts:942-963`), so `MentorAssignment` is actively misleading — it looks like the source of truth and even has an `assignedBy` audit field the real path lacks.
+  **Fix:** delete the entities and add a migration to drop the tables. *If the `assignedBy`/`isActive` audit trail is wanted, that's a ❓SCOPE item instead.*
 
-- [ ] 🧹 **DEBT · S · Consolidate duplicate enums and tables**
-  - `RnsStatus` (integer-backed, `backend/src/entities/enums/rns.enum.ts`) and `Status` (string-backed, `enums/status.enum.ts`) define the same seven states. `Status` also carries a Cebuano comment (`// basin pwede sa RNS…`) that should go before submission.
-  - ~~`recommendations` (`recommendation.entity.ts`, written by `rna/recommendation-storage.service.ts`) and `ai_recommendations` (`ai-recommendation.entity.ts`, written by `ai/ai.service.ts:176`) overlap heavily.~~ Resolved: `recommendation.entity.ts` and `recommendation-storage.service.ts` deleted (both were dead — stub methods, never called, no writer). The `recommendations` **table** is fully resolved — **verified against Neon on 2026-08-04, it does not exist at all** (`select table_name from information_schema.tables where table_schema='public' and table_name='recommendations'` returns zero rows). This item previously said the table "is dropped automatically on the next boot"; that phrasing implied a pending action. There is none — nothing to drop, no migration to write.
-  **Fix:** pick one of each and migrate.
+- [ ] 🧹 **DEBT · S · Consolidate duplicate enums**
+  `RnsStatus` (integer-backed) and `Status` (string-backed) define the same seven states. `Status` also carries a Cebuano comment (`// basin pwede sa RNS…`) that should go before submission.
+  *(The `recommendations` table half of this item is fully resolved — the entity and its service are deleted, and the table does not exist on Neon at all, verified 2026-08-04. No pending action.)*
 
 - [ ] 🧹 **DEBT · S · Remove committed scratch files**
-  All tracked in git: `backend/test-login.js` (0 bytes), `frontend/fix-page.cjs`, `frontend/src/routes/(app)/admin/assessments/+page.svelte.backup`, `frontend/src/routes/(app)/admin/assessments/temp_fix.txt`, `chumcheck_2025-03-04_025337.sql` (561 KB).
-  Also untracked but sitting in the repo root: `backend.zip` (116 MB) and `frontend.zip` (84 MB) — add to `.gitignore` or delete.
+  Tracked: `backend/test-login.js` (0 bytes), `frontend/fix-page.cjs`, `.../admin/assessments/+page.svelte.backup`, `.../admin/assessments/temp_fix.txt`, `chumcheck_2025-03-04_025337.sql` (561 KB). Untracked but in the repo root: `backend.zip` (116 MB), `frontend.zip` (84 MB) — gitignore or delete.
   **Why it matters:** `.backup` and `temp_fix.txt` files next to the code they patch are the first thing a reviewer notices.
 
 - [ ] 🧹 **DEBT · S · Purge `chumcheck` references**
-  `scripts/reset_db.sh`, `scripts/reset_db.ps1`, `scripts/delete_db.sh` all target a database named `chumcheck` with user `postgres`, while `docker-compose.yml` creates `launchup_db` / `launchup_user`.
-  **Why it matters:** running any of these scripts does nothing to your actual dev database — or worse, drops an unrelated one. Update or delete them.
+  `scripts/reset_db.sh`, `reset_db.ps1`, `delete_db.sh` all target a database named `chumcheck` with user `postgres`, while the project uses Neon. Running any of them does nothing to your dev database — or worse, drops an unrelated one.
 
 - [ ] 🧹 **DEBT · M · Resolve migrations vs. `updateSchema()`**
-  `backend/src/main.ts:292` calls `orm.getSchemaGenerator().updateSchema()` on every boot, while 93 migration files sit in `backend/src/migrations/`.
-  **Why it matters:** the migrations are effectively inert; the auto-sync is what shapes the dev DB. Schema drift is invisible, and a migration you write won't obviously do anything. Auto-sync on boot is also unsafe against a production database.
-  **Fix:** pick one strategy. For a capstone, gating `updateSchema()` behind `if (process.env.NODE_ENV !== 'production')` is a reasonable compromise.
+  `main.ts:292` calls `updateSchema()` on every boot while 93 migration files sit in `src/migrations/`. The migrations are inert, schema drift is invisible, and auto-sync on boot is unsafe against production.
+  **Fix:** pick one. For a capstone, gating `updateSchema()` behind `if (process.env.NODE_ENV !== 'production')` is a reasonable compromise.
 
 - [ ] 🧹 **DEBT · S · Move demo seeding out of `bootstrap()`**
-  `backend/src/main.ts:16-268` — ~250 lines of seeding logic (including a large commented-out block at `:97-148`) runs on every startup, with `console.log` output per record.
-  **Fix:** move to a seeder script (`backend/seed-*.js` already exist) invoked by an npm script, and gate it on a `SEED_DEMO` env flag.
+  `main.ts:16-268` — ~250 lines of seeding (including a large commented-out block at `:97-148`) runs on every startup with `console.log` per record.
+  **Fix:** move to a seeder script invoked by an npm script, gated on a `SEED_DEMO` flag.
 
 - [ ] 🧹 **DEBT · S · Remove `console.log` debugging from request paths**
-  e.g. `backend/src/startup/startup.controller.ts:216-226` logs full request and response bodies on every capsule-proposal PATCH; `frontend/src/routes/(app)/admin/+page.server.ts:14,19` logs on every admin page load.
-  **Why it matters:** the backend one writes startup proposal contents to logs.
+  `startup.controller.ts:216-226` logs full request and response bodies on every capsule-proposal PATCH — **writing startup proposal contents to logs**. Also `(app)/admin/+page.server.ts:14,19` on every admin page load.
 
 - [ ] 🧹 **DEBT · S · Fix the doubled route segment `/startups/startups`**
-  `backend/src/startup/startup.controller.ts:31` (`@Controller('startups')`) + `:38` (`@Get('/startups')`).
-  **Why it matters:** cosmetic, but confusing — and note `backend/src/assessment/startup-assessment.controller.ts:16` *also* claims the `startups` prefix, so route ownership is already split across two files.
-  **Fix:** change to `@Get()`; update the two frontend callers (`(app)/startups/+page.server.ts:11`, `(app)/startups/+page.svelte`).
+  `startup.controller.ts:31` (`@Controller('startups')`) + `:38` (`@Get('/startups')`). Note `assessment/startup-assessment.controller.ts:16` *also* claims the `startups` prefix, so route ownership is already split across two files.
+  **Fix:** change to `@Get()`; update the two frontend callers.
 
 - [ ] 🧹 **DEBT · S · Delete commented-out dead code**
-  Largest blocks: `backend/src/startup/startup.controller.ts:231-310` (the `with-capsule-proposal` handler — resolve the §2 bug first), `frontend/src/lib/axios.ts:13-45` (refresh interceptor), `backend/src/app.controller.ts:75-89`, `frontend/src/routes/(app)/startups/[id]/+layout.server.ts:12-40`.
+  Largest blocks: `startup.controller.ts:231-310` (the `with-capsule-proposal` handler — resolve the §2 bug first), `lib/axios.ts:13-45` (refresh interceptor), `app.controller.ts:75-89`, `(app)/startups/[id]/+layout.server.ts:12-40`.
 
-- [ ] 🧹 **DEBT · S · Add `README.md` corrections**
-  `README.md:29` lists `DISQUALIFIED` as a qualification status; the enum has no such value — it has `COMPLETED` (`backend/src/entities/enums/qualification-status.enum.ts`). The README also doesn't mention that `JWT_SECRET` must match across both `.env` files, which is the most common setup failure.
+- [ ] 🧹 **DEBT · S · README corrections**
+  `README.md:29` lists `DISQUALIFIED` as a qualification status; the enum has `COMPLETED` instead. The README also doesn't mention that **`JWT_SECRET` must match across both `.env` files**, which is the most common setup failure.
+
+- [x] 🐞 **BUG · S · The boot seeder gave startups to staff accounts and assigned no mentor** — *fixed 2026-07-27*
+  `seedDemoStartups()` set a Manager as owner of one startup and a Mentor of the other, with no `startups_mentors` row on either.
+  **Why it mattered beyond cosmetics:** any ownership/IDOR work in §1 would have been tested against data where the roles were already conflated, so a broken ownership check could look correct.
+  **Fixed:** `seedLocalDemoData()` creates `founder.agrolink@` / `founder.medisync@` as `Role.Startup`, and a single `seedDemoStartup(em, spec)` helper sets the founder as `user`, adds them to `members`, and adds `mentor@launchup.local` to `mentors`. Same emails `seed-demo-full.js` uses, so the two seeders agree.
+  **Deliberately creation-only** — the `if (existing)` guard stays, so branches seeded by the old code keep the wrong shape until `node seed-demo-full.js` is run. Verified on a genuinely cold throwaway Neon DB: all three assertions (non-`Startup` owners / self-mentoring / mentorless) returned 0.
+  *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached.*
 
 ---
 
 ## 5. Infrastructure decisions (open questions)
 
-Neither the SRS nor the SDD names a storage vendor, a specific model version, or Docker — so these are genuinely your call. Recommendations below.
+Neither the SRS nor the SDD names a storage vendor, a model version, or Docker — these are genuinely your call.
 
-- [ ] ❓ **SCOPE · S · Pick a file-storage provider to replace DigitalOcean Spaces**
-  `backend/src/upload/upload.service.ts` read five `DO_SPACES_*` vars; none were set, so `enabled = false` and uploads 503'd. The SDD only ever says *"Object storage (file storage service)"* (p.48) — **no vendor is specified**.
-  **Code is done (2026-07-27); only credentials are outstanding.** Cloudflare R2 was the original recommendation but was ruled out — it requires a credit card on file even for the free tier. **Targeting Supabase Storage** instead: S3-compatible, no card, ~1 GB free.
-  **What landed:**
-  - `DO_SPACES_*` → `S3_*` throughout, plus `forcePathStyle: true` (Supabase addresses buckets as a path segment).
-  - Dropped `ACL: 'public-read'`. Supabase, R2, and modern S3 all control public access at the *bucket* level; per-object ACLs are not the model any more.
-  - **Presigned PUT** (`POST /upload/presign`) — the browser uploads straight to the bucket, so a 10 MB file no longer occupies an API request.
-  - **Presigned GET** (`GET /upload/signed-url?key=`) — the bucket is private, so this is the only read path.
-  - `JwtGuard` on the whole controller, closing the §1 SEC item.
-  - Frontend `FileUploadField.svelte` switched to presign → PUT, and now stores `{key, fileName}`. Legacy `{url, fileName}` rows still render.
-  **Two bugs the unit tests caught before they could reach production:** the AWS SDK signs a CRC32 checksum of the *empty* signing-time body by default, so every real upload would have failed validation at the bucket (fixed with `requestChecksumCalculation: 'WHEN_REQUIRED'`); and `getSignedUrl` signs only `host` unless told otherwise, which made the returned `Content-Type` requirement decorative (fixed with `signableHeaders`).
-  **Verified end to end against the live Supabase bucket (2026-07-27).** Credentials are in `backend/.env`; `test-connection` reports `connected`. API round trip: presign → PUT (200) → signed GET (200) returned a byte-identical file, and an **unsigned** GET on the same object returned **403**, confirming the bucket is genuinely private. Through the UI as `founder.agrolink@launchup.local` (Startup role): attached a PNG to "Upload your system architecture diagram", submitted, the assessment flipped to Completed, and Preview resolved a fresh signed URL that rendered the image. The stored `answerValue` is `{"files":[{"key":"assessments/…png","fileName":"architecture-diagram.png"}]}` — a **key, no URL**, as designed.
-  *The assessment tables were empty after the DB wipe, so `seed-demo-full.js` now also seeds 6 assessments (2 File-type) — without them the assessment page renders nothing and the upload field is unreachable.*
+- [x] ✅ **SCOPE · S · File-storage provider** — *settled 2026-07-27: Supabase Storage*
+  Cloudflare R2 was the original recommendation but requires a credit card even on the free tier. Supabase is S3-compatible, no card, ~1 GB free. Because `upload.service.ts` uses the generic `@aws-sdk/client-s3` `S3` class with a configurable `endpoint`, the swap was config, not a rewrite.
+  `DO_SPACES_*` → `S3_*` + `forcePathStyle: true`; dropped `ACL: 'public-read'` (Supabase/R2/modern S3 all gate public access per *bucket*); **presigned PUT** so a 10 MB file no longer occupies an API request; **presigned GET** as the only read path against a private bucket; `JwtGuard` on the controller. `FileUploadField.svelte` stores `{key, fileName}` and still renders legacy `{url, fileName}`.
+  **Two bugs the unit tests caught before they could ship:** the SDK signs a CRC32 checksum of the *empty* signing-time body by default, so every real upload would have been rejected at the bucket (`requestChecksumCalculation: 'WHEN_REQUIRED'`); and `getSignedUrl` signs only `host` unless given `signableHeaders`, which made the returned `Content-Type` requirement decorative.
+  **Verified end to end against the live bucket:** presign → PUT → signed GET returns a byte-identical file; an **unsigned** GET on the same object returns **403**. Through the UI as a Startup-role founder, the stored `answerValue` is a **key, no URL**, as designed.
 
-- [ ] ❓ **SCOPE · M · Move off `gemini-2.5-flash-lite` to task-appropriate models**
-  **Partially addressed:** the model is no longer a hardcoded literal — `AiConfigService` (`backend/src/ai/ai-config.service.ts`) now resolves `model` and `temperature` from `GEMINI_MODEL` / `AI_TEMPERATURE` env vars (see `backend/.env.example`), and every call site in `ai.service.ts` reads `this.aiConfig.defaults.model` / `.temperature` instead of a literal, so switching models is now an env change, not a code change. `temperature` is also now applied consistently across call sites (defaulting to `0`), which resolves the "pin `temperature: 0` on all scoring calls" ask two paragraphs down.
-  **Default raised to `gemini-3.6-flash` (2026-07-27)** — `DEFAULT_MODEL` in `ai-config.service.ts` and `GEMINI_MODEL` in both `.env` and `.env.example`.
-  **Why it matters for *this* project specifically:** Objectives 1 and 4 are about hallucination and leniency bias, and the lite tier is the most susceptible to both — weakest instruction-following, weakest reasoning, most sycophantic. Objective 3 needs handwriting and sketch understanding, which is exactly where a lite vision model is weakest. A weak model doesn't just degrade UX here; it **biases your research results against your own hypothesis**.
+- [x] ✅ **SCOPE · M · Model selection** — *settled 2026-07-27: `gemini-3.6-flash`*
+  The model is no longer a literal — `AiConfigService` resolves `model` and `temperature` from `GEMINI_MODEL`/`AI_TEMPERATURE`, so switching is an env change.
 
-  ⚠️ **The earlier recommendation in this section was wrong, and measuring it is what caught that.** It named Gemini 2.5 Pro / 2.5 Flash. Measured against the project's own API key on 2026-07-27:
+  ⚠️ **The earlier recommendation in this section was wrong, and measuring it is what caught that.** It named Gemini 2.5 Pro / 2.5 Flash:
 
-  | Model | Latency | Output tok | **Thinking tok** | Total | JSON |
-  |---|---|---|---|---|---|
-  | `gemini-2.5-flash-lite` *(was default)* | 2.3s | 326 | **0** | 448 | fenced |
-  | `gemini-3.1-flash-lite` | 2.1s | 266 | 0 | 388 | clean |
-  | `gemini-3.5-flash-lite` | 1.9s | 280 | 0 | 402 | clean |
-  | **`gemini-3.6-flash`** *(new default)* | 6.5s | 343 | **779** | 1244 | clean |
-  | `gemini-3.5-flash` | 12.1s | 362 | 965 | 1449 | clean |
-  | `gemini-2.5-flash` | — | — | — | — | **404 "no longer available to new users"** |
-  | `gemini-2.5-pro`, `gemini-3-pro-preview`, `gemini-3.1-pro-preview` | — | — | — | — | **429 — not on the free tier** |
+  | Model | Latency | Output tok | **Thinking tok** | JSON |
+  |---|---|---|---|---|
+  | `gemini-2.5-flash-lite` *(was default)* | 2.3s | 326 | **0** | fenced |
+  | `gemini-3.5-flash-lite` *(escape hatch)* | 1.9s | 280 | 0 | clean |
+  | **`gemini-3.6-flash`** *(new default)* | 6.5s | 343 | **779** | clean |
+  | `gemini-3.5-flash` | 12.1s | 362 | 965 | clean |
+  | `gemini-2.5-flash` | — | — | — | **404 "no longer available to new users"** |
+  | `gemini-2.5-pro`, `gemini-3-pro-preview`, `gemini-3.1-pro-preview` | — | — | — | **429 — not on the free tier** |
 
   - **`gemini-2.5-flash` is gone.** Wiring the old recommendation would have 404'd every AI call.
-  - **No Pro-tier model is reachable on the free key.** All three 429 with 20s spacing, so it is tier exclusion, not a rate limit. **Any plan that puts Pro on scoring/bias requires paid billing.**
-  - **The lite tiers spend zero tokens reasoning.** Asked for *Technology* readiness, `2.5-flash-lite` answered about revenue and product-market fit — the wrong dimension. Every 3.x model stayed on-topic. That is the leniency-bias objective visible in one sample.
-  - **Cost:** ~2.8× tokens and ~3× latency versus the old default. If free-tier quota bites, `gemini-3.5-flash-lite` is the escape hatch — still better than `2.5-flash-lite` on every measured axis, but no reasoning.
-  - `gemini-embedding-2` (8192 input) and `gemini-embedding-001` (2048) are both reachable for the §0 RAG work.
+  - **No Pro-tier model is reachable on the free key** (429 at 20s spacing = tier exclusion). Any plan putting Pro on scoring requires paid billing.
+  - **The lite tiers spend zero tokens reasoning.** Asked for *Technology* readiness, `2.5-flash-lite` answered about revenue and product-market fit — the wrong dimension.
+  - **Cost:** ~2.8× tokens and ~3× latency vs the old default.
 
-  **Verified live:** RNA generation for AgroLink returned 6 rows in 14s, citing specifics from the capsule proposal ("18 cooperative interviews", "1 provisional buyer agreement", "SMS fallback") rather than generic filler. `ai_generation_runs` id=5 records `model: gemini-3.6-flash` with the full resolved config.
-  **Instrumentation gap closed (2026-07-27).** Three calls previously read `AiConfigService.defaults` directly and opened **no** `ai_generation_runs` row — `getCapsuleProposalInfo`, `getCapsuleProposalInfoFromImage`, and `generateStartupAnalysisSummary`. They now take an `AiRunContext` like every other model call, under two new operations:
-  - `capsule_extract` — `POST /startups/parse-capsule-proposal`, opened with a null `startupId` because parsing happens while the application is still being filled in. Covers **Objective 3's Gemini Vision handwriting path**, which was entirely invisible to the comparison study before.
-  - `analysis_summary` — `POST /startups/apply`, also opened with a null `startupId` and then backfilled via `AiRunService.attribute()` once `create()` has persisted the startup.
-  Both now honour `X-Ai-Pipeline-Config` (they silently ignored it before) and contribute their token spend to the run. The vision call and its Tesseract-text fallback accumulate into **one** run rather than being counted separately.
-  **Verified live:** `capsule_extract` recorded `model: gemini-3.6-flash`, 26.5s, 1605 prompt / 251 completion tokens on a 1400×1000 image; `analysis_summary` recorded 9.1s, 324/106, attributed to the startup it created.
-  ### Measured old vs new (2026-07-27) — and the premise of this section was wrong
-
-  Same input, same production grounding instruction, `temperature: 0`, 3 repetitions, two documents (AgroLink = paper prototype and zero revenue; MediSync = 6 paying facilities and PHP 5k MRR). Only the model varied.
+  **Old-vs-new measurement (3 reps, two documents, only the model varied) — and it overturned this section's premise:**
 
   | | `gemini-2.5-flash-lite` | `gemini-3.6-flash` |
   |---|---|---|
   | AgroLink (early) mean level | 1.67 | 2.33 |
   | MediSync (mid) mean level | 1.50 | 4.61 |
-  | **Gap between them** | **−0.17** | **+2.28** |
-  | Distinct levels used across both | 3 | 5 |
-  | Invented values for absent fields | 0 / 9 | 0 / 9 |
-  | Recalled facts present in the doc | 9 / 9 | 9 / 9 |
-  | Total tokens (6 calls) | 3,135 | 14,978 |
+  | **Gap** | **−0.17** | **+2.28** |
+  | Invented values for absent fields | 0/9 | 0/9 |
 
-  **1. The old model could not tell the two startups apart — it ranked them backwards.** A gap of −0.17 means the mid-stage venture with paying customers scored *marginally lower* than the one with a paper prototype. Per-dimension, **5 of 6 dimensions returned identical scores for both companies**. Every dimension moves the right way on 3.6-flash (Technology 3→6, Investment 1→4, Regulatory 1→3).
+  1. **The old model ranked the two startups backwards** — 5 of 6 dimensions returned identical scores for both.
+  2. **"The lite tier is sycophantic / lenient" is not supported.** It was floor-bound and blind, collapsing everything to 1–3. The real defect was **differentiation (Objective 2)**, not leniency (Objective 4).
+  3. **That reframes 2b** — weighting near-identical inputs could never have produced differentiation. The model was the binding constraint, not the formula.
+  4. **Grounding did not improve** — both models refused all 9 absent fields and recalled all 9 present ones, so **no Objective 1 gain can be attributed to the model change**.
 
-  **2. This section's stated premise — that the lite tier is "most sycophantic", most prone to leniency — is not supported.** The lite model was not lenient; it was floor-bound and blind, collapsing everything to 1–3 regardless of evidence. The real defect was **differentiation, i.e. Objective 2**, not leniency (Objective 4).
+  **Instrumentation gap closed:** `capsule_extract` (covering Objective 3's Gemini Vision handwriting path, previously invisible to the study) and `analysis_summary` now open `ai_generation_runs` rows and honour `X-Ai-Pipeline-Config`.
+  **Per-task tiering is deferred, not dropped** — there is no seam between scoring and generation today, and with Pro unreachable there is nothing stronger to point a seam at.
+  **Limits:** N is small (3 reps × 6 dimensions × 2 documents), there is no expert ground truth so the trustworthy signal is the *gap and its direction*, and 1 of 3 AgroLink reps produced unparseable output.
 
-  **3. That reframes Objective 2b.** `TierConfig.weights` being unread by the scorer is still a real bug, but fixing weighted scoring alone would **not** have produced differentiation: the per-dimension inputs being weighted were nearly identical for both startups. The model was the binding constraint, not the formula.
+- [ ] ❓ **SCOPE · S · Switch structured calls to `responseSchema`** — still unaddressed
+  Use `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`). Directly satisfies SRS §2.2's "all AI-generated structured outputs are validated against expected schemas."
+  *(`temperature: 0` is done — `AI_TEMPERATURE` defaults to `0` and applies at every call site. **This was a real behaviour change, not a no-op:** the one call site that set it passed it at the *top level*, where the SDK dropped it, so every Gemini call previously ran at the API default. Baseline-arm results gathered before this are not sampling-comparable with results after.)*
 
-  **4. The model change did *not* measurably improve grounding.** Both models refused all 9 absent fields and recalled all 9 present ones. `groundPrompt()` is doing that work, and this test found no headroom — so **Objective 1 gains cannot be attributed to the model upgrade**. A harder probe (longer documents, adversarial distractors) is needed to find where grounding actually breaks.
-
-  **Limits, stated honestly:** N is small (3 reps × 6 dimensions × 2 documents); there is no expert ground truth, so the reliable signal is the *gap and its direction*, not the absolute levels; the prompt mirrors production shape but is not `createBasePrompt` with RAG attached; and 1 of 3 AgroLink reps on 3.6-flash returned output that did not parse into levels (n=12 rather than 18 for that cell), which is a small robustness caveat.
-
-  **Still open — per-task tiering:** deferred, not dropped. There is no seam between scoring and generation today (both read `ctx.config.model`), and with Pro unreachable there is no stronger model to point a seam at. The measurement above also weakens the case for one: the large differentiation win is already banked on 3.6-flash, and no leniency problem was observed that a stronger model would fix.
-  Verify current model IDs against <https://ai.google.dev/gemini-api/docs/models> before wiring; the family moves fast — as this section demonstrates.
-  **Do at the same time:** switch structured calls to `responseMimeType: 'application/json'` + `responseSchema` instead of regex-stripping ```` ```json ```` fences (`extractJsonPayload`, `ai.service.ts:338`) — still unaddressed. That directly satisfies the SRS §2.2 criterion "all AI-generated structured outputs are validated against expected schemas." ~~Also pin `temperature: 0` on all scoring calls — only one call site sets it today (`:303`)~~ — **done**: `AI_TEMPERATURE` now defaults to `0` and is applied via `AiConfigService` across all call sites, satisfying SRS §2.3's reproducibility requirement. **Note this is a real behaviour change, not a no-op.** That one call site passed `temperature` at the *top level* of the request, where the SDK dropped it exactly as it dropped `maxOutputTokens` — so every Gemini call in this codebase previously ran at the API default temperature, never at `0`. Baseline-arm results gathered before this change are therefore not sampling-comparable with results gathered after it.
-
-- [ ] ❓ **SCOPE · M · Decide whether Gemini calls should have output caps at all, and pick values per call site**
-  **No call in `ai.service.ts` currently sends `maxOutputTokens`, and none ever effectively did.** Before the AI-config work, `callAiExpectJson` passed `maxOutputTokens: 1024` at the *top level* of the `@google/genai` request — but `GenerateContentParameters` only accepts `model`, `contents`, and `config`, so the SDK silently dropped it (an `as any` hid the type error). The other calls (`getCapsuleProposalInfo`, `getCapsuleProposalInfoFromImage`, `generateStartupAnalysisSummary`, and the four `refine*` methods) passed no cap at all. So every Gemini call in this codebase has always been uncapped.
-  **Why it is now explicitly absent:** moving sampling params into `config` (which was the point — it is what made `temperature` take effect) would have *newly enforced* those caps for the first time. That is a user-visible regression, not a no-op: `getCapsuleProposalInfo` extracts eight full prose fields from a whole document, and truncation at 1024 tokens makes `JSON.parse` throw at `startup/startup.service.ts:355`, whose catch at `:356` sets `parsedPayload = {}` — the founder gets a completely blank extraction review screen with only a `console.error` in the logs. The caps were therefore removed rather than moved, so default behaviour matches the base commit exactly.
-  **The open decision:** if the team *wants* caps (cost control, latency bounds, or forcing concise output), choose a value per call site from the actual prompt shape — the capsule extraction and image OCR paths need far more headroom than a three-sentence summary — and add a test per site that a realistic full-length response is not truncated. Do not reintroduce a single blanket number.
-  **Note if you do add caps:** Gemini 2.5 models bill and count *thinking* tokens against `maxOutputTokens`, so a cap sized to the visible JSON alone can truncate before the model emits any answer at all.
-  **Related under-count in the provenance data:** `ai_generation_runs.completion_tokens` sums only `candidatesTokenCount` (`accumulateTokenUsage`, `ai.service.ts:352`). `thoughtsTokenCount` is billed separately and is *not* included in that figure, so recorded output spend is a floor, not a total, on any thinking-enabled model. Fold it in before using these columns for a cost analysis.
+- [ ] ❓ **SCOPE · M · Decide whether Gemini calls should have output caps at all**
+  **No call in `ai.service.ts` sends `maxOutputTokens`, and none ever effectively did** — `callAiExpectJson` passed `1024` at the top level, where the SDK silently dropped it (an `as any` hid the type error); every other call passed nothing.
+  **Why it is now explicitly absent:** moving sampling params into `config` (which is what made `temperature` take effect) would have *newly enforced* those caps for the first time. That is a user-visible regression — `getCapsuleProposalInfo` extracts eight prose fields from a whole document, and truncation makes `JSON.parse` throw at `startup.service.ts:355`, whose catch sets `parsedPayload = {}`, so the founder gets a blank extraction screen with only a `console.error`.
+  **The decision:** if caps are wanted, choose a value **per call site** from the actual prompt shape and add a test per site that a realistic full-length response is not truncated. Do not reintroduce a blanket number. Note Gemini bills *thinking* tokens against `maxOutputTokens`, so a cap sized to the visible JSON can truncate before any answer is emitted.
+  **Related under-count:** `ai_generation_runs.completion_tokens` sums only `candidatesTokenCount`, so recorded output spend is a floor. Fold in `thoughtsTokenCount` before using these columns for cost analysis (see §4).
 
 - [ ] ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
-  The configured key starts with `AQ.Ab8RN6…`. Google AI Studio keys normally begin with `AIzaSy`. Confirm this is a valid AI Studio key (and not a Vertex/OAuth credential, which `@google/genai` would need different auth for) — a bad key here would make every AI feature fail at demo time.
+  The configured key starts with `AQ.Ab8RN6…`; AI Studio keys normally begin with `AIzaSy`. Confirm it is a valid AI Studio key and not a Vertex/OAuth credential, which `@google/genai` would need different auth for — a bad key makes every AI feature fail at demo time.
 
-- [ ] ❓ **SCOPE · S · Drop Docker, and give each developer a Neon branch instead**
-  `docker-compose.yml` only ever provided local Postgres, and `backend/.env` now points at Neon (`ep-still-salad-…aws.neon.tech`). **Neither the SRS nor the SDD mentions Docker anywhere** — there is no requirement to satisfy.
-  **Recommendation: don't adopt it.** Nothing in your remaining work is containerization-shaped (it's AI and scoring logic), Vercel/Render don't build from your compose file, and it's friction for a 5-person Windows team.
-  **But fix the real problem it masks:** `backend/src/main.ts:292` runs `updateSchema()` and seeds demo data **on every boot**, and all five of you now point at the *same* Neon database. Every `pnpm dev` mutates shared schema and re-inserts demo rows. Use **Neon branching** (one branch per developer, free tier supports it) so everyone gets an isolated database from the same provider. Combine with gating the auto-sync behind `NODE_ENV !== 'production'` (see §4).
-  **Then:** delete `docker-compose.yml` or mark it clearly unused, and correct `README.md` / `CLAUDE.md` / `PROJECT_OVERVIEW.md` §8, which all still describe the Docker path.
+- [ ] ❓ **SCOPE · S · Drop Docker, give each developer a Neon branch**
+  `docker-compose.yml` only ever provided local Postgres, and `backend/.env` points at Neon. **Neither the SRS nor the SDD mentions Docker** — there is no requirement to satisfy, nothing in the remaining work is containerization-shaped, and Vercel/Render don't build from a compose file.
+  **But fix the real problem it masks:** `main.ts:292` runs `updateSchema()` and seeds demo data on every boot, and everyone points at the *same* Neon database — so every `pnpm dev` mutates shared schema. Use **Neon branching** (one branch per developer, free tier supports it), combined with gating the auto-sync behind `NODE_ENV !== 'production'` (§4).
+  **Then:** delete `docker-compose.yml` or mark it unused, and correct `README.md` / `CLAUDE.md` / `PROJECT_OVERVIEW.md` §8.
 
 ---
 
@@ -593,9 +520,8 @@ Neither the SRS nor the SDD names a storage vendor, a specific model version, or
 Checked and confirmed fine, so you don't re-investigate:
 
 - ✅ `.env` files are **not** tracked in git — only `.env.example` (verified via `git ls-files`).
-- ✅ `backend.zip` / `frontend.zip` are untracked (though they should still be gitignored).
 - ✅ Admin module guard coverage is correct — class-level `@UseGuards(JwtGuard, AdminGuard)` on all 18 routes.
 - ✅ Assessment module guards are correct — class-level `JwtGuard` + method-level `AdminGuard` on create/update/delete.
-- ✅ Password handling is sound — argon2 hashing, `@Property({hidden: true})` on `User.hash`, and old-password verification on change.
+- ✅ Password handling is sound — argon2 hashing, `@Property({hidden: true})` on `User.hash`, old-password verification on change.
 - ✅ Cookies are `httpOnly` + `sameSite: 'strict'` + `secure` outside dev.
 - ✅ The global `ValidationPipe` uses `whitelist: true`, so DTOs strip unknown properties.

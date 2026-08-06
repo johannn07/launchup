@@ -52,6 +52,19 @@ Do not include a `Co-Authored-By` line in commit messages.
 - If a comment or doc line doesn't add information a reader wouldn't already have,
   cut it.
 
+## Documentation maintenance
+- Keep `SESSION_NOTES.md` and `TODO_CHECKLIST.md` concise — no restated context, no
+  verbose process narration.
+- `SESSION_NOTES.md`: compress sessions older than the 3 most recent into a short
+  paragraph each (outcome only, not process). Never delete unresolved bugs, open
+  decisions, or citable measurement results — compress them instead.
+- `TODO_CHECKLIST.md`: maintain a status summary table (Objective | Status) directly
+  below "Recently completed" and above "Capstone objectives", covering Capstone
+  objectives, Security issues, Broken functionality, Incomplete features, Cleanup,
+  and Infrastructure decisions. Keep it in sync with the detailed sections below it.
+- Do this trimming/table-update proactively at the end of sessions where these files
+  were touched, not just when asked.
+
 ## Architecture
 
 ### Backend (NestJS + MikroORM)
