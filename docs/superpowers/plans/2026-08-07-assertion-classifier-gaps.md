@@ -198,7 +198,7 @@ In `backend/measurement/lib/assertions.js`, replace `RECOMMENDATION` with:
  * `asserted`.
  */
 const RECOMMENDATION =
-  /\b(?:should|must|need(?:s|ed|ing)?|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able)|require(?:s|d|ment|ments)?)\b/i;
+  /\b(?:should|must|need(?:s|ed|ing)?|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able))\b/i;
 ```
 
 - [ ] **Step 4: Run the full measurement suite**
