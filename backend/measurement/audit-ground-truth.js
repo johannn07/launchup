@@ -15,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const { levelPlacement } = require('./lib/metrics');
+const { HARD_ABSENCES, verifyAbsences } = require(path.join(__dirname, 'lib/hard-absences.js'));
 
 const DIMENSIONS = ['Technology', 'Market', 'Acceptance', 'Organizational', 'Regulatory', 'Investment'];
 
@@ -88,45 +89,6 @@ const DERIVED = {
   },
 };
 
-/**
- * Reference-free check, and the only part of this file that can support a claim
- * about which arm is better.
- *
- * Every reference here — seeded, derived, or hand-adjudicated — is contestable,
- * and a model-set one is worse than contestable: an adjudicator reading the
- * document with the full rubric ladder in front of it is approximately the
- * deviation-deterministic condition, so its agreement with that arm proves
- * nothing. This check needs no reference. Some rungs require an artifact class
- * the document never mentions at all, so any placement at or above them asserts
- * evidence that does not exist, whatever the true level is.
- *
- * `ceiling` is deliberately generous — one rung above what the document
- * supports — so the finding does not depend on a close reading. `absentTokens`
- * is asserted against the document at run time, not trusted.
- *
- * Directional on purpose: it catches over-placement into absent evidence and is
- * silent on under-placement.
- */
-const HARD_ABSENCES = {
-  Organizational: {
-    ceiling: 2,
-    requires: 'ORL 3+ requires a non-founder contributor under contract; ORL 4+ adds written role definitions and a first full-time hire beyond the founders.',
-    // "full-time" is excluded: AgroLink uses it of its founders, not of a hire.
-    absentTokens: ['employee', 'hire', 'hired', 'staff', 'contractor', 'advisor', 'consultant', 'org chart', 'board'],
-  },
-  Regulatory: {
-    ceiling: 2,
-    requires: 'RRL 3+ requires external counsel engaged and a preliminary opinion received.',
-    // "trademark"/"IPOPHL" are present in both documents but are IP, not product regulation.
-    absentTokens: ['counsel', 'lawyer', 'legal', 'regulator', 'regulatory', 'compliance', 'license', 'licence', 'permit', 'certification', 'accredit'],
-  },
-  Investment: {
-    ceiling: 2,
-    requires: 'IRL 3+ requires a written funding plan with a stated target raise and use of funds.',
-    absentTokens: ['funding', 'investor', 'invest', 'raise', 'round', 'seed', 'grant', 'angel', 'term sheet', 'SAFE', 'capital', 'valuation', 'burn', 'runway'],
-  },
-};
-
 /** Cells where the seeded level's own rubric text is contradicted by the document. */
 const CONTRADICTIONS = [
   ['MediSync Cebu', 'Market', 'MRL 4: "no prospect has yet indicated a specific willingness to pay"', 'PHP 5,000 monthly recurring revenue'],
@@ -146,21 +108,6 @@ function loadDocuments() {
     out[name] = m[1];
   }
   return out;
-}
-
-/** Fails loudly if a token claimed absent actually appears — assert, don't trust. */
-function verifyAbsences(docs) {
-  const violations = [];
-  for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {
-    for (const [startup, doc] of Object.entries(docs)) {
-      const text = doc.toLowerCase();
-      for (const token of spec.absentTokens) {
-        if (text.includes(token.toLowerCase())) violations.push(`${startup}/${dim}: "${token}" is present`);
-      }
-    }
-  }
-  if (violations.length) throw new Error(`HARD_ABSENCES is wrong:\n  ${violations.join('\n  ')}`);
-  return true;
 }
 
 /** Placements at or above a rung whose required evidence the document lacks. */
