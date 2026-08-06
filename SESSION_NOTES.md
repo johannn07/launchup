@@ -1024,3 +1024,82 @@ The durable fix is not the corrected numbers, it is that the load-bearing claim 
 ### Operational note — the scheduled task did not work
 
 A one-shot scheduled task was created for 15:07 PH (quota reset). It **fired** (`lastRunAt` recorded) and started its MCP servers, but never ran the command: no results file, no commit, no `measure-grounding` process. The run was done manually instead, after confirming no measurement process was alive and no quota had been spent — a live run racing a scheduled one would have double-spent a 20/day cap. **Do not assume a fired scheduled task did its work; check for the artifact.**
+
+---
+
+## Supplied-level fabrication probe — built, and it caught the thing it was built for — 2026-08-06
+
+Branch `measure/supplied-level-fabrication`, 22 commits off `master` at `41afeb4`, **nothing pushed**. Spec `docs/superpowers/specs/2026-08-06-supplied-level-fabrication-probe-design.md`, plan `docs/superpowers/plans/2026-08-06-supplied-level-fabrication-probe.md`, executed as 7 subagent tasks with an independent review after each, then a whole-branch review.
+
+Closes the gap the 2026-08-05 close-out named as the highest-value measurement left: every grounding number to date is the **levels** probe, where the model *infers* the level. Production does the opposite — mentors set levels and the RNA path consumes them.
+
+### Why it needed a manipulation
+
+The fabrication was observed while the seeded levels were still wrong (MediSync IRL 3). The 2026-08-05 correction moved MediSync to IRL 1, so retrieval now pulls IRL 1/2 and the funding-plan text never enters the prompt. **The fix removed the trigger without touching the vulnerability.** An observational re-run measures 0 and proves nothing.
+
+So `--level-condition=truth|inflated|both` runs the RNA probe once per condition, inflating O/R/I while T/M/A stay at truth as a within-call control. `lib/assertions.js` scores each RNA per (call, dimension) for clauses that *assert* an absent artifact, separating that from correctly *recommending* it — at IRL 1, "draft a funding plan" is the RNA doing its job and "the venture has drafted a funding plan" is the defect.
+
+### Three design defects, none findable by testing
+
+All three were in the spec, not the implementation — the tests were written from the same mistaken model that produced the spec.
+
+1. **The classifier admitted bare copulas.** "Investor interest is growing" scored as a fabrication. That inverts the lower-bound property the whole claim rests on. Caught by a reviewer comparing the regex against the module's own stated guarantee.
+2. **`absentTokens` had `contractor` but not `contributor`** — the word ORL 3's own rubric uses. Organizational would have read 0 for the wrong reason, and 0 is the conclusion favourable to the corpus. Caught by the quota-free pre-flight, not by any unit test.
+3. **Inflating to 4 skipped the row the probe was about.** Retrieval pulls `(L, L+1)`, so 4 pulls rows 4-5 and IRL 3 — *"A funding plan has been drafted specifying a target raise amount"*, the literal source of the observed instance — lands in neither condition. Changed to **3**. Caught by the whole-branch review.
+
+A fourth, a real Critical: `--level-condition=inflated` let the **levels** probe run rubric-less under an *unchanged* fingerprint, so degraded calls would have pooled straight into the six collected levels files.
+
+### The result (`measurement/results/2026-08-06-supplied-level.json`, 16/16 calls, n=2)
+
+| arm | condition | asserted | mentioned | unclassified |
+|---|---|---|---|---|
+| baseline | truth | 0/12 | 2/12 | 1/12 |
+| baseline | inflated | **0/12** | 2/12 | 2/12 |
+| corpus | truth | 0/12 | 8/12 | 4/12 |
+| corpus | **inflated** | **2/12 (17%)** | 11/12 | 4/12 |
+
+**Only corpus+inflated fabricates. The wrong number alone produces nothing** — baseline is 0/12 under both conditions.
+
+Both flagged clauses weld a fabricated artifact to a true document fact, which is the insidious form:
+
+> "Currently at RRL 3, with **legal counsel engaged** and a trademark application pending with IPOPHL."
+> "Currently at IRL 3, with **a drafted funding plan** and PHP 5,000 in monthly recurring revenue achieved by February 2026."
+
+The second reproduces the 2026-08-05 instance almost verbatim.
+
+### Reading `flaggedClauses` by hand changed the finding
+
+**Two more genuine fabrications sat in `unclassified`**, both missed for the same reasons — `exists` is not an assertion cue, and clause fragments lose their subject:
+
+> "A basic funding plan **exists** alongside PHP 5,000 MRR." (rep 1, Investment)
+> "…Joy Tabotabo) **alongside a first non-founder contributor**." (rep 0, Organizational)
+
+So the effect reproduced across **both** reps on Investment, and Organizational fabricated too. The measured 17% is a floor — the lower-bound property held, and the audit dump is the only reason it is visible. One flagged clause is a false positive (a recommendation fragment where `maintain` tripped a cue); it does not change the count.
+
+### The level-isolating cell, which is the strongest part
+
+Truth pulls ORL 2+3, inflated pulls ORL 3+4 — so **ORL 3 reaches the model under both conditions**. Same rubric text, only the supplied level differs:
+
+| supplied | output |
+|---|---|
+| ORL 2 | "**Needs:** Advance to ORL 3 by **engaging** the first non-founder contributor…" |
+| ORL 3 | "…alongside a **first non-founder contributor**." |
+
+Advice under truth, asserted fact under inflation, with the text held constant. **That rules out "the corpus added new text" as the explanation.** Investment and Regulatory confound level with text; Organizational separates them. Recorded in the spec *before* the run, so it is not a post-hoc reading.
+
+### Limits to quote
+
+- n=2 reps, 16 calls. **Every fabrication came from MediSync**; AgroLink produced none.
+- `unclassified` is 4/12 on corpus arms. The design says do not quote a rate when that column is large — the hand-read is what makes this reportable.
+- The Organizational finding is qualitative, from reading clauses, not a measured rate.
+- One rung above the ceiling, not two, so a null would have supported "a one-rung supplied-level error did not induce fabrication", not the unqualified claim. The interpretation table was rescoped for this **before** the run.
+
+### Deliberately not done
+
+**The classifier was not patched and the data not re-scored.** That is the post-hoc move, and the fingerprint guard enforces it mechanically: editing the classifier changes the `assertion*` hash, so re-scored results correctly refuse to pool with this run. A fixed classifier means a fresh run, as a separate experiment.
+
+### Process notes worth keeping
+
+- **The 15 pinned fingerprints held** across 22 commits, verified byte-identical by a focused test run rather than by claim. The eight collected result files still pool.
+- **A subagent reported RED-phase test figures that were arithmetically impossible** (131 + 8 = 132). The code was fine; the transcript was reconstructed from memory. Re-derived by actually reverting the implementation. Worth assuming reconstruction whenever reported numbers do not reconcile.
+- **The 2026-08-05 scheduled-task lesson held.** The run was launched in-session, not scheduled, after confirming no measurement process was alive.

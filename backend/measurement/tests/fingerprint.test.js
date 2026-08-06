@@ -139,3 +139,41 @@ test('editing a corpus row\'s keyTerms moves the fingerprint even though the row
   assert.notEqual(a['levels|deviation-deterministic'], b['levels|deviation-deterministic']);
   assert.notEqual(a['rna|deviation-deterministic'], b['rna|deviation-deterministic']);
 });
+
+// Pinned literally. New probes may ADD keys; they may never change an existing
+// one. A changed hash here means already-collected runs in measurement/results/
+// have been orphaned — which is sometimes correct (the 2026-08-05 level
+// correction did it deliberately) but must never happen as a side effect.
+test('adding the assertion probe leaves all 15 existing fingerprints byte-identical', () => {
+  const fps = require(path.resolve(__dirname, '../measure-grounding.js')).currentFingerprints();
+  const EXPECTED = {
+    'levels|baseline': 'f37240d520f1',
+    'rna|baseline': 'c989157dd47c',
+    'fabrication|baseline': '5c3658a9d8a0',
+    'levels|sdd-semantic': '685aaca78813',
+    'rna|sdd-semantic': 'e493360bc91d',
+    'fabrication|sdd-semantic': 'ad0cadacf33b',
+    'levels|deviation-deterministic': '068c08908b27',
+    'rna|deviation-deterministic': '0496862854ed',
+    'fabrication|deviation-deterministic': '2cea25747e77',
+    'levels|deviation-titles': '0334a04515c0',
+    'rna|deviation-titles': '0496862854ed',
+    'fabrication|deviation-titles': '2cea25747e77',
+    'levels|deviation-bare': '28a2e7c629fe',
+    'rna|deviation-bare': '0496862854ed',
+    'fabrication|deviation-bare': '2cea25747e77',
+  };
+  for (const [key, value] of Object.entries(EXPECTED)) {
+    assert.equal(fps[key], value, `${key} changed — collected data would stop pooling`);
+  }
+});
+
+test('the assertion probe adds two keys per arm', () => {
+  const fps = require(path.resolve(__dirname, '../measure-grounding.js')).currentFingerprints();
+  assert.ok(fps['assertion|baseline'], 'truth-condition key missing');
+  assert.ok(fps['assertion-inflated|baseline'], 'inflated-condition key missing');
+  assert.notEqual(
+    fps['assertion|baseline'], fps['assertion-inflated|baseline'],
+    'the two conditions must never pool with each other',
+  );
+});

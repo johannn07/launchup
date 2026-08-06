@@ -1,0 +1,1034 @@
+{
+  "generatedAt": "2026-08-06T09:49:18.719Z",
+  "genModel": "gemini-3.6-flash",
+  "embedModel": "gemini-embedding-2",
+  "reps": 2,
+  "corpusRows": 54,
+  "floor": 0.78,
+  "fingerprints": {
+    "levels|baseline": "f37240d520f1",
+    "rna|baseline": "c989157dd47c",
+    "fabrication|baseline": "5c3658a9d8a0",
+    "assertion|baseline": "4c1429815dc7",
+    "assertion-inflated|baseline": "e7909c42d7d7",
+    "levels|sdd-semantic": "685aaca78813",
+    "rna|sdd-semantic": "e493360bc91d",
+    "fabrication|sdd-semantic": "ad0cadacf33b",
+    "assertion|sdd-semantic": "e3a9d53a1c87",
+    "assertion-inflated|sdd-semantic": "f813c2d42558",
+    "levels|deviation-deterministic": "068c08908b27",
+    "rna|deviation-deterministic": "0496862854ed",
+    "fabrication|deviation-deterministic": "2cea25747e77",
+    "assertion|deviation-deterministic": "594bfe2211ae",
+    "assertion-inflated|deviation-deterministic": "c8a1b8cf4ec8",
+    "levels|deviation-titles": "0334a04515c0",
+    "rna|deviation-titles": "0496862854ed",
+    "fabrication|deviation-titles": "2cea25747e77",
+    "assertion|deviation-titles": "594bfe2211ae",
+    "assertion-inflated|deviation-titles": "c8a1b8cf4ec8",
+    "levels|deviation-bare": "28a2e7c629fe",
+    "rna|deviation-bare": "0496862854ed",
+    "fabrication|deviation-bare": "2cea25747e77",
+    "assertion|deviation-bare": "594bfe2211ae",
+    "assertion-inflated|deviation-bare": "c8a1b8cf4ec8"
+  },
+  "results": {
+    "baseline": {
+      "startups": {
+        "AgroLink PH": {
+          "retrieved": [],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "At TRL 2, the mobile-first platform with SMS fallback has tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025. Needs transition from paper prototype to software development, platform implementation, and technical testing.",
+                "Market": "At MRL 3, the target market includes roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. Field interviews were conducted with 18 cooperatives in June 2025, and a provisional agreement was secured with 1 buyer in January 2026. Needs to convert buyer interest into formal agreements and broaden market penetration.",
+                "Acceptance": "At ARL 3, initial feedback was gathered through interviews with 18 cooperatives in June 2025 and paper prototype testing with 3 cooperatives in September 2025. Needs wider user acceptance testing with cooperative officers and institutional buyers using a working platform.",
+                "Organizational": "At ORL 2, two founders—Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer)—committed full-time in January 2026. Needs organizational development, governance structures, and additional personnel as operations scale.",
+                "Regulatory": "At RRL 1, no patents are filed and the 'AgroLink PH' wordmark is not registered with IPOPHL. Needs registration of the wordmark with IPOPHL and assessment of regulatory/legal compliance for operating an agricultural market platform.",
+                "Investment": "At IRL 1, the venture has no revenue to date, though it holds a provisional agreement with one buyer as of January 2026. Needs a defined business model, revenue generation, and financial plan to attract investment."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Current Status (TRL 2): Concept formulated for a mobile-first platform with SMS fallback to match cooperative harvest volumes with buyer demand. Tested a lot-aggregation flow paper prototype with 3 cooperatives in 2025-09. Needs: Move from paper prototypes to building and testing a working digital MVP and SMS backend led by backend engineer Ana Beltran.",
+                "Market": "Current Status (MRL 3): Target market defined as ~400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. Secured a provisional agreement with 1 buyer in 2026-01. Needs: Expand buyer engagement beyond the single provisional agreement and validate commercial demand across target cooperatives.",
+                "Acceptance": "Current Status (ARL 3): Completed field interviews with 18 cooperatives in 2025-06 and paper prototype testing with 3 cooperatives in 2025-09. Needs: Evaluate cooperative officer adoption and user acceptance using an actual functional mobile/SMS interface.",
+                "Organizational": "Current Status (ORL 2): Two founders committed full-time in 2026-01 (Rafael Domingo with 6 years agricultural extension experience and Ana Beltran with 4 years backend engineering experience). Needs: Formalize operational workflows and team structure to support platform rollout and onboarding.",
+                "Regulatory": "Current Status (RRL 1): No patents filed, and the 'AgroLink PH' wordmark is not registered with IPOPHL. Needs: File for wordmark registration with IPOPHL and assess regulatory and legal compliance obligations for agricultural market matching.",
+                "Investment": "Current Status (IRL 1): No revenue generated to date. Needs: Formulate a clear financial model, commercial pricing strategy, and investment pitch to secure initial funding."
+              }
+            }
+          ],
+          "levelCalls": [],
+          "hallucCalls": [],
+          "assertionTruthCalls": [
+            {
+              "byDim": {
+                "Technology": "At TRL 2, the mobile-first platform with SMS fallback has tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025. Needs transition from paper prototype to software development, platform implementation, and technical testing.",
+                "Market": "At MRL 3, the target market includes roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. Field interviews were conducted with 18 cooperatives in June 2025, and a provisional agreement was secured with 1 buyer in January 2026. Needs to convert buyer interest into formal agreements and broaden market penetration.",
+                "Acceptance": "At ARL 3, initial feedback was gathered through interviews with 18 cooperatives in June 2025 and paper prototype testing with 3 cooperatives in September 2025. Needs wider user acceptance testing with cooperative officers and institutional buyers using a working platform.",
+                "Organizational": "At ORL 2, two founders—Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer)—committed full-time in January 2026. Needs organizational development, governance structures, and additional personnel as operations scale.",
+                "Regulatory": "At RRL 1, no patents are filed and the 'AgroLink PH' wordmark is not registered with IPOPHL. Needs registration of the wordmark with IPOPHL and assessment of regulatory/legal compliance for operating an agricultural market platform.",
+                "Investment": "At IRL 1, the venture has no revenue to date, though it holds a provisional agreement with one buyer as of January 2026. Needs a defined business model, revenue generation, and financial plan to attract investment."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Current Status (TRL 2): Concept formulated for a mobile-first platform with SMS fallback to match cooperative harvest volumes with buyer demand. Tested a lot-aggregation flow paper prototype with 3 cooperatives in 2025-09. Needs: Move from paper prototypes to building and testing a working digital MVP and SMS backend led by backend engineer Ana Beltran.",
+                "Market": "Current Status (MRL 3): Target market defined as ~400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. Secured a provisional agreement with 1 buyer in 2026-01. Needs: Expand buyer engagement beyond the single provisional agreement and validate commercial demand across target cooperatives.",
+                "Acceptance": "Current Status (ARL 3): Completed field interviews with 18 cooperatives in 2025-06 and paper prototype testing with 3 cooperatives in 2025-09. Needs: Evaluate cooperative officer adoption and user acceptance using an actual functional mobile/SMS interface.",
+                "Organizational": "Current Status (ORL 2): Two founders committed full-time in 2026-01 (Rafael Domingo with 6 years agricultural extension experience and Ana Beltran with 4 years backend engineering experience). Needs: Formalize operational workflows and team structure to support platform rollout and onboarding.",
+                "Regulatory": "Current Status (RRL 1): No patents filed, and the 'AgroLink PH' wordmark is not registered with IPOPHL. Needs: File for wordmark registration with IPOPHL and assess regulatory and legal compliance obligations for agricultural market matching.",
+                "Investment": "Current Status (IRL 1): No revenue generated to date. Needs: Formulate a clear financial model, commercial pricing strategy, and investment pitch to secure initial funding."
+              }
+            }
+          ],
+          "assertionInflatedCalls": [
+            {
+              "byDim": {
+                "Technology": "Current TRL is 2. Concept involves a mobile-first platform with SMS fallback for lot aggregation. A paper prototype was tested with 3 cooperatives in September 2025. Needs advancement from paper prototyping to actual software development, backend implementation, and functional system testing.",
+                "Market": "Current MRL is 3. Target market includes roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac. A provisional agreement was secured with one buyer in January 2026. Needs formalization of buyer contracts, market validation, and expansion of buyer demand on the platform.",
+                "Acceptance": "Current ARL is 3. Field interviews were conducted with 18 cooperatives in June 2025, followed by paper prototype testing with 3 cooperatives in September 2025. Needs user testing of digital and SMS workflows with cooperative officers and institutional buyers.",
+                "Organizational": "Current ORL is 3. Team has two full-time founders as of January 2026: Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer). Needs organizational structuring and operational planning to support platform rollout.",
+                "Regulatory": "Current RRL is 3. No patents have been filed and the 'AgroLink PH' wordmark is not registered with IPOPHL. Needs trademark registration with IPOPHL and evaluation of regulatory requirements for agricultural trading platforms.",
+                "Investment": "Current IRL is 3. The venture has generated no revenue to date, though two founders committed full-time in January 2026. Needs a defined financial model and funding strategy to support technology development and field operations."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 2. Concept defined for a mobile-first platform with SMS fallback, and a paper prototype of the lot-aggregation flow was tested with 3 cooperatives in September 2025. Needs actual functional software development and tech infrastructure beyond paper prototypes.",
+                "Market": "Currently at MRL 3. Target market identified as ~400 rice and vegetable cooperatives in Nueva Ecija and Tarlac, with a provisional agreement secured with 1 buyer in January 2026. Zero revenue generated to date. Needs to secure formal buyer contracts and demonstrate commercial traction.",
+                "Acceptance": "Currently at ARL 3. Field interviews conducted with 18 cooperatives in June 2025 and paper prototype tested with 3 cooperatives. Needs pilot deployment and user feedback from cooperative officers and institutional buyers to ensure sustained adoption.",
+                "Organizational": "Currently at ORL 3. Two founders (Rafael Domingo, 6 yrs ag extension; Ana Beltran, 4 yrs backend engineer) committed full-time in January 2026. Needs operational planning and team expansion to support platform rollout and partner onboarding.",
+                "Regulatory": "Currently at RRL 3. No patents filed and the 'AgroLink PH' wordmark is not registered with IPOPHL. Needs trademark registration with IPOPHL and compliance checks for agricultural digital transactions.",
+                "Investment": "Currently at IRL 3. Has generated zero revenue to date, though two founders are committed full-time as of January 2026. Needs initial funding or capital investment to transition from prototype to working platform development."
+              }
+            }
+          ]
+        },
+        "MediSync Cebu": {
+          "retrieved": [],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 6. The solution replaces paper-and-phone referrals by transmitting structured records with bed-availability, triage category, and clinical history. Tested in a 2025-02 pilot with 2 RHUs and 1 district hospital, expanding to 6 facilities by 2025-08. Needs full operational deployment and system integration across the remaining target facilities (44 RHUs, 8 district hospitals, and 3 tertiary referral centres in Cebu).",
+                "Market": "Currently at MRL 5. Target market comprises 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu. Achieved first paid facility subscriptions in 2025-08 and reached PHP 5,000 monthly recurring revenue by 2026-02. Needs to expand market adoption and secure subscription contracts across the rest of the target public health facilities in the province.",
+                "Acceptance": "Currently at ARL 5. Demonstrated initial user acceptance by replacing handwritten forms and phone calls across 6 pilot and paid facilities. Needs to drive broader acceptance among administrative and clinical staff across all 44 RHUs, 8 district hospitals, and 3 tertiary referral centres to ensure smooth workflow adoption.",
+                "Organizational": "Currently at ORL 2. The team has grown to 3 founders: Dr. Elena Reyes (9 years provincial public health), Marco Villanueva (7 years health IT), and Joy Tabotabo (5 years LGU administration). Needs to formalize organizational structures, workflows, and support capacity beyond the core founders to handle multi-facility scaling.",
+                "Regulatory": "Currently at RRL 1. Holds no patents, with a trademark application pending at IPOPHL. Needs to establish compliance with health data regulation and data privacy requirements for transmitting clinical histories across LGUs and hospitals, and secure pending trademark protection.",
+                "Investment": "Currently at IRL 1. Reached PHP 5,000 monthly recurring revenue from paid facility subscriptions by 2026-02. Needs to build financial models, investor pitch materials, and investment readiness plans to secure capital needed for scaling operations across Cebu province."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 6. Solution replaces paper-and-phone referrals by transmitting structured records with bed-availability status, triage category, and attached history. Piloted in Feb 2025 with 2 rural health units and 1 district hospital, expanding to 6 facilities by Aug 2025. Needs to scale technology to serve the full target of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Market": "Currently at MRL 5. Target market consists of 44 rural health units in Cebu province, 8 district hospitals, and 3 tertiary referral centres. Achieved first paid facility subscriptions in Aug 2025 and reached PHP 5,000 monthly recurring revenue by Feb 2026. Needs to further penetrate the target market across remaining public health facilities in Cebu.",
+                "Acceptance": "Currently at ARL 5. Demonstrates adoption by replacing paper-and-phone referrals with digital structured records. Successfully piloted with 2 rural health units and 1 district hospital in Feb 2025, expanding adoption to 6 facilities by Aug 2025. Needs to drive broader acceptance across provincial health facilities in Cebu.",
+                "Organizational": "Currently at ORL 2. Team expanded by Feb 2026 to 3 founders: Dr. Elena Reyes (9 years provincial public health experience), Marco Villanueva (7 years health IT experience), and Joy Tabotabo (5 years LGU administration experience). Needs to scale internal organizational capacity to support expanded operations.",
+                "Regulatory": "Currently at RRL 1. Holds no patents. A trademark application has been filed with IPOPHL and remains pending. Needs to advance regulatory strategy and intellectual property compliance as it expands across rural health units and provincial hospitals.",
+                "Investment": "Currently at IRL 1. Reached first paid facility subscriptions in Aug 2025 and PHP 5,000 monthly recurring revenue by Feb 2026. Needs to improve investment readiness to support scaling beyond its current revenue base and 6 facilities."
+              }
+            }
+          ],
+          "levelCalls": [],
+          "hallucCalls": [],
+          "assertionTruthCalls": [
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 6. The solution replaces paper-and-phone referrals by transmitting structured records with bed-availability, triage category, and clinical history. Tested in a 2025-02 pilot with 2 RHUs and 1 district hospital, expanding to 6 facilities by 2025-08. Needs full operational deployment and system integration across the remaining target facilities (44 RHUs, 8 district hospitals, and 3 tertiary referral centres in Cebu).",
+                "Market": "Currently at MRL 5. Target market comprises 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu. Achieved first paid facility subscriptions in 2025-08 and reached PHP 5,000 monthly recurring revenue by 2026-02. Needs to expand market adoption and secure subscription contracts across the rest of the target public health facilities in the province.",
+                "Acceptance": "Currently at ARL 5. Demonstrated initial user acceptance by replacing handwritten forms and phone calls across 6 pilot and paid facilities. Needs to drive broader acceptance among administrative and clinical staff across all 44 RHUs, 8 district hospitals, and 3 tertiary referral centres to ensure smooth workflow adoption.",
+                "Organizational": "Currently at ORL 2. The team has grown to 3 founders: Dr. Elena Reyes (9 years provincial public health), Marco Villanueva (7 years health IT), and Joy Tabotabo (5 years LGU administration). Needs to formalize organizational structures, workflows, and support capacity beyond the core founders to handle multi-facility scaling.",
+                "Regulatory": "Currently at RRL 1. Holds no patents, with a trademark application pending at IPOPHL. Needs to establish compliance with health data regulation and data privacy requirements for transmitting clinical histories across LGUs and hospitals, and secure pending trademark protection.",
+                "Investment": "Currently at IRL 1. Reached PHP 5,000 monthly recurring revenue from paid facility subscriptions by 2026-02. Needs to build financial models, investor pitch materials, and investment readiness plans to secure capital needed for scaling operations across Cebu province."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 6. Solution replaces paper-and-phone referrals by transmitting structured records with bed-availability status, triage category, and attached history. Piloted in Feb 2025 with 2 rural health units and 1 district hospital, expanding to 6 facilities by Aug 2025. Needs to scale technology to serve the full target of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Market": "Currently at MRL 5. Target market consists of 44 rural health units in Cebu province, 8 district hospitals, and 3 tertiary referral centres. Achieved first paid facility subscriptions in Aug 2025 and reached PHP 5,000 monthly recurring revenue by Feb 2026. Needs to further penetrate the target market across remaining public health facilities in Cebu.",
+                "Acceptance": "Currently at ARL 5. Demonstrates adoption by replacing paper-and-phone referrals with digital structured records. Successfully piloted with 2 rural health units and 1 district hospital in Feb 2025, expanding adoption to 6 facilities by Aug 2025. Needs to drive broader acceptance across provincial health facilities in Cebu.",
+                "Organizational": "Currently at ORL 2. Team expanded by Feb 2026 to 3 founders: Dr. Elena Reyes (9 years provincial public health experience), Marco Villanueva (7 years health IT experience), and Joy Tabotabo (5 years LGU administration experience). Needs to scale internal organizational capacity to support expanded operations.",
+                "Regulatory": "Currently at RRL 1. Holds no patents. A trademark application has been filed with IPOPHL and remains pending. Needs to advance regulatory strategy and intellectual property compliance as it expands across rural health units and provincial hospitals.",
+                "Investment": "Currently at IRL 1. Reached first paid facility subscriptions in Aug 2025 and PHP 5,000 monthly recurring revenue by Feb 2026. Needs to improve investment readiness to support scaling beyond its current revenue base and 6 facilities."
+              }
+            }
+          ],
+          "assertionInflatedCalls": [
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 6. The technology transmits structured referral records with bed availability, triage categories, and clinical history to replace paper/phone referrals, tested across 6 facilities as of August 2025 under Marco Villanueva (7 years health IT). Needs: Technical scaling from the initial 6 facilities to cover the full target network of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province.",
+                "Market": "Currently at MRL 5. Target market comprises 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu. Secured first paid facility subscriptions in August 2025, reaching PHP 5,000 monthly recurring revenue by February 2026. Needs: Expand paid subscription coverage across the remaining rural health units, district hospitals, and tertiary referral centres in Cebu province to grow revenue.",
+                "Acceptance": "Currently at ARL 5. Pilot adoption demonstrated in 2 rural health units and 1 district hospital (Feb 2025), expanding to 6 facilities (Aug 2025) with leadership from Dr. Elena Reyes (9 years public health) and Joy Tabotabo (5 years LGU admin). Needs: Drive broader clinical and administrative acceptance to transition remaining paper-and-phone referral workflows across Cebu health units and hospitals.",
+                "Organizational": "Currently at ORL 3. Team expanded to 3 founders by February 2026: Dr. Elena Reyes (public health), Marco Villanueva (health IT), and Joy Tabotabo (LGU admin). Needs: Strengthen internal operational structures, governance, and capacity to manage multi-facility deployment and service delivery across provincial healthcare facilities.",
+                "Regulatory": "Currently at RRL 3. IP status includes no patents and a pending trademark application filed with IPOPHL. System handles patient clinical history across public health units. Needs: Secure approval for the pending IPOPHL trademark and ensure compliance with health data and public sector regulatory requirements across LGU and provincial hospital systems.",
+                "Investment": "Currently at IRL 3. Commercial traction reached PHP 5,000 monthly recurring revenue by February 2026 via paid facility subscriptions. Needs: Build financial readiness and scale monthly recurring revenue to support capital and operational requirements for province-wide expansion."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "At TRL 6, MediSync Cebu replaces paper-and-phone referrals with structured digital records containing bed availability, triage categories, and clinical history. The technology was piloted in February 2025 with 2 rural health units and 1 district hospital, expanding to 6 facilities by August 2025. Technical development is led by Marco Villanueva, who has 7 years of health IT experience.",
+                "Market": "At MRL 5, the target market consists of 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu province. Commercial validation began in August 2025 with the first paid facility subscriptions, leading to PHP 5,000 in monthly recurring revenue by February 2026.",
+                "Acceptance": "At ARL 5, the solution addresses user pain points where handwritten forms and phone calls cause lost clinical history. Stakeholder acceptance demonstrated initial adoption during a February 2025 pilot with 2 rural health units and 1 district hospital, expanding to 6 facilities with paid subscriptions by August 2025.",
+                "Organizational": "At ORL 3, the team grew to 3 founders by February 2026. Organizational capabilities are driven by Dr. Elena Reyes (9 years in provincial public health), Marco Villanueva (7 years in health IT), and Joy Tabotabo (5 years in LGU administration).",
+                "Regulatory": "At RRL 3, the project holds no patents. Intellectual property protection currently consists of a trademark application filed with the Intellectual Property Office of the Philippines (IPOPHL), which remains pending.",
+                "Investment": "At IRL 3, financial viability is supported by achieving paid facility subscriptions in August 2025 and generating PHP 5,000 in monthly recurring revenue as of February 2026."
+              }
+            }
+          ]
+        }
+      },
+      "quotaHit": false
+    },
+    "sdd-semantic": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "deviation-deterministic": {
+      "startups": {
+        "AgroLink PH": {
+          "retrieved": [
+            {
+              "key": "trl-2",
+              "readinessType": "Technology",
+              "level": 2,
+              "title": "TRL 2 — Technology concept formulated",
+              "content": "Once basic principles are observed, practical applications can be speculated upon, but they remain analytic; no experimental proof or detailed analysis yet supports the invention. For a startup, this looks like a named product concept and an architecture sketch describing how the underlying principle would solve a specific problem, backed by rough back-of-envelope reasoning rather than any built code or lab result.",
+              "keyTerms": [
+                "concept formulated",
+                "speculative application",
+                "architecture sketch",
+                "no experimental proof"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "trl-3",
+              "readinessType": "Technology",
+              "level": 3,
+              "title": "TRL 3 — Experimental proof of concept",
+              "content": "Active research and development is initiated, including analytical and laboratory studies to physically validate the analytical predictions of separate elements of the technology. For a startup, this means a scoped experiment or a proof-of-concept script has produced a recorded result showing the core mechanism functions in isolation, even though no components have been integrated into a working prototype.",
+              "keyTerms": [
+                "proof of concept",
+                "analytical validation",
+                "isolated mechanism",
+                "recorded result",
+                "lab study"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "mrl-3",
+              "readinessType": "Market",
+              "level": 3,
+              "title": "MRL 3 — Informal problem interviews",
+              "content": "The team has held informal conversations with prospective buyers — problem interviews or casual conversations at events — surfacing anecdotal interest, but no prospect has made any commitment. Evidence is a set of interview notes or call logs showing a handful of conversations, with reactions recorded but no willingness-to-pay signal.",
+              "keyTerms": [
+                "problem interviews",
+                "anecdotal interest",
+                "informal conversations",
+                "no commitment"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "mrl-4",
+              "readinessType": "Market",
+              "level": 4,
+              "title": "MRL 4 — Structured customer discovery",
+              "content": "Customer discovery has been formalized: structured interviews have been run across multiple prospects using a consistent script, and a common pain point has been validated across that sample. Evidence is a discovery report summarizing interview themes across a named number of prospects, though no prospect has yet indicated a specific willingness to pay.",
+              "keyTerms": [
+                "customer discovery",
+                "structured interviews",
+                "validated pain point",
+                "discovery report"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-1",
+              "readinessType": "Regulatory",
+              "level": 1,
+              "title": "RRL 1 — No regulatory analysis",
+              "content": "No analysis has been done of which laws, regulations, or licensing regimes apply to the product or its operation; the regulatory landscape is entirely unknown to the team. Evidence at this level is the absence of any regulatory review — no memo, no advisor engaged, no list of candidate rules.",
+              "keyTerms": [
+                "no regulatory analysis",
+                "unknown requirements",
+                "unassessed compliance risk"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-2",
+              "readinessType": "Regulatory",
+              "level": 2,
+              "title": "RRL 2 — Regulatory domain identified",
+              "content": "The team has identified which regulatory domain and which oversight body plausibly governs the product — for example, data protection, financial services, or medical device rules — but has not obtained any formal legal assessment of what specifically applies. Evidence is an internal note naming the likely regulator or regulatory area, based on the team's own research rather than counsel.",
+              "keyTerms": [
+                "regulatory domain identified",
+                "oversight body",
+                "informal assessment"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-3",
+              "readinessType": "Acceptance",
+              "level": 3,
+              "title": "ARL 3 — Informal demo reactions",
+              "content": "The product concept has been shown to a handful of prospective users through informal demos, and their verbal reactions have been captured, but no behavior has actually been measured — reactions are qualitative impressions only. Evidence is a log of demo sessions with recorded verbal feedback from a small number of people.",
+              "keyTerms": [
+                "informal demo",
+                "qualitative reaction",
+                "verbal feedback",
+                "concept exposure"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-4",
+              "readinessType": "Acceptance",
+              "level": 4,
+              "title": "ARL 4 — Structured usability testing",
+              "content": "Structured usability or concept-testing sessions have been run with prospective users, collecting task-completion and satisfaction data, but every interaction has occurred under direct observation rather than independent use. Evidence is a usability test report with task-completion rates and satisfaction scores from a defined set of observed sessions.",
+              "keyTerms": [
+                "usability testing",
+                "task completion rate",
+                "satisfaction score",
+                "observed session"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-2",
+              "readinessType": "Organizational",
+              "level": 2,
+              "title": "ORL 2 — Informal division of responsibilities",
+              "content": "Founders have informally divided responsibilities between themselves based on skill or interest, but nothing is written down and decisions are still made ad hoc rather than through any agreed process. Evidence is, at most, an informal verbal understanding of who handles what, with no written role description or org chart.",
+              "keyTerms": [
+                "informal division of labor",
+                "ad hoc decisions",
+                "no written roles"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-3",
+              "readinessType": "Organizational",
+              "level": 3,
+              "title": "ORL 3 — First non-founder contributor",
+              "content": "A first contributor beyond the founders — a contractor, advisor, or part-time hire — has joined the venture, but there is still no formal governance structure or documented operating process guiding how work happens. Evidence is a contract or engagement letter for the first non-founder contributor, with no accompanying process documentation.",
+              "keyTerms": [
+                "first non-founder hire",
+                "no formal governance",
+                "contractor engagement"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "irl-1",
+              "readinessType": "Investment",
+              "level": 1,
+              "title": "IRL 1 — No funding plan, founder time only",
+              "content": "No funding plan exists at all: the venture is running on founder time and personal resources with no target raise amount, no use-of-funds outline, and no investor contact of any kind. Evidence is simply the absence of any funding document or investor conversation.",
+              "keyTerms": [
+                "no funding plan",
+                "founder time only",
+                "no investor contact"
+              ],
+              "provenance": "authored",
+              "citation": null
+            },
+            {
+              "key": "irl-2",
+              "readinessType": "Investment",
+              "level": 2,
+              "title": "IRL 2 — Informal funding hypothesis",
+              "content": "An informal funding hypothesis has been noted — a general sense that a seed round will eventually be needed — but no target amount, use-of-funds outline, or investor list has been drafted. Evidence is, at most, a passing mention in founder notes rather than any funding document.",
+              "keyTerms": [
+                "informal funding hypothesis",
+                "no target amount",
+                "no investor list"
+              ],
+              "provenance": "authored",
+              "citation": null
+            }
+          ],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "Current Level: TRL 2 (Technology concept formulated). AgroLink PH is designed as a mobile-first platform concept with SMS fallback for lot aggregation.\nNeed: Advance to TRL 3 by executing proof-of-concept tests and isolation scripts to validate the core aggregation and SMS fallback mechanics.",
+                "Market": "Current Level: MRL 3 (Informal problem interviews). Conducted field interviews with 18 cooperatives in June 2025 and reached a provisional agreement with one buyer in January 2026, addressing roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac.\nNeed: Conduct structured customer discovery across prospective buyers and cooperatives to systematically validate willingness to pay.",
+                "Acceptance": "Current Level: ARL 3 (Informal demo reactions). Tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025.\nNeed: Execute structured usability testing sessions with cooperative officers to collect task-completion rates and satisfaction metrics under direct observation.",
+                "Organizational": "Current Level: ORL 2 (Informal division of responsibilities). Founders Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer) committed full-time in January 2026.\nNeed: Document role descriptions, establish operational decision processes, and bring on a first non-founder contributor.",
+                "Regulatory": "Current Level: RRL 1 (No regulatory analysis). No patents have been filed, and the AgroLink PH wordmark is unregistered with IPOPHL.\nNeed: Identify applicable regulatory domains governing data privacy and agricultural trading, and initiate IP protection for the brand.",
+                "Investment": "Current Level: IRL 1 (No funding plan, founder time only). The venture has zero revenue to date and relies on founder time without an active funding strategy.\nNeed: Draft an initial funding hypothesis, outline target raise requirements, and build a use-of-funds roadmap."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 2 with a mobile-first product concept and a paper prototype tested with 3 cooperatives in 2025-09. To reach TRL 3, backend engineer Ana Beltran needs to develop and run proof-of-concept scripts to experimentally validate core mechanisms like lot aggregation and SMS fallback in isolation.",
+                "Market": "Currently at MRL 3 following 18 cooperative field interviews in 2025-06 and securing a provisional buyer agreement in 2026-01 (target: ~400 coops in Nueva Ecija and Tarlac). To advance to MRL 4, the team needs to formalize structured customer discovery across institutional buyers and document systematic pain-point validation.",
+                "Acceptance": "Currently at ARL 3 after capturing verbal reactions during paper prototype testing of the lot-aggregation flow with 3 cooperatives in 2025-09. To reach ARL 4, the team must run structured usability testing sessions with cooperative officers to measure task-completion rates and satisfaction scores under direct observation.",
+                "Organizational": "Currently at ORL 2 with founders Rafael Domingo and Ana Beltran committed full-time as of 2026-01 with an informal split of responsibilities. To reach ORL 3, the venture needs to engage its first non-founder contributor (such as a contractor or advisor) under a formal agreement.",
+                "Regulatory": "Currently at RRL 1 with no regulatory analysis conducted and the 'AgroLink PH' wordmark unregistered with IPOPHL. To reach RRL 2, the team must identify applicable regulatory domains, governing bodies, and trademark requirements for their platform.",
+                "Investment": "Currently at IRL 1 with zero revenue, no funding plan, running on founder time and personal resources. To progress to IRL 2, the team needs to outline an informal funding hypothesis detailing seed funding expectations, potential target raise amounts, and initial use of funds."
+              }
+            }
+          ],
+          "levelCalls": [],
+          "hallucCalls": [],
+          "assertionTruthCalls": [
+            {
+              "byDim": {
+                "Technology": "Current Level: TRL 2 (Technology concept formulated). AgroLink PH is designed as a mobile-first platform concept with SMS fallback for lot aggregation.\nNeed: Advance to TRL 3 by executing proof-of-concept tests and isolation scripts to validate the core aggregation and SMS fallback mechanics.",
+                "Market": "Current Level: MRL 3 (Informal problem interviews). Conducted field interviews with 18 cooperatives in June 2025 and reached a provisional agreement with one buyer in January 2026, addressing roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac.\nNeed: Conduct structured customer discovery across prospective buyers and cooperatives to systematically validate willingness to pay.",
+                "Acceptance": "Current Level: ARL 3 (Informal demo reactions). Tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025.\nNeed: Execute structured usability testing sessions with cooperative officers to collect task-completion rates and satisfaction metrics under direct observation.",
+                "Organizational": "Current Level: ORL 2 (Informal division of responsibilities). Founders Rafael Domingo (6 years agricultural extension officer) and Ana Beltran (4 years backend engineer) committed full-time in January 2026.\nNeed: Document role descriptions, establish operational decision processes, and bring on a first non-founder contributor.",
+                "Regulatory": "Current Level: RRL 1 (No regulatory analysis). No patents have been filed, and the AgroLink PH wordmark is unregistered with IPOPHL.\nNeed: Identify applicable regulatory domains governing data privacy and agricultural trading, and initiate IP protection for the brand.",
+                "Investment": "Current Level: IRL 1 (No funding plan, founder time only). The venture has zero revenue to date and relies on founder time without an active funding strategy.\nNeed: Draft an initial funding hypothesis, outline target raise requirements, and build a use-of-funds roadmap."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 2 with a mobile-first product concept and a paper prototype tested with 3 cooperatives in 2025-09. To reach TRL 3, backend engineer Ana Beltran needs to develop and run proof-of-concept scripts to experimentally validate core mechanisms like lot aggregation and SMS fallback in isolation.",
+                "Market": "Currently at MRL 3 following 18 cooperative field interviews in 2025-06 and securing a provisional buyer agreement in 2026-01 (target: ~400 coops in Nueva Ecija and Tarlac). To advance to MRL 4, the team needs to formalize structured customer discovery across institutional buyers and document systematic pain-point validation.",
+                "Acceptance": "Currently at ARL 3 after capturing verbal reactions during paper prototype testing of the lot-aggregation flow with 3 cooperatives in 2025-09. To reach ARL 4, the team must run structured usability testing sessions with cooperative officers to measure task-completion rates and satisfaction scores under direct observation.",
+                "Organizational": "Currently at ORL 2 with founders Rafael Domingo and Ana Beltran committed full-time as of 2026-01 with an informal split of responsibilities. To reach ORL 3, the venture needs to engage its first non-founder contributor (such as a contractor or advisor) under a formal agreement.",
+                "Regulatory": "Currently at RRL 1 with no regulatory analysis conducted and the 'AgroLink PH' wordmark unregistered with IPOPHL. To reach RRL 2, the team must identify applicable regulatory domains, governing bodies, and trademark requirements for their platform.",
+                "Investment": "Currently at IRL 1 with zero revenue, no funding plan, running on founder time and personal resources. To progress to IRL 2, the team needs to outline an informal funding hypothesis detailing seed funding expectations, potential target raise amounts, and initial use of funds."
+              }
+            }
+          ],
+          "assertionInflatedCalls": [
+            {
+              "byDim": {
+                "Technology": "AgroLink PH formulated its mobile-first concept with SMS fallback and tested a paper prototype of the lot-aggregation flow with 3 cooperatives in September 2025. To advance, backend engineer Ana Beltran and the team must move beyond paper prototypes to build and run proof-of-concept scripts that experimentally validate core isolation mechanisms of the platform.",
+                "Market": "The team conducted field interviews with 18 cooperatives in June 2025 and secured a provisional agreement with one institutional buyer in January 2026. To progress, the team must formalize customer discovery using structured scripts across target rice and vegetable cooperatives in Nueva Ecija and Tarlac to validate pain points and willingness-to-pay signals.",
+                "Acceptance": "Initial qualitative reactions were gathered during paper prototype testing with 3 cooperatives in September 2025. To advance, AgroLink PH needs to conduct structured usability testing sessions with cooperative officers under direct observation, collecting quantitative task-completion rates and satisfaction metrics for the lot-aggregation interface.",
+                "Organizational": "Founders Rafael Domingo and Ana Beltran committed full-time in January 2026. To advance organizational readiness, the venture needs to contract or hire its first non-founder contributor and document initial role definitions and operational processes, such as decision logs or onboarding guides.",
+                "Regulatory": "AgroLink PH has filed no patents and has not registered its wordmark with IPOPHL. To advance regulatory readiness, the team needs to engage external legal counsel for a preliminary opinion on regulatory requirements and draft a documented checklist of required permits and certifications.",
+                "Investment": "The startup has recorded no revenue to date. To build investment readiness, AgroLink PH must draft a formal funding plan outlining a target raise amount and use-of-funds breakdown, then initiate initial pitch meetings with prospective investors."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "The platform features a mobile-first design concept with SMS fallback, and a paper prototype of the lot-aggregation flow was tested in 2025-09. Led by backend engineer Ana Beltran, no functional software is built yet. To advance, the team needs to build and validate an experimental proof-of-concept script for the core aggregation mechanism.",
+                "Market": "Field interviews were conducted with 18 cooperatives in 2025-06, and a provisional agreement was reached with one buyer in 2026-01, targeting 400 cooperatives in Nueva Ecija and Tarlac. To progress, the team needs to formalize structured discovery reports across target cooperatives and establish validated willingness-to-pay signals.",
+                "Acceptance": "A paper prototype of the lot-aggregation flow was tested with 3 cooperatives in 2025-09 to gather early feedback. To advance acceptance, AgroLink PH needs to run structured usability testing sessions with cooperative officers to measure task-completion rates and user satisfaction under direct observation.",
+                "Organizational": "Founders Rafael Domingo (6 years extension officer) and Ana Beltran (4 years backend engineer) committed full-time in 2026-01. To advance organizational readiness, the startup needs to bring on its first non-founder contributor, draft formal role definitions, and document initial operating processes.",
+                "Regulatory": "No patents have been filed, and the AgroLink PH wordmark is not registered with IPOPHL. To move forward, the startup must engage legal counsel to receive a preliminary opinion on compliance requirements and register its wordmark with IPOPHL.",
+                "Investment": "The venture has recorded zero revenue to date. To advance investment readiness, AgroLink PH needs to create a written funding plan specifying target raise amounts and use of funds, prepare a pitch deck, and initiate preliminary investor discussions."
+              }
+            }
+          ]
+        },
+        "MediSync Cebu": {
+          "retrieved": [
+            {
+              "key": "trl-6",
+              "readinessType": "Technology",
+              "level": 6,
+              "title": "TRL 6 — Technology demonstrated in relevant environment",
+              "content": "A representative model or prototype system, well beyond the level tested for TRL 5, is tested in a relevant environment, going beyond laboratory testing to simulated operational conditions. A startup at this level has run a pilot with a small number of real customers in their own environment, delivering an end-to-end result and capturing structured feedback, though the deployment is limited in scale and duration.",
+              "keyTerms": [
+                "pilot deployment",
+                "representative prototype",
+                "end-to-end result",
+                "limited-scale trial",
+                "relevant environment"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "trl-7",
+              "readinessType": "Technology",
+              "level": 7,
+              "title": "TRL 7 — System prototype demonstration in operational environment",
+              "content": "A prototype implementation, near or at the scale of the planned operational system, is demonstrated in an actual operational environment. For a startup, this looks like a substantially complete version of the product running live for real customers under actual operating conditions, in a limited rollout rather than a full launch, with monitoring in place to capture how it behaves outside a controlled trial.",
+              "keyTerms": [
+                "operational environment",
+                "near-final prototype",
+                "limited rollout",
+                "live demonstration",
+                "production monitoring"
+              ],
+              "provenance": "standard",
+              "citation": "European Commission, Horizon Europe Work Programme, General Annex B — Technology Readiness Levels (TRL); consistent with ISO 16290:2013",
+              "sourceUrl": "https://ec.europa.eu/research/participants/data/ref/h2020/wp/2014_2015/annexes/h2020-wp1415-annex-g-trl_en.pdf"
+            },
+            {
+              "key": "mrl-5",
+              "readinessType": "Market",
+              "level": 5,
+              "title": "MRL 5 — Paid pilots with named customers",
+              "content": "Demand has moved from stated interest to a financial commitment: the startup has run repeated paid pilots with named customers, each willing to pay for a defined trial period. Evidence is signed pilot agreements or purchase orders from more than one named customer, together with pilot usage or outcome data collected during the engagement.",
+              "keyTerms": [
+                "paid pilot",
+                "named customers",
+                "signed agreement",
+                "purchase order",
+                "willingness to pay"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "mrl-6",
+              "readinessType": "Market",
+              "level": 6,
+              "title": "MRL 6 — Repeat sales beyond initial pilots",
+              "content": "The customer base has expanded beyond the original pilots — additional paying customers have been acquired using a pitch or process that is starting to repeat — but there is no scalable acquisition channel yet and each sale still depends heavily on founder involvement. Evidence is a growing list of paying customers with dates of acquisition, plus early renewal or expansion revenue from at least one pilot customer.",
+              "keyTerms": [
+                "repeat sales",
+                "customer acquisition",
+                "renewal revenue",
+                "founder-led sales"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-1",
+              "readinessType": "Regulatory",
+              "level": 1,
+              "title": "RRL 1 — No regulatory analysis",
+              "content": "No analysis has been done of which laws, regulations, or licensing regimes apply to the product or its operation; the regulatory landscape is entirely unknown to the team. Evidence at this level is the absence of any regulatory review — no memo, no advisor engaged, no list of candidate rules.",
+              "keyTerms": [
+                "no regulatory analysis",
+                "unknown requirements",
+                "unassessed compliance risk"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "rrl-2",
+              "readinessType": "Regulatory",
+              "level": 2,
+              "title": "RRL 2 — Regulatory domain identified",
+              "content": "The team has identified which regulatory domain and which oversight body plausibly governs the product — for example, data protection, financial services, or medical device rules — but has not obtained any formal legal assessment of what specifically applies. Evidence is an internal note naming the likely regulator or regulatory area, based on the team's own research rather than counsel.",
+              "keyTerms": [
+                "regulatory domain identified",
+                "oversight body",
+                "informal assessment"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-5",
+              "readinessType": "Acceptance",
+              "level": 5,
+              "title": "ARL 5 — Measured usage by trial users",
+              "content": "Real users beyond the founding team have used the product independently in a trial, and their usage has actually been measured rather than merely observed. Evidence is trial usage data — session logs, feature-usage counts, or completion events — captured from named non-founder users without the founders present.",
+              "keyTerms": [
+                "measured usage",
+                "non-founder users",
+                "independent trial",
+                "usage logs"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "arl-6",
+              "readinessType": "Acceptance",
+              "level": 6,
+              "title": "ARL 6 — Repeat usage and first referrals",
+              "content": "The trial cohort has expanded and users are returning for repeat sessions rather than trying the product once, with engagement metrics such as return rate now tracked, and the first organic, unprompted referrals from users to their peers have begun to appear. Evidence is a return-rate metric across a named trial cohort plus at least one documented organic referral.",
+              "keyTerms": [
+                "repeat usage",
+                "return rate",
+                "organic referral",
+                "expanded cohort"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-2",
+              "readinessType": "Organizational",
+              "level": 2,
+              "title": "ORL 2 — Informal division of responsibilities",
+              "content": "Founders have informally divided responsibilities between themselves based on skill or interest, but nothing is written down and decisions are still made ad hoc rather than through any agreed process. Evidence is, at most, an informal verbal understanding of who handles what, with no written role description or org chart.",
+              "keyTerms": [
+                "informal division of labor",
+                "ad hoc decisions",
+                "no written roles"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "orl-3",
+              "readinessType": "Organizational",
+              "level": 3,
+              "title": "ORL 3 — First non-founder contributor",
+              "content": "A first contributor beyond the founders — a contractor, advisor, or part-time hire — has joined the venture, but there is still no formal governance structure or documented operating process guiding how work happens. Evidence is a contract or engagement letter for the first non-founder contributor, with no accompanying process documentation.",
+              "keyTerms": [
+                "first non-founder hire",
+                "no formal governance",
+                "contractor engagement"
+              ],
+              "provenance": "framework-derived",
+              "citation": "Balanced Readiness Level assessment (BRLa), Technological Forecasting and Social Change (2021) — dimension framework; level descriptors authored against its stated criteria",
+              "sourceUrl": "https://www.sciencedirect.com/science/article/pii/S0040162521002869"
+            },
+            {
+              "key": "irl-1",
+              "readinessType": "Investment",
+              "level": 1,
+              "title": "IRL 1 — No funding plan, founder time only",
+              "content": "No funding plan exists at all: the venture is running on founder time and personal resources with no target raise amount, no use-of-funds outline, and no investor contact of any kind. Evidence is simply the absence of any funding document or investor conversation.",
+              "keyTerms": [
+                "no funding plan",
+                "founder time only",
+                "no investor contact"
+              ],
+              "provenance": "authored",
+              "citation": null
+            },
+            {
+              "key": "irl-2",
+              "readinessType": "Investment",
+              "level": 2,
+              "title": "IRL 2 — Informal funding hypothesis",
+              "content": "An informal funding hypothesis has been noted — a general sense that a seed round will eventually be needed — but no target amount, use-of-funds outline, or investor list has been drafted. Evidence is, at most, a passing mention in founder notes rather than any funding document.",
+              "keyTerms": [
+                "informal funding hypothesis",
+                "no target amount",
+                "no investor list"
+              ],
+              "provenance": "authored",
+              "citation": null
+            }
+          ],
+          "rnaCalls": [
+            {
+              "byDim": {
+                "Technology": "MediSync Cebu demonstrated its structured referral record platform in a relevant environment through a 2025-02 pilot with 2 rural health units and 1 district hospital, expanding to 6 facilities by 2025-08 (TRL 6). To reach TRL 7, the system must be demonstrated at full scale in live operational conditions across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary referral centres.",
+                "Market": "MediSync Cebu secured paid facility subscriptions across 6 facilities in 2025-08 and achieved PHP 5,000 monthly recurring revenue by 2026-02 (MRL 5). To advance to MRL 6, the venture needs repeat sales beyond initial pilots, acquiring additional paying facilities across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary centres, alongside subscription renewals.",
+                "Acceptance": "Trial users across pilot facilities use the system to transmit referral records, bed availability, triage categories, and clinical history (ARL 5). To advance to ARL 6, MediSync Cebu must measure return rates across a defined cohort of healthcare users and document organic, unprompted referrals from facility staff to peer institutions.",
+                "Organizational": "The team has 3 founders—Dr. Elena Reyes, Marco Villanueva, and Joy Tabotabo—who informally divide responsibilities (ORL 2). To progress to ORL 3, MediSync Cebu must engage its first non-founder contributor, such as a contractor, advisor, or part-time hire, to support provincial deployment.",
+                "Regulatory": "No regulatory analysis has been conducted regarding laws or licensing for transmitting patient clinical histories across health facilities (RRL 1). To reach RRL 2, the team must perform initial research to identify the applicable regulatory domains and governing bodies overseeing healthcare data and systems in the Philippines.",
+                "Investment": "The venture operates solely on founder time and personal resources, generating PHP 5,000 MRR without a funding plan or investor outreach (IRL 1). To reach IRL 2, MediSync Cebu needs to formulate an informal funding hypothesis outlining target capital requirements and potential use of funds to support system expansion."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Current Level: TRL 6. MediSync Cebu demonstrated its referral record technology in pilots with 2 rural health units and 1 district hospital in Feb 2025, expanding to 6 facilities by Aug 2025. Needs: Advance to TRL 7 by demonstrating a near full-scale prototype system live in an operational environment across more of the target market (44 rural health units, 8 district hospitals, and 3 tertiary referral centres).",
+                "Market": "Current Level: MRL 5. Converted initial pilot sites to paid facility subscriptions in Aug 2025, reaching PHP 5,000 MRR by Feb 2026. Needs: Advance to MRL 6 by acquiring additional paying facilities beyond the initial cohort across Cebu province and achieving early subscription renewals.",
+                "Acceptance": "Current Level: ARL 5. Measured usage captured from trial users in participating provincial facilities replacing paper-and-phone referrals. Needs: Advance to ARL 6 by tracking return rates, demonstrating repeat ongoing usage by healthcare workers, and documenting the first unprompted organic referrals.",
+                "Organizational": "Current Level: ORL 2. The venture is led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) with an informal division of responsibilities. Needs: Advance to ORL 3 by engaging the first non-founder contributor, such as a contractor, advisor, or part-time hire.",
+                "Regulatory": "Current Level: RRL 1. No regulatory analysis has been conducted for the platform (though a trademark application is pending with IPOPHL). Needs: Advance to RRL 2 by identifying the applicable regulatory domain and oversight bodies governing health data and referral systems.",
+                "Investment": "Current Level: IRL 1. Currently operating solely on founder time and personal resources alongside PHP 5,000 MRR without a funding plan. Needs: Advance to IRL 2 by forming an informal funding hypothesis regarding future capital needs and potential target raise amounts."
+              }
+            }
+          ],
+          "levelCalls": [],
+          "hallucCalls": [],
+          "assertionTruthCalls": [
+            {
+              "byDim": {
+                "Technology": "MediSync Cebu demonstrated its structured referral record platform in a relevant environment through a 2025-02 pilot with 2 rural health units and 1 district hospital, expanding to 6 facilities by 2025-08 (TRL 6). To reach TRL 7, the system must be demonstrated at full scale in live operational conditions across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary referral centres.",
+                "Market": "MediSync Cebu secured paid facility subscriptions across 6 facilities in 2025-08 and achieved PHP 5,000 monthly recurring revenue by 2026-02 (MRL 5). To advance to MRL 6, the venture needs repeat sales beyond initial pilots, acquiring additional paying facilities across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary centres, alongside subscription renewals.",
+                "Acceptance": "Trial users across pilot facilities use the system to transmit referral records, bed availability, triage categories, and clinical history (ARL 5). To advance to ARL 6, MediSync Cebu must measure return rates across a defined cohort of healthcare users and document organic, unprompted referrals from facility staff to peer institutions.",
+                "Organizational": "The team has 3 founders—Dr. Elena Reyes, Marco Villanueva, and Joy Tabotabo—who informally divide responsibilities (ORL 2). To progress to ORL 3, MediSync Cebu must engage its first non-founder contributor, such as a contractor, advisor, or part-time hire, to support provincial deployment.",
+                "Regulatory": "No regulatory analysis has been conducted regarding laws or licensing for transmitting patient clinical histories across health facilities (RRL 1). To reach RRL 2, the team must perform initial research to identify the applicable regulatory domains and governing bodies overseeing healthcare data and systems in the Philippines.",
+                "Investment": "The venture operates solely on founder time and personal resources, generating PHP 5,000 MRR without a funding plan or investor outreach (IRL 1). To reach IRL 2, MediSync Cebu needs to formulate an informal funding hypothesis outlining target capital requirements and potential use of funds to support system expansion."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Current Level: TRL 6. MediSync Cebu demonstrated its referral record technology in pilots with 2 rural health units and 1 district hospital in Feb 2025, expanding to 6 facilities by Aug 2025. Needs: Advance to TRL 7 by demonstrating a near full-scale prototype system live in an operational environment across more of the target market (44 rural health units, 8 district hospitals, and 3 tertiary referral centres).",
+                "Market": "Current Level: MRL 5. Converted initial pilot sites to paid facility subscriptions in Aug 2025, reaching PHP 5,000 MRR by Feb 2026. Needs: Advance to MRL 6 by acquiring additional paying facilities beyond the initial cohort across Cebu province and achieving early subscription renewals.",
+                "Acceptance": "Current Level: ARL 5. Measured usage captured from trial users in participating provincial facilities replacing paper-and-phone referrals. Needs: Advance to ARL 6 by tracking return rates, demonstrating repeat ongoing usage by healthcare workers, and documenting the first unprompted organic referrals.",
+                "Organizational": "Current Level: ORL 2. The venture is led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) with an informal division of responsibilities. Needs: Advance to ORL 3 by engaging the first non-founder contributor, such as a contractor, advisor, or part-time hire.",
+                "Regulatory": "Current Level: RRL 1. No regulatory analysis has been conducted for the platform (though a trademark application is pending with IPOPHL). Needs: Advance to RRL 2 by identifying the applicable regulatory domain and oversight bodies governing health data and referral systems.",
+                "Investment": "Current Level: IRL 1. Currently operating solely on founder time and personal resources alongside PHP 5,000 MRR without a funding plan. Needs: Advance to IRL 2 by forming an informal funding hypothesis regarding future capital needs and potential target raise amounts."
+              }
+            }
+          ],
+          "assertionInflatedCalls": [
+            {
+              "byDim": {
+                "Technology": "Currently at TRL 6, MediSync Cebu demonstrated its system in pilots starting with 2 rural health units and 1 district hospital, expanding to 6 facilities. To reach TRL 7, the team needs to demonstrate a substantially complete system operating live across Cebu's target facilities (44 RHUs, 8 district hospitals, 3 tertiary centers), maintaining real-time bed availability and referral record transmission with full monitoring under operational conditions outside controlled trials.",
+                "Market": "Currently at MRL 5, having secured paid facility subscriptions in August 2025 and PHP 5,000 monthly recurring revenue by February 2026. To advance to MRL 6, the startup needs to expand sales beyond initial pilots across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary referral centers, documenting acquisition dates and securing early renewal or subscription expansion revenue.",
+                "Acceptance": "Currently at ARL 5, with measured usage captured from trial users in operating facilities. To reach ARL 6, MediSync Cebu must measure return rates and repeat session usage among healthcare staff transmitting referral records and checking bed status, while securing and documenting the first unprompted organic referral from active users to peer facilities.",
+                "Organizational": "Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor. To achieve ORL 4, the startup must draft formal role definitions for the core team, create initial operational process artifacts like onboarding checklists or decision logs, and prepare for its first full-time hire beyond the founding team.",
+                "Regulatory": "Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL. To reach RRL 4, MediSync Cebu needs to document a detailed regulatory checklist specifying the exact permits, health data privacy standards, and local governance compliance standards required to handle clinical histories and digital referrals across public health facilities.",
+                "Investment": "Currently at IRL 3, with a drafted funding plan and PHP 5,000 in monthly recurring revenue achieved by February 2026. To reach IRL 4, the startup must convert its funding plan into an investor pitch deck or one-pager, initiate warm-intro investor meetings, and maintain an active log of investor pitches conducted."
+              }
+            },
+            {
+              "byDim": {
+                "Technology": "Current Status: TRL 6. The referral coordination system was piloted in 2025-02 with 2 RHUs and 1 district hospital, expanding to 6 facilities by 2025-08. Needs: Demonstrate the system running live under actual operating conditions across additional target facilities (out of 44 RHUs, 8 district hospitals, and 3 tertiary centers) with operational monitoring in place to reach TRL 7.",
+                "Market": "Current Status: MRL 5. Reached PHP 5,000 monthly recurring revenue by 2026-02 from paid facility subscriptions initiated in 2025-08. Needs: Acquire additional paying clinic or hospital customers beyond the initial pilot cohort using a standardized process, securing early renewals or expansion revenue to achieve MRL 6.",
+                "Acceptance": "Current Status: ARL 5. Measured usage by independent healthcare trial users has been established across deployed facilities. Needs: Track cohort return rates for recurring clinical usage and document the first unprompted, organic referrals from active health workers to peer facilities to reach ARL 6.",
+                "Organizational": "Current Status: ORL 3. The team consists of 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo). Needs: Draft formal role definitions, document basic team processes (such as onboarding guides or decision logs), and evaluate hiring the first full-time non-founder team member to reach ORL 4.",
+                "Regulatory": "Current Status: RRL 3. IPOPHL trademark application is pending, with no patents filed. Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards, and compliance certifications needed for health referral software to reach RRL 4.",
+                "Investment": "Current Status: IRL 3. A basic funding plan exists alongside PHP 5,000 MRR. Needs: Complete a pitch deck or one-pager and conduct initial investor conversations, logging meetings held with targeted investors to reach IRL 4."
+              }
+            }
+          ]
+        }
+      },
+      "quotaHit": false
+    },
+    "deviation-titles": {
+      "startups": {},
+      "quotaHit": false
+    },
+    "deviation-bare": {
+      "startups": {},
+      "quotaHit": false
+    }
+  },
+  "flaggedClauses": [
+    {
+      "arm": "baseline",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "and investment pitch to secure initial funding."
+    },
+    {
+      "arm": "baseline",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "Needs a defined financial model and funding strategy to support technology development and field operations."
+    },
+    {
+      "arm": "baseline",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "Needs initial funding or capital investment to transition from prototype to working platform development."
+    },
+    {
+      "arm": "baseline",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "recommended",
+      "text": "Needs to build financial models, investor pitch materials"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Organizational",
+      "klass": "unclassified",
+      "text": "and bring on a first non-founder contributor."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "negated",
+      "text": "Current Level: IRL 1 (No funding plan, founder time only)."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "negated",
+      "text": "The venture has zero revenue to date and relies on founder time without an active funding strategy."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "Need: Draft an initial funding hypothesis, outline target raise requirements"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Organizational",
+      "klass": "recommended",
+      "text": "To reach ORL 3, the venture needs to engage its first non-founder contributor (such as a contractor or advisor) under a formal agreement."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "negated",
+      "text": "Currently at IRL 1 with zero revenue, no funding plan, running on founder time and personal resources."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "recommended",
+      "text": "To progress to IRL 2, the team needs to outline an informal funding hypothesis detailing seed funding expectations, potential target raise amounts"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Organizational",
+      "klass": "recommended",
+      "text": "To advance organizational readiness, the venture needs to contract or hire its first non-founder contributor and document initial role definitions and operational processes, such as decision logs or onboarding guides."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Regulatory",
+      "klass": "recommended",
+      "text": "To advance regulatory readiness, the team needs to engage external legal counsel for a preliminary opinion on regulatory requirements and draft a documented checklist of required permits and certifications."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "recommended",
+      "text": "To build investment readiness, AgroLink PH must draft a formal funding plan outlining a target raise amount and use-of-funds breakdown, then initiate initial pitch meetings with prospective investors."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Organizational",
+      "klass": "recommended",
+      "text": "To advance organizational readiness, the startup needs to bring on its first non-founder contributor, draft formal role definitions"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Regulatory",
+      "klass": "recommended",
+      "text": "To move forward, the startup must engage legal counsel to receive a preliminary opinion on compliance requirements and register its wordmark with IPOPHL."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "recommended",
+      "text": "To advance investment readiness, AgroLink PH needs to create a written funding plan specifying target raise amounts and use of funds, prepare a pitch deck"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "AgroLink PH",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "and initiate preliminary investor discussions."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Organizational",
+      "klass": "recommended",
+      "text": "To progress to ORL 3, MediSync Cebu must engage its first non-founder contributor, such as a contractor, advisor, or part-time hire, to support provincial deployment."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "negated",
+      "text": "The venture operates solely on founder time and personal resources, generating PHP 5,000 MRR without a funding plan or investor outreach (IRL 1)."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "recommended",
+      "text": "To reach IRL 2, MediSync Cebu needs to formulate an informal funding hypothesis outlining target capital requirements and potential use of funds to support system expansion."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Organizational",
+      "klass": "unclassified",
+      "text": "Needs: Advance to ORL 3 by engaging the first non-founder contributor, such as a contractor, advisor, or part-time hire."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "negated",
+      "text": "Currently operating solely on founder time and personal resources alongside PHP 5,000 MRR without a funding plan."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "truth",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "Needs: Advance to IRL 2 by forming an informal funding hypothesis regarding future capital needs and potential target raise amounts."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Organizational",
+      "klass": "unclassified",
+      "text": "Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Organizational",
+      "klass": "unclassified",
+      "text": "and prepare for its first full-time hire beyond the founding team."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Regulatory",
+      "klass": "asserted",
+      "text": "Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Regulatory",
+      "klass": "recommended",
+      "text": "To reach RRL 4, MediSync Cebu needs to document a detailed regulatory checklist specifying the exact permits, health data privacy standards"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "asserted",
+      "text": "Currently at IRL 3, with a drafted funding plan and PHP 5,000 in monthly recurring revenue achieved by February 2026."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "recommended",
+      "text": "To reach IRL 4, the startup must convert its funding plan into an investor pitch deck or one-pager, initiate warm-intro investor meetings"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 0,
+      "dimension": "Investment",
+      "klass": "asserted",
+      "text": "and maintain an active log of investor pitches conducted."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Regulatory",
+      "klass": "unclassified",
+      "text": "Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards"
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Regulatory",
+      "klass": "unclassified",
+      "text": "and compliance certifications needed for health referral software to reach RRL 4."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "A basic funding plan exists alongside PHP 5,000 MRR."
+    },
+    {
+      "arm": "deviation-deterministic",
+      "startup": "MediSync Cebu",
+      "condition": "inflated",
+      "rep": 1,
+      "dimension": "Investment",
+      "klass": "unclassified",
+      "text": "Needs: Complete a pitch deck or one-pager and conduct initial investor conversations, logging meetings held with targeted investors to reach IRL 4."
+    }
+  ]
+}

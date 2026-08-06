@@ -32,11 +32,18 @@ const hash = (material) =>
  * @param {Array}  [spec.rubrics]   the full RUBRICS corpus - one entry per row, each with at
  *                                  least title/content/keyTerms/key/readinessType/level
  * @param {object} spec.sources     { rna, levels, fabrication, readinessLevelBlock,
- *                                    renderRubricBlock, fullLadderRubrics } - prompt-builder
- *                                  and prompt-helper source text
+ *                                    renderRubricBlock, renderTitlesOnlyBlock,
+ *                                    renderBareTitlesBlock, fullLadderRubrics } - prompt-builder
+ *                                  and prompt-helper source text, plus optional
+ *                                  `assertion` (lib/assertions.js's CLASSIFIER_SOURCE,
+ *                                  the whole classifier - regexes included, not one
+ *                                  function's .toString()), which is what gates the
+ *                                  two assertion key families
  * @param {Array}  spec.arms        ARMS
  * @param {string} [spec.levelsRubricScope]  'full-ladder' | 'current-and-next' | 'none'
  * @param {string} [spec.rnaRubricScope]     'current-and-next' | 'none'
+ * @param {object} [spec.absences]       HARD_ABSENCES - the assertion probe's hard-coded absence list
+ * @param {object} [spec.inflatedLevels] INFLATED_OVERRIDE - the assertion probe's inflated-condition levels
  */
 function fingerprintMap(spec) {
   const {
@@ -47,6 +54,8 @@ function fingerprintMap(spec) {
     arms,
     levelsRubricScope = 'full-ladder',
     rnaRubricScope = 'current-and-next',
+    absences,
+    inflatedLevels,
   } = spec;
 
   // Content hash, not the row count mergeRuns' envKey already checks — editing
@@ -101,6 +110,26 @@ function fingerprintMap(spec) {
       corpusHash: corpusHashForArm,
     });
     out[`fabrication|${arm.name}`] = hash({ src: sources.fabrication, common, scope: rnaScope, rubricMode: arm.rubricMode });
+
+    // Additive only. JSON.stringify drops undefined, and a new KEY cannot
+    // change an existing one's material — so every hash above is untouched.
+    if (sources.assertion) {
+      const assertionMaterial = {
+        src: sources.rna,
+        readinessLevelBlockSrc: sources.readinessLevelBlock,
+        renderRubricBlockSrc: sources.renderRubricBlock,
+        common,
+        scope: rnaScope,
+        rubricMode: arm.rubricMode,
+        corpusHash: corpusHashForArm,
+        // Scoring is part of comparability here: re-scoring old text with an
+        // edited classifier or an edited token list is a different measurement.
+        classifierSrc: sources.assertion,
+        absences,
+      };
+      out[`assertion|${arm.name}`] = hash(assertionMaterial);
+      out[`assertion-inflated|${arm.name}`] = hash({ ...assertionMaterial, inflatedLevels });
+    }
   }
   return out;
 }

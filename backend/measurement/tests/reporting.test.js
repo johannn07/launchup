@@ -63,3 +63,96 @@ test('an arm that never ran reports n=0 rather than undefined', () => {
     assert.ok(row, 'the unreached arm still needs a row');
   }
 });
+
+test('metric 5 reports asserted, mentioned and unclassified per condition', () => {
+  const results = {
+    baseline: {
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [{ byDim: { Investment: 'No funding plan exists yet.' } }],
+          assertionInflatedCalls: [{ byDim: { Investment: 'The venture has drafted a funding plan.' } }],
+        },
+      },
+    },
+  };
+  const s = H.summarizeResults(results);
+  const truth = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  const inflated = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'inflated');
+  assert.equal(truth.asserted, '0/1');
+  assert.equal(inflated.asserted, '1/1');
+});
+
+// An arm a 429 never reached must produce a row that says n/a, not one that
+// says 0% — an absent row and a zero row mean different things.
+test('metric 5 gives every arm a row even with no calls', () => {
+  const s = H.summarizeResults({});
+  assert.equal(s.metric5.length, H.ARMS.length * 2, 'one row per arm per condition');
+  assert.equal(s.metric5[0]['asserted %'], 'n/a');
+});
+
+// A bare 0 in the honesty column reads as "the classifier handled everything
+// cleanly" for an arm that was never run. Every live --merge printed that.
+test('unclassified says n/a at obs=0, not 0', () => {
+  const s = H.summarizeResults({});
+  assert.equal(s.metric5[0].unclassified, 'n/a');
+});
+
+test('unclassified is x/obs once there is data', () => {
+  const s = H.summarizeResults({
+    baseline: {
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [{ byDim: { Investment: 'Funding, per the attached schedule.' } }],
+          assertionInflatedCalls: [],
+        },
+      },
+    },
+  });
+  const truth = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.equal(truth.unclassified, '1/1');
+});
+
+// The audit trail is what makes the lower-bound claim checkable rather than
+// trusted, so its shape is pinned.
+test('flaggedClauses emits one seven-field row per flagged clause', () => {
+  const rows = H.flaggedClauses({
+    baseline: {
+      startups: {
+        'AgroLink PH': {
+          assertionTruthCalls: [{ byDim: { Investment: 'The venture has drafted a funding plan.' } }],
+          assertionInflatedCalls: [],
+        },
+      },
+    },
+  });
+  assert.equal(rows.length, 1);
+  assert.deepEqual(Object.keys(rows[0]).sort(), [
+    'arm', 'condition', 'dimension', 'klass', 'rep', 'startup', 'text',
+  ]);
+  assert.deepEqual(rows[0], {
+    arm: 'baseline', startup: 'AgroLink PH', condition: 'truth', rep: 0,
+    dimension: 'Investment', klass: 'asserted', text: 'The venture has drafted a funding plan.',
+  });
+});
+
+test('flaggedClauses labels the inflated condition and the rep index', () => {
+  const rows = H.flaggedClauses({
+    baseline: {
+      startups: {
+        'AgroLink PH': {
+          assertionTruthCalls: [],
+          assertionInflatedCalls: [
+            { byDim: { Investment: 'No funding plan exists.' } },
+            { byDim: { Investment: 'A funding plan is in place.' } },
+          ],
+        },
+      },
+    },
+  });
+  assert.deepEqual(rows.map((r) => [r.condition, r.rep, r.klass]), [
+    ['inflated', 0, 'negated'],
+    ['inflated', 1, 'asserted'],
+  ]);
+});

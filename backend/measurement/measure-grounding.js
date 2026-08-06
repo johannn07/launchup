@@ -107,7 +107,7 @@ const MERGE_FILES = MERGE_ARGS.flatMap((pattern) =>
 const KNOWN_EXACT_FLAGS = new Set([
   '--retrieval-only', '--dry-run', '--with-fabrication-probe', '--fingerprint', '--merge',
 ]);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe=', '--level-condition='];
 
 const ALL_PROBES = ['rna', 'levels'];
 
@@ -140,6 +140,58 @@ function selectProbes(filter) {
   return { probes: ALL_PROBES.filter((p) => entries.includes(p)), errors: [] };
 }
 
+const ALL_LEVEL_CONDITIONS = ['truth', 'inflated'];
+
+/**
+ * Organizational, Regulatory and Investment are the three dimensions with
+ * verified hard absences, and both startups sit at O2 R1 I1 — so one override
+ * covers both and the manipulated cells pool.
+ *
+ * 3, not 4. Deterministic retrieval pulls (L, L+1), so 3 pulls rows 3-4 — the
+ * rows that name a non-founder contributor under contract (ORL 3), counsel
+ * engaged with a preliminary opinion received (RRL 3), and a drafted funding
+ * plan (IRL 3). IRL 3 is the literal source of the observed fabrication; at 4
+ * it sits in neither condition's block, so the manipulation would never inject
+ * the rubric row that produced the instance being reproduced.
+ *
+ * All three stay above HARD_ABSENCES' ceiling of 2, so nothing stops being
+ * scoreable, and +1/+2/+2 is a likelier mentor error than +2/+3/+3. T/M/A stay
+ * at truth so every call carries its own unmanipulated control.
+ */
+const INFLATED_OVERRIDE = { Organizational: 3, Regulatory: 3, Investment: 3 };
+
+/** Returns a NEW object. STARTUPS.levels is inside `common` and is hashed into
+ *  all 15 fingerprints — mutating it would orphan every collected result file. */
+function inflatedLevels(levels) {
+  return { ...levels, ...INFLATED_OVERRIDE };
+}
+
+/** The one place a condition maps to supplied levels — live run and --dry-run. */
+const levelsForCondition = (startup, condition) =>
+  condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+
+/** The one place a condition maps to its storage field — scoring and audit trail. */
+const conditionField = (condition) =>
+  condition === 'inflated' ? 'assertionInflatedCalls' : 'assertionTruthCalls';
+
+/**
+ * Exact names only, like selectProbes: two fixed values, so a prefix match buys
+ * nothing and could silently select the wrong one. Defaults to `truth`, which
+ * reproduces the harness's behaviour before this flag existed.
+ */
+function selectLevelConditions(filter) {
+  if (filter == null) return { conditions: ['truth'], errors: [] };
+  const raw = String(filter).trim().toLowerCase();
+  if (raw === 'both') return { conditions: ALL_LEVEL_CONDITIONS.slice(), errors: [] };
+  if (ALL_LEVEL_CONDITIONS.includes(raw)) return { conditions: [raw], errors: [] };
+  return {
+    conditions: [],
+    errors: [
+      `--level-condition=${filter} is not a condition. Available: ${ALL_LEVEL_CONDITIONS.join(', ')}, both.`,
+    ],
+  };
+}
+
 /**
  * Pure validation over raw CLI args plus the glob-resolved --merge list.
  * Returns error strings; empty means well-formed. Exported and called only
@@ -166,7 +218,8 @@ function validateArgs(argv, mergeFiles) {
         errors.push(
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
             '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
-            '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, --merge <files...>.',
+            '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, ' +
+            '--level-condition=<truth|inflated|both>, --merge <files...>.',
         );
       }
     } else {
@@ -703,21 +756,21 @@ function renderTitlesOnlyBlock(rows) {
 }
 
 /**
- * Retrieval is deterministic, so it is computed once per (arm, startup) and
- * reused across reps rather than re-run for no informational gain.
+ * Retrieval is deterministic, so it is computed once per (arm, startup, condition)
+ * and reused across reps rather than re-run for no informational gain.
  *
  * `deterministic` is a pure key lookup and baseline needs no rubric, so neither
  * may be blocked by the single embed call `semantic` needs. That call is lazy,
  * memoized on `state`, and degrades to "nothing retrieved" on failure — as
  * EmbeddingService.embed does in production.
  */
-async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
+async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state, levels = startup.levels) {
   if (!arm.ragCorpus) return [];
 
   if (arm.rubricMode === 'deterministic') {
     const wanted = new Set();
     for (const dim of DIMENSIONS) {
-      const level = startup.levels[dim];
+      const level = levels[dim];
       wanted.add(rubricKey(dim, level));
       wanted.add(rubricKey(dim, Math.min(level + 1, MAX_READINESS_LEVEL)));
     }
@@ -743,6 +796,18 @@ async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
     .slice(0, RUBRIC_LIMIT)
     .filter((x) => x.score >= FLOOR)
     .map((x) => x.r);
+}
+
+/**
+ * The one place an RNA cell's retrieval and rubric block are built.
+ *
+ * --dry-run and the live run built these independently before, and that is
+ * precisely how the harness once shipped a --dry-run printing a prompt the run
+ * would not send — defeating the only quota-free way to check a prompt.
+ */
+async function buildRnaCell(ai, arm, startup, levels, corpusVecs, state) {
+  const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, state, levels);
+  return { retrieved, rnaBlock: renderRubricBlock(retrieved) };
 }
 
 /**
@@ -834,14 +899,20 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
     // levels probe doubles the reps a day's cap affords for the only metric
     // that discriminates.
     probes = ['rna', 'levels'],
+    conditions = ['truth'],
   } = opts;
+
+  // Metric 5's lower bound rests on these tokens being absent from the
+  // documents. The README and the metric-5 comment both say that is asserted at
+  // run time; before this line only audit-ground-truth.js asserted it.
+  verifyAbsences(Object.fromEntries(Object.entries(STARTUPS).map(([n, s]) => [n, s.doc])));
 
   const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
   const filtered = arms.length !== ARMS.length || startupNames.length !== Object.keys(STARTUPS).length;
 
   if (report) {
     console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
-    const callsPerCell = (withFabrication ? 1 : 0) + probes.length;
+    const callsPerCell = (withFabrication ? 1 : 0) + (probes.includes('levels') ? 1 : 0) + (probes.includes('rna') ? conditions.length : 0);
     const perRep = arms.length * selectedStartups.length * callsPerCell;
     console.log(
       `reps=${reps}, ${perRep} calls per rep (${reps * perRep} total) ` +
@@ -875,14 +946,30 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   const levelBlocks = new Map();  // `${arm}|${startup}` -> block for the levels probe
   for (const arm of arms) {
     for (const [startupName, startup] of selectedStartups) {
-      const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
-      rnaBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
+      // Unconditional, whatever conditions were selected: the levels probe's
+      // ladder and the fabrication probe's rubric block both key off the truth
+      // retrieval, and deriving them from `inflated` (or from nothing) is a
+      // silently degraded probe carrying a valid fingerprint. Free — baseline
+      // returns [], deterministic is a key lookup, and semantic's one embed is
+      // memoized on embedState.
+      const truthRetrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
+      for (const condition of conditions) {
+        const levels = levelsForCondition(startup, condition);
+        const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
+        rnaBlocks.set(`${arm.name}|${startupName}|${condition}`, { block: built.rnaBlock, levels });
+      }
+      // The levels probe is unaffected by the manipulation — its prompt carries
+      // no supplied levels at all — so its ladder keys off the truth retrieval.
       // Only corpus arms get a rubric. `semantic` retrieves nothing here
       // (Step A: 0/12), making it a null-condition replicate of baseline —
       // kept deliberately as a noise control, not a third condition.
-      const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
+      const ladder = arm.ragCorpus && truthRetrieved.length ? fullLadderRubrics() : [];
       levelBlocks.set(`${arm.name}|${startupName}`, renderLevelsBlockFor(arm, ladder));
-      results[arm.name].startups[startupName] = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
+      results[arm.name].startups[startupName] = {
+        retrieved: truthRetrieved,
+        rnaCalls: [], levelCalls: [], hallucCalls: [],
+        assertionTruthCalls: [], assertionInflatedCalls: [],
+      };
     }
   }
 
@@ -890,39 +977,50 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   repLoop: for (let rep = 0; rep < reps; rep++) {
     for (const arm of arms) {
       for (const [startupName, startup] of selectedStartups) {
-        const rnaBlock = rnaBlocks.get(`${arm.name}|${startupName}`);
         const levelBlock = levelBlocks.get(`${arm.name}|${startupName}`);
         const cell = results[arm.name].startups[startupName];
 
-        // --- RNA generation (metric 1) ---
-        if (probes.includes('rna')) try {
-          const out = await attempt(callFn, ai, rnaPrompt(startup.doc, rnaBlock, startup.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna`);
-          const payload = extractJsonPayload(out.text);
-          const parsed = payload ? JSON.parse(payload) : null;
-          if (Array.isArray(parsed)) {
-            const byDim = {};
-            for (const x of parsed) {
-              if (typeof x.rna === 'string' && typeof x.readiness_level_type === 'string') {
-                byDim[x.readiness_level_type] = x.rna;
+        // --- RNA generation (metrics 1-2 on truth; metric 5 on both) ---
+        if (probes.includes('rna')) for (const condition of conditions) {
+          const entry = rnaBlocks.get(`${arm.name}|${startupName}|${condition}`);
+          try {
+            const out = await attempt(callFn, ai, rnaPrompt(startup.doc, entry.block, entry.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna(${condition})`);
+            const payload = extractJsonPayload(out.text);
+            const parsed = payload ? JSON.parse(payload) : null;
+            if (Array.isArray(parsed)) {
+              const byDim = {};
+              for (const x of parsed) {
+                if (typeof x.rna === 'string' && typeof x.readiness_level_type === 'string') {
+                  byDim[x.readiness_level_type] = x.rna;
+                }
+              }
+              // One call, two records: metrics 1-2 read rnaCalls, metric 5 reads
+              // its own per-condition field. Separate fields keep mergeRuns'
+              // 1:1 metric->field invariant, which double-pushes if two metric
+              // keys share a field and silently doubles n.
+              if (condition === 'truth') {
+                cell.rnaCalls.push({ byDim });
+                cell.assertionTruthCalls.push({ byDim });
+              } else {
+                cell.assertionInflatedCalls.push({ byDim });
               }
             }
-            cell.rnaCalls.push({ byDim });
+          } catch (e) {
+            if (is429(e)) {
+              console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna(${condition})]`);
+              quotaHit = true;
+              results[arm.name].quotaHit = true;
+              break repLoop;
+            } else {
+              // Parse failures, network blips and schema errors must not vanish
+              // silently: this harness runs unattended
+              // across a 20-request daily cap, and the only symptom of a
+              // swallowed non-429 error is a lower n= with no explanation.
+              console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna(${condition})]`, e.message);
+            }
           }
-        } catch (e) {
-          if (is429(e)) {
-            console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna]`);
-            quotaHit = true;
-            results[arm.name].quotaHit = true;
-            break repLoop;
-          } else {
-            // Parse failures, network blips and schema errors must not vanish
-            // silently: this harness runs unattended
-            // across a 20-request daily cap, and the only symptom of a
-            // swallowed non-429 error is a lower n= with no explanation.
-            console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna]`, e.message);
-          }
+          if (pacingMs) await sleep(pacingMs);
         }
-        if (pacingMs) await sleep(pacingMs);
 
         // --- Levels (metric 3) ---
         if (probes.includes('levels')) try {
@@ -949,9 +1047,12 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
         if (pacingMs) await sleep(pacingMs);
 
         // --- Hallucination probe (metric 2) ---
+        // Unaffected by the level manipulation, so it reads the truth-condition
+        // block via cell.retrieved, which is now computed whatever conditions
+        // were selected — see the retrieval above.
         if (withFabrication) {
           try {
-            const out = await attempt(callFn, ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent), retry, `${arm.name} / ${startupName} / rep ${rep} / hallucination`);
+            const out = await attempt(callFn, ai, hallucinationPrompt(startup.doc, renderRubricBlock(cell.retrieved), startup.present, startup.absent), retry, `${arm.name} / ${startupName} / rep ${rep} / hallucination`);
             const payload = extractJsonPayload(out.text);
             const parsed = payload ? JSON.parse(payload) : null;
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -1013,6 +1114,7 @@ function summarizeResults(results) {
   const metric2 = [];
   const metric3 = [];
   const metric4 = [];
+  const metric5 = [];
 
   for (const arm of ARMS) {
     const armResult = results[arm.name] || { startups: {} };
@@ -1090,9 +1192,41 @@ function summarizeResults(results) {
       'present recalled': `${presentCorrect}/${presentChecked}`,
       'n reps': reps,
     });
+
+    // --- Metric 5: supplied-level fabrication (asserted absent evidence) ---
+    //
+    // Reference-free: HARD_ABSENCES names artifact classes neither document
+    // mentions, asserted at run time by verifyAbsences rather than trusted. One
+    // binary observation per (call, dimension) — counting tokens would reward
+    // verbosity, and the corpus arm writes longer RNAs.
+    for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = conditionField(condition);
+      let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
+      for (const [, cell] of Object.entries(armResult.startups)) {
+        for (const c of cell[field] || []) {
+          for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
+            obs++;
+            if (o.asserted) asserted++;
+            if (o.mentioned) mentioned++;
+            if (o.unclassified) unclassified++;
+          }
+        }
+      }
+      metric5.push({
+        arm: arm.name,
+        condition,
+        asserted: `${asserted}/${obs}`,
+        'asserted %': obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
+        mentioned: `${mentioned}/${obs}`,
+        // x/obs, never a bare 0: at obs=0 a bare 0 reads as "the classifier
+        // handled everything cleanly" for an arm that was never run — in the
+        // one column the design calls the honesty column.
+        unclassified: obs ? `${unclassified}/${obs}` : 'n/a',
+      });
+    }
   }
 
-  return { metric1, metric2, metric3, metric4 };
+  return { metric1, metric2, metric3, metric4, metric5 };
 }
 
 function printReports(results) {
@@ -1116,6 +1250,12 @@ function printReports(results) {
     console.log('(saturated at 0/15 on 2026-07-29 across every arm; kept as evidence for SRS 2.2, not as a discriminator)\n');
     console.table(s.metric4);
   }
+
+  console.log('\n--- Metric 5: supplied-level fabrication (asserted absent evidence) ---');
+  console.log('(share of dimensions whose RNA asserts an artifact class neither document mentions;');
+  console.log(' `asserted` is a lower bound and `mentioned` an upper one. A large `unclassified`');
+  console.log(' means the classifier cannot read this output and the rate should not be quoted.)\n');
+  console.table(s.metric5);
 }
 
 // --------------------------------------------------------------------------
@@ -1132,6 +1272,8 @@ function printReports(results) {
  */
 const { fingerprintMap } = require(path.join(__dirname, 'lib/fingerprint.js'));
 const { MARKERS } = require(path.join(__dirname, 'lib/stage-markers.js'));
+const { scoreAssertedAbsences, CLASSIFIER_SOURCE } = require(path.join(__dirname, 'lib/assertions.js'));
+const { HARD_ABSENCES, verifyAbsences } = require(path.join(__dirname, 'lib/hard-absences.js'));
 
 function currentFingerprints() {
   return fingerprintMap({
@@ -1155,11 +1297,39 @@ function currentFingerprints() {
       renderTitlesOnlyBlock: renderTitlesOnlyBlock.toString(),
       renderBareTitlesBlock: renderBareTitlesBlock.toString(),
       fullLadderRubrics: fullLadderRubrics.toString(),
+      // Not scoreAssertedAbsences.toString(): it contains neither the cue
+      // regexes nor the helpers it calls. See CLASSIFIER_SOURCE.
+      assertion: CLASSIFIER_SOURCE,
     },
     arms: ARMS,
     levelsRubricScope: 'full-ladder',
     rnaRubricScope: 'current-and-next',
+    absences: HARD_ABSENCES,
+    inflatedLevels: INFLATED_OVERRIDE,
   });
+}
+
+/**
+ * Every clause the classifier flagged, verbatim — the audit trail the lower-bound
+ * claim depends on being checkable rather than trusted. Pure and exported so the
+ * seven-field shape is tested, not merely produced.
+ */
+function flaggedClauses(results) {
+  const out = [];
+  for (const [armName, armResult] of Object.entries(results)) {
+    for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
+      for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[conditionField(condition)] || []).forEach((c, rep) => {
+          for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
+            for (const cl of o.clauses) {
+              out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+            }
+          }
+        });
+      }
+    }
+  }
+  return out;
 }
 
 function writeResults(file, results) {
@@ -1172,6 +1342,7 @@ function writeResults(file, results) {
     floor: FLOOR,
     fingerprints: currentFingerprints(),
     results,
+    flaggedClauses: flaggedClauses(results),
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
@@ -1218,7 +1389,13 @@ function mergeRuns(files, arms) {
 
   const contributions = {};
   const refusals = [];
-  const FIELD = { levels: 'levelCalls', rna: 'rnaCalls', fabrication: 'hallucCalls' };
+  const FIELD = {
+    levels: 'levelCalls',
+    rna: 'rnaCalls',
+    fabrication: 'hallucCalls',
+    assertion: 'assertionTruthCalls',
+    'assertion-inflated': 'assertionInflatedCalls',
+  };
 
   for (const { file, data } of days) {
     for (const arm of arms) {
@@ -1250,11 +1427,12 @@ function mergeRuns(files, arms) {
             merged[arm.name].startups[startupName] ||
             (merged[arm.name].startups[startupName] = {
               retrieved: cell.retrieved,
-              rnaCalls: [],
-              levelCalls: [],
-              hallucCalls: [],
+              rnaCalls: [], levelCalls: [], hallucCalls: [],
+              assertionTruthCalls: [], assertionInflatedCalls: [],
             });
-          dst[field].push(...cell[field]);
+          // Defensive: a file carrying an assertion fingerprint but no assertion
+          // array (hand-edited, or written by a partial run) must not throw.
+          dst[field].push(...(cell[field] || []));
         }
         contributions[key] = (contributions[key] || []).concat(path.basename(file));
       }
@@ -1303,8 +1481,9 @@ if (require.main === module) {
       Object.keys(STARTUPS),
     );
     const probeSelection = selectProbes(flagValue('only-probe'));
-    if (selection.errors.length || probeSelection.errors.length) {
-      for (const e of [...selection.errors, ...probeSelection.errors]) console.error(e);
+    const conditionSelection = selectLevelConditions(flagValue('level-condition'));
+    if (selection.errors.length || probeSelection.errors.length || conditionSelection.errors.length) {
+      for (const e of [...selection.errors, ...probeSelection.errors, ...conditionSelection.errors]) console.error(e);
       process.exit(1);
     }
 
@@ -1338,12 +1517,15 @@ if (require.main === module) {
         for (const startupName of selection.startups) {
           const startup = STARTUPS[startupName];
           const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
-          const rnaBlock = renderRubricBlock(retrieved);
           const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
           const levelBlock = renderLevelsBlockFor(arm, ladder);
           console.log(`\n${'='.repeat(78)}\n${arm.name} / ${startupName}\n${'='.repeat(78)}`);
           console.log(`retrieved for RNA probe: ${retrieved.length} rows; levels probe: ${ladder.length} rows`);
-          console.log(`\n----- RNA PROMPT -----\n${rnaPrompt(startup.doc, rnaBlock, startup.levels)}`);
+          for (const condition of conditionSelection.conditions) {
+            const levels = levelsForCondition(startup, condition);
+            const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
+            console.log(`\n----- RNA PROMPT (${condition}) -----\n${rnaPrompt(startup.doc, built.rnaBlock, levels)}`);
+          }
           console.log(`\n----- LEVELS PROMPT -----\n${levelsPrompt(startup.doc, levelBlock)}`);
         }
       }
@@ -1355,6 +1537,7 @@ if (require.main === module) {
       arms: selection.arms,
       startupNames: selection.startups,
       probes: probeSelection.probes,
+      conditions: conditionSelection.conditions,
     });
     if (OUT_FILE) writeResults(OUT_FILE, results);
   })().catch((e) => {
@@ -1381,15 +1564,21 @@ module.exports = {
   rnaPrompt,
   levelsPrompt,
   hallucinationPrompt,
+  buildRnaCell,
   extractJsonPayload,
   isAbsentAnswer,
   mean,
   summarizeResults,
   mergeRuns,
   currentFingerprints,
+  flaggedClauses,
   validateArgs,
   selectCells,
   selectProbes,
+  ALL_LEVEL_CONDITIONS,
+  INFLATED_OVERRIDE,
+  inflatedLevels,
+  selectLevelConditions,
   isRetryableServerError,
   is429,
   withRetry,
