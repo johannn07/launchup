@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Only `backend/measurement/lib/assertions.js` and `backend/measurement/tests/assertions.test.js` are modified.** `lib/hard-absences.js`, `lib/metrics.js`, `lib/fingerprint.js` and `measure-grounding.js` are untouched.
+- **Tasks 1-7 modify only `backend/measurement/lib/assertions.js` and `backend/measurement/tests/assertions.test.js`.** `lib/hard-absences.js`, `lib/metrics.js`, `lib/fingerprint.js` and `measure-grounding.js` are untouched by every task. Task 8 additionally writes a results JSON and updates `measurement/README.md`, `TODO_CHECKLIST.md` and `SESSION_NOTES.md` — that is documentation, and it is the only task permitted to touch them.
 - **Do not re-score `measurement/results/2026-08-06-supplied-level.json`, and do not quote a corrected rate from it.** The audit dump is design input only.
 - **Baseline test suite: `pnpm test:measurement` → 178 passing, 0 failing.** Run from `backend/`. It must read 178+N passing / 0 failing at the end of every task. *(Note: `SESSION_NOTES.md` records 117 — that figure predates the 2026-08-06 branch and is corrected in Task 8.)*
 - **The test runner needs the glob, not the directory.** `node --test measurement/tests/` fails; use `pnpm test:measurement`, or `node --test measurement/tests/assertions.test.js` for one file.
@@ -528,9 +528,13 @@ test('an artifact governed by an accompaniment preposition is asserted', () => {
 // cannot be restricted usefully, and excluding it costs nothing measured: the
 // two already-detected assertions use `with` but are caught by their participle.
 test('"with" is not an accompaniment preposition', () => {
-  assert.notEqual(
-    classifyClause('Currently at ORL 2 with founders committed full-time', ORG),
-    'asserted',
+  // The clause must CONTAIN an artifact token, or classifyClause returns null
+  // and the assertion passes without testing anything. "advisor" is in
+  // Organizational's artifactTokens; "founders" and "full-time" are not.
+  assert.equal(
+    classifyClause('The venture operates with an advisor role planned for Q3', ORG),
+    'unclassified',
+    'adding `with` to ACCOMPANIMENT would make this assert',
   );
 });
 
@@ -542,12 +546,27 @@ test('an accompaniment assertion caught by its participle still works', () => {
   );
 });
 
-// The window and the punctuation guard are what stop a preposition governing
-// some earlier phrase from reaching a distant token.
+// The window and the punctuation guard are separate restrictions and need
+// separate tests: a span long enough to fail the window usually also contains a
+// comma, so one fixture would leave whichever guard runs second unkilled.
 test('a preposition separated from the token by punctuation does not assert', () => {
-  assert.notEqual(
+  assert.equal(
     classifyClause('Growth continued alongside strong demand, and a term sheet', INVEST),
-    'asserted',
+    'unclassified',
+    'the comma puts the preposition and the token in different phrases',
+  );
+});
+
+test('a preposition beyond the noun-phrase window does not assert', () => {
+  // 61 characters between "alongside" and "term sheet", and deliberately no
+  // punctuation — this fixture kills a widened ACCOMPANIMENT_WINDOW and nothing else.
+  assert.equal(
+    classifyClause(
+      'The platform grew alongside sustained demand from cooperatives across the province and a term sheet',
+      INVEST,
+    ),
+    'unclassified',
+    'the preposition governs "demand", not the distant token',
   );
 });
 
@@ -637,7 +656,7 @@ Run from `backend/`:
 ```bash
 pnpm test:measurement
 ```
-Expected: PASS, 205 tests, 0 failing.
+Expected: PASS, 206 tests, 0 failing.
 
 - [ ] **Step 5: Commit**
 
@@ -760,7 +779,7 @@ Run from `backend/`:
 ```bash
 pnpm test:measurement
 ```
-Expected: PASS, 208 tests, 0 failing.
+Expected: PASS, 209 tests, 0 failing.
 
 The pre-existing test `CLASSIFIER_SOURCE carries every cue regex, every helper and the token matcher` (`:234`) must still pass — its distinctive substrings all survive, since no cue lost a branch in this plan.
 
@@ -823,11 +842,11 @@ For each row: apply the mutation, run `pnpm test:measurement` from `backend/`, r
 | 6 | Drop `\b(?:exists?\|existed\|existing)\b` from `ASSERTION` | `an existential predicate on an artifact is an assertion` |
 | 7 | Remove `\|\| assertsByAccompaniment(text, tokens)` from `classifyClause` | `an artifact governed by an accompaniment preposition is asserted` |
 | 8 | Add `\|with` to `ACCOMPANIMENT` | `"with" is not an accompaniment preposition` |
-| 9 | Raise `ACCOMPANIMENT_WINDOW` to `400` | `a preposition separated from the token by punctuation does not assert` |
+| 9 | Raise `ACCOMPANIMENT_WINDOW` to `400` | `a preposition beyond the noun-phrase window does not assert` |
 | 10 | Drop the `!/[,;()]/.test(span)` guard from `assertsByAccompaniment` | `a preposition separated from the token by punctuation does not assert` |
-| 11 | Drop `CONTINUATION` from `CUES` | `every module-level constant is either a cue or a named non-cue` — no; it should be caught by `CLASSIFIER_SOURCE carries every cue in CUES`. **Verify which**, and if neither fails, that is a real gap to close in step 2. |
+| 11 | Drop `CONTINUATION` from `CUES` | `every module-level constant is either a cue or a named non-cue`. **Not** `CLASSIFIER_SOURCE carries every cue in CUES` — that test iterates `CUES`, so removing an entry makes it pass vacuously. This mutant exists to prove the source scan is the guard that matters. |
 
-**Mutants 9 and 10 both point at the same test.** If either survives, add a dedicated test rather than assuming the other covers it.
+**Mutants 9 and 10 have separate fixtures on purpose** — a span long enough to fail the window usually also contains a comma, so a shared fixture would leave whichever guard runs second unkilled.
 
 - [ ] **Step 2: Close any survivor**
 
@@ -839,7 +858,7 @@ Run from `backend/`:
 ```bash
 pnpm test:measurement
 ```
-Expected: PASS, 208+ tests, 0 failing. Also confirm `git status` is clean apart from any test file changes — a leftover mutation reaching a commit would be far worse than a surviving mutant.
+Expected: PASS, 209+ tests, 0 failing. Also confirm `git status` is clean apart from any test file changes — a leftover mutation reaching a commit would be far worse than a surviving mutant.
 
 - [ ] **Step 4: Commit**
 
