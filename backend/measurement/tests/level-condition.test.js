@@ -135,18 +135,33 @@ test('the levels probe runs once regardless of how many conditions are selected'
   assert.equal(r.prompts.length, 1);
 });
 
-// A silently degraded probe that looks like a real arm is the failure mode
-// this harness exists to prevent — and it would spend quota to produce it.
-test('--with-fabrication-probe rejects an inflated-only condition', () => {
-  const errs = validateArgs(['--with-fabrication-probe', '--level-condition=inflated'], []);
-  assert.equal(errs.length, 1);
-  assert.match(errs[0], /truth condition/i);
+// Regression for the silently degraded probe: truth-condition retrieval used to
+// be collected inside the condition loop, so an inflated-only run left the
+// ladder empty and the levels probe ran rubric-less on a corpus arm — under an
+// unchanged `levels|*` fingerprint, so the degraded calls would have pooled.
+test('an inflated-only run still gives a corpus arm its levels rubric block', async () => {
+  const r = recorder();
+  await runGenerationArms(null, null, {
+    ...OPTS,
+    arms: [ARMS.find((a) => a.name === 'deviation-deterministic')],
+    probes: ['levels'],
+    conditions: ['inflated'],
+    callFn: r.callFn,
+  });
+  assert.equal(r.prompts.length, 1);
+  assert.match(r.prompts[0], /Verified Readiness Rubrics \(authoritative\)/);
 });
 
-test('--with-fabrication-probe accepts both conditions', () => {
-  assert.deepEqual(validateArgs(['--with-fabrication-probe', '--level-condition=both'], []), []);
-});
-
-test('--with-fabrication-probe accepts the default condition', () => {
-  assert.deepEqual(validateArgs(['--with-fabrication-probe'], []), []);
+test('the fabrication probe gets the truth rubric block under an inflated-only run', async () => {
+  const r = recorder();
+  const results = await runGenerationArms(null, null, {
+    ...OPTS,
+    arms: [ARMS.find((a) => a.name === 'deviation-deterministic')],
+    probes: [],
+    conditions: ['inflated'],
+    withFabrication: true,
+    callFn: r.callFn,
+  });
+  assert.equal(results['deviation-deterministic'].startups['AgroLink PH'].retrieved.length, 12);
+  assert.match(r.prompts[0], /Verified Readiness Rubrics \(authoritative\)/);
 });

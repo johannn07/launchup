@@ -160,6 +160,14 @@ function inflatedLevels(levels) {
   return { ...levels, ...INFLATED_OVERRIDE };
 }
 
+/** The one place a condition maps to supplied levels — live run and --dry-run. */
+const levelsForCondition = (startup, condition) =>
+  condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+
+/** The one place a condition maps to its storage field — scoring and audit trail. */
+const conditionField = (condition) =>
+  condition === 'inflated' ? 'assertionInflatedCalls' : 'assertionTruthCalls';
+
 /**
  * Exact names only, like selectProbes: two fixed values, so a prefix match buys
  * nothing and could silently select the wrong one. Defaults to `truth`, which
@@ -226,21 +234,6 @@ function validateArgs(argv, mergeFiles) {
       '--merge was given no files to pool (missing arguments, a glob that matched nothing, or ' +
         '--merge placed last with nothing after it). Refusing to fall through to a live generation run.',
     );
-  }
-
-  // The hallucination probe's rubric block always comes from the truth-condition
-  // retrieval (cell.retrieved), so excluding 'truth' leaves it silently rubric-less
-  // — a degraded arm that looks like a real one and still spends quota to produce.
-  if (toValidate.includes('--with-fabrication-probe')) {
-    const levelConditionArg = toValidate.find((a) => a.startsWith('--level-condition='));
-    const raw = levelConditionArg ? levelConditionArg.slice('--level-condition='.length) : null;
-    if (!selectLevelConditions(raw).conditions.includes('truth')) {
-      errors.push(
-        '--with-fabrication-probe needs the truth condition: its rubric block comes from the ' +
-          'truth-condition retrieval, so under --level-condition=inflated it would run with no rubric ' +
-          'at all and spend quota on a degraded probe. Use --level-condition=both or truth.',
-      );
-    }
   }
 
   return errors;
@@ -942,17 +935,20 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   const levelBlocks = new Map();  // `${arm}|${startup}` -> block for the levels probe
   for (const arm of arms) {
     for (const [startupName, startup] of selectedStartups) {
-      let truthRetrieved = [];
+      // Unconditional, whatever conditions were selected: the levels probe's
+      // ladder and the fabrication probe's rubric block both key off the truth
+      // retrieval, and deriving them from `inflated` (or from nothing) is a
+      // silently degraded probe carrying a valid fingerprint. Free — baseline
+      // returns [], deterministic is a key lookup, and semantic's one embed is
+      // memoized on embedState.
+      const truthRetrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
       for (const condition of conditions) {
-        const levels = condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+        const levels = levelsForCondition(startup, condition);
         const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
         rnaBlocks.set(`${arm.name}|${startupName}|${condition}`, { block: built.rnaBlock, levels });
-        if (condition === 'truth') truthRetrieved = built.retrieved;
       }
       // The levels probe is unaffected by the manipulation — its prompt carries
       // no supplied levels at all — so its ladder keys off the truth retrieval.
-      // When only `inflated` is selected, truthRetrieved stays [] and the ladder
-      // is empty, which is correct: that run is not measuring the levels probe.
       // Only corpus arms get a rubric. `semantic` retrieves nothing here
       // (Step A: 0/12), making it a null-condition replicate of baseline —
       // kept deliberately as a noise control, not a third condition.
@@ -1041,8 +1037,8 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
 
         // --- Hallucination probe (metric 2) ---
         // Unaffected by the level manipulation, so it reads the truth-condition
-        // block via cell.retrieved rather than a per-condition rnaBlocks entry —
-        // that stays defined even when 'truth' isn't among the selected conditions.
+        // block via cell.retrieved, which is now computed whatever conditions
+        // were selected — see the retrieval above.
         if (withFabrication) {
           try {
             const out = await attempt(callFn, ai, hallucinationPrompt(startup.doc, renderRubricBlock(cell.retrieved), startup.present, startup.absent), retry, `${arm.name} / ${startupName} / rep ${rep} / hallucination`);
@@ -1504,7 +1500,7 @@ if (require.main === module) {
           console.log(`\n${'='.repeat(78)}\n${arm.name} / ${startupName}\n${'='.repeat(78)}`);
           console.log(`retrieved for RNA probe: ${retrieved.length} rows; levels probe: ${ladder.length} rows`);
           for (const condition of conditionSelection.conditions) {
-            const levels = condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+            const levels = levelsForCondition(startup, condition);
             const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
             console.log(`\n----- RNA PROMPT (${condition}) -----\n${rnaPrompt(startup.doc, built.rnaBlock, levels)}`);
           }
