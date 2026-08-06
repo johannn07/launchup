@@ -17,8 +17,18 @@
 const NEGATION =
   /\b(?:no|not|never|none|lacks?|lacking|without|absent)\b|n['’]t\b|\b(?:absence|lack)\s+of\b|\b(?:yet|has\s+yet|have\s+yet)\s+to\b/i;
 
+/**
+ * `need(?:s|ed|ing)?` rather than `need\s+to`: the model's modal form for a
+ * requirement is a label — "Needs: Advance to ORL 3", "Need: Draft an initial
+ * funding hypothesis", "Needs a defined financial model", "certifications
+ * needed". Seven of fourteen unclassified clauses on 2026-08-06 were this.
+ *
+ * Widening here cannot raise the fabrication rate: classifyClause tests
+ * recommendation before assertion, so a new match can only move a clause OUT of
+ * `asserted`.
+ */
 const RECOMMENDATION =
-  /\b(?:should|must|need\s+to|needs\s+to|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able))\b/i;
+  /\b(?:should|must|need(?:s|ed|ing)?|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able)|require(?:s|d|ment|ments)?)\b/i;
 
 /** Clause-initial bare imperative: "Engage counsel", "Draft a funding plan". */
 const IMPERATIVE =

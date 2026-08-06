@@ -287,3 +287,26 @@ test('a bare initial is not a sentence end', () => {
   const clauses = splitClauses('Founders are E. Reyes and M. Villanueva of the venture.');
   assert.equal(clauses.length, 1);
 });
+
+// --------------------------------------------------------------------------
+// Gap 1, measured 2026-08-06: seven of the fourteen `unclassified` clauses were
+// recommendations wearing a label. RECOMMENDATION required `need\s+to`, so
+// "Needs:", "Need:", "Needs a ..." and "needed" all missed. Strings verbatim
+// from measurement/results/2026-08-06-supplied-level.json.
+// --------------------------------------------------------------------------
+
+const LABEL_FORM = [
+  [ORG, 'Needs: Advance to ORL 3 by engaging the first non-founder contributor, such as a contractor, advisor, or part-time hire.'],
+  [INVEST, 'Needs: Advance to IRL 2 by forming an informal funding hypothesis regarding future capital needs and potential target raise amounts.'],
+  [INVEST, 'Need: Draft an initial funding hypothesis, outline target raise requirements'],
+  [INVEST, 'Needs a defined financial model and funding strategy to support technology development and field operations.'],
+  [INVEST, 'Needs initial funding or capital investment to transition from prototype to working platform development.'],
+  [REGU, 'Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards'],
+  [INVEST, 'Needs: Complete a pitch deck or one-pager and conduct initial investor conversations, logging meetings held with targeted investors to reach IRL 4.'],
+];
+
+for (const [tokens, clause] of LABEL_FORM) {
+  test(`a labelled requirement is a recommendation: "${clause.slice(0, 40)}..."`, () => {
+    assert.equal(classifyClause(clause, tokens), 'recommended');
+  });
+}
