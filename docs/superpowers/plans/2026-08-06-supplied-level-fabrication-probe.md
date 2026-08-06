@@ -653,28 +653,30 @@ Update the per-cell budget line so the console estimate stays honest:
     const callsPerCell = (withFabrication ? 1 : 0) + (probes.includes('levels') ? 1 : 0) + (probes.includes('rna') ? conditions.length : 0);
 ```
 
-Replace the pre-loop `rnaBlocks` construction so it is keyed by condition, and initialise the two new arrays:
+Replace the pre-loop body inside `for (const [startupName, startup] of selectedStartups)` (currently lines ~877-885). The existing local is named **`embedState`**, not `state`, and `retrieveRubricsForArm`'s result is currently held in a `retrieved` const that the levels ladder also reads — so build the conditions first and keep the truth-condition rows for both the ladder and the cell:
 
 ```js
+      let truthRetrieved = [];
       for (const condition of conditions) {
         const levels = condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
-        const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, state);
+        const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
         rnaBlocks.set(`${arm.name}|${startupName}|${condition}`, { block: built.rnaBlock, levels });
-        if (condition === 'truth') retrievedForCell = built.retrieved;
+        if (condition === 'truth') truthRetrieved = built.retrieved;
       }
-```
-
-Keep `results[arm.name].startups[startupName].retrieved` set from the **truth** condition — `mergeRuns` copies that field and historical files carry the same shape.
-
-Initialise the cell as:
-
-```js
+      // The levels probe is unaffected by the manipulation — its prompt carries
+      // no supplied levels at all — so its ladder keys off the truth retrieval.
+      // When only `inflated` is selected, truthRetrieved stays [] and the ladder
+      // is empty, which is correct: that run is not measuring the levels probe.
+      const ladder = arm.ragCorpus && truthRetrieved.length ? fullLadderRubrics() : [];
+      levelBlocks.set(`${arm.name}|${startupName}`, renderLevelsBlockFor(arm, ladder));
       results[arm.name].startups[startupName] = {
-        retrieved: retrievedForCell,
+        retrieved: truthRetrieved,
         rnaCalls: [], levelCalls: [], hallucCalls: [],
         assertionTruthCalls: [], assertionInflatedCalls: [],
       };
 ```
+
+`results[...].retrieved` stays the **truth**-condition rows: `mergeRuns` copies that field and every historical file carries the same shape.
 
 Inside the rep loop, replace the single RNA block with a loop over conditions. Everything else — the 429 `break repLoop`, the non-429 `console.error`, the `pacingMs` sleep — is unchanged and must stay:
 
