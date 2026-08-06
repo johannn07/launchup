@@ -107,7 +107,7 @@ const MERGE_FILES = MERGE_ARGS.flatMap((pattern) =>
 const KNOWN_EXACT_FLAGS = new Set([
   '--retrieval-only', '--dry-run', '--with-fabrication-probe', '--fingerprint', '--merge',
 ]);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe=', '--level-condition='];
 
 const ALL_PROBES = ['rna', 'levels'];
 
@@ -140,6 +140,44 @@ function selectProbes(filter) {
   return { probes: ALL_PROBES.filter((p) => entries.includes(p)), errors: [] };
 }
 
+const ALL_LEVEL_CONDITIONS = ['truth', 'inflated'];
+
+/**
+ * Organizational, Regulatory and Investment are the three dimensions with
+ * verified hard absences, and both startups sit at O2 R1 I1 — so one override
+ * covers both and the manipulated cells pool.
+ *
+ * 4 is +2/+3/+3 from truth: enough to pull the ORL/RRL/IRL 4-5 rubric rows
+ * (the ones demanding a non-founder hire, engaged counsel, and a written
+ * funding plan), and still plausible as a real mentor's mis-set level. T/M/A
+ * stay at truth so every call carries its own unmanipulated control.
+ */
+const INFLATED_OVERRIDE = { Organizational: 4, Regulatory: 4, Investment: 4 };
+
+/** Returns a NEW object. STARTUPS.levels is inside `common` and is hashed into
+ *  all 15 fingerprints — mutating it would orphan every collected result file. */
+function inflatedLevels(levels) {
+  return { ...levels, ...INFLATED_OVERRIDE };
+}
+
+/**
+ * Exact names only, like selectProbes: two fixed values, so a prefix match buys
+ * nothing and could silently select the wrong one. Defaults to `truth`, which
+ * reproduces the harness's behaviour before this flag existed.
+ */
+function selectLevelConditions(filter) {
+  if (filter == null) return { conditions: ['truth'], errors: [] };
+  const raw = String(filter).trim().toLowerCase();
+  if (raw === 'both') return { conditions: ALL_LEVEL_CONDITIONS.slice(), errors: [] };
+  if (ALL_LEVEL_CONDITIONS.includes(raw)) return { conditions: [raw], errors: [] };
+  return {
+    conditions: [],
+    errors: [
+      `--level-condition=${filter} is not a condition. Available: ${ALL_LEVEL_CONDITIONS.join(', ')}, both.`,
+    ],
+  };
+}
+
 /**
  * Pure validation over raw CLI args plus the glob-resolved --merge list.
  * Returns error strings; empty means well-formed. Exported and called only
@@ -166,7 +204,8 @@ function validateArgs(argv, mergeFiles) {
         errors.push(
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
             '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
-            '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, --merge <files...>.',
+            '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, ' +
+            '--level-condition=<truth|inflated|both>, --merge <files...>.',
         );
       }
     } else {
@@ -1390,6 +1429,10 @@ module.exports = {
   validateArgs,
   selectCells,
   selectProbes,
+  ALL_LEVEL_CONDITIONS,
+  INFLATED_OVERRIDE,
+  inflatedLevels,
+  selectLevelConditions,
   isRetryableServerError,
   is429,
   withRetry,
