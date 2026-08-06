@@ -750,13 +750,13 @@ function renderTitlesOnlyBlock(rows) {
  * memoized on `state`, and degrades to "nothing retrieved" on failure — as
  * EmbeddingService.embed does in production.
  */
-async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
+async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state, levels = startup.levels) {
   if (!arm.ragCorpus) return [];
 
   if (arm.rubricMode === 'deterministic') {
     const wanted = new Set();
     for (const dim of DIMENSIONS) {
-      const level = startup.levels[dim];
+      const level = levels[dim];
       wanted.add(rubricKey(dim, level));
       wanted.add(rubricKey(dim, Math.min(level + 1, MAX_READINESS_LEVEL)));
     }
@@ -782,6 +782,18 @@ async function retrieveRubricsForArm(ai, arm, startup, corpusVecs, state) {
     .slice(0, RUBRIC_LIMIT)
     .filter((x) => x.score >= FLOOR)
     .map((x) => x.r);
+}
+
+/**
+ * The one place an RNA cell's retrieval and rubric block are built.
+ *
+ * --dry-run and the live run built these independently before, and that is
+ * precisely how the harness once shipped a --dry-run printing a prompt the run
+ * would not send — defeating the only quota-free way to check a prompt.
+ */
+async function buildRnaCell(ai, arm, startup, levels, corpusVecs, state) {
+  const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, state, levels);
+  return { retrieved, rnaBlock: renderRubricBlock(retrieved) };
 }
 
 /**
@@ -873,6 +885,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
     // levels probe doubles the reps a day's cap affords for the only metric
     // that discriminates.
     probes = ['rna', 'levels'],
+    conditions = ['truth'],
   } = opts;
 
   const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
@@ -880,7 +893,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
 
   if (report) {
     console.log('\n\n=== Step B: generation arms (baseline / sdd-semantic / deviation-deterministic) ===');
-    const callsPerCell = (withFabrication ? 1 : 0) + probes.length;
+    const callsPerCell = (withFabrication ? 1 : 0) + (probes.includes('levels') ? 1 : 0) + (probes.includes('rna') ? conditions.length : 0);
     const perRep = arms.length * selectedStartups.length * callsPerCell;
     console.log(
       `reps=${reps}, ${perRep} calls per rep (${reps * perRep} total) ` +
@@ -914,14 +927,27 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   const levelBlocks = new Map();  // `${arm}|${startup}` -> block for the levels probe
   for (const arm of arms) {
     for (const [startupName, startup] of selectedStartups) {
-      const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
-      rnaBlocks.set(`${arm.name}|${startupName}`, renderRubricBlock(retrieved));
+      let truthRetrieved = [];
+      for (const condition of conditions) {
+        const levels = condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+        const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
+        rnaBlocks.set(`${arm.name}|${startupName}|${condition}`, { block: built.rnaBlock, levels });
+        if (condition === 'truth') truthRetrieved = built.retrieved;
+      }
+      // The levels probe is unaffected by the manipulation — its prompt carries
+      // no supplied levels at all — so its ladder keys off the truth retrieval.
+      // When only `inflated` is selected, truthRetrieved stays [] and the ladder
+      // is empty, which is correct: that run is not measuring the levels probe.
       // Only corpus arms get a rubric. `semantic` retrieves nothing here
       // (Step A: 0/12), making it a null-condition replicate of baseline —
       // kept deliberately as a noise control, not a third condition.
-      const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
+      const ladder = arm.ragCorpus && truthRetrieved.length ? fullLadderRubrics() : [];
       levelBlocks.set(`${arm.name}|${startupName}`, renderLevelsBlockFor(arm, ladder));
-      results[arm.name].startups[startupName] = { retrieved, rnaCalls: [], levelCalls: [], hallucCalls: [] };
+      results[arm.name].startups[startupName] = {
+        retrieved: truthRetrieved,
+        rnaCalls: [], levelCalls: [], hallucCalls: [],
+        assertionTruthCalls: [], assertionInflatedCalls: [],
+      };
     }
   }
 
@@ -929,39 +955,50 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   repLoop: for (let rep = 0; rep < reps; rep++) {
     for (const arm of arms) {
       for (const [startupName, startup] of selectedStartups) {
-        const rnaBlock = rnaBlocks.get(`${arm.name}|${startupName}`);
         const levelBlock = levelBlocks.get(`${arm.name}|${startupName}`);
         const cell = results[arm.name].startups[startupName];
 
-        // --- RNA generation (metric 1) ---
-        if (probes.includes('rna')) try {
-          const out = await attempt(callFn, ai, rnaPrompt(startup.doc, rnaBlock, startup.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna`);
-          const payload = extractJsonPayload(out.text);
-          const parsed = payload ? JSON.parse(payload) : null;
-          if (Array.isArray(parsed)) {
-            const byDim = {};
-            for (const x of parsed) {
-              if (typeof x.rna === 'string' && typeof x.readiness_level_type === 'string') {
-                byDim[x.readiness_level_type] = x.rna;
+        // --- RNA generation (metrics 1-2 on truth; metric 5 on both) ---
+        if (probes.includes('rna')) for (const condition of conditions) {
+          const entry = rnaBlocks.get(`${arm.name}|${startupName}|${condition}`);
+          try {
+            const out = await attempt(callFn, ai, rnaPrompt(startup.doc, entry.block, entry.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna(${condition})`);
+            const payload = extractJsonPayload(out.text);
+            const parsed = payload ? JSON.parse(payload) : null;
+            if (Array.isArray(parsed)) {
+              const byDim = {};
+              for (const x of parsed) {
+                if (typeof x.rna === 'string' && typeof x.readiness_level_type === 'string') {
+                  byDim[x.readiness_level_type] = x.rna;
+                }
+              }
+              // One call, two records: metrics 1-2 read rnaCalls, metric 5 reads
+              // its own per-condition field. Separate fields keep mergeRuns'
+              // 1:1 metric->field invariant, which double-pushes if two metric
+              // keys share a field and silently doubles n.
+              if (condition === 'truth') {
+                cell.rnaCalls.push({ byDim });
+                cell.assertionTruthCalls.push({ byDim });
+              } else {
+                cell.assertionInflatedCalls.push({ byDim });
               }
             }
-            cell.rnaCalls.push({ byDim });
+          } catch (e) {
+            if (is429(e)) {
+              console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna(${condition})]`);
+              quotaHit = true;
+              results[arm.name].quotaHit = true;
+              break repLoop;
+            } else {
+              // Parse failures, network blips and schema errors must not vanish
+              // silently: this harness runs unattended
+              // across a 20-request daily cap, and the only symptom of a
+              // swallowed non-429 error is a lower n= with no explanation.
+              console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna(${condition})]`, e.message);
+            }
           }
-        } catch (e) {
-          if (is429(e)) {
-            console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna]`);
-            quotaHit = true;
-            results[arm.name].quotaHit = true;
-            break repLoop;
-          } else {
-            // Parse failures, network blips and schema errors must not vanish
-            // silently: this harness runs unattended
-            // across a 20-request daily cap, and the only symptom of a
-            // swallowed non-429 error is a lower n= with no explanation.
-            console.error(`  [error: ${arm.name} / ${startupName} / rep ${rep} / rna]`, e.message);
-          }
+          if (pacingMs) await sleep(pacingMs);
         }
-        if (pacingMs) await sleep(pacingMs);
 
         // --- Levels (metric 3) ---
         if (probes.includes('levels')) try {
@@ -988,9 +1025,12 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
         if (pacingMs) await sleep(pacingMs);
 
         // --- Hallucination probe (metric 2) ---
+        // Unaffected by the level manipulation, so it reads the truth-condition
+        // block via cell.retrieved rather than a per-condition rnaBlocks entry —
+        // that stays defined even when 'truth' isn't among the selected conditions.
         if (withFabrication) {
           try {
-            const out = await attempt(callFn, ai, hallucinationPrompt(startup.doc, rnaBlock, startup.present, startup.absent), retry, `${arm.name} / ${startupName} / rep ${rep} / hallucination`);
+            const out = await attempt(callFn, ai, hallucinationPrompt(startup.doc, renderRubricBlock(cell.retrieved), startup.present, startup.absent), retry, `${arm.name} / ${startupName} / rep ${rep} / hallucination`);
             const payload = extractJsonPayload(out.text);
             const parsed = payload ? JSON.parse(payload) : null;
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -1342,8 +1382,9 @@ if (require.main === module) {
       Object.keys(STARTUPS),
     );
     const probeSelection = selectProbes(flagValue('only-probe'));
-    if (selection.errors.length || probeSelection.errors.length) {
-      for (const e of [...selection.errors, ...probeSelection.errors]) console.error(e);
+    const conditionSelection = selectLevelConditions(flagValue('level-condition'));
+    if (selection.errors.length || probeSelection.errors.length || conditionSelection.errors.length) {
+      for (const e of [...selection.errors, ...probeSelection.errors, ...conditionSelection.errors]) console.error(e);
       process.exit(1);
     }
 
@@ -1377,12 +1418,15 @@ if (require.main === module) {
         for (const startupName of selection.startups) {
           const startup = STARTUPS[startupName];
           const retrieved = await retrieveRubricsForArm(ai, arm, startup, corpusVecs, embedState);
-          const rnaBlock = renderRubricBlock(retrieved);
           const ladder = arm.ragCorpus && retrieved.length ? fullLadderRubrics() : [];
           const levelBlock = renderLevelsBlockFor(arm, ladder);
           console.log(`\n${'='.repeat(78)}\n${arm.name} / ${startupName}\n${'='.repeat(78)}`);
           console.log(`retrieved for RNA probe: ${retrieved.length} rows; levels probe: ${ladder.length} rows`);
-          console.log(`\n----- RNA PROMPT -----\n${rnaPrompt(startup.doc, rnaBlock, startup.levels)}`);
+          for (const condition of conditionSelection.conditions) {
+            const levels = condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+            const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
+            console.log(`\n----- RNA PROMPT (${condition}) -----\n${rnaPrompt(startup.doc, built.rnaBlock, levels)}`);
+          }
           console.log(`\n----- LEVELS PROMPT -----\n${levelsPrompt(startup.doc, levelBlock)}`);
         }
       }
@@ -1394,6 +1438,7 @@ if (require.main === module) {
       arms: selection.arms,
       startupNames: selection.startups,
       probes: probeSelection.probes,
+      conditions: conditionSelection.conditions,
     });
     if (OUT_FILE) writeResults(OUT_FILE, results);
   })().catch((e) => {
@@ -1420,6 +1465,7 @@ module.exports = {
   rnaPrompt,
   levelsPrompt,
   hallucinationPrompt,
+  buildRnaCell,
   extractJsonPayload,
   isAbsentAnswer,
   mean,

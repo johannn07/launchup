@@ -60,3 +60,77 @@ test('a misspelled flag is still rejected', () => {
   assert.equal(errs.length, 1);
   assert.match(errs[0], /Unrecognized flag/);
 });
+
+const { runGenerationArms, ARMS } = require(path.resolve(__dirname, '../measure-grounding.js'));
+
+const ONE_ARM = [ARMS.find((a) => a.name === 'baseline')];
+const RNA_JSON = JSON.stringify([
+  { readiness_level_type: 'Investment', rna: 'The venture has drafted a funding plan (IRL 3).' },
+]);
+
+function recorder() {
+  const prompts = [];
+  return {
+    prompts,
+    callFn: async (_ai, prompt) => {
+      prompts.push(prompt);
+      return { text: RNA_JSON };
+    },
+  };
+}
+
+const OPTS = {
+  arms: ONE_ARM,
+  startupNames: ['AgroLink PH'],
+  probes: ['rna'],
+  reps: 1,
+  pacingMs: 0,
+  report: false,
+  retry: { attempts: 1, delayMs: 0, sleep: async () => {} },
+};
+
+// A call filtered after the fact still costs a call against a 20/day cap, so
+// the assertion is that the request was never MADE.
+test('truth-only suppresses the inflated call rather than discarding it', async () => {
+  const r = recorder();
+  await runGenerationArms(null, null, { ...OPTS, conditions: ['truth'], callFn: r.callFn });
+  assert.equal(r.prompts.length, 1, 'exactly one model call');
+  assert.match(r.prompts[0], /IRL 1/, 'the truth condition supplies AgroLink IRL 1');
+});
+
+test('both conditions issue exactly one call each, with different supplied levels', async () => {
+  const r = recorder();
+  await runGenerationArms(null, null, { ...OPTS, conditions: ['truth', 'inflated'], callFn: r.callFn });
+  assert.equal(r.prompts.length, 2, 'one call per condition, never two per condition');
+  assert.match(r.prompts[0], /IRL 1/);
+  assert.match(r.prompts[1], /IRL 4/);
+  assert.match(r.prompts[1], /ORL 4/);
+  assert.match(r.prompts[1], /RRL 4/);
+});
+
+test('the inflated prompt leaves Technology at truth', async () => {
+  const r = recorder();
+  await runGenerationArms(null, null, { ...OPTS, conditions: ['inflated'], callFn: r.callFn });
+  assert.match(r.prompts[0], /TRL 2/, 'AgroLink Technology is 2 and must not move');
+});
+
+test('each condition lands in its own storage field', async () => {
+  const r = recorder();
+  const results = await runGenerationArms(null, null, {
+    ...OPTS, conditions: ['truth', 'inflated'], callFn: r.callFn,
+  });
+  const cell = results.baseline.startups['AgroLink PH'];
+  assert.equal(cell.assertionTruthCalls.length, 1);
+  assert.equal(cell.assertionInflatedCalls.length, 1);
+  assert.equal(cell.rnaCalls.length, 1, 'only the truth condition feeds metrics 1-2');
+});
+
+// The levels probe's prompt contains no supplied levels at all, so running it
+// once per condition would spend a second call for a byte-identical request.
+test('the levels probe runs once regardless of how many conditions are selected', async () => {
+  const r = recorder();
+  await runGenerationArms(null, null, {
+    ...OPTS, probes: ['levels'], conditions: ['truth', 'inflated'], callFn: r.callFn,
+  });
+  assert.equal(r.prompts.length, 1);
+});
