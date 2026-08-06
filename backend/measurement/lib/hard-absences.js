@@ -30,7 +30,29 @@
  * Directional on purpose: it catches over-placement into absent evidence and is
  * silent on under-placement.
  */
-const HARD_ABSENCES = {
+/**
+ * Two lists, one source, because the two consumers want opposite things.
+ *
+ * `absentTokens` is BROAD on purpose: verifyAbsences wants the strongest
+ * possible absence guarantee over the documents, and a topic word that never
+ * appears is a stronger guarantee than an artifact noun that never appears.
+ *
+ * `artifactTokens` is NARROW, and is what lib/assertions.js scores GENERATED
+ * text with. A broad topic word fires on abstract usage that asserts no
+ * artifact — "has compliance obligations", "has limited runway", "has
+ * significant regulatory exposure" — and each such hit scores `asserted`,
+ * breaking the lower-bound property the whole probe rests on.
+ *
+ * Derived, never duplicated: narrow = broad − `notArtifacts` + `artifactExtras`.
+ * `notArtifacts` names the topic words; `artifactExtras` are multiword
+ * refinements of a dropped word, the same device as `term sheet`/`org chart`.
+ */
+const narrow = ({ absentTokens, notArtifacts = [], artifactExtras = [] }) => [
+  ...absentTokens.filter((t) => !notArtifacts.includes(t)),
+  ...artifactExtras,
+];
+
+const SPECS = {
   Organizational: {
     ceiling: 2,
     requires: 'ORL 3+ requires a non-founder contributor under contract; ORL 4+ adds written role definitions and a first full-time hire beyond the founders.',
@@ -38,22 +60,39 @@ const HARD_ABSENCES = {
     // "contributor" added: ORL 3's own rubric text says "non-founder contributor",
     // so a fabrication is more likely to use that word than "contractor".
     absentTokens: ['employee', 'hire', 'hired', 'staff', 'contractor', 'contributor', 'advisor', 'consultant', 'org chart', 'board'],
+    // Bare "board" is a modifier as often as a noun ("board-level discipline"),
+    // so the narrow list names the governance artifact instead.
+    notArtifacts: ['board'],
+    artifactExtras: ['advisory board', 'board of directors', 'board seat'],
   },
   Regulatory: {
     ceiling: 2,
     requires: 'RRL 3+ requires external counsel engaged and a preliminary opinion received.',
     // "trademark"/"IPOPHL" are present in both documents but are IP, not product regulation.
-    // "opinion" added: RRL 3's own rubric text says "a preliminary opinion received".
     absentTokens: ['counsel', 'lawyer', 'legal', 'regulator', 'regulatory', 'compliance', 'license', 'licence', 'permit', 'certification', 'accredit', 'opinion'],
+    // Domain words, not artifacts: "has compliance obligations" and "has
+    // significant regulatory exposure" name nothing that could exist or not.
+    notArtifacts: ['legal', 'compliance', 'regulatory', 'opinion'],
+    // RRL 3's own rubric text is "a preliminary opinion received"; bare
+    // "opinion" also catches "in our opinion".
+    artifactExtras: ['preliminary opinion'],
   },
   Investment: {
     ceiling: 2,
     requires: 'IRL 3+ requires a written funding plan with a stated target raise and use of funds.',
     absentTokens: ['funding', 'investor', 'invest', 'raise', 'round', 'seed', 'grant', 'angel', 'term sheet', 'SAFE', 'capital', 'valuation', 'burn', 'runway'],
+    // Financial condition, not artifacts: "limited runway", "high burn",
+    // "compliance obligations under capital rules" assert no document evidence.
+    notArtifacts: ['capital', 'burn', 'runway'],
   },
 };
 
-/** Fails loudly if a token claimed absent actually appears — assert, don't trust. */
+const HARD_ABSENCES = Object.fromEntries(
+  Object.entries(SPECS).map(([dim, spec]) => [dim, { ...spec, artifactTokens: narrow(spec) }]),
+);
+
+/** Fails loudly if a token claimed absent actually appears — assert, don't trust.
+ *  Deliberately the BROAD list: the guarantee should be as strong as possible. */
 function verifyAbsences(docs) {
   const violations = [];
   for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {

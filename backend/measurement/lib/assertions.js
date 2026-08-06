@@ -36,25 +36,47 @@ const IMPERATIVE =
 const ASSERTION =
   /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 
-/** Multiword tokens like "term sheet" and "org chart" must match as phrases. */
+/**
+ * Multiword tokens like "term sheet" and "org chart" must match as phrases.
+ *
+ * The optional plural is not cosmetic: RRL 4's own text reads "The specific
+ * permits, licenses, or certifications required", so the plural is the form the
+ * model echoes. Without it "Two permits have been issued" scored null — invisible
+ * even to `mentioned`, which the README calls an upper bound.
+ */
 const tokenRe = (token) =>
-  new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}\\b`, 'i');
+  new RegExp(
+    `\\b${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+')}(?:s|es)?\\b`,
+    'i',
+  );
+
+/** A coordinated clause that reports an absence: "and no investors...", "and has not...". */
+const AND_CLAUSE =
+  /\s+and\s+(?=(?:it\s+|they\s+|the\s+\w+\s+)?(?:should|must|need|needs|consider|begin|start|prioriti[sz]e|plan\s+to|aim\s+to|ought)\b|(?:(?:has|have|had|is|are|was|were)\s+)?(?:no|not|never)\b)/i;
 
 /**
- * Sentence boundaries, semicolons, and comma-joined coordination — plus the one
- * bare-conjunction case that matters: a negated report joined directly to its
- * recommendation ("has no funding plan and should draft one"). Splitting every
- * bare "and" would shred noun phrases ("counsel and compliance review") into
- * cue-less fragments and inflate the unclassified column for nothing.
+ * Sentence boundaries, semicolons, comma-joined coordination, contrastive
+ * conjunctions, and the coordinations that join two independent reports.
+ *
+ * "Assessment of X, absence of Y" is the modal shape of an RNA, so a balanced
+ * sentence must not collapse into one clause: NEGATION has precedence and would
+ * mask the assertion half. Splitting every bare "and" is still refused — it
+ * would shred noun phrases ("counsel and compliance review") into cue-less
+ * fragments — so "and" splits only before a modal or a negation, the two shapes
+ * that start a new finite clause.
  */
 function splitClauses(text) {
   return String(text)
-    .split(/(?<=[.!?])\s+|;\s*|,\s+(?=(?:and|but|while|whereas|although|though)\b)/i)
-    .flatMap((part) =>
-      part.split(
-        /\s+(?:and|but)\s+(?=(?:it\s+|they\s+|the\s+\w+\s+)?(?:should|must|need|needs|consider|begin|start|prioriti[sz]e|plan\s+to|aim\s+to|ought)\b)/i,
-      ),
-    )
+    .split(/(?<=[.!?])\s+|;\s*/)
+    .flatMap((part) => part.split(/,\s+(?=(?:and|but|while|whereas|although|though)\b)/i))
+    // A leading subordinator scopes its negation to its own clause: "While no
+    // term sheet exists, the team has secured angel funding" asserts.
+    .flatMap((part) => {
+      const m = /^((?:while|though|although|whereas)\b[^,]*),\s*(.+)$/i.exec(part.trim());
+      return m ? [m[1], m[2]] : [part];
+    })
+    .flatMap((part) => part.split(/\s+(?:but|though|while)\s+/i))
+    .flatMap((part) => part.split(AND_CLAUSE))
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -93,7 +115,9 @@ function scoreAssertedAbsences(rnaByDim, absences) {
     if (typeof text !== 'string') continue;
     const clauses = [];
     for (const clause of splitClauses(text)) {
-      const klass = classifyClause(clause, spec.absentTokens);
+      // artifactTokens, not absentTokens: the broad list is verifyAbsences'
+      // absence guarantee and fires on abstract usage here. See lib/hard-absences.js.
+      const klass = classifyClause(clause, spec.artifactTokens);
       if (klass) clauses.push({ text: clause, klass });
     }
     observations.push({

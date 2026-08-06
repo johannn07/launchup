@@ -6,9 +6,9 @@ const { splitClauses, classifyClause, scoreAssertedAbsences } =
   require(path.resolve(__dirname, '../lib/assertions.js'));
 const { HARD_ABSENCES } = require(path.resolve(__dirname, '../lib/hard-absences.js'));
 
-const INVEST = HARD_ABSENCES.Investment.absentTokens;
-const REGU = HARD_ABSENCES.Regulatory.absentTokens;
-const ORG = HARD_ABSENCES.Organizational.absentTokens;
+const INVEST = HARD_ABSENCES.Investment.artifactTokens;
+const REGU = HARD_ABSENCES.Regulatory.artifactTokens;
+const ORG = HARD_ABSENCES.Organizational.artifactTokens;
 
 // The exact sentence observed on 2026-08-05. This is the defect the probe exists
 // to count: the rubric's evidence REQUIREMENT restated as accomplished fact.
@@ -68,7 +68,11 @@ test('scoring is binary per dimension, so verbosity cannot inflate it', () => {
     { Investment: 'Angel funding is secured. Investor conversations are underway. The round is closed.' },
     { Investment: HARD_ABSENCES.Investment },
   );
-  assert.equal(r.observations[0].asserted, true, 'three fabricating clauses still count as one observation');
+  // Only the first clause asserts under the tightened cue set — "are underway"
+  // and "is closed" are bare copulas with no participle, so they land in
+  // unclassified. Asserting that too keeps the test honest about what it covers.
+  assert.equal(r.observations[0].asserted, true, 'one asserting clause still counts as one observation');
+  assert.equal(r.observations[0].unclassified, true, 'the other two clauses match no cue');
 });
 
 test('a dimension the model dropped is skipped, not scored as clean', () => {
@@ -121,4 +125,87 @@ test('a granted permit is an achievement, not unclassified', () => {
 
 test('a received opinion is an achievement', () => {
   assert.equal(classifyClause('A preliminary opinion was received', REGU), 'asserted');
+});
+
+// --------------------------------------------------------------------------
+// The narrow artifact list. The broad `absentTokens` is verifyAbsences' absence
+// guarantee over the documents; reused as an artifact detector over generated
+// text it fires on abstract usage, and every such hit scored `asserted` — which
+// is the opposite direction from the lower bound the probe claims.
+// --------------------------------------------------------------------------
+
+const ABSTRACT_USAGE = [
+  ['Regulatory', REGU, 'The venture has compliance obligations under DOH rules'],
+  ['Regulatory', REGU, 'The venture has significant regulatory exposure'],
+  ['Investment', INVEST, 'The team has limited runway'],
+  ['Investment', INVEST, 'The venture has a high burn relative to revenue'],
+  ['Organizational', ORG, 'The founders have a board-level discipline'],
+];
+
+for (const [dim, tokens, sentence] of ABSTRACT_USAGE) {
+  test(`abstract usage asserts no artifact: ${dim} — "${sentence}"`, () => {
+    assert.notEqual(classifyClause(sentence, tokens), 'asserted');
+  });
+}
+
+test('the narrow list is a subset of the broad one, plus multiword refinements', () => {
+  for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {
+    for (const t of spec.artifactTokens) {
+      const derived = spec.absentTokens.includes(t) || (spec.artifactExtras || []).includes(t);
+      assert.ok(derived, `${dim}: "${t}" is in neither absentTokens nor artifactExtras`);
+    }
+  }
+});
+
+// --------------------------------------------------------------------------
+// Under-count channel (a): singular-only matching. RRL 4's own text reads "The
+// specific permits, licenses, or certifications required" — the plural is the
+// form the model echoes, and it used to be invisible even to `mentioned`.
+// --------------------------------------------------------------------------
+
+test('a plural artifact noun is matched', () => {
+  assert.equal(classifyClause('The venture has engaged three investors', INVEST), 'asserted');
+});
+
+test('a plural under contract is matched', () => {
+  assert.equal(classifyClause('Two contractors are under contract', ORG), 'asserted');
+});
+
+test('plural permits are matched', () => {
+  assert.equal(classifyClause('Two permits have been issued', REGU), 'asserted');
+});
+
+// --------------------------------------------------------------------------
+// Under-count channel (b): "assessment of X, absence of Y" is the modal shape of
+// an RNA. Collapsed into one clause, NEGATION's precedence masks the assertion.
+// --------------------------------------------------------------------------
+
+test('a bare "but" separates an assertion from its balancing absence', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'The venture has drafted a funding plan but no investors have been approached.' },
+    { Investment: HARD_ABSENCES.Investment },
+  );
+  assert.equal(r.observations[0].asserted, true);
+});
+
+test('a leading "While" scopes its negation to its own clause', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'While no term sheet exists, the team has secured angel funding of PHP 2M.' },
+    { Investment: HARD_ABSENCES.Investment },
+  );
+  assert.equal(r.observations[0].asserted, true);
+});
+
+test('"and has not" starts a new clause; the assertion before it survives', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'The venture has secured seed capital and has not yet defined use of funds.' },
+    { Investment: HARD_ABSENCES.Investment },
+  );
+  assert.equal(r.observations[0].asserted, true);
+});
+
+// The reason bare "and" is still not split: a coordinated noun phrase would
+// become two cue-less fragments and inflate the unclassified column for nothing.
+test('a coordinated noun phrase is not split', () => {
+  assert.deepEqual(splitClauses('Engage counsel and compliance review'), ['Engage counsel and compliance review']);
 });
