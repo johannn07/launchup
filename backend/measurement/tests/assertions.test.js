@@ -310,3 +310,50 @@ for (const [tokens, clause] of LABEL_FORM) {
     assert.equal(classifyClause(clause, tokens), 'recommended');
   });
 }
+
+// --------------------------------------------------------------------------
+// Gap 2, measured 2026-08-06. A comma-and split strands a continuation fragment
+// from the modal governing it, leaving it cue-less. Five clauses landed in
+// `unclassified` this way — and one landed in `asserted`, which is a live
+// counterexample to this module's lower-bound guarantee.
+// --------------------------------------------------------------------------
+
+// THE FALSE POSITIVE. Source RNA: "To reach IRL 4, the startup must convert its
+// funding plan into an investor pitch deck or one-pager, initiate warm-intro
+// investor meetings, and maintain an active log of investor pitches conducted."
+// The fragment lost its `must`, and ASSERTION's `maintains?` fired.
+test('a stranded continuation does not assert off its own verb', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'To reach IRL 4, the startup must convert its funding plan into an investor pitch deck or one-pager, initiate warm-intro investor meetings, and maintain an active log of investor pitches conducted.' },
+    { Investment: HARD_ABSENCES.Investment },
+  );
+  assert.equal(r.observations[0].asserted, false, 'the governing "must" makes every fragment advice');
+  assert.equal(r.observations[0].unclassified, false);
+});
+
+const STRANDED = [
+  ['Organizational', ORG, 'To achieve ORL 4, the startup must draft formal role definitions for the core team, create initial operational process artifacts like onboarding checklists or decision logs, and prepare for its first full-time hire beyond the founding team.'],
+  ['Organizational', ORG, 'Need: Document role descriptions, establish operational decision processes, and bring on a first non-founder contributor.'],
+  ['Investment', INVEST, 'To advance investment readiness, AgroLink PH needs to create a written funding plan specifying target raise amounts and use of funds, prepare a pitch deck, and initiate preliminary investor discussions.'],
+  ['Investment', INVEST, 'Needs to build financial models, investor pitch materials, and investment pitch to secure initial funding.'],
+  ['Regulatory', REGU, 'Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards, and compliance certifications needed for health referral software to reach RRL 4.'],
+];
+
+for (const [dim, tokens, sentence] of STRANDED) {
+  test(`a continuation fragment inherits its governing modal: ${dim} — "${sentence.slice(0, 40)}..."`, () => {
+    const r = scoreAssertedAbsences({ [dim]: sentence }, { [dim]: HARD_ABSENCES[dim] });
+    assert.equal(r.observations[0].asserted, false);
+    assert.equal(r.observations[0].unclassified, false, 'the fragment should be recommended, not unclassified');
+  });
+}
+
+// A fragment must never inherit `asserted` — inheritance carries only the two
+// gates that resolve AWAY from fabrication. Without that restriction this would
+// score asserted off the head clause's participle.
+test('a continuation fragment never inherits an assertion', () => {
+  assert.equal(
+    classifyClause('and a term sheet', INVEST, 'The venture has secured angel funding'),
+    'unclassified',
+    'inheriting `asserted` would manufacture a fabrication from a neighbour',
+  );
+});

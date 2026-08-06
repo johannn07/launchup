@@ -102,18 +102,34 @@ function splitClauses(text) {
 }
 
 /**
+ * A fragment left by a coordination split. Its subject and its modal are in the
+ * previous clause: "..., and prepare for its first full-time hire" carries no
+ * cue of its own, and "..., and maintain an active log" carried an ASSERTION cue
+ * it had no right to.
+ */
+const CONTINUATION = /^\s*(?:and|or|then)\b/i;
+
+/**
  * Returns null when the clause names no absent artifact at all.
  *
  * Order is load-bearing: negation, then recommendation, then assertion. A clause
  * holding both "has" and "not" is a correct report of an absence, and a clause
  * holding both "has" and "should" is advice. Testing assertion first would score
  * both as fabrications.
+ *
+ * `scope` is the clause governing a continuation fragment. Only the two gates
+ * that resolve AWAY from fabrication see it — the token test and ASSERTION read
+ * the fragment alone, so a fragment can never be made `asserted` by its
+ * neighbour. Inheriting cues rather than a verdict is deliberate: a head clause
+ * frequently holds no artifact token and so classifies as null, leaving a
+ * verdict-inheriting design nothing to inherit.
  */
-function classifyClause(clause, tokens) {
+function classifyClause(clause, tokens, scope = '') {
   const text = String(clause);
   if (!tokens.some((t) => tokenRe(t).test(text))) return null;
-  if (NEGATION.test(text)) return 'negated';
-  if (RECOMMENDATION.test(text) || IMPERATIVE.test(text.trim())) return 'recommended';
+  const gated = scope ? `${scope} ${text}` : text;
+  if (NEGATION.test(gated)) return 'negated';
+  if (RECOMMENDATION.test(gated) || IMPERATIVE.test(gated.trim())) return 'recommended';
   if (ASSERTION.test(text)) return 'asserted';
   return 'unclassified';
 }
@@ -134,10 +150,13 @@ function scoreAssertedAbsences(rnaByDim, absences) {
     const text = rnaByDim[dimension];
     if (typeof text !== 'string') continue;
     const clauses = [];
+    let scope = '';
     for (const clause of splitClauses(text)) {
+      const continuation = CONTINUATION.test(clause);
       // artifactTokens, not absentTokens: the broad list is verifyAbsences'
       // absence guarantee and fires on abstract usage here. See lib/hard-absences.js.
-      const klass = classifyClause(clause, spec.artifactTokens);
+      const klass = classifyClause(clause, spec.artifactTokens, continuation ? scope : '');
+      if (!continuation) scope = clause;
       if (klass) clauses.push({ text: clause, klass });
     }
     observations.push({
@@ -167,6 +186,7 @@ const CLASSIFIER_SOURCE = [
   ASSERTION.source,
   AND_CLAUSE.source,
   SENTENCE_BREAK.source,
+  CONTINUATION.source,
   tokenRe.toString(),
   splitClauses.toString(),
   classifyClause.toString(),
