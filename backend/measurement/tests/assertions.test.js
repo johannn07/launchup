@@ -399,3 +399,72 @@ test('"existing" is refused — an attributive adjective asserts no artifact', (
     'asserted',
   );
 });
+
+// --------------------------------------------------------------------------
+// Gap 4b, measured 2026-08-06. Once the `Dr.` split is fixed the clause arrives
+// whole — and still has no cue. It asserts by accompaniment: no possession, no
+// achievement participle, just the artifact hung off "alongside".
+// --------------------------------------------------------------------------
+
+test('an artifact governed by an accompaniment preposition is asserted', () => {
+  const r = scoreAssertedAbsences(
+    { Organizational: 'Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor.' },
+    { Organizational: HARD_ABSENCES.Organizational },
+  );
+  assert.equal(r.observations[0].asserted, true);
+});
+
+// `with` is deliberately NOT an accompaniment preposition. It is pervasive and
+// cannot be restricted usefully, and excluding it costs nothing measured: the
+// two already-detected assertions use `with` but are caught by their participle.
+test('"with" is not an accompaniment preposition', () => {
+  // The clause must CONTAIN an artifact token, or classifyClause returns null
+  // and the assertion passes without testing anything. "advisor" is in
+  // Organizational's artifactTokens; "founders" and "full-time" are not.
+  assert.equal(
+    classifyClause('The venture operates with an advisor role planned for Q3', ORG),
+    'unclassified',
+    'adding `with` to ACCOMPANIMENT would make this assert',
+  );
+});
+
+test('an accompaniment assertion caught by its participle still works', () => {
+  assert.equal(
+    classifyClause('Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL.', REGU),
+    'asserted',
+    'this one is caught by `engaged`, not by accompaniment',
+  );
+});
+
+// The window and the punctuation guard are separate restrictions and need
+// separate tests: a span long enough to fail the window usually also contains a
+// comma, so one fixture would leave whichever guard runs second unkilled.
+test('a preposition separated from the token by punctuation does not assert', () => {
+  assert.equal(
+    classifyClause('Growth continued alongside strong demand, and a term sheet', INVEST),
+    'unclassified',
+    'the comma puts the preposition and the token in different phrases',
+  );
+});
+
+test('a preposition beyond the noun-phrase window does not assert', () => {
+  // 61 characters between "alongside" and "term sheet", and deliberately no
+  // punctuation — this fixture kills a widened ACCOMPANIMENT_WINDOW and nothing else.
+  assert.equal(
+    classifyClause(
+      'The platform grew alongside sustained demand from cooperatives across the province and a term sheet',
+      INVEST,
+    ),
+    'unclassified',
+    'the preposition governs "demand", not the distant token',
+  );
+});
+
+// Negation still wins, which is what protects a real reported absence that
+// happens to contain an accompaniment preposition.
+test('negation beats accompaniment', () => {
+  assert.equal(
+    classifyClause('Currently operating solely on founder time and personal resources alongside PHP 5,000 MRR without a funding plan.', INVEST),
+    'negated',
+  );
+});
