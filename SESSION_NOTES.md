@@ -840,3 +840,187 @@ The lesson is cheap: **a long-lived measurement branch that edits shared docs sh
 2. **`measure/grounding-rep2` is unpushed** and has no PR. It is now up to date with `master`, so it can be merged whenever the recalibration work is either done or explicitly deferred.
 3. **Deferred from the 2b final review, not blocking:** the mixed-scale `readiness_evaluations` rows (16 legacy rows scored under ÷5 sitting beside new ÷9 rows, with one admin action relabelling across both — a database cleanup, not a code change), and the tier-threshold recalibration left deliberately open at `TODO_CHECKLIST.md` §3.
 4. **Flagged in passing, unrelated to any of the above:** `backend/src/mikro-orm.config.ts` disables TLS certificate verification against Neon (`rejectUnauthorized: false`). Neon uses a public CA, so this is probably just tightenable.
+
+---
+
+## Ground-truth audit — metric 1's reference is broken, and the finding inverts — 2026-08-05
+
+Branch `measure/ground-truth-audit`, off `master` at `2fa24a9`. Nothing pushed. **No quota spent** — everything below re-scores runs already collected.
+
+The session started on the checklist's stated next step: recalibrate the O/R/I rubric rows so their evidence bar matches the seeded ground truth. Before editing the corpus, the ground truth itself was checked against the documents. It does not survive the check.
+
+### The reference is contradicted by its own documents
+
+Metric 1 scores placement against the seeded `StartupReadinessLevel` rows. Those came from the demo seeder, written for the UI, and were never derived from the capsule documents the model is shown. `metrics.js:14` justifies them as *"independent of the prompt"* — which is true, and a sound fix for a real problem (a rubric-similarity metric would just reward parroting). But independence and correctness are different properties, and only the first was ever secured.
+
+Five cells are negated by their own document, checkable without any judgement call:
+
+| startup | dim | seeded level's own rubric text | the document |
+|---|---|---|---|
+| MediSync | Market 4 | "no prospect has yet indicated a specific willingness to pay" | PHP 5,000 monthly recurring revenue |
+| MediSync | Organizational 4 | "first full-time hire beyond the founders" | "team grew to 3 founders" |
+| MediSync | Investment 3 | "a written funding plan document with a stated amount" | no funding activity mentioned |
+| MediSync | Technology 5 | "has not yet gone live for actual users" | paid subscriptions at 6 live facilities |
+| AgroLink | Acceptance 1 | "no user has interacted with the product in any form" | paper prototype tested with 3 cooperatives |
+
+### Re-scoring the same 30 calls reverses the direction
+
+`measurement/audit-ground-truth.js` pools the same six result files and scores every arm against three references. It **reproduces the published seeded figures exactly** (0.78 / 0.42 / 1.36 / 1.69 / 1.78 MAE, within1 30/34/13/15/12), which is the point — the pooling and scoring agree with the harness, so what changes under a different reference is the reference and not a bug here. That reproduction is now a test.
+
+| arm | MAE vs seeded | vs doc-strict | vs doc-permissive |
+|---|---|---|---|
+| `baseline` | 0.78 | 0.97 | 1.17 |
+| `sdd-semantic` *(null control)* | 0.42 | 0.89 | 1.14 |
+| `deviation-deterministic` | 1.36 | **0.28** | **0.19** |
+| `deviation-titles` | 1.69 | 0.72 | 0.58 |
+| `deviation-bare` | 1.78 | 0.81 | 0.50 |
+
+Within one rung, corpus arm: 13/36 → **36/36**. Robust to both derivation rules.
+
+**The O/R/I "displacement" was the corpus correcting baseline, not drifting from truth.** Against the document-derived reference, baseline over-places Organizational **+1.67**, Regulatory **+0.83** and Investment **+1.67** — it puts MediSync's Investment at 4–5 ("initial investor conversations", "angel funding secured") for a document that mentions no investor contact anywhere, and Organizational at 4–5 for three founders and no employees. The corpus arm sits at −0.17 / 0.00 / 0.00. That is the Objective 1b claim, and it doubles as an Objective 4 leniency result.
+
+A second signal, independent of any single cell: `baseline` and `sdd-semantic` send byte-identical prompts, so they should score alike. Under the seeded reference they differ by 0.36 MAE; under the derived references, by 0.08 and 0.03.
+
+### Two things that cut against a clean win
+
+1. **The reference was derived after the results were known.** Real researcher-degrees-of-freedom exposure, not argued away. It is enough to retire the negative conclusion — the five contradictions stand on their own — and not enough to license the positive one. Hence the blind worksheet rather than a rewrite.
+2. **The corpus induced a fabrication on the RNA probe.** Where the level is *supplied* rather than inferred, the corpus arm wrote *"The venture has drafted a funding plan (IRL 3)"* — asserting the rubric's evidence requirement as a fact. A wrong supplied level turns rubric text into fabricated evidence, and the 0/15 fabrication probe does not catch this class. Worth a probe of its own.
+
+The volume finding is unchanged in direction: stripping the rubric bodies still sends MediSync to TRL 9 on every rep. The bodies are load-bearing restraint. What changes is the framing — 0.28 → 0.81 is a near-tripling, where 1.36 → 1.78 read as flat-and-bad.
+
+### Where it stands
+
+- `measurement/build-adjudication-worksheet.js` generates `measurement/data/ground-truth-adjudication.md` — the two documents and the rubric ladders verbatim from the corpus, with the seeded levels, the derived reference and every arm's output deliberately withheld. John sets the 12 cells blind; that removes the post-hoc objection.
+- Measurement tests 103 → **108**, all passing. `TODO_CHECKLIST.md` §0 carries a hold marker so nobody quotes the retired conclusion or starts the O/R/I rubric edit on the old premise.
+- **The seeded levels are the live demo data, not only harness fixtures** — `seed-demo-full.js` and `main.ts`'s seeder write the same contradicted values, so the app's demo startups disagree with their own capsule proposals. Agreed to fix once the reference is settled, so it is done once.
+- Quota note: the window resets 15:00 PH and 2026-08-04 was spent 20/20, so no generation calls were available this session. None were needed.
+
+### Adjudicated it myself, and then stopped relying on it — same day
+
+Asked to adjudicate the 12 cells rather than wait. Did, and the reference is committed with its provenance stated in the file header — but the more useful outcome is that adjudicating it exposed why a model-set reference cannot carry the positive claim: **an adjudicator reading the document with the full rubric ladder in front of it is approximately the `deviation-deterministic` condition.** Agreement with that arm would be near-circular. My earlier derivation has that problem plus knowledge of the results.
+
+So the claim was restated in a form needing no reference. Three rungs require an artifact class **neither document mentions anywhere** — ORL 3+ a non-founder contributor, RRL 3+ counsel engaged, IRL 3+ a written funding plan — so any placement above them asserts evidence that does not exist, whatever the true level is. The absences are asserted at run time (`verifyAbsences`) rather than trusted, and the ceilings are one rung more generous than the documents support, making the rates a lower bound.
+
+| arm | asserts absent evidence | rate |
+|---|---|---|
+| `baseline` | 11/18 | **61%** |
+| `sdd-semantic` *(control)* | 10/18 | 56% |
+| `deviation-deterministic` | **0/18** | **0%** |
+| `deviation-titles` | 1/18 | 6% |
+| `deviation-bare` | 1/18 | 6% |
+
+Baseline puts MediSync's Investment at 4–5 for a document with no funding token of any kind. **This is an unsupported-claim rate measured directly against the source document** — Objective 1b's actual claim, and an Objective 4 leniency result — and it is the strongest number the grounding study has produced, precisely because it survives the reference being contested. Directional: silent on under-placement.
+
+**A mutation pass earned its keep again.** Changing `placed > spec.ceiling` to `>=` passed all nine tests while silently inflating every arm's rate. The test written to kill it pins the boundary directly (at the ceiling = supported, one rung above = not) and was confirmed to fail against the mutant and pass against the original. Measurement tests 108 → **113**.
+
+What still needs a human reference: whether the corpus places *closer to the true level*. The blind worksheet stands for that.
+
+### Demo levels corrected to the strict column — same day
+
+John adjudicated by choosing the **strict** reading, so the corrected levels are AgroLink `T2 M3 A3 O2 R1 I1` and MediSync `T6 M5 A5 O2 R1 I1`.
+
+**The duplication was the actual bug, so that got fixed first.** `main.ts` and the harness each held their own copy of these levels, and `seed-demo-full.js` held none — which is how the app and the study drifted apart unnoticed. New `src/demo-readiness-levels.ts` is the single source; `main.ts` imports it, `seed-demo-full.js` requires it from `dist`, and a measurement test **parses the TS source** and fails if the harness and the seeder disagree. That test replaced one that simply restated the numbers a third time. Mutation-checked: changing the seeder's TRL 6 to 7 fails it.
+
+**Repair path, because a cold-boot fix never reaches an existing database.** `seedDemoStartup` returns early on `if (existing)`, so editing the constant alone would have left every already-seeded Neon branch wrong. `seed-demo-full.js` now repoints the rows — but only rows still carrying the seeder's own remark, since a graded row says so in its remark and replacing a mentor's rating with a seed value would be worse than leaving it stale.
+
+**`--check-levels`, deliberately not `--dry-run`.** The flag reports and exits *before step 1*, so it writes nothing at all. Naming it `--dry-run` would have been a lie: the seeder's other six steps would still have written rows. Caught while writing it, not after.
+
+Applied to Neon: **8 rows changed, 0 skipped**; re-running reports 0. Verified by querying `startups_readiness_level` directly rather than trusting the script's own report — all 12 rows match the strict column.
+
+**Composites moved**, computed from the live rows with the scorer's own `team→A, market→M, product→T, traction→O, regulatory→R, funding→I` mapping. The mapping is validated rather than assumed: it reproduces the previously documented AgroLink 17 and MediSync-healthtech 40 exactly from the old levels.
+
+| startup | before | after |
+|---|---|---|
+| AgroLink PH (global profile) | 17 | **26** — crosses the 25 tier threshold |
+| MediSync Cebu (healthtech) | 40 | **41** |
+
+MediSync barely moves because the T/M/A rises and the O/R/I falls nearly cancel under healthtech weights. `readiness_evaluations` still holds pre-correction composites — the same un-backfilled-rows item already open from the 2b work.
+
+**Fingerprint consequence, and it is correct.** Levels sit inside `common`, so all 15 fingerprints changed; runs collected before the correction will refuse to pool with runs after it, because the RNA prompt genuinely changed. `audit-ground-truth.js`'s `SEEDED` stays **frozen** at the old values — that is what the collected runs were scored against, and the reproduction test only reproduces against the reference that produced it. A test asserts `SEEDED` does *not* track the harness, so a well-meaning sync cannot land quietly.
+
+**Two pre-existing guards failed on the change, which is them working.** One restated the old levels; it became the source-parsing cross-check above. The other used AgroLink Market 4 as an "off by 2" fixture, which is off by 1 against the corrected truth — changed to 5 so the arithmetic the test asserts is unchanged. A vacuity assertion in the new parser also caught a real bug immediately: the non-greedy regex stopped at the first tuple and parsed one level instead of six.
+
+Suites: measurement **117/117**; jest **216 passing / 1 failing**, the documented pre-existing `AiService` case. `pnpm build` clean.
+
+### The measurement ran against the corrected reference — 2026-08-05, 15:30
+
+18/18 calls, no 429, no 503. `measurement/results/2026-08-05-corrected-reference.json`. Arms: `baseline`, `sdd-semantic`, `deviation-deterministic`; levels probe only; n=3, 36 observations per arm, balanced.
+
+**The scheduled task did not do this.** It fired at 15:07:48 and brought up its MCP servers, but never ran the command — no results file, no commit, no `measure-grounding` process. Checked before launching manually, specifically so a live run and a scheduled one could not double-spend the 20/day cap. Nothing indicates quota was consumed by it.
+
+**This is the first measurement scored against a reference fixed *before* the generations existed**, so unlike the 2026-08-05 re-scoring it is not exposed to the post-hoc objection.
+
+| arm | MAE | exact | within 1 |
+|---|---|---|---|
+| `baseline` | 0.69 | 20/36 (56%) | 29/36 |
+| `sdd-semantic` *(null control)* | 0.94 | 15/36 (42%) | 28/36 |
+| `deviation-deterministic` | **0.22** | **28/36 (78%)** | **36/36** |
+
+**Read it against the control, not against baseline alone.** `baseline` and `sdd-semantic` send byte-identical prompts, so their difference is noise: 0.25 MAE, and **1** on `within1`. The corpus arm beats baseline by 0.47 MAE — 1.9x that spread — and by **7** on `within1`, against a control spread of 1. `within1` is the discriminating number, as it was at n=3 on the old data.
+
+**Per-dimension signed error (+ = placed too high) is where the mechanism shows:**
+
+| arm | Tech | Mark | Acce | Orga | Regu | Inve |
+|---|---|---|---|---|---|---|
+| `baseline` | +0.33 | +0.00 | +0.00 | **+1.67** | **+0.67** | **+1.17** |
+| `sdd-semantic` | +0.00 | −0.33 | −0.33 | **+1.33** | **+0.83** | **+1.83** |
+| `deviation-deterministic` | +0.50 | +0.83 | +0.00 | **0.00** | **0.00** | **0.00** |
+
+The corpus arm is *exactly* right on Organizational, Regulatory and Investment across all 36 observations, while both corpus-free arms over-place them by +0.67 to +1.83. This prospectively reproduces the reference-free unsupported-claim result (baseline 61% asserting absent evidence, corpus 0%) — the same three dimensions, by the same mechanism, on fresh generations.
+
+**The corpus arm's remaining error is reference ambiguity, not model error.** Its whole residual is Technology +0.50 and Market +0.83, and it places MediSync at `T7 M6` on all three reps — which is exactly the *permissive* reading of those two cells. Scored against permissive instead of strict: corpus **0.19**, baseline 0.94. So the direction is robust to the strict/permissive choice, and the corpus arm sits inside the band between the two readings.
+
+**Metric 3 remains unresolvable and should not be quoted.** Gaps: baseline 1.94, sdd-semantic 2.56, corpus 1.56. The byte-identical control pair differs by **0.62**, larger than the corpus arm's 0.38 deficit against baseline. Same conclusion as 2026-08-03 — this metric cannot separate these arms.
+
+**Metric 2 is n/a**, not 0%: the run was `--only-probe=levels`, so no RNA was generated to score.
+
+**The fingerprint guard was verified, not assumed.** `--merge measurement/results/*.json` refuses the new file on all 15 (metric, arm) pairs with the exact hashes recorded before and after the correction (e.g. `levels|baseline: 9a33522237d3 vs a9502f4cb258`). The new run therefore stands alone, correctly, and the historical n=3 set is closed. An earlier check of this appeared to show only the 2026-07-29 file being refused — that was a truncated `head -20`, not the guard.
+
+Also fixed: the metric 1 table still printed "(vs seeded ground truth)" after the reference was corrected. Now reads "(vs the document-derived reference)".
+
+**Limits, unchanged and still the ones to quote:** this is the *levels* probe, a harness construct — production does not ask the model to assign readiness levels, mentors set them. n=3, two startups, one model. It is a direct positive result for Objective 1b's *assessment* claim and still says nothing about RNA generation quality.
+
+---
+
+## Session close-out — 2026-08-05
+
+One work stream, and it inverted the headline result of Objective 1b. Detail is in the four entries above; this is state and handoff.
+
+**The session did not do the work it set out to do, and that was the right outcome.** The top open item prescribed editing the O/R/I rubric rows so their evidence bar matched the seeded ground truth. Checking that ground truth first — before spending anything on the corpus edit — showed the ground truth was the broken thing. Everything below follows from that one check.
+
+| stream | outcome | where |
+|---|---|---|
+| Ground-truth audit | seeded reference refuted; historical runs re-scored | `measurement/audit-ground-truth.js` |
+| Reference-free unsupported-claim rate | baseline **61%**, corpus **0%** | same file, `HARD_ABSENCES` |
+| Demo levels corrected + de-duplicated | applied to Neon, 8 rows | `src/demo-readiness-levels.ts` |
+| Measurement vs the corrected reference | corpus **0.22** MAE vs baseline **0.69** | `results/2026-08-05-corrected-reference.json` |
+| Docs rewritten, hold lifted | 1b is now a positive result | `TODO_CHECKLIST.md` §0, `measurement/README.md`, `CLAUDE.md`, `PROJECT_OVERVIEW.md` |
+
+### State
+
+- Branch **`measure/ground-truth-audit`**, 6 commits ahead of `master` (`2fa24a9`), 16 files, **+2094 / −112**, **nothing pushed**, working tree clean.
+- Measurement tests **117/117** (103 at session start). Jest **216 passing / 1 failing** — the documented pre-existing `AiService › passes valid task responses through unchanged`. `pnpm build` clean.
+- Neon demo data corrected: AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`. Composites moved **17 → 26** and **40 → 41**.
+- Day's quota: 18 of 20 spent, all on the one run.
+
+### The methodological lesson, which outlasts the numbers
+
+A reference can be *independent of the prompt* and still be *wrong*, and `lib/metrics.js` secured only the first while the study assumed both. Three reps across five arms agreed in direction for a week — not because the effect was real, but because the reference was consistently wrong. **Agreement across reps tests sampling noise, not the reference.** The study's own null control had been quietly reporting this: two byte-identical prompts differed by 0.36 MAE under the seeded reference and by 0.03–0.08 under a document-derived one.
+
+The durable fix is not the corrected numbers, it is that the load-bearing claim no longer needs a reference at all. `HARD_ABSENCES` scores placements against artifact classes the documents never mention, asserts those absences at run time rather than trusting a hand-written list, and sets ceilings one rung generous so the rates are lower bounds.
+
+### What is genuinely open
+
+1. **The branch is unpushed and has no PR.** It is the only stream from this session, and it touches shared docs plus live demo data, so it should not sit long. Needs the usual merge / push-and-PR / keep-as-is decision.
+2. **RNA generation quality is still unmeasured** — the real remaining gap for 1b. Every figure this session is the *levels* probe, a harness construct; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. This needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
+3. **A fabrication mechanism worth its own probe.** On the RNA probe, where the level is *supplied* rather than inferred, the corpus made the model assert the rubric's evidence requirement as fact (*"The venture has drafted a funding plan (IRL 3)"*). A wrong supplied level turns rubric text into fabricated evidence. The 0/15 fabrication probe does not catch this class, and production supplies mentor-set levels — so this is the one finding this session that points at a *risk* in the shipped path.
+4. **A human reference would still strengthen the placement claim.** The blind worksheet is regenerable (`node measurement/build-adjudication-worksheet.js`, no flag). Not blocking: the 61%/0% result does not depend on it.
+5. **Deferred, unchanged:** mixed-scale `readiness_evaluations` rows now also hold pre-correction composites; tier thresholds still uncalibrated against the ÷9 scores (`TODO_CHECKLIST.md` §3); `mikro-orm.config.ts` disables TLS verification against Neon.
+
+### Next step
+
+**Decide the branch, then pick up item 3 above** — the supplied-level fabrication probe. It is the highest-value measurement left: it targets the production path rather than a harness construct, it tests a risk rather than a benefit, and it is the one place this session's evidence points against the corpus.
+
+### Operational note — the scheduled task did not work
+
+A one-shot scheduled task was created for 15:07 PH (quota reset). It **fired** (`lastRunAt` recorded) and started its MCP servers, but never ran the command: no results file, no commit, no `measure-grounding` process. The run was done manually instead, after confirming no measurement process was alive and no quota had been spent — a live run racing a scheduled one would have double-spent a 20/day cap. **Do not assume a fired scheduled task did its work; check for the artifact.**

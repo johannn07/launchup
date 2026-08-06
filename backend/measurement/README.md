@@ -294,6 +294,82 @@ startups that is 20 calls — a whole day's cap — so full reps are no longer t
 normal way to run this. Use `--only-arm=` and `--only-probe=` to buy the cell
 you actually need; see below.
 
+### Result, 2026-08-05 — the reference was broken; corrected, and the direction reverses
+
+**Read this before any result section below it.** Every "Result" section that
+follows scored metric 1 against the seeded `StartupReadinessLevel` rows. Those
+were demo fixtures written for the UI and never checked against the documents the
+model is shown — and they are contradicted by those documents in **ten of twelve
+cells**. Seeded Market 4 requires *"no prospect has yet indicated a specific
+willingness to pay"* beside a document stating PHP 5,000 monthly recurring
+revenue; seeded Organizational 4 requires a *"first full-time hire beyond the
+founders"* beside *"team grew to 3 founders"*; seeded Investment 3 requires a
+written funding plan beside a document mentioning no funding activity at all.
+
+`lib/metrics.js` justified that reference as *"independent of the prompt"*. True,
+and a sound fix for a real problem — a rubric-similarity metric would just reward
+parroting. But independence and correctness are different properties, and only
+the first was ever secured.
+
+The reference is now derived per cell from the documents
+(`data/ground-truth-adjudication.md`, single source `src/demo-readiness-levels.ts`).
+Re-running the three arms against it, n=3, 36 balanced observations per arm,
+levels probe, 18/18 calls
+(`results/2026-08-05-corrected-reference.json`):
+
+| arm | MAE | exact | within 1 rung |
+|---|---|---|---|
+| `baseline` | 0.69 | 20/36 (56%) | 29/36 |
+| `sdd-semantic` *(null control)* | 0.94 | 15/36 (42%) | 28/36 |
+| `deviation-deterministic` | **0.22** | **28/36 (78%)** | **36/36** |
+
+The byte-identical control pair differs by 0.25 MAE and **1** on `within1`, so the
+corpus arm's margins over baseline — 0.47 MAE and **7** on `within1` — sit
+outside the noise floor. Mean signed error shows the mechanism: the corpus arm is
+*exactly* right on Organizational, Regulatory and Investment across all 36
+observations (0.00 / 0.00 / 0.00) while `baseline` inflates them by +1.67 / +0.67
+/ +1.17 and `sdd-semantic` by +1.33 / +0.83 / +1.83.
+
+The corpus arm's whole residual is Technology and Market on MediSync, where it
+places `T7 M6` on all three reps — exactly the *permissive* reading of those two
+cells. Scored against permissive instead of strict: corpus **0.19**, baseline
+0.94. The direction survives either reading.
+
+**The claim that needs no reference at all.** Three rungs require an artifact class
+neither document mentions anywhere — ORL 3+ a non-founder contributor, RRL 3+
+counsel engaged, IRL 3+ a written funding plan — so any placement above them
+asserts evidence that does not exist, whatever the true level is. `verifyAbsences`
+in `audit-ground-truth.js` asserts those absences at run time rather than trusting
+the list, and the ceilings are one rung more generous than the documents support,
+making these lower bounds: `baseline` 11/18 (**61%**), `sdd-semantic` 10/18,
+`deviation-deterministic` **0/18 (0%)**, titles 1/18, bare 1/18. This is an
+unsupported-claim rate measured directly against the source document, and it is
+the figure to quote, because it survives the reference being contested.
+
+**What this does and does not change below.**
+
+- The **negative conclusion is withdrawn.** Three reps agreeing in direction was
+  not evidence — they agreed because the reference was consistently wrong.
+- The **volume ladder result stands in direction**: stripping the rubric bodies
+  still sends MediSync to TRL 9 on every rep, so the bodies are load-bearing
+  restraint. Its magnitudes are scored against the broken reference.
+- The **O/R/I rubric recalibration those sections prescribe is cancelled**, not
+  deferred. It existed to make the corpus reproduce the seeded levels; those
+  levels were the error, and O/R/I is now exactly right.
+- **Pooling:** levels sit inside `common`, so every fingerprint changed and the
+  pre-correction runs are a closed set. Verified rather than assumed — `--merge`
+  refuses the new file on all 15 (metric, arm) pairs. `audit-ground-truth.js`'s
+  `SEEDED` stays frozen at the old values, with a test asserting it does not track
+  the harness, because that is what the historical runs were scored against.
+
+**Scope limit, unchanged and still the one to quote.** This is the *levels* probe,
+a harness construct. Production does not ask the model to assign readiness levels
+— mentors set them. So this is a positive result for Objective 1b's *assessment*
+claim and says nothing about RNA generation quality, where metric 2 has never
+produced a signal on any arm. Metric 3 remains unresolvable: baseline 1.94,
+control 2.56, corpus 1.56, and the control pair's own spread (0.62) exceeds the
+corpus arm's deficit against baseline (0.38).
+
 ### Result, 2026-08-04 — n=3 complete, and the volume hypothesis is refuted
 
 Three files: `2026-08-04-rep3-refill.json` (2 calls, filling the cell a 503 cost
@@ -375,9 +451,14 @@ much larger ones.
 
 **Scope limit, stated plainly.** This is the *levels* probe, a harness
 construct. Production does not ask the model to assign readiness levels this
-way — mentors set them. So this is a direct negative result for Objective 1b's
-*assessment* claim and says nothing about RNA generation quality, where metric 2
-has been saturated at 0% on every arm and has never produced a signal.
+way — mentors set them.
+
+⚠ **Superseded — see "Result, 2026-08-05" above.** The "direct negative result"
+this section reported is withdrawn: every figure in it is scored against the
+seeded reference, which the documents contradict in ten of twelve cells. Against
+a document-derived reference the direction reverses. The section is kept because
+its volume ladder still holds in direction and because the retraction is part of
+the record.
 
 **Two data artifacts, recorded rather than hidden:** the refill re-ran the RNA
 probe for a cell that already had one, so `deviation-deterministic` reports 42

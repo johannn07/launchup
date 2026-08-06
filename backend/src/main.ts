@@ -15,6 +15,7 @@ import { EmbeddingIndexService } from './ai/embedding-index.service';
 import { WeightProfile } from './entities/weight-profile.entity';
 import { SEED_WEIGHT_PROFILES } from './readiness/readiness.weights';
 import { Sector } from './entities/enums/sector.enum';
+import { DEMO_READINESS_LEVELS, SEEDED_LEVEL_REMARK } from './demo-readiness-levels';
 
 async function ensureUser(
   em: EntityManager,
@@ -268,7 +269,7 @@ async function seedDemoStartup(
         em.create(StartupReadinessLevel, {
           startup,
           readinessLevel,
-          remark: `Seeded baseline for ${spec.name}`,
+          remark: SEEDED_LEVEL_REMARK(spec.name),
           createdAt: new Date(),
           updatedAt: new Date(),
         }),
@@ -294,14 +295,7 @@ async function seedDemoStartups(
     mentor: mentorUser,
     links: { team: '2 founders', revenue: 0, sector: 'agritech' },
     sector: Sector.Agritech,
-    levels: [
-      [ReadinessType.T, 2],
-      [ReadinessType.M, 2],
-      [ReadinessType.A, 1],
-      [ReadinessType.O, 2],
-      [ReadinessType.R, 1],
-      [ReadinessType.I, 1],
-    ],
+    levels: DEMO_READINESS_LEVELS['AgroLink PH'],
   });
 
   // MediSync Cebu (mid stage)
@@ -311,14 +305,7 @@ async function seedDemoStartups(
     mentor: mentorUser,
     links: { team: '3 founders', revenue: 5000, sector: 'healthtech' },
     sector: Sector.Healthtech,
-    levels: [
-      [ReadinessType.T, 5],
-      [ReadinessType.M, 4],
-      [ReadinessType.A, 3],
-      [ReadinessType.O, 4],
-      [ReadinessType.R, 3],
-      [ReadinessType.I, 3],
-    ],
+    levels: DEMO_READINESS_LEVELS['MediSync Cebu'],
   });
 }
 

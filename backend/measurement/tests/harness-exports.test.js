@@ -34,10 +34,31 @@ test('exposes the pure helpers', () => {
   assert.equal(m.rubricKey('Technology', 2), 'trl-2');
 });
 
-test('seeded ground-truth levels match main.ts seedDemoStartups', () => {
+/**
+ * Reads the app seeder's own source rather than restating its numbers. A third
+ * copy of the levels is what let the harness and the app disagree unnoticed;
+ * this fails if either side moves without the other.
+ */
+test('harness ground-truth levels match src/demo-readiness-levels.ts', () => {
+  const fs = require('fs');
   const { STARTUPS } = require(HARNESS);
-  assert.deepEqual(STARTUPS['AgroLink PH'].levels,
-    { Technology: 2, Market: 2, Acceptance: 1, Organizational: 2, Regulatory: 1, Investment: 1 });
-  assert.deepEqual(STARTUPS['MediSync Cebu'].levels,
-    { Technology: 5, Market: 4, Acceptance: 3, Organizational: 4, Regulatory: 3, Investment: 3 });
+  const src = fs.readFileSync(
+    path.resolve(__dirname, '../../src/demo-readiness-levels.ts'), 'utf8',
+  );
+  const ABBREV = { T: 'Technology', M: 'Market', A: 'Acceptance', O: 'Organizational', R: 'Regulatory', I: 'Investment' };
+
+  for (const name of Object.keys(STARTUPS)) {
+    // Terminator is the outer close at two-space indent — a plain `],` stops at
+    // the first tuple and yields one level, not six.
+    const block = src.match(new RegExp(`'${name}':\\s*\\[([\\s\\S]*?)\\r?\\n  \\],`));
+    assert.ok(block, `no levels block for ${name} in demo-readiness-levels.ts`);
+
+    const parsed = {};
+    for (const [, abbrev, level] of block[1].matchAll(/ReadinessType\.(\w+),\s*(\d+)/g)) {
+      parsed[ABBREV[abbrev]] = Number(level);
+    }
+    // A regex that silently matched nothing must not pass vacuously.
+    assert.equal(Object.keys(parsed).length, 6, `parsed ${Object.keys(parsed).length} levels for ${name}, expected 6`);
+    assert.deepEqual(STARTUPS[name].levels, parsed, `${name}: harness disagrees with the app seeder`);
+  }
 });
