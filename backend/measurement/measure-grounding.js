@@ -1107,6 +1107,7 @@ function summarizeResults(results) {
   const metric2 = [];
   const metric3 = [];
   const metric4 = [];
+  const metric5 = [];
 
   for (const arm of ARMS) {
     const armResult = results[arm.name] || { startups: {} };
@@ -1184,9 +1185,38 @@ function summarizeResults(results) {
       'present recalled': `${presentCorrect}/${presentChecked}`,
       'n reps': reps,
     });
+
+    // --- Metric 5: supplied-level fabrication (asserted absent evidence) ---
+    //
+    // Reference-free: HARD_ABSENCES names artifact classes neither document
+    // mentions, asserted at run time by verifyAbsences rather than trusted. One
+    // binary observation per (call, dimension) — counting tokens would reward
+    // verbosity, and the corpus arm writes longer RNAs.
+    for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = condition === 'truth' ? 'assertionTruthCalls' : 'assertionInflatedCalls';
+      let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
+      for (const [, cell] of Object.entries(armResult.startups)) {
+        for (const c of cell[field] || []) {
+          for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
+            obs++;
+            if (o.asserted) asserted++;
+            if (o.mentioned) mentioned++;
+            if (o.unclassified) unclassified++;
+          }
+        }
+      }
+      metric5.push({
+        arm: arm.name,
+        condition,
+        asserted: `${asserted}/${obs}`,
+        'asserted %': obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
+        mentioned: `${mentioned}/${obs}`,
+        unclassified,
+      });
+    }
   }
 
-  return { metric1, metric2, metric3, metric4 };
+  return { metric1, metric2, metric3, metric4, metric5 };
 }
 
 function printReports(results) {
@@ -1210,6 +1240,12 @@ function printReports(results) {
     console.log('(saturated at 0/15 on 2026-07-29 across every arm; kept as evidence for SRS 2.2, not as a discriminator)\n');
     console.table(s.metric4);
   }
+
+  console.log('\n--- Metric 5: supplied-level fabrication (asserted absent evidence) ---');
+  console.log('(share of dimensions whose RNA asserts an artifact class neither document mentions;');
+  console.log(' `asserted` is a lower bound and `mentioned` an upper one. A large `unclassified`');
+  console.log(' means the classifier cannot read this output and the rate should not be quoted.)\n');
+  console.table(s.metric5);
 }
 
 // --------------------------------------------------------------------------
@@ -1271,6 +1307,26 @@ function writeResults(file, results) {
     floor: FLOOR,
     fingerprints: currentFingerprints(),
     results,
+    // Audit trail for metric 5 — every clause the classifier flagged (asserted,
+    // mentioned, or unclassified), verbatim, so it is checkable rather than trusted.
+    flaggedClauses: (() => {
+      const out = [];
+      for (const [armName, armResult] of Object.entries(results)) {
+        for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
+          for (const condition of ALL_LEVEL_CONDITIONS) {
+            const field = condition === 'truth' ? 'assertionTruthCalls' : 'assertionInflatedCalls';
+            (cell[field] || []).forEach((c, rep) => {
+              for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
+                for (const cl of o.clauses) {
+                  out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+                }
+              }
+            });
+          }
+        }
+      }
+      return out;
+    })(),
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);

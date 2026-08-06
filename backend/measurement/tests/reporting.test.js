@@ -63,3 +63,30 @@ test('an arm that never ran reports n=0 rather than undefined', () => {
     assert.ok(row, 'the unreached arm still needs a row');
   }
 });
+
+test('metric 5 reports asserted, mentioned and unclassified per condition', () => {
+  const results = {
+    baseline: {
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [{ byDim: { Investment: 'No funding plan exists yet.' } }],
+          assertionInflatedCalls: [{ byDim: { Investment: 'The venture has drafted a funding plan.' } }],
+        },
+      },
+    },
+  };
+  const s = H.summarizeResults(results);
+  const truth = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  const inflated = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'inflated');
+  assert.equal(truth.asserted, '0/1');
+  assert.equal(inflated.asserted, '1/1');
+});
+
+// An arm a 429 never reached must produce a row that says n/a, not one that
+// says 0% — an absent row and a zero row mean different things.
+test('metric 5 gives every arm a row even with no calls', () => {
+  const s = H.summarizeResults({});
+  assert.equal(s.metric5.length, H.ARMS.length * 2, 'one row per arm per condition');
+  assert.equal(s.metric5[0]['asserted %'], 'n/a');
+});

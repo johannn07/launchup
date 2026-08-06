@@ -16,6 +16,9 @@ node measurement/measure-grounding.js                  # full harness (1 rep = 1
 node measurement/measure-grounding.js --retrieval-only  # Step A only, no generation quota spent
 node measurement/measure-grounding.js --dry-run         # assemble and print every arm's prompts, no model call at all
 node measurement/measure-grounding.js --fingerprint     # print today's comparability fingerprints, no model call at all
+node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministic \
+  --only-probe=rna --level-condition=both --reps=2 \
+  --out=measurement/results/<date>-supplied-level.json  # metric 5, see below — --only-arm is mandatory here
 
 # One rep is what a free-tier day buys. Accumulate across days:
 node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-07-30-rep2.json
@@ -293,6 +296,77 @@ A full rep is **2 calls per (arm, startup, probe)**. With five arms and two
 startups that is 20 calls — a whole day's cap — so full reps are no longer the
 normal way to run this. Use `--only-arm=` and `--only-probe=` to buy the cell
 you actually need; see below.
+
+### `--level-condition=` and metric 5 — added 2026-08-06
+
+Every result above is the **levels probe**, where the model infers the
+readiness level. Production never does that — mentors set levels and the RNA
+path consumes them as given. Metric 5 measures the path production actually
+ships: whether a generated RNA **asserts as fact** an artifact class the
+source document never mentions, when the *supplied* level is wrong.
+
+**Why this needs a manipulation, not an observational run.** The 2026-08-05
+level correction (see the result below) moved MediSync from IRL 3 to IRL 1.
+That removed the *trigger* — deterministic retrieval no longer pulls the
+funding-plan rubric text into the prompt — without touching the underlying
+vulnerability. An observational run today measures 0 and proves nothing. The
+probe instead supplies a deliberately wrong level (`Organizational: 4,
+Regulatory: 4, Investment: 4` — both startups share `O2 R1 I1`, so one
+override covers both) and checks whether the resulting rubric text turns into
+asserted fact. Technology/Market/Acceptance stay at the true level in the same
+call, so every observation carries its own unmanipulated control.
+
+Reference-free, like the unsupported-claim rate below: `HARD_ABSENCES`
+(`lib/hard-absences.js`, shared with `audit-ground-truth.js`) names artifact
+classes neither document mentions, and `verifyAbsences` asserts that absence
+against the documents at run time rather than trusting the list. No ground
+truth level is needed.
+
+Run it with:
+
+```bash
+node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministic \
+  --only-probe=rna --level-condition=both --reps=2 \
+  --out=measurement/results/2026-08-06-supplied-level.json
+```
+
+**`--only-arm` is not optional here.** `ARMS` holds five arms; omitting the
+filter runs all five, which at two startups × two conditions × two reps is
+**40 calls against a 20-call daily cap** — the run dies mid-experiment, the
+same failure mode that produced n=0 on 2026-07-29.
+
+`--level-condition=truth|inflated|both` selects which supplied-level condition
+runs (default `truth`, today's existing behaviour unchanged). `both` issues
+one extra model call per (arm, startup, rep) for the inflated condition; under
+`truth` alone the inflated call is never generated, not generated-then-discarded.
+
+**What's reported, and why three numbers instead of one:**
+
+- `mentioned` — any absent-artifact token appeared in the dimension's text.
+  Upper bound.
+- `asserted` — the headline: the text asserted at least one absent artifact
+  as already true, not merely raised it or recommended it. Lower bound.
+- `unclassified` — clauses that mentioned an absent token but matched none of
+  the classifier's negation/recommendation/assertion cues. The honesty
+  column: if it is large, the classifier cannot read this output and the
+  `asserted` rate should not be quoted.
+
+**Limitation, stated plainly.** Detection is token-based — it matches clauses
+containing a known absent-artifact token and classifies them by cue words
+(`has`/`secured`/`in place` vs. `no`/`not`/`should`). It misses paraphrase
+that avoids the vocabulary entirely, e.g. *"the team has brought in outside
+expertise"* dodges every Organizational token. So `asserted` is a floor, not
+a census, and this probe **cannot prove the absence of fabrication** — only
+report what it caught.
+
+**Interpretation, pre-registered before any run:**
+
+| Outcome | Reading |
+|---|---|
+| corpus-inflated ≫ baseline-inflated | The corpus converts a wrong supplied level into asserted evidence. A real risk in the shipped path. |
+| corpus-inflated ≈ baseline-inflated | The wrong level alone drives it; the corpus is not culpable. |
+| both ≈ 0 | No fabrication even under adversarial supply. |
+| `unclassified` large | The classifier is too weak to read any of the above — report that, do not quote a rate. |
 
 ### Result, 2026-08-05 — the reference was broken; corrected, and the direction reverses
 
