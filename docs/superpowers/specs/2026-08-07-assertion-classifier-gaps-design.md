@@ -23,7 +23,7 @@ Hand-classifying the 14 `unclassified` clauses: **12 are recommendations that we
 | 1 | `Needs:` / `Need:` / `Needs a…` / `needed` — `RECOMMENDATION` requires `need\s+to` | `"Needs: Advance to ORL 3 by engaging the first non-founder contributor…"` | recommended | 7 |
 | 2 | coordination strands the modal; `IMPERATIVE` is `^`-anchored so a leading `and` defeats it | `"and prepare for its first full-time hire beyond the founding team."` | recommended | 5 |
 | 3 | `exists` is not an assertion cue | `"A basic funding plan exists alongside PHP 5,000 MRR."` | asserted | 1 |
-| 4 | `Dr.` splits a sentence, and no cue covers accompaniment | `"Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor."` | asserted | 1 |
+| 4 | `Dr.` splits a sentence, and no cue covers accompaniment (§3 — **not fixed**, see below) | `"Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor."` | asserted | 1 |
 
 Mechanism 2 also accounts for one clause outside the `unclassified` set — the false positive below — so six clauses in total are coordination-stranded.
 
@@ -79,21 +79,30 @@ Safe by ordering: `"No funding plan exists at all"` hits `NEGATION` first, and `
 
 Both were floated in `SESSION_NOTES.md`. Neither has a measured instance.
 
-### 3. Accompaniment — the one structural change to `classifyClause`
+### 3. Accompaniment — designed, built, measured, and CUT
 
 Mechanism 4's repaired sentence still has no assertion cue:
 
 > `"Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, …) alongside a first non-founder contributor."`
 
-No negation, no recommendation, no imperative, and no possession or achievement participle. It asserts by accompaniment.
+No negation, no recommendation, no imperative, and no possession or achievement participle. It asserts by accompaniment. The original design added a positional predicate: a token qualifies when an accompaniment preposition (`alongside | along with | together with | accompanied by | as well as`) ends within 40 characters before it, with no clause punctuation in the span.
 
-`classifyClause` is presently a set of whole-clause boolean tests, which cannot express *"the artifact is the object of an accompaniment preposition."* Add a positional predicate: a token match qualifies when an accompaniment preposition — `alongside | along with | together with | accompanied by | as well as` — ends within **40 characters** before the token's start index, with **no `,` `;` `(` `)` or sentence-final punctuation** in the span between them.
+**It was implemented, reviewed under attack, and removed on 2026-08-07.** The predicate has no requirement that the token be the **head** of the governed phrase, and no restriction is available that supplies one. Under adversarial review, **14 of 14** constructed realistic clauses flipped `unclassified → asserted`, and **5 of 6** realistic RNA dimension texts flipped end to end. Two distinct failure shapes:
 
-40 characters is the noun-phrase window: it admits `"alongside a first non-founder contributor"` and `"alongside PHP 5,000 MRR"` while refusing a preposition that governs some earlier phrase. It is a constant in the module, not a literal at the call site, so a future recalibration is one edit and shows up in `CLASSIFIER_SOURCE`.
+| shape | clause | why it is not an assertion |
+|---|---|---|
+| token used attributively, not as head | `"Customer adoption grew steadily as well as investor interest."` | `investor` modifies `interest`. This is *verbatim* the case `ASSERTION`'s own comment excludes bare copulas for |
+| preposition governs an earlier noun; token lands in the window by coincidence | `"The pilot ran alongside barangay officials to obtain a permit."` | `alongside` governs `barangay officials`; the permit is the goal of a purpose clause — explicitly **not** obtained |
 
-**`with` is excluded.** It is pervasive and cannot be restricted usefully — `"Currently at ORL 2 with founders committed full-time"`, `"engage a contributor with a formal agreement"`. It costs nothing measured: both already-detected assertions use `with` but are caught through their participle (`engaged`, `drafted`), which is the mechanism the module's header already documents.
+The second shape is the worse one: it fires on a *recommendation*, and no cue gates it, because the corpus's own gerund style (`expanding`, `acquiring`, `addressing`) is not in `RECOMMENDATION`. `as well as` is a coordinating conjunction rather than an accompaniment preposition and contributed 6 of the 14 uniquely.
 
-**This is the only change in the design that can move the rate upward**, so it carries the heaviest test burden — see §6.
+Hardening was considered and rejected. Requiring a determiner at the head of the span was measured at 14 → 2 false positives, but ~2 survive — including the purpose-clause shape — and the restriction would be tuned against constructed cases rather than measured ones.
+
+**The trade this cuts:** the plan recovers **1 of the 2** genuine misses instead of 2. That is the right side of the trade. §3 was the only change that could raise the measured rate, and the lower-bound guarantee is what lets the study's reference-free 61%-vs-0% result survive a contested reference. Buying one detection with a predicate that fires on 14 of 14 constructed non-assertions inverts the property the result rests on.
+
+**What is recorded instead:** accompaniment-only assertion is a **known uncaught class**, kept in the tests as the ORL 3 clause scoring `unclassified` with a comment saying why. A known uncaught class is itself a lower-bound statement, so it costs the claim nothing.
+
+**`with` was excluded even in the original design** and stays excluded — it is pervasive and unrestrictable. It cost nothing measured: both already-detected assertions use `with` but are caught through their participle (`engaged`, `drafted`).
 
 ### 4. `RECOMMENDATION` and `IMPERATIVE` widen
 
@@ -119,7 +128,7 @@ The subordinator split at `assertions.js:74` is unaffected: in `"While no term s
 
 The file's "add any new regex or helper here at the same time you add it above" comment is exactly the kind of instruction that gets missed, and the consequence is re-scored data pooling with data scored by a different classifier.
 
-Replace it with structure: collect the cue regexes into a `CUES` object and **build `CLASSIFIER_SOURCE` from `Object.values(CUES)`**, so a regex in `CUES` cannot be left out of the hash. Then add one test that reads the module source, extracts every module-level `SCREAMING_CASE` constant, and asserts each is either a `CUES` key or a named non-cue (`ACCOMPANIMENT_WINDOW`, `CLASSIFIER_SOURCE`) — that catches a *new* regex declared outside `CUES`, which building from `CUES` alone cannot.
+Replace it with structure: collect the cue regexes into a `CUES` object and **build `CLASSIFIER_SOURCE` from `Object.values(CUES)`**, so a regex in `CUES` cannot be left out of the hash. Then add one test that reads the module source, extracts every module-level `SCREAMING_CASE` constant, and asserts each is either a `CUES` key or a named non-cue (`CLASSIFIER_SOURCE`) — that catches a *new* regex declared outside `CUES`, which building from `CUES` alone cannot.
 
 `assertion|*` will change. The re-run must therefore **refuse** to pool with `2026-08-06-supplied-level.json`. That refusal is verified, not assumed.
 
@@ -166,6 +175,6 @@ The `unclassified` shrinkage also retires `measurement/README.md`'s standing cav
 ## Out of scope
 
 - Re-scoring `2026-08-06-supplied-level.json`.
-- `remains` / `includes` assertion cues, and `with` as an accompaniment preposition.
+- `remains` / `includes` / `existed` / `existing` assertion cues, and the accompaniment predicate of §3 in any form — hardened or otherwise.
 - Any change to `lib/hard-absences.js`, `lib/metrics.js`, or the harness.
 - The RNA-generation-quality probe (`SESSION_NOTES.md`'s "still unmeasured") — that needs a harder probe, not this instrument fix.

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Repair the four measured defects in the fabrication classifier, then re-run the supplied-level probe on a fresh quota window.
+**Goal:** Repair the measured defects in the fabrication classifier, then re-run the supplied-level probe on a fresh quota window. Three of the four measured mechanisms are fixed; the fourth (accompaniment) is recorded as a known uncaught class after its predicate failed adversarial review — see spec §3.
 
-**Architecture:** All code changes are in one pure module, `backend/measurement/lib/assertions.js` — no I/O, no model calls, no harness dependency. `classifyClause` tests cues in the order negation → recommendation → assertion, and that ordering is the safety property the whole design rests on: widening the first two can only move clauses *out of* `asserted`, so only the accompaniment predicate (Task 5) can raise the measured rate. Editing this module changes the `assertion|*` fingerprint by design, so the re-run is a fresh experiment that must refuse to pool with 2026-08-06.
+**Architecture:** All code changes are in one pure module, `backend/measurement/lib/assertions.js` — no I/O, no model calls, no harness dependency. `classifyClause` tests cues in the order negation → recommendation → assertion, and that ordering is the safety property the whole design rests on: widening the first two can only move clauses *out of* `asserted`, The accompaniment predicate that could have raised it was built and cut (spec §3), so after Task 5 every remaining change is safe by construction. Editing this module changes the `assertion|*` fingerprint by design, so the re-run is a fresh experiment that must refuse to pool with 2026-08-06.
 
 **Tech Stack:** Node 22, `node:test` + `node:assert` (no Jest here — the measurement suite is separate from `backend`'s Jest suite), CommonJS.
 
@@ -16,7 +16,7 @@
 - **Do not re-score `measurement/results/2026-08-06-supplied-level.json`, and do not quote a corrected rate from it.** The audit dump is design input only.
 - **Baseline test suite: `pnpm test:measurement` → 178 passing, 0 failing.** Run from `backend/`. It must read 178+N passing / 0 failing at the end of every task. *(Note: `SESSION_NOTES.md` records 117 — that figure predates the 2026-08-06 branch and is corrected in Task 8.)*
 - **The test runner needs the glob, not the directory.** `node --test measurement/tests/` fails; use `pnpm test:measurement`, or `node --test measurement/tests/assertions.test.js` for one file.
-- Fixtures come in two kinds and must not be confused. **Dump fixtures** are lifted from `measurement/results/2026-08-06-supplied-level.json` and must appear there **verbatim** — grep each one against the file before using it, rather than trusting this plan's transcription of it. Three provenance defects have already been found in these strings (one truncated, one spliced from two startups' outputs). **Guard fixtures** are deliberately constructed to pin a boundary — the `remains`/`includes` refusals, the `with` exclusion, the accompaniment window — and have no source in the dump; label them as constructed in a comment so a later reader does not go looking.
+- Fixtures come in two kinds and must not be confused. **Dump fixtures** are lifted from `measurement/results/2026-08-06-supplied-level.json` and must appear there **verbatim** — grep each one against the file before using it, rather than trusting this plan's transcription of it. Three provenance defects have already been found in these strings (one truncated, one spliced from two startups' outputs). **Guard fixtures** are deliberately constructed to pin a boundary — the `remains`/`includes`/`existing` refusals — and have no source in the dump; label them as constructed in a comment so a later reader does not go looking.
 - Every new regex goes in the `CUES` object (Task 6), never as a loose `const`.
 - Commit after every task. Do not push. Work on branch `measure/assertion-classifier-gaps` (already created, holds the spec at `c536dd5`).
 
@@ -26,7 +26,7 @@
 
 | File | Responsibility | Change |
 |---|---|---|
-| `backend/measurement/lib/assertions.js` | The whole classifier: cue regexes, clause splitting, per-clause classification, per-dimension scoring, and the fingerprint material | Modified — all six spec sections |
+| `backend/measurement/lib/assertions.js` | The whole classifier: cue regexes, clause splitting, per-clause classification, per-dimension scoring, and the fingerprint material | Modified — spec §§1, 2, 4, 5, 6 (§3 was built and cut) |
 | `backend/measurement/tests/assertions.test.js` | Behaviour of the above, including the mutant-killers that make each cue load-bearing | Modified — new tests appended per task |
 
 No new files. The module is ~155 lines and each spec section touches a different part of it; splitting it would separate cues from the function that applies them.
@@ -490,191 +490,96 @@ floated in the session notes and both have plain counterexamples."
 
 ---
 
-### Task 5: Accompaniment predicate
+### Task 5: Accompaniment predicate — BUILT, THEN CUT (2026-08-07)
+
+**Status: the predicate was implemented at `516063a`, attacked in review, and removed.** See spec §3 for the full record. The plan text that specified it has been replaced by this removal spec, so nobody re-implements it from a stale step list.
+
+**Why it was cut.** The predicate has no requirement that the artifact token be the *head* of the governed phrase, and no available restriction supplies one. Under adversarial review 14 of 14 constructed realistic clauses flipped `unclassified → asserted`, and 5 of 6 realistic RNA dimension texts flipped end to end — including `"Customer adoption grew steadily as well as investor interest."` (the exact case `ASSERTION`'s own comment excludes bare copulas for) and `"The pilot ran alongside barangay officials to obtain a permit."` (the preposition governs an earlier noun; the permit is the *goal* of a purpose clause, explicitly not obtained). It bought one recovered detection. The lower-bound guarantee is what lets the study's reference-free result survive a contested reference, and one detection is not worth inverting it.
 
 **Files:**
-- Modify: `backend/measurement/lib/assertions.js` — new `ACCOMPANIMENT`, `ACCOMPANIMENT_WINDOW`, `assertsByAccompaniment`; one line in `classifyClause`
-- Test: `backend/measurement/tests/assertions.test.js`
+- Modify: `backend/measurement/lib/assertions.js` — remove `ACCOMPANIMENT`, `ACCOMPANIMENT_WINDOW`, `assertsByAccompaniment`, the `classifyClause` disjunct, and their `CLASSIFIER_SOURCE` entries
+- Modify: `backend/measurement/tests/assertions.test.js` — remove four tests, reframe one, keep one
 
 **Interfaces:**
-- Consumes: `tokenRe` (existing, `:47`); `SENTENCE_BREAK` from Task 1 — without it the target clause never arrives whole.
-- Produces:
-  - `ACCOMPANIMENT` — module-level `RegExp`, **global-flagged** (`matchAll` needs it).
-  - `ACCOMPANIMENT_WINDOW` — module-level `number`, `40`.
-  - `assertsByAccompaniment(text, tokens) -> boolean` — module-private, not exported.
+- Consumes: `SENTENCE_BREAK` from Task 1 — it is what makes the ORL 3 clause arrive whole, and that remains worth having even though the clause now scores `unclassified`.
+- Produces: nothing. `classifyClause`'s assertion branch returns to `ASSERTION.test(text)` alone.
 
-**This is the only change in the plan that can move the measured rate upward.** It carries the heaviest mutant-killer burden in Task 7.
+- [ ] **Step 1: Remove the production code**
 
-- [ ] **Step 1: Write the failing tests**
-
-Append to `backend/measurement/tests/assertions.test.js`:
-
-```js
-// --------------------------------------------------------------------------
-// Gap 4b, measured 2026-08-06. Once the `Dr.` split is fixed the clause arrives
-// whole — and still has no cue. It asserts by accompaniment: no possession, no
-// achievement participle, just the artifact hung off "alongside".
-// --------------------------------------------------------------------------
-
-test('an artifact governed by an accompaniment preposition is asserted', () => {
-  const r = scoreAssertedAbsences(
-    { Organizational: 'Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor.' },
-    { Organizational: HARD_ABSENCES.Organizational },
-  );
-  assert.equal(r.observations[0].asserted, true);
-});
-
-// `with` is deliberately NOT an accompaniment preposition. It is pervasive and
-// cannot be restricted usefully, and excluding it costs nothing measured: the
-// two already-detected assertions use `with` but are caught by their participle.
-test('"with" is not an accompaniment preposition', () => {
-  // The clause must CONTAIN an artifact token, or classifyClause returns null
-  // and the assertion passes without testing anything. "advisor" is in
-  // Organizational's artifactTokens; "founders" and "full-time" are not.
-  assert.equal(
-    classifyClause('The venture operates with an advisor role planned for Q3', ORG),
-    'unclassified',
-    'adding `with` to ACCOMPANIMENT would make this assert',
-  );
-});
-
-test('an accompaniment assertion caught by its participle still works', () => {
-  assert.equal(
-    classifyClause('Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL.', REGU),
-    'asserted',
-    'this one is caught by `engaged`, not by accompaniment',
-  );
-});
-
-// The window and the punctuation guard are separate restrictions and need
-// separate tests: a span long enough to fail the window usually also contains a
-// comma, so one fixture would leave whichever guard runs second unkilled.
-test('a preposition separated from the token by punctuation does not assert', () => {
-  assert.equal(
-    classifyClause('Growth continued alongside strong demand, and a term sheet', INVEST),
-    'unclassified',
-    'the comma puts the preposition and the token in different phrases',
-  );
-});
-
-test('a preposition beyond the noun-phrase window does not assert', () => {
-  // 61 characters between "alongside" and "term sheet", and deliberately no
-  // punctuation — this fixture kills a widened ACCOMPANIMENT_WINDOW and nothing else.
-  assert.equal(
-    classifyClause(
-      'The platform grew alongside sustained demand from cooperatives across the province and a term sheet',
-      INVEST,
-    ),
-    'unclassified',
-    'the preposition governs "demand", not the distant token',
-  );
-});
-
-// Negation still wins, which is what protects a real reported absence that
-// happens to contain an accompaniment preposition.
-test('negation beats accompaniment', () => {
-  assert.equal(
-    classifyClause('Currently operating solely on founder time and personal resources alongside PHP 5,000 MRR without a funding plan.', INVEST),
-    'negated',
-  );
-});
-```
-
-- [ ] **Step 2: Run the tests to verify they fail**
-
-Run from `backend/`:
-```bash
-node --test measurement/tests/assertions.test.js
-```
-Expected: FAIL on `an artifact governed by an accompaniment preposition is asserted` — reports `false !== true`. The other four pass already and are guards.
-
-- [ ] **Step 3: Implement**
-
-In `backend/measurement/lib/assertions.js`, add after `tokenRe`:
-
-```js
-/**
- * Accompaniment asserts existence without a verb: "led by 3 founders alongside
- * a first non-founder contributor" holds no possession and no achievement
- * participle, yet claims the contributor exists.
- *
- * `with` is deliberately absent. It is pervasive and un-restrictable —
- * "Currently at ORL 2 with founders committed full-time", "engage a contributor
- * with a formal agreement" — and it costs nothing measured, because the
- * `with` assertions the probe has actually caught were caught by their
- * participle (`engaged`, `drafted`).
- *
- * Global flag is required: assertsByAccompaniment uses matchAll.
- */
-const ACCOMPANIMENT =
-  /\b(?:alongside|along\s+with|together\s+with|accompanied\s+by|as\s+well\s+as)\b/gi;
-
-/**
- * The noun-phrase window between the preposition and the artifact it governs.
- * Admits "alongside a first non-founder contributor" (32) while refusing a
- * preposition that governs some earlier phrase. A constant, not a literal at the
- * call site, so a recalibration is one edit and shows up in CLASSIFIER_SOURCE.
- */
-const ACCOMPANIMENT_WINDOW = 40;
-
-/**
- * True when an artifact token is the object of an accompaniment preposition:
- * within ACCOMPANIMENT_WINDOW characters after it, with no punctuation between
- * that would put them in different phrases.
- */
-function assertsByAccompaniment(text, tokens) {
-  const preps = [...text.matchAll(ACCOMPANIMENT)].map((m) => m.index + m[0].length);
-  if (!preps.length) return false;
-  for (const token of tokens) {
-    const m = tokenRe(token).exec(text);
-    if (!m) continue;
-    for (const end of preps) {
-      if (m.index <= end) continue;
-      const span = text.slice(end, m.index);
-      if (span.length <= ACCOMPANIMENT_WINDOW && !/[,;()]/.test(span)) return true;
-    }
-  }
-  return false;
-}
-```
-
-In `classifyClause`, change the assertion line from:
+In `backend/measurement/lib/assertions.js`, delete `ACCOMPANIMENT`, `ACCOMPANIMENT_WINDOW` and `assertsByAccompaniment` entirely, with their doc comments. In `classifyClause`, restore the assertion line to:
 
 ```js
   if (ASSERTION.test(text)) return 'asserted';
 ```
 
-to:
+Remove `ACCOMPANIMENT.source`, the `ACCOMPANIMENT_WINDOW` entry and `assertsByAccompaniment.toString()` from `CLASSIFIER_SOURCE`.
+
+- [ ] **Step 2: Delete the four tests that only existed for the predicate**
+
+Remove: `"with" is not an accompaniment preposition`, `a preposition separated from the token by punctuation does not assert`, `a preposition beyond the noun-phrase window does not assert`, and `negation beats accompaniment`. Each pins a boundary of a predicate that no longer exists.
+
+- [ ] **Step 3: Reframe the ORL 3 test as a known uncaught class**
+
+This is the point of the whole task — the limitation goes in the tests, not only in a document. Replace `an artifact governed by an accompaniment preposition is asserted` with:
 
 ```js
-  if (ASSERTION.test(text) || assertsByAccompaniment(text, tokens)) return 'asserted';
+// KNOWN UNCAUGHT CLASS, recorded deliberately. This clause does assert a
+// non-founder contributor, and the classifier does not catch it: there is no
+// possession, no achievement participle, and no negation or recommendation —
+// the artifact hangs off "alongside" alone.
+//
+// A predicate for this was built and cut (spec section 3): it had no way to
+// require the token be the HEAD of the governed phrase, so 14 of 14 constructed
+// realistic clauses scored as fabrications. Missing a real assertion keeps the
+// reported rate a lower bound; inventing one does not. This test exists so the
+// gap is visible in the suite rather than only in a document.
+test('accompaniment-only assertion is a known uncaught class', () => {
+  const r = scoreAssertedAbsences(
+    { Organizational: 'Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor.' },
+    { Organizational: HARD_ABSENCES.Organizational },
+  );
+  assert.equal(r.observations[0].asserted, false, 'if this ever passes, the predicate came back — read spec section 3 first');
+  assert.equal(r.observations[0].mentioned, true, 'the artifact is still detected as mentioned');
+});
 ```
 
-- [ ] **Step 4: Run the full measurement suite**
+- [ ] **Step 4: Keep the participle test unchanged**
+
+`an accompaniment assertion caught by its participle still works` stays exactly as it is. It never depended on the predicate — it passes through `engaged` — and it is now the evidence that cutting §3 did not cost the `with`-shaped detections.
+
+- [ ] **Step 5: Run the full measurement suite**
 
 Run from `backend/`:
 ```bash
 pnpm test:measurement
 ```
-Expected: PASS, 206 tests, 0 failing.
+Expected: PASS, 203 tests, 0 failing. Arithmetic: 207 after the predicate landed, minus 4 deleted tests. The reframed test and the participle test both remain, so only the four boundary tests go.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add backend/measurement/lib/assertions.js backend/measurement/tests/assertions.test.js
-git commit -m "feat(measurement): detect assertion by accompaniment
+git commit -m "revert(measurement): cut the accompaniment predicate
 
-'led by 3 founders alongside a first non-founder contributor' holds no
-possession and no achievement participle, yet claims the contributor
-exists. The second of the two genuine fabrications missed on 2026-08-06.
+Built at 516063a, attacked in review, removed. It had no way to require
+the artifact token be the head of the governed phrase: 14 of 14
+constructed realistic clauses flipped unclassified -> asserted, and 5 of
+6 realistic RNA texts flipped end to end.
 
-Positional rather than a whole-clause cue: the token must be the object
-of the preposition, within a 40-char noun-phrase window with no
-punctuation between. 'with' is excluded - pervasive, un-restrictable, and
-costs nothing measured."
+Two shapes. Attributive use - 'Customer adoption grew steadily as well as
+investor interest' - is verbatim the case ASSERTION's own comment
+excludes bare copulas for. Window coincidence - 'The pilot ran alongside
+barangay officials to obtain a permit' - fires on a recommendation, since
+the preposition governs an earlier noun and the artifact is the goal of a
+purpose clause.
+
+It bought one recovered detection. The lower-bound guarantee is what lets
+the reference-free result survive a contested reference, so the trade was
+the wrong way round. The gap is now recorded as a known uncaught class in
+the suite."
 ```
 
----
+
 
 ### Task 6: `CUES` and the fingerprint guard
 
@@ -840,13 +745,9 @@ For each row: apply the mutation, run `pnpm test:measurement` from `backend/`, r
 | 4 | In `scoreAssertedAbsences`, pass `scope` unconditionally instead of `continuation ? scope : ''` | `a leading "While" scopes its negation to its own clause` (pre-existing, `:206`) |
 | 5 | Let `ASSERTION` be tested against `gated` too | `a continuation fragment never inherits an assertion` |
 | 6 | Drop `\b(?:exists?\|existed\|existing)\b` from `ASSERTION` | `an existential predicate on an artifact is an assertion` |
-| 7 | Remove `\|\| assertsByAccompaniment(text, tokens)` from `classifyClause` | `an artifact governed by an accompaniment preposition is asserted` |
-| 8 | Add `\|with` to `ACCOMPANIMENT` | `"with" is not an accompaniment preposition` |
-| 9 | Raise `ACCOMPANIMENT_WINDOW` to `400` | `a preposition beyond the noun-phrase window does not assert` |
-| 10 | Drop the `!/[,;()]/.test(span)` guard from `assertsByAccompaniment` | `a preposition separated from the token by punctuation does not assert` |
-| 11 | Drop `CONTINUATION` from `CUES` | `every module-level constant is either a cue or a named non-cue`. **Not** `CLASSIFIER_SOURCE carries every cue in CUES` — that test iterates `CUES`, so removing an entry makes it pass vacuously. This mutant exists to prove the source scan is the guard that matters. |
+| 7 | Drop `CONTINUATION` from `CUES` | `every module-level constant is either a cue or a named non-cue`. **Not** `CLASSIFIER_SOURCE carries every cue in CUES` — that test iterates `CUES`, so removing an entry makes it pass vacuously. This mutant exists to prove the source scan is the guard that matters. |
 
-**Mutants 9 and 10 have separate fixtures on purpose** — a span long enough to fail the window usually also contains a comma, so a shared fixture would leave whichever guard runs second unkilled.
+**Four mutants were removed when the accompaniment predicate was cut** (spec §3), leaving seven. Add an eighth: restore the `\|\| assertsByAccompaniment(...)` disjunct as dead code and confirm `accompaniment-only assertion is a known uncaught class` fails — that test is the guard against the predicate silently returning.
 
 - [ ] **Step 2: Close any survivor**
 
