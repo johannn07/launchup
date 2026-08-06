@@ -24,8 +24,17 @@ const RECOMMENDATION =
 const IMPERATIVE =
   /^(?:draft|engage|secure|hire|formali[sz]e|document|develop|establish|prepare|obtain|create|build|conduct|appoint|register)\b/i;
 
+/**
+ * Possession ("has a funding plan") and achievement ("counsel engaged", "is in
+ * place") assert that an artifact exists. A bare copula does not: "investor
+ * interest is growing" names no artifact, and admitting it would bias the rate
+ * upward — the opposite of this module's lower-bound guarantee.
+ *
+ * Copula fabrications are still caught through their participle: "angel funding
+ * is secured" matches `secured`, so no separate "is + X" alternative is needed.
+ */
 const ASSERTION =
-  /\b(?:has|have|had|is|are|was|were|secured|obtained|engaged|established|maintains?|holds?|already|currently|in\s+place)\b/i;
+  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 
 /** Multiword tokens like "term sheet" and "org chart" must match as phrases. */
 const tokenRe = (token) =>

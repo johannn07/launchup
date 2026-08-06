@@ -86,3 +86,22 @@ test('an unrecognised framing is reported as unclassified, not silently clean', 
   assert.equal(r.observations[0].asserted, false);
   assert.equal(r.observations[0].unclassified, true);
 });
+
+// The reason bare copulas were dropped: this names no funding artifact, and
+// scoring it as a fabrication would bias the rate upward — the opposite of
+// this module's lower-bound guarantee.
+test('a bare copula beside a token is unclassified, not asserted', () => {
+  assert.equal(classifyClause('Investor interest is growing steadily', INVEST), 'unclassified');
+});
+
+test('a copula fabrication is still caught through its participle', () => {
+  assert.equal(classifyClause('Angel funding is secured', INVEST), 'asserted');
+});
+
+test('an achievement state is asserted', () => {
+  assert.equal(classifyClause('A written funding plan is in place', INVEST), 'asserted');
+});
+
+test('a bare imperative is a recommendation even with no modal', () => {
+  assert.equal(classifyClause('Draft a funding plan', INVEST), 'recommended');
+});
