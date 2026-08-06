@@ -157,6 +157,21 @@ test('the narrow list is a subset of the broad one, plus multiword refinements',
   }
 });
 
+// The subset test above only checks direction (narrow ⊆ broad ∪ extras), which
+// passes even if a notArtifacts entry matches nothing — a typo or wrong case
+// silently drops zero tokens, leaving a topic word in artifactTokens with no
+// error. This checks the subtraction actually removed something.
+test('every notArtifacts entry matches something in its dimension\'s absentTokens', () => {
+  for (const [dim, spec] of Object.entries(HARD_ABSENCES)) {
+    for (const t of spec.notArtifacts || []) {
+      assert.ok(
+        spec.absentTokens.includes(t),
+        `${dim}: notArtifacts entry "${t}" matches nothing in absentTokens — typo or wrong case silently no-ops`,
+      );
+    }
+  }
+});
+
 // --------------------------------------------------------------------------
 // Under-count channel (a): singular-only matching. RRL 4's own text reads "The
 // specific permits, licenses, or certifications required" — the plural is the
