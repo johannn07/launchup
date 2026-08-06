@@ -335,7 +335,7 @@ const STRANDED = [
   ['Organizational', ORG, 'To achieve ORL 4, the startup must draft formal role definitions for the core team, create initial operational process artifacts like onboarding checklists or decision logs, and prepare for its first full-time hire beyond the founding team.'],
   ['Organizational', ORG, 'Need: Document role descriptions, establish operational decision processes, and bring on a first non-founder contributor.'],
   ['Investment', INVEST, 'To advance investment readiness, AgroLink PH needs to create a written funding plan specifying target raise amounts and use of funds, prepare a pitch deck, and initiate preliminary investor discussions.'],
-  ['Investment', INVEST, 'Needs to build financial models, investor pitch materials, and investment pitch to secure initial funding.'],
+  ['Investment', INVEST, 'Needs: Formulate a clear financial model, commercial pricing strategy, and investment pitch to secure initial funding.'],
   ['Regulatory', REGU, 'Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards, and compliance certifications needed for health referral software to reach RRL 4.'],
 ];
 
