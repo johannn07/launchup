@@ -97,23 +97,29 @@ No negation, no recommendation, no imperative, and no possession or achievement 
 
 ### 4. `RECOMMENDATION` and `IMPERATIVE` widen
 
-- `need\s+to|needs\s+to` → `\bneed(?:s|ed|ing)?\b`, covering all seven mechanism-1 instances.
-- `IMPERATIVE` gains the stranded verbs: `bring, initiate, advance, outline, formulate, convert, assemble, complete, conduct, transition`.
-- `IMPERATIVE` strips a leading `and | or | then` before applying its `^` anchor.
+`need\s+to|needs\s+to` → `\bneed(?:s|ed|ing)?\b`, covering all seven mechanism-1 instances.
+
+**`IMPERATIVE` gains nothing.** The earlier draft of this section added the stranded verbs (`bring`, `initiate`, `advance`, …) and a leading-coordinator strip. Both are withdrawn: §5 handles every stranded fragment by inheriting its governing clause's modal, which is the principled rule, and patching a verb list alongside it would make §5 reachable on only one of the six clauses — leaving the mutation pass unable to show it is load-bearing. One mechanism, tested.
 
 ### 5. Coordination scope inheritance
 
-In `scoreAssertedAbsences`, a clause matching `^(?:and|or|then)\b` is a **continuation fragment** and inherits the preceding non-fragment clause's `negated` or `recommended` verdict.
+A clause matching `^(?:and|or|then)\b` is a **continuation fragment**. `classifyClause` gains an optional third parameter, `scope` — the preceding non-fragment clause — and `scoreAssertedAbsences` passes it for continuation fragments only.
 
-**A fragment never inherits `asserted`.** Inheritance propagates only the two gates that resolve away from fabrication, which keeps the change monotonically safe and is what makes it acceptable without a separate lower-bound argument.
+**`NEGATION`, `RECOMMENDATION` and `IMPERATIVE` are tested against `scope + clause`. The token test and `ASSERTION` are tested against the clause alone.** Only the two gates that resolve away from fabrication get the wider window, so the change is monotonically safe. A fragment can never become `asserted` because of something in its neighbour.
 
-This covers all six coordination-stranded clauses — the five `unclassified` ones and the false positive in §"A live counterexample". Two of them (`"and compliance certifications needed…"`, `"and initiate preliminary investor discussions."`) are also reachable through §4 alone; the redundancy is fine, but the mutation pass must confirm §5 is load-bearing on the clauses only it can reach.
+Inheritance is scoped to *cues*, not to `classifyClause`'s output. That distinction is load-bearing: the head clause frequently contains no artifact token — `"To achieve ORL 4, the startup must draft formal role definitions…"` has none — so it classifies as `null`, and a verdict-inheriting design would find nothing to inherit. Testing the cue regexes against the concatenation reconstructs the original sentence scope instead.
+
+The third parameter defaults to `''`, so all existing two-argument call sites and tests are unaffected.
+
+This covers all six coordination-stranded clauses — the five `unclassified` ones and the false positive in §"A live counterexample".
 
 The subordinator split at `assertions.js:74` is unaffected: in `"While no term sheet exists, the team has secured angel funding"` the asserting clause does not begin with a coordinator, so it inherits nothing and still scores `asserted`.
 
 ### 6. Fingerprint
 
-Every new regex and helper is added to `CLASSIFIER_SOURCE` in the same change. A new test enumerates the module's regexes and asserts each appears in `CLASSIFIER_SOURCE`, replacing the file's "add any new regex or helper here" comment with a mechanical check — the comment is exactly the kind of instruction that gets missed, and the consequence is re-scored data pooling with old data.
+The file's "add any new regex or helper here at the same time you add it above" comment is exactly the kind of instruction that gets missed, and the consequence is re-scored data pooling with data scored by a different classifier.
+
+Replace it with structure: collect the cue regexes into a `CUES` object and **build `CLASSIFIER_SOURCE` from `Object.values(CUES)`**, so a regex in `CUES` cannot be left out of the hash. Then add one test that reads the module source, extracts every module-level `SCREAMING_CASE` constant, and asserts each is either a `CUES` key or a named non-cue (`ACCOMPANIMENT_WINDOW`, `CLASSIFIER_SOURCE`) — that catches a *new* regex declared outside `CUES`, which building from `CUES` alone cannot.
 
 `assertion|*` will change. The re-run must therefore **refuse** to pool with `2026-08-06-supplied-level.json`. That refusal is verified, not assumed.
 
@@ -131,7 +137,7 @@ Additional required tests:
 | `"a permit remains outstanding"` → not `asserted` | the §2 refusals stay refused |
 | `"Currently at ORL 2 with founders committed full-time"` → not `asserted` | `with` stays excluded from §3 |
 | every module regex appears in `CLASSIFIER_SOURCE` | §6 |
-| all 117 existing measurement tests | no regression |
+| all 178 existing measurement tests | no regression |
 
 **Mutation pass.** Remove each new cue and the §5 inheritance rule individually; confirm at least one test fails for each. Mutation testing has caught decorative guards three times on this work (`is429`, `placed > ceiling`, `ipo`/`IPOPHL`), and §3 in particular must be shown to be load-bearing rather than merely present.
 
