@@ -228,6 +228,21 @@ function validateArgs(argv, mergeFiles) {
     );
   }
 
+  // The hallucination probe's rubric block always comes from the truth-condition
+  // retrieval (cell.retrieved), so excluding 'truth' leaves it silently rubric-less
+  // — a degraded arm that looks like a real one and still spends quota to produce.
+  if (toValidate.includes('--with-fabrication-probe')) {
+    const levelConditionArg = toValidate.find((a) => a.startsWith('--level-condition='));
+    const raw = levelConditionArg ? levelConditionArg.slice('--level-condition='.length) : null;
+    if (!selectLevelConditions(raw).conditions.includes('truth')) {
+      errors.push(
+        '--with-fabrication-probe needs the truth condition: its rubric block comes from the ' +
+          'truth-condition retrieval, so under --level-condition=inflated it would run with no rubric ' +
+          'at all and spend quota on a degraded probe. Use --level-condition=both or truth.',
+      );
+    }
+  }
+
   return errors;
 }
 
@@ -742,8 +757,8 @@ function renderTitlesOnlyBlock(rows) {
 }
 
 /**
- * Retrieval is deterministic, so it is computed once per (arm, startup) and
- * reused across reps rather than re-run for no informational gain.
+ * Retrieval is deterministic, so it is computed once per (arm, startup, condition)
+ * and reused across reps rather than re-run for no informational gain.
  *
  * `deterministic` is a pure key lookup and baseline needs no rubric, so neither
  * may be blocked by the single embed call `semantic` needs. That call is lazy,

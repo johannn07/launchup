@@ -134,3 +134,19 @@ test('the levels probe runs once regardless of how many conditions are selected'
   });
   assert.equal(r.prompts.length, 1);
 });
+
+// A silently degraded probe that looks like a real arm is the failure mode
+// this harness exists to prevent — and it would spend quota to produce it.
+test('--with-fabrication-probe rejects an inflated-only condition', () => {
+  const errs = validateArgs(['--with-fabrication-probe', '--level-condition=inflated'], []);
+  assert.equal(errs.length, 1);
+  assert.match(errs[0], /truth condition/i);
+});
+
+test('--with-fabrication-probe accepts both conditions', () => {
+  assert.deepEqual(validateArgs(['--with-fabrication-probe', '--level-condition=both'], []), []);
+});
+
+test('--with-fabrication-probe accepts the default condition', () => {
+  assert.deepEqual(validateArgs(['--with-fabrication-probe'], []), []);
+});
