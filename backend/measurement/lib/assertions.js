@@ -34,7 +34,7 @@ const IMPERATIVE =
  * is secured" matches `secured`, so no separate "is + X" alternative is needed.
  */
 const ASSERTION =
-  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed)\b|\bin\s+place\b|\bunder\s+contract\b/i;
+  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 
 /** Multiword tokens like "term sheet" and "org chart" must match as phrases. */
 const tokenRe = (token) =>

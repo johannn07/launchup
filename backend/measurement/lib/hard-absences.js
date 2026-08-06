@@ -35,13 +35,16 @@ const HARD_ABSENCES = {
     ceiling: 2,
     requires: 'ORL 3+ requires a non-founder contributor under contract; ORL 4+ adds written role definitions and a first full-time hire beyond the founders.',
     // "full-time" is excluded: AgroLink uses it of its founders, not of a hire.
-    absentTokens: ['employee', 'hire', 'hired', 'staff', 'contractor', 'advisor', 'consultant', 'org chart', 'board'],
+    // "contributor" added: ORL 3's own rubric text says "non-founder contributor",
+    // so a fabrication is more likely to use that word than "contractor".
+    absentTokens: ['employee', 'hire', 'hired', 'staff', 'contractor', 'contributor', 'advisor', 'consultant', 'org chart', 'board'],
   },
   Regulatory: {
     ceiling: 2,
     requires: 'RRL 3+ requires external counsel engaged and a preliminary opinion received.',
     // "trademark"/"IPOPHL" are present in both documents but are IP, not product regulation.
-    absentTokens: ['counsel', 'lawyer', 'legal', 'regulator', 'regulatory', 'compliance', 'license', 'licence', 'permit', 'certification', 'accredit'],
+    // "opinion" added: RRL 3's own rubric text says "a preliminary opinion received".
+    absentTokens: ['counsel', 'lawyer', 'legal', 'regulator', 'regulatory', 'compliance', 'license', 'licence', 'permit', 'certification', 'accredit', 'opinion'],
   },
   Investment: {
     ceiling: 2,

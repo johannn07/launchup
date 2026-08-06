@@ -8,6 +8,7 @@ const { HARD_ABSENCES } = require(path.resolve(__dirname, '../lib/hard-absences.
 
 const INVEST = HARD_ABSENCES.Investment.absentTokens;
 const REGU = HARD_ABSENCES.Regulatory.absentTokens;
+const ORG = HARD_ABSENCES.Organizational.absentTokens;
 
 // The exact sentence observed on 2026-08-05. This is the defect the probe exists
 // to count: the rubric's evidence REQUIREMENT restated as accomplished fact.
@@ -104,4 +105,20 @@ test('an achievement state is asserted', () => {
 
 test('a bare imperative is a recommendation even with no modal', () => {
   assert.equal(classifyClause('Draft a funding plan', INVEST), 'recommended');
+});
+
+// ORL 3's own rubric text is "a non-founder contributor under contract", so a
+// fabrication is likelier to use that word than "contractor". Missing it made
+// Organizational read 0 for the wrong reason — and 0 is the corpus-is-safe
+// conclusion, so the gap biased toward exonerating the thing under test.
+test('a non-founder contributor claim is detected', () => {
+  assert.equal(classifyClause('A first non-founder contributor is now under contract', ORG), 'asserted');
+});
+
+test('a granted permit is an achievement, not unclassified', () => {
+  assert.equal(classifyClause('The operating permit was granted last quarter', REGU), 'asserted');
+});
+
+test('a received opinion is an achievement', () => {
+  assert.equal(classifyClause('A preliminary opinion was received', REGU), 'asserted');
 });
