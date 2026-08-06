@@ -357,3 +357,34 @@ test('a continuation fragment never inherits an assertion', () => {
     'inheriting `asserted` would manufacture a fabrication from a neighbour',
   );
 });
+
+// --------------------------------------------------------------------------
+// Gap 3, measured 2026-08-06. Verbatim from the audit dump — MediSync,
+// corpus arm, inflated condition, rep 1.
+// --------------------------------------------------------------------------
+
+test('an existential predicate on an artifact is an assertion', () => {
+  assert.equal(
+    classifyClause('A basic funding plan exists alongside PHP 5,000 MRR.', INVEST),
+    'asserted',
+  );
+});
+
+test('a negated existential is still correct reporting', () => {
+  assert.equal(classifyClause('No funding plan exists at all', INVEST), 'negated');
+});
+
+test('a recommended existential is still advice', () => {
+  assert.equal(classifyClause('A written funding plan should exist by Q3', INVEST), 'recommended');
+});
+
+// Both were floated in SESSION_NOTES.md as likely additions alongside `exists`.
+// Both are refused: neither has a measured instance, and each has a plain
+// counterexample that would break the lower-bound guarantee.
+test('"remains" is refused — it asserts nothing about existence', () => {
+  assert.notEqual(classifyClause('A permit remains outstanding', REGU), 'asserted');
+});
+
+test('"includes" is refused — a plan is not an artifact in existence', () => {
+  assert.notEqual(classifyClause('The roadmap includes a contractor engagement', ORG), 'asserted');
+});

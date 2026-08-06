@@ -42,9 +42,16 @@ const IMPERATIVE =
  *
  * Copula fabrications are still caught through their participle: "angel funding
  * is secured" matches `secured`, so no separate "is + X" alternative is needed.
+ *
+ * `exists` is the one existential added (measured 2026-08-06: "A basic funding
+ * plan exists alongside PHP 5,000 MRR"). It is safe only because negation and
+ * recommendation are tested first — "no funding plan exists" and "should exist"
+ * both exit before this runs. `remains` and `includes` were considered and
+ * REFUSED: "a permit remains outstanding" and "the roadmap includes a contractor
+ * engagement" assert nothing, and neither has a measured instance.
  */
 const ASSERTION =
-  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\bin\s+place\b|\bunder\s+contract\b/i;
+  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\b(?:exists?|existed|existing)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 
 /**
  * Multiword tokens like "term sheet" and "org chart" must match as phrases.
