@@ -16,7 +16,7 @@
 - **Do not re-score `measurement/results/2026-08-06-supplied-level.json`, and do not quote a corrected rate from it.** The audit dump is design input only.
 - **Baseline test suite: `pnpm test:measurement` → 178 passing, 0 failing.** Run from `backend/`. It must read 178+N passing / 0 failing at the end of every task. *(Note: `SESSION_NOTES.md` records 117 — that figure predates the 2026-08-06 branch and is corrected in Task 8.)*
 - **The test runner needs the glob, not the directory.** `node --test measurement/tests/` fails; use `pnpm test:measurement`, or `node --test measurement/tests/assertions.test.js` for one file.
-- All fixture strings are copied **verbatim** from `measurement/results/2026-08-06-supplied-level.json` — real model output. Do not paraphrase or tidy them.
+- Fixtures come in two kinds and must not be confused. **Dump fixtures** are lifted from `measurement/results/2026-08-06-supplied-level.json` and must appear there **verbatim** — grep each one against the file before using it, rather than trusting this plan's transcription of it. Three provenance defects have already been found in these strings (one truncated, one spliced from two startups' outputs). **Guard fixtures** are deliberately constructed to pin a boundary — the `remains`/`includes` refusals, the `with` exclusion, the accompaniment window — and have no source in the dump; label them as constructed in a comment so a later reader does not go looking.
 - Every new regex goes in the `CUES` object (Task 6), never as a loose `const`.
 - Commit after every task. Do not push. Work on branch `measure/assertion-classifier-gaps` (already created, holds the spec at `c536dd5`).
 
