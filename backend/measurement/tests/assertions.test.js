@@ -145,7 +145,10 @@ const ABSTRACT_USAGE = [
 
 for (const [dim, tokens, sentence] of ABSTRACT_USAGE) {
   test(`abstract usage asserts no artifact: ${dim} — "${sentence}"`, () => {
-    assert.notEqual(classifyClause(sentence, tokens), 'asserted');
+    // All five are rejected at the token-narrowing gate itself (classifyClause
+    // returns null before any cue runs), which is the mechanism this test is
+    // meant to pin — verified with node before tightening from notEqual.
+    assert.equal(classifyClause(sentence, tokens), null);
   });
 }
 
@@ -380,11 +383,21 @@ test('a continuation fragment never inherits an assertion', () => {
 // corpus arm, inflated condition, rep 1.
 // --------------------------------------------------------------------------
 
-test('an existential predicate on an artifact is an assertion', () => {
-  assert.equal(
-    classifyClause('A basic funding plan exists alongside PHP 5,000 MRR.', INVEST),
-    'asserted',
+// KNOWN UNCAUGHT CLASS, recorded deliberately. This is a real fabrication — a
+// funding plan the source document never mentions, reported as present — and
+// the classifier does not catch it. `exists` was tried as a cue for exactly
+// this clause (measured 2026-08-06) and then cut (measured 2026-08-09): the
+// same cue also fires on "Investor interest exists but remains informal at
+// this stage," where `funding`/`investor` is attributive, not the thing being
+// said to exist. No syntactic restriction separates the two, so the cue was
+// refused and this clause reverted to a documented gap instead.
+test('an existential predicate on an artifact is a known uncaught class', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'A basic funding plan exists alongside PHP 5,000 MRR.' },
+    { Investment: HARD_ABSENCES.Investment },
   );
+  assert.equal(r.observations[0].asserted, false, 'the cue that would catch this also fires on "Investor interest exists"');
+  assert.equal(r.observations[0].mentioned, true, 'the artifact is still detected as mentioned');
 });
 
 test('a negated existential is still correct reporting', () => {
@@ -404,6 +417,25 @@ test('"remains" is refused — it asserts nothing about existence', () => {
 
 test('"includes" is refused — a plan is not an artifact in existence', () => {
   assert.notEqual(classifyClause('The roadmap includes a contractor engagement', ORG), 'asserted');
+});
+
+// Constructed guard: the reason `exists` was cut. `investor` is attributive
+// here, not the head of the subject NP — the same shape as "A basic funding
+// plan exists", which IS a fabrication. Nothing in the syntax distinguishes
+// them, so the cue cannot be trusted for either.
+test('"exists" is refused — an attributive subject asserts no artifact', () => {
+  assert.notEqual(
+    classifyClause('Investor interest exists but remains informal at this stage.', INVEST),
+    'asserted',
+  );
+});
+
+// Constructed guard for `existed`, the one refused cue with no test before this.
+test('"existed" is refused — no measured instance and the same attributive hole as `exists`', () => {
+  assert.notEqual(
+    classifyClause('A significant funding gap existed between revenue and cost.', INVEST),
+    'asserted',
+  );
 });
 
 // Constructed guard, not a dump fixture. `existing` is an attributive

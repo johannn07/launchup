@@ -26,6 +26,19 @@ const NEGATION =
  * Widening here cannot raise the fabrication rate: classifyClause tests
  * recommendation before assertion, so a new match can only move a clause OUT of
  * `asserted`.
+ *
+ * That widening is not free, though: `need(?:s|ed|ing)?` also matches the NOUN
+ * "needs", not just the modal, so it can pull a real assertion into
+ * `recommended` too. Measured on 2026-07-30-redesign-rep1.json (Investment,
+ * MediSync Cebu, deviation-deterministic arm — a corpus arm): "A funding plan
+ * has been drafted outlining target capital needs alongside current traction of
+ * PHP 5,000 monthly recurring revenue" scored `asserted` before this cue and
+ * `recommended` after — a detection lost, not just a lower-bound direction. The
+ * lower-bound property still holds (the move is still OUT of `asserted`, never
+ * in), but sensitivity does not. A clause-initial anchor (`^need...`) was
+ * measured as an alternative: it recovers this one detection but sends two other
+ * clauses back to `unclassified`, so it is a real trade, not a free fix, and is
+ * not made here.
  */
 const RECOMMENDATION =
   /\b(?:should|must|need(?:s|ed|ing)?|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able))\b/i;
@@ -43,18 +56,19 @@ const IMPERATIVE =
  * Copula fabrications are still caught through their participle: "angel funding
  * is secured" matches `secured`, so no separate "is + X" alternative is needed.
  *
- * `exists` is the one existential added (measured 2026-08-06: "A basic funding
- * plan exists alongside PHP 5,000 MRR"). It is safe because it is a finite verb
- * requiring the artifact as its subject, unlike `existing`, an attributive
- * adjective. `existed` and `existing` were considered and REFUSED: "Existing
- * investor sentiment remains cautious despite early traction" asserts nothing,
- * and neither form has a measured instance. The gate against bare copulas
- * ("investor interest is growing") does not protect against attributive usage,
- * so the ordering argument for negation/recommendation precedence does not apply.
- * `remains` and `includes` were also refused for lack of measured instances.
+ * `exists` was added (measured 2026-08-06: "A basic funding plan exists
+ * alongside PHP 5,000 MRR"), then CUT (measured 2026-08-09): a finite existential
+ * verb does not guarantee the artifact is what is being said to exist, because
+ * the artifact token can be an attributive modifier inside the subject noun
+ * phrase rather than its head. "Investor interest exists" and "A basic funding
+ * plan exists" are structurally identical — `funding` is attributive in both —
+ * and only the second one is a real fabrication; nothing in the syntax tells
+ * them apart. `exists`, `existed`, `existing`, `remains`, and `includes` are all
+ * refused on this same ground: none of them can tell an attributive artifact
+ * token from a head one, so none can be trusted as an existential cue.
  */
 const ASSERTION =
-  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\b(?:exists?)\b|\bin\s+place\b|\bunder\s+contract\b/i;
+  /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\bin\s+place\b|\bunder\s+contract\b/i;
 
 /**
  * Multiword tokens like "term sheet" and "org chart" must match as phrases.
