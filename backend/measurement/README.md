@@ -901,6 +901,91 @@ headline claim — does the corpus reduce hallucination and improve
 differentiation — remains untested under the current, confound-free probe
 design; the 2026-07-29 numbers above cannot answer it either way.
 
+## Assertion classifier — 2026-08-07 repair and mutation log
+
+`lib/assertions.js` was repaired after hand-reading the 2026-08-06 run's
+`flaggedClauses`. Of its 14 `unclassified` clauses, **12 were recommendations
+mis-binned**, not missed assertions — the recorded "subject-less fragments"
+diagnosis was a third of the picture. Full record in
+`docs/superpowers/specs/2026-08-07-assertion-classifier-gaps-design.md`.
+
+**What shipped:** abbreviation-safe sentence splitting; `RECOMMENDATION` widened
+to `need(?:s|ed|ing)?` for the model's `Needs:` label form; coordination **scope
+inheritance**, where a continuation fragment inherits its governing clause's
+negation/recommendation cues but never its assertion; `CUES` with
+`CLASSIFIER_SOURCE` built from it plus a source scan catching a regex declared
+outside it.
+
+**What was refused, and this is the point:** five candidate assertion cues were
+built or specified and then cut — `require`, `existed`, `existing`, `exists`,
+and a whole accompaniment predicate. **The assertion branch is unchanged from
+before this work.** Every cue that could raise the measured rate failed the same
+test: the artifact token turned out to be an attributive modifier rather than
+the head of the phrase, so the cue fired on clauses asserting nothing.
+`"Investor interest exists"` and `"A basic funding plan exists"` are
+structurally identical; the accompaniment predicate false-positived on 14 of 14
+constructed realistic clauses. Both genuine missed assertions are now recorded
+as **known uncaught classes** with tests, which is itself a lower-bound
+statement.
+
+**A live counterexample to the lower-bound guarantee was found and removed:**
+`"and maintain an active log of investor pitches conducted."` had been stranded
+from its governing `must` by a comma-and split and scored `asserted` on
+`maintains?`.
+
+**Whole-branch effect over the 330 stored dimension texts:** `unclassified`
+clauses 36 → 2, `asserted` 14 → 11. The instrument got stricter about false
+positives, not more sensitive.
+
+**Fingerprint:** `assertion|baseline` moved `4c1429815dc7` → `529dd55beb2c`, so
+a re-run **cannot pool** with the 2026-08-06 data. That is the guard working; a
+fixed classifier means a fresh experiment.
+
+### Mutation log
+
+Nine mutants, nine killed, against 205 passing tests. Scripted rather than
+hand-driven, restoring from an in-memory copy in a `finally` block — a first
+hand-driven attempt was interrupted and left a live mutation in the tree.
+
+| mutation | killed by |
+|---|---|
+| revert `SENTENCE_BREAK` to the naive split | `an abbreviation period is not a sentence end` |
+| `RECOMMENDATION` back to `need\s+to` only | all 7 labelled-requirement tests **+ 3 continuation tests** |
+| `classifyClause` ignores `scope` | `a stranded continuation does not assert off its own verb` + 4 more |
+| `scope` passed unconditionally | `a leading "While" scopes its negation to its own clause` |
+| `ASSERTION` tested against `scope + clause` | `a continuation fragment never inherits an assertion` |
+| drop `exists?` (before it was cut outright) | `an existential predicate on an artifact is an assertion` |
+| drop `CONTINUATION` from `CUES` | `every module-level constant is either a cue or a named non-cue` |
+| resurrect an accompaniment disjunct | `accompaniment-only assertion is a known uncaught class` |
+| readmit `existing` to `ASSERTION` | `"existing" is refused — an attributive adjective asserts no artifact` |
+
+Two results worth carrying forward:
+
+- **Reverting the `RECOMMENDATION` widening also breaks three of the
+  continuation fixtures.** Those fragments inherit a `Needs:` head, so scope
+  inheritance is only reachable through the widening. The two changes are
+  coupled and the suite now shows it.
+- **One genuine survivor, recorded not fixed:** removing `CONTINUATION` from
+  `CUES` *and* allowlisting it in the test's `NON_CUES` survives green. Both
+  guards pass — the scan allows the name, and the coverage test iterates `CUES`
+  so it passes vacuously. Closing it would mean guarding against an author who
+  edits the guard to accept its own bypass.
+
+**A harness caveat for anyone repeating this:** two mutants first reported as
+survivors were failures to apply. `String.replace(string, string)` takes only
+the first occurrence, and the doc comment quotes the regex above it — so the
+mutation edited the comment; and a multi-line anchor used `\n` against a CRLF
+file. **A mutation that fails to apply reports a green suite, which is
+indistinguishable from a decorative guard.** Assert the mutation landed.
+
+**Known sensitivity cost, measured:** the widened `RECOMMENDATION` also matches
+the *noun* "needs", which reclassifies one real fabrication in the stored data
+— `"A funding plan has been drafted outlining target capital needs…"`
+(`2026-07-30-redesign-rep1.json`, MediSync, `deviation-deterministic`) — from
+`asserted` to `recommended`. Conservative direction, so the lower bound holds,
+but it is a detection lost, not a free win. A clause-initial anchor recovers it
+and costs two other clauses.
+
 ## Reading the output
 
 Trust the **gap and its direction**, not the absolute levels — there is no
