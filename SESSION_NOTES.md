@@ -249,6 +249,68 @@ Branch `docs/trim-notes-and-status-table` (`5e844b0`), pushed, **PR not yet open
 
 ---
 
+## 2026-08-09 — the classifier repair, and five cues that did not survive review
+
+Branch `measure/assertion-classifier-gaps`, 19 commits off `master` at `69a9387`, **nothing pushed**. Spec and plan under `docs/superpowers/`, executed task-by-task with an independent review after each and a whole-branch review at the end.
+
+### The recorded diagnosis was a third of the picture
+
+The standing next step named two gaps: `exists` missing from the assertion cues, and `splitClauses` yielding subject-less fragments. Dumping all 35 classified clauses from the 2026-08-06 run showed something different. Of the 14 `unclassified` clauses, **12 were recommendations mis-binned** — seven via the model's `Needs:`/`Need:` label form (`RECOMMENDATION` required `need\s+to`), five via coordination splits stranding a fragment from its governing modal. Only 2 were missed assertions. **The dominant defect was recommendation detection, not assertion detection.**
+
+The fragment diagnosis was also wrong in mechanism: the split happened at **`Dr.`** inside a founder name, not at a coordination.
+
+### A counterexample to the lower-bound guarantee was sitting in the collected data
+
+`"and maintain an active log of investor pitches conducted."` had been stranded from the `must` in its head clause and scored `asserted` on `ASSERTION`'s `maintains?`. The module's header claims every ambiguity resolves *away* from fabrication; this was one resolving toward it. It did not move the published 2/12 — that call's Investment was already asserted on a legitimate clause — but the guarantee was a claim rather than a property.
+
+Fixed by **scope inheritance**: a continuation fragment inherits its governing clause's negation/recommendation cues and **never** its assertion. Inheritance is of *cues*, not of a verdict, because head clauses frequently carry no artifact token and so classify as `null`.
+
+### Five assertion cues were built or specified, and all five were cut
+
+This is the substantive outcome. `require`, `existed`, `existing`, `exists`, and an entire accompaniment predicate were each written into the spec or plan by me and each removed after review. **Every one failed the same way: the artifact token turned out to be an attributive modifier rather than the head of its phrase**, so the cue fired on clauses asserting nothing.
+
+- `existing` — *"Existing investor sentiment remains cautious"* scored as fabrication.
+- accompaniment (`alongside`, `as well as`, …) — **14 of 14** constructed realistic clauses false-positived; *"The pilot ran alongside barangay officials to obtain a permit"* fires on a clause saying the permit is **not** obtained. Hardening with a determiner requirement was measured at 14 → 2 and rejected.
+- `exists` — the killer: *"Investor interest exists"* and *"A basic funding plan exists"* are **structurally identical**. The genuine detection worked only because `plan` happens to be the head noun. No syntactic restriction separates them.
+
+**So the assertion branch ships byte-identical to before this work.** All recovery came from the recommendation side. Both genuine missed assertions are now **known uncaught classes with tests** — a lower-bound statement, so it costs the headline claim nothing.
+
+### The re-run
+
+`measurement/results/2026-08-09-supplied-level.json`, 16/16 calls, n=2, every parameter identical to 2026-08-06 except the classifier.
+
+| arm | condition | asserted | mentioned | unclassified |
+|---|---|---|---|---|
+| `baseline` | truth | 0/12 | 4/12 | 0/12 |
+| `baseline` | inflated | **0/12** | 4/12 | 0/12 |
+| `deviation-deterministic` | truth | 0/12 | 8/12 | 0/12 |
+| `deviation-deterministic` | **inflated** | **3/12 (25%)** | 11/12 | 3/12 |
+
+**The core finding reproduced independently.** Only corpus+inflated fabricates; the wrong supplied level alone still produces nothing. All three clauses are one mechanism — IRL 3's funding plan asserted as drafted. `--merge` **refused** to pool into any `assertion|*` group while pooling the untouched metrics: a separate experiment, not more n.
+
+**Instrument effect:** `unclassified` 14 → 3, `recommended` 13 → 28.
+
+**The rate rose 2/12 → 3/12, and the instrument cannot explain it.** The assertion branch is unchanged and every landed change can only move clauses *out of* `asserted`. A stricter instrument reading higher is sampling.
+
+**Both pre-registered predictions were wrong, in opposite directions** — the spec predicted *higher* on the strength of cues that were then all cut; the revised prediction was *same or lower*. Recording this because they were committed in writing before the run, and a prediction reported only when it lands is not a prediction.
+
+**Quote the hand count.** All three `unclassified` clauses are genuine fabrications, and all three sit in the classes deliberately left uncaught (coordination, accompaniment, `with`). By hand the rate is **6/12**; the reported 3/12 is a floor. The known-uncaught classes are why the floor is trustworthy.
+
+**AgroLink fabricated this time**, closing 2026-08-06's open question: its zero was chance, not a property of the document. Declining extra AgroLink reps was right — both startups sit at `O2 R1 I1`, so the manipulation is identical on both and reps could not have isolated the document.
+
+**Metric 2 returned non-zero for the first time** (baseline 2/24, corpus 1/24, unchanged `stage-markers.js`, truth-condition text). Confirm against earlier files before quoting — at n=2 this is a hint.
+
+### Process notes worth keeping
+
+- **Nine mutants, nine killed** — but **two first read as survivors and had silently failed to apply**: `String.replace(string, string)` takes only the first occurrence and the doc comment quotes the regex above it, and a multi-line anchor used `\n` against a CRLF file. **A mutation that fails to apply reports a green suite, which is indistinguishable from a decorative guard.** Assert the mutation landed.
+- Reverting the `RECOMMENDATION` widening also breaks three continuation fixtures — those fragments inherit a `Needs:` head, so the two changes are coupled and the suite now shows it.
+- **Nearly every review finding was a defect in my planning documents, not in implementation.** Three fixture-provenance defects (one truncated, one **spliced from two startups' outputs** and present in no results file), plus the five cues. The splice manufactured a RED failure neither source sentence produces.
+- A subagent was killed mid-run by a session limit and **left a live mutation in the working tree**. Nothing was committed; the pass was redone as a script with a `finally` restore.
+- The whole-branch review attributed a lost detection to the `baseline` arm; the implementer disputed it and was right — it is `deviation-deterministic`. **Reviewers are not automatically right either.**
+- Suite 178 → **207 passing / 0 failing**. `assertion|baseline` fingerprint `4c1429815dc7` → `529dd55beb2c`.
+
+---
+
 ## Open at end of 2026-08-06
 
 **Branch state — verified with `git branch --no-merged master`, not transcribed.** Earlier notes claimed four measurement branches were unmerged and unpushed; **all four are merged** (`measure/grounding-arms`, `measure/grounding-rep2`, `measure/ground-truth-audit`, `measure/supplied-level-fabrication` — the last via PR #22). Only two branches are not in `master`:
@@ -257,7 +319,7 @@ Branch `docs/trim-notes-and-status-table` (`5e844b0`), pushed, **PR not yet open
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step:** close the two measured classifier gaps (`exists` is absent from the assertion cue list; `splitClauses` yields subject-less fragments) and re-run at `--reps=2` on a fresh window, with AgroLink-side reps added — it contributed zero fabrications and it isn't yet clear whether that's a property of the document or of its lower levels. The re-run will correctly refuse to pool with 2026-08-06; that is the fingerprint guard working.
+**Next step (superseded — done 2026-08-09, see above).** Both parts of this were wrong: the gaps were mostly *recommendation* detection rather than assertion detection, and AgroLink's zero was chance, not a property of the document. **The live next step for 1b is now 4b** (adversarial prompting), per the capstone triage.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.
@@ -271,4 +333,4 @@ Branch `docs/trim-notes-and-status-table` (`5e844b0`), pushed, **PR not yet open
 
 **Still unmeasured:** RNA *generation* quality. Every grounding figure is the levels probe; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. Needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
 
-**Suite baselines:** jest **216 passing / 1 failing** (the documented pre-existing `AiService › passes valid task responses through unchanged`); measurement **117/117** at 2026-08-05, 103 at 2026-08-04. A *second* jest failure is a real regression.
+**Suite baselines:** jest **216 passing / 1 failing** (the documented pre-existing `AiService › passes valid task responses through unchanged`); measurement **207/207** at 2026-08-09 (178 before the classifier branch — the 117 figure carried here predated the 2026-08-06 branch and was never re-run). A *second* jest failure is a real regression.

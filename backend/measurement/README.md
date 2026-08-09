@@ -941,6 +941,84 @@ positives, not more sensitive.
 a re-run **cannot pool** with the 2026-08-06 data. That is the guard working; a
 fixed classifier means a fresh experiment.
 
+### The 2026-08-09 re-run on the repaired classifier
+
+`results/2026-08-09-supplied-level.json`, 16/16 calls, n=2, `gemini-3.6-flash`,
+54 corpus rows, floor 0.78 — identical to 2026-08-06 in every parameter except
+the classifier. **A separate experiment, not more n:** `--merge` correctly
+refused to pool it into any `assertion|*` or `assertion-inflated|*` group while
+pooling `levels|*`, `rna|*` and `fabrication|*`, whose fingerprints did not
+move. That per-(metric, arm) granularity is the point of the design.
+
+| arm | condition | asserted | mentioned | unclassified |
+|---|---|---|---|---|
+| `baseline` | truth | 0/12 | 4/12 | 0/12 |
+| `baseline` | inflated | **0/12** | 4/12 | 0/12 |
+| `deviation-deterministic` | truth | 0/12 | 8/12 | 0/12 |
+| `deviation-deterministic` | **inflated** | **3/12 (25%)** | 11/12 | 3/12 |
+
+**The core finding reproduced independently.** Only corpus+inflated fabricates;
+baseline is 0/12 under *both* conditions, so the wrong supplied level alone
+still produces nothing. All three asserted clauses are the same mechanism —
+IRL 3's funding plan asserted as drafted:
+
+> "Currently at IRL 3 with a funding plan drafted"
+> "MediSync Cebu is at IRL 3 with a drafted funding plan covering target raise and use of funds."
+> "Currently at IRL 3 with a drafted funding plan outlining target raise and use-of-funds."
+
+**AgroLink fabricated this time, which closes an open question.** On 2026-08-06
+every fabrication came from MediSync, and the notes recorded it as unresolved
+whether that was a property of the document or of chance. It was chance: the
+first of the three clauses above is AgroLink. The plan's decision *not* to buy
+that answer with extra AgroLink reps was right for the wrong reason — re-running
+the same design answered it for free.
+
+**The instrument repair is visible in the clause census, and it is the real
+result of this work:**
+
+| | 2026-08-06 | 2026-08-09 |
+|---|---|---|
+| `recommended` | 13 | **28** |
+| `unclassified` | **14** | **3** |
+| `negated` | 5 | 5 |
+| `asserted` | 3 | 3 |
+
+**The measured rate rose, 2/12 → 3/12, and the instrument cannot explain it.**
+The classifier's *assertion* branch is byte-identical to before this work — all
+five candidate cues were cut — and every change that did land (`Needs:`
+recognition, scope inheritance) can only move clauses **out of** `asserted`.
+A stricter instrument reading higher is sampling, not measurement drift.
+
+**Both pre-registered predictions were wrong, in opposite directions.** The spec
+predicted the cell would read *higher* because of added assertion cues; after
+those cues were cut the prediction was revised to *same or lower*. It read
+higher, and neither reason was the cause. Recorded because the predictions were
+committed in writing before the run, and a prediction that only gets reported
+when it lands is not a prediction.
+
+**Read the hand count, not the table.** `unclassified` is 3/12 on the cell that
+matters, and the design says not to quote a rate while that column is large.
+Reading all three by hand: **all three are genuine fabrications**, and all three
+fall in the classes deliberately recorded as uncaught —
+
+> "At ORL 3, the core team comprises 3 founders (…) **and a first non-founder contributor**." — coordination, no participle
+> "and Joy Tabotabo **along with a first non-founder contributor**." — accompaniment
+> "Currently at RRL 3 with a pending IPOPHL trademark application **and preliminary counsel opinion**." — `with`-coordination
+
+So the by-hand rate is **6/12**, and the reported 3/12 is a floor — which is
+the property the whole probe is built on. The known-uncaught classes are not a
+loose end; they are the reason the floor is trustworthy.
+
+**Metric 2 (stage-inappropriate recommendations) returned a non-zero reading**
+for the first time: baseline 2/24 (8%), corpus 1/24 (4%), scored on
+truth-condition text with an unchanged `lib/stage-markers.js`. The notes record
+this metric as saturated at 0% since 2026-07-29, so this is worth confirming
+against the earlier files before anyone quotes it — at n=2 and 2 flagged, it is
+a hint, not a result.
+
+**Limits:** n=2, 16 calls, one model, one window. Three of the four asserted
+observations are MediSync. Inflation is one rung above the ceiling, not two.
+
 ### Mutation log
 
 Nine mutants, nine killed, against 205 passing tests. Scripted rather than
