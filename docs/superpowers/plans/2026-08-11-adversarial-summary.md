@@ -415,37 +415,61 @@ Mutation pass: 5 mutants, all killed."
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `backend/src/ai/ai-config.service.spec.ts`, matching the style of the existing flag tests in that file:
+`backend/src/ai/ai-config.service.spec.ts` already has the helpers you need, defined at the top of the file:
+
+```ts
+const configFrom = (values: Record<string, string | undefined>) =>
+  ({ get: (key: string) => values[key] }) as unknown as ConfigService;
+// and, inside the resolve describe block:
+const permissive = () => new AiConfigService(configFrom({ AI_ALLOW_REQUEST_OVERRIDE: 'true' }));
+```
+
+**Before writing anything new, note this or the task fails in a confusing way.** Three existing assertions compare the *whole* resolved object with `toEqual` — at roughly `:26`, `:40` and `:110`. Adding a fifth flag makes all three fail with an unexpected extra key. **Add `adversarialSummary` to each of those three object literals** with the value that block expects: `false` where the fully-specified environment sets every flag off, `true` in the two defaults blocks. That is part of this task, not a regression.
+
+Then append:
 
 ```ts
 describe('adversarialSummary flag (SO 4.2)', () => {
   it('defaults to true when the env var is unset', () => {
-    // Follow the arrangement the existing flag tests in this file use.
-    expect(resolveWithEnv({}).adversarialSummary).toBe(true);
+    expect(new AiConfigService(configFrom({})).defaults.adversarialSummary).toBe(true);
   });
 
-  it('is false when the env var is "false"', () => {
-    expect(resolveWithEnv({ AI_ADVERSARIAL_SUMMARY_ENABLED: 'false' }).adversarialSummary).toBe(false);
-  });
-
-  it('is honoured in a privileged per-request override', () => {
-    const resolved = resolveWithOverride(
-      { adversarialSummary: false },
-      { privileged: true },
+  it('reads AI_ADVERSARIAL_SUMMARY_ENABLED', () => {
+    const service = new AiConfigService(
+      configFrom({ AI_ADVERSARIAL_SUMMARY_ENABLED: 'false' }),
     );
+    expect(service.defaults.adversarialSummary).toBe(false);
+  });
+
+  it('accepts 0 and 1 like the other flags', () => {
+    expect(
+      new AiConfigService(configFrom({ AI_ADVERSARIAL_SUMMARY_ENABLED: '0' })).defaults
+        .adversarialSummary,
+    ).toBe(false);
+  });
+
+  it('honours a privileged per-request override', () => {
+    const resolved = permissive().resolve('{"adversarialSummary":false}', true);
     expect(resolved.adversarialSummary).toBe(false);
+  });
+
+  // The override gate is the whole reason this flag is safe to expose.
+  it('ignores the override for an unprivileged caller', () => {
+    const resolved = permissive().resolve('{"adversarialSummary":false}', false);
+    expect(resolved.adversarialSummary).toBe(true);
   });
 });
 ```
 
-**Read `ai-config.service.spec.ts` first** and reuse its existing helpers rather than the placeholder names `resolveWithEnv`/`resolveWithOverride` — the file already has an arrangement for exactly this, established for the other four flags. Match it.
+The `permissive` helper is scoped to the `AiConfigService.resolve` describe block at `:105`, so put the two override tests inside that block and the three default tests in the outer one — or define a local `permissive` in your new block. Do not move the existing helper.
 
 - [ ] **Step 2: Run to verify they fail**
 
+Run from `backend/`:
 ```bash
 pnpm test -- ai-config.service
 ```
-Expected: FAIL — `adversarialSummary` is `undefined`.
+Expected: FAIL — the five new tests report `adversarialSummary` is `undefined`, and the three `toEqual` blocks you edited fail until the implementation adds the field.
 
 - [ ] **Step 3: Implement**
 
