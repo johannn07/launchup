@@ -731,7 +731,18 @@ Second, list the critical risks that follow from those gaps.
 Only then write the summary: exactly three sentences, which must be consistent with the criteria and risks you just listed. Do not lead with strengths.`;
 ```
 
-Extract the shared field interpolation into `proposalFieldsBlock(dto)` and have `LEGACY_SUMMARY_PROMPT` keep its own copy — do **not** refactor the legacy prompt to use the shared block, because that would edit the preserved baseline.
+Extract the shared field interpolation into `proposalFieldsBlock(dto)` for the adversarial prompt, and have `LEGACY_SUMMARY_PROMPT` **keep its own copy**. Do not refactor the legacy prompt to use the shared block — that would edit the preserved baseline.
+
+**This duplication is deliberate and was ruled on before execution.** A reviewer will flag it, correctly, as a duplicated logic block. Put the reason at the site so it is not silently DRY-ed later:
+
+```ts
+// DO NOT DRY this with proposalFieldsBlock(). This prompt is a frozen
+// measurement baseline: the arm it defines has to be what production
+// actually did, byte for byte. Sharing the interpolation would mean a
+// later edit to the shared block silently changes the control - which is
+// the confound that invalidated the first grounding run, where production
+// emitted readiness levels for every arm and the harness for none.
+```
 
 The method becomes: if `!ctx.config.adversarialSummary`, run the legacy free-text path and return `{summary, unmetCriteria: [], criticalRisks: []}`. Otherwise call with `responseMimeType: 'application/json'` and a `responseSchema` whose `properties` are declared in the order `unmet_criteria, critical_risks, summary`, validate with `analysisSummarySchema`, and map snake_case to the camelCase interface. On parse failure after `callAiExpectJson`'s existing corrective retry, fall through to the legacy path.
 
