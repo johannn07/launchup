@@ -56,7 +56,9 @@ Positive framing is written into the instruction, and criticism is item 3 of 3. 
 
 Return type changes from `string` to `{ summary, unmetCriteria, criticalRisks }`. `proposal.aiAnalysisSummary` still receives a string, so the entity, the column and the Manager's view are untouched.
 
-**Why ordering rather than instruction.** The current prompt *already* asks for critical risks — it is item 3 — and the model still leads with viability. An instruction the model can reorder is not a constraint. Generation is autoregressive and the schema fixes field order, so the model cannot emit `summary` before it has emitted `unmet_criteria`. "Before" becomes a property of the generation rather than a request.
+**Why ordering rather than instruction.** The current prompt *already* asks for critical risks — it is item 3 of 3 — yet nothing in the prompt stops the model leading with viability, because an instruction the model can reorder is not a constraint. Generation is autoregressive and the schema fixes field order, so the model cannot emit `summary` before it has emitted `unmet_criteria`. "Before" becomes a property of the generation rather than a request.
+
+**Unmeasured, and this is the origin of the claim.** Earlier drafts of this line asserted that the model *does* still lead with viability. Nothing in the repo measures the summary path — no summary arm in `measurement/README.md`, no summary results file, and the only stored `ai_analysis_summary` strings are hand-written seed prose that `demo-capsule-proposals.ts` deliberately excludes from measurement. Whether the legacy prompt's ordering biases output is precisely what §7's 12-call comparison exists to answer. The design argument above stands on the *structural* point (an instruction is reorderable, a schema is not) and does not need the empirical one. Corrected here rather than only downstream, because this sentence had already propagated into the plan twice and into `ai.service.ts`'s committed doc comment.
 
 This also retires the standing §5 item — `responseSchema` in place of `extractJsonPayload`'s regex fence-stripping — at the call site where it matters most.
 
