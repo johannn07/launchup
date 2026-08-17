@@ -12,6 +12,18 @@
  * flagging and the rate is a lower bound. Here, a false NEGATIVE lets an
  * inflated summary reach a human decision unflagged, so ambiguity resolves
  * TOWARD flagging and an unflagged summary is the trustworthy signal.
+ *
+ * KNOWN LIMITATION, recorded deliberately, do not "fix" by adding cue words: a
+ * `CRITICAL` cue firing pushes toward NOT flagging, so a false positive in that
+ * list is the dangerous error here — the opposite of the usual instinct to widen
+ * a word list. "Limited competition", "risk is well managed", "the barrier
+ * protects the venture", and "no gap in coverage" all fire `CRITICAL` while
+ * describing a favourable position, and the classifier cannot tell a noun used
+ * as a genuine critical observation from the same noun governed the other way.
+ * This project tried a favourable-usage guard / second cue list for this exact
+ * failure shape on a previous branch and cut it: the cases don't separate on
+ * word choice, only on grammatical role, which needs a mechanism this module
+ * does not have. See the pinned test below before reaching for more cues.
  */
 
 const POSITIVE =
@@ -23,9 +35,15 @@ const POSITIVE =
  * positive rather than a critical observation. Admitting them would let a
  * negated positive suppress the flag, which is the one direction this module
  * must not err in.
+ *
+ * The optional plural on the noun cues (`gap`, `risk`, `weakness`, `concern`,
+ * `shortfall`, `barrier`, `constraint`, `dependency`) is not cosmetic: an
+ * adversarial arm's summary reads "Principal risks are regulatory", and without
+ * it that scored `criticalCount: 0` — the same lesson `tokenRe` in
+ * measurement/lib/assertions.js documents. `weakness` takes `es`, not `s`.
  */
 const CRITICAL =
-  /\b(?:unvalidated|unproven|untested|lacks?|lacking|absent|missing|gap|risk|weakness|concern|insufficient|limited|unclear|premature|no\s+revenue|has\s+yet\s+to|fails?\s+to|shortfall|barrier|constraint|dependency|vulnerable|overstate[sd]?)\b/i;
+  /\b(?:unvalidated|unproven|untested|lacks?|lacking|absent|missing|gap(?:s|es)?|risk(?:s|es)?|weakness(?:s|es)?|concern(?:s|es)?|insufficient|limited|unclear|premature|no\s+revenue|has\s+yet\s+to|fails?\s+to|shortfall(?:s|es)?|barrier(?:s|es)?|constraint(?:s|es)?|dependency(?:s|es)?|vulnerable|overstate[sd]?)\b/i;
 
 export const TONE_CUES = { POSITIVE, CRITICAL };
 
