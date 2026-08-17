@@ -907,6 +907,10 @@ await this.aiService.recordAiRecommendation({
     unmetCriteria: analysis.unmetCriteria,
     criticalRisks: analysis.criticalRisks,
     tone: { positiveCount: tone.positiveCount, criticalCount: tone.criticalCount, ratio: tone.ratio },
+    // Which prompt actually produced this. A schema parse failure degrades to
+    // the baseline arm's prompt, and without this the row is indistinguishable
+    // from a genuine adversarial result.
+    source: analysis.source,
   }),
   generationRun: ctx.run,
 });
@@ -956,7 +960,12 @@ as an open 1c design question cannot occur on this path."
 
 Arms: `baseline` (`adversarialSummary: false`) and `adversarial` (`true`). Startups: both keys of `DEMO_CAPSULE_PROPOSALS`. Reps: 3.
 
-Per call record: arm, startup, rep, summary text, `unmetCriteria.length`, `criticalRisks.length`, and the full `analyzeTone` result. Write to `measurement/results/<date>-summary-bias.json` with a comparability block — `genModel`, `temperature`, a hash of `LEGACY_SUMMARY_PROMPT.toString()`, `ADVERSARIAL_SUMMARY_PROMPT.toString()` and `summary-tone.ts`'s source — so a later run refuses to pool across a prompt or cue edit.
+Per call record: arm, startup, rep, summary text, `unmetCriteria.length`, `criticalRisks.length`, the full `analyzeTone` result, and **`source`** (`'schema' | 'legacy'`).
+
+**`source` is a validity gate on the whole run, not a nice-to-have field.** A schema parse failure degrades to `LEGACY_SUMMARY_PROMPT` — the control arm's prompt — while the run is still labelled `adversarialSummary: true`. Any `source: 'legacy'` row in the adversarial arm is a baseline output wearing the adversarial label, and averaging it in reproduces exactly the confound that invalidated the first grounding run. So:
+
+- **Report the `source` breakdown per arm before any other table.** If the adversarial arm has *any* `'legacy'` rows, say how many, exclude them from the tone and criteria means, and report the reduced n.
+- If more than one of the six adversarial calls degraded, treat the run as **inconclusive** rather than reporting it — a 5/6 or worse schema-adherence rate is itself the finding, and the fix is the prompt or the schema, not the statistics. Write to `measurement/results/<date>-summary-bias.json` with a comparability block — `genModel`, `temperature`, a hash of `LEGACY_SUMMARY_PROMPT.toString()`, `ADVERSARIAL_SUMMARY_PROMPT.toString()` and `summary-tone.ts`'s source — so a later run refuses to pool across a prompt or cue edit.
 
 - [ ] **Step 2: Report three things, not one**
 
