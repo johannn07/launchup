@@ -27,7 +27,8 @@ import {
   ChangeMentorDto,
   UpdateCapsuleProposalDto,
 } from './dto';
-import { AiService } from '../ai/ai.service';
+import { AiService, StartupAnalysisSummary } from '../ai/ai.service';
+import { analyzeTone } from '../ai/summary-tone';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
@@ -456,6 +457,7 @@ export class StartupService {
         proposal.aiAnalysisSummary = analysis.summary;
 
         await this.em.flush();
+        await this.recordSummaryProvenance(startup, analysis, ctx);
         return proposal;
       }
 
@@ -489,10 +491,65 @@ export class StartupService {
       });
 
       await this.em.persistAndFlush(proposal);
+      await this.recordSummaryProvenance(startup, analysis, ctx);
       return proposal;
     } catch (err) {
       console.error(`Error creating capsule proposal`, err);
       throw err;
+    }
+  }
+
+  /**
+   * SO 4.4 tone verdict plus the criteria the summary was built from, into
+   * ai_recommendations. Reuses that table rather than adding a column: one
+   * summary per generation run, so the (generationRun, dimensionKey) collision
+   * open on the validator path cannot occur here.
+   *
+   * Never fails the submission. The proposal and its summary are already
+   * committed by the time this runs, and this row is supplementary provenance —
+   * losing it costs the Manager a flag, whereas throwing rolls back the
+   * founder's whole application inside create()'s transaction. Logged loudly
+   * because nothing else would show the flag went missing; a genuinely broken
+   * transaction still surfaces at create()'s next flush.
+   */
+  private async recordSummaryProvenance(
+    startup: Startup,
+    analysis: StartupAnalysisSummary,
+    ctx: AiRunContext,
+  ) {
+    const tone = analyzeTone(analysis.summary);
+
+    try {
+      await this.aiService.recordAiRecommendation({
+        startupId: startup.id,
+        dimensionKey: 'overall', // the summary is not per-dimension
+        recommendationKind: 'analysis_summary',
+        content: analysis.summary,
+        // Tells the Manager to look harder before a status change.
+        confidenceStatus: tone.flagged ? 'positive-language-flagged' : 'balanced',
+        notes: JSON.stringify({
+          unmetCriteria: analysis.unmetCriteria,
+          criticalRisks: analysis.criticalRisks,
+          tone: {
+            positiveCount: tone.positiveCount,
+            criticalCount: tone.criticalCount,
+            ratio: tone.ratio,
+          },
+          // Which prompt actually produced this. A schema parse failure degrades
+          // to the baseline arm's prompt, and without this the row is
+          // indistinguishable from a genuine adversarial result.
+          source: analysis.source,
+        }),
+        generationRun: ctx.run,
+      });
+    } catch (err) {
+      console.error(
+        `Failed to record the analysis-summary provenance for startup ${startup.id} ` +
+          `(run ${ctx.runId}): the SO 4.4 tone verdict "${tone.flagged ? 'positive-language-flagged' : 'balanced'}" ` +
+          `and ${analysis.unmetCriteria.length} unmet criteria were not persisted. ` +
+          `The proposal and its summary are stored; the application was not rejected.`,
+        err,
+      );
     }
   }
 
