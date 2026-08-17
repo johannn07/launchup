@@ -25,6 +25,53 @@ import {
 } from './rag-corpus.types';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
 
+/**
+ * The summary prompt exactly as it shipped before 2026-08-11.
+ *
+ * Preserved verbatim so the measurement's baseline arm is what production
+ * actually did, not a reconstruction. Note it already asks for "Critical risks"
+ * as item 3 of 3 and the model still leads with viability - which is the
+ * evidence that instruction-level adversarial prompting is insufficient here,
+ * and why SO 4.2 is implemented with schema field ordering instead.
+ *
+ * Do not edit. If it needs to change, that is a new arm.
+ */
+export const LEGACY_SUMMARY_PROMPT = (dto: StartupApplicationDto): string =>
+  `Please provide a comprehensive analysis of the following startup proposal:
+
+      Title: ${dto.title}
+      Description: ${dto.description}
+      Problem Statement: ${dto.problemStatement}
+      Target Market: ${dto.targetMarket}
+      Solution Description: ${dto.solutionDescription}
+      Objectives: ${dto.objectives.join('\n')}
+      Proposal Scope: ${dto.proposalScope}
+      Methodology: ${dto.methodology}
+      Historical Timeline: ${dto.historicalTimeline?.map((h) => `${h.monthYear}: ${h.description}`).join('\n') || 'Not provided'}
+      Competitive Advantage Analysis: ${
+        dto.competitiveAdvantageAnalysis
+          ?.map(
+            (c) =>
+              `Competitor: ${c.competitorName}
+         Offer: ${c.offer}
+         Pricing Strategy: ${c.pricingStrategy}`,
+          )
+          .join('\n\n') || 'Not provided'
+      }
+      Intellectual Property Status: ${dto.intellectualPropertyStatus}
+
+      Analyze the startup proposal and provide a concise three-sentence summary that covers:
+      1. Overall viability assessment (market potential and solution strength)
+      2. Key competitive advantages and growth strategy feasibility
+      3. Critical risks and primary recommendations
+      
+      Important: 
+      - Provide exactly three sentences
+      - Start directly with the analysis, no introductory phrases
+      - Be clear and direct about the startup's potential
+      - Focus on the most impactful insights
+      - Keep output concise while covering essential points`;
+
 /** How many context rows reach the prompt. Matches the previous keyword slice. */
 export const RAG_TOP_K = 3;
 
@@ -666,40 +713,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     ctx: AiRunContext,
     dto: StartupApplicationDto,
   ): Promise<string> {
-    const prompt = `Please provide a comprehensive analysis of the following startup proposal:
-
-      Title: ${dto.title}
-      Description: ${dto.description}
-      Problem Statement: ${dto.problemStatement}
-      Target Market: ${dto.targetMarket}
-      Solution Description: ${dto.solutionDescription}
-      Objectives: ${dto.objectives.join('\n')}
-      Proposal Scope: ${dto.proposalScope}
-      Methodology: ${dto.methodology}
-      Historical Timeline: ${dto.historicalTimeline?.map((h) => `${h.monthYear}: ${h.description}`).join('\n') || 'Not provided'}
-      Competitive Advantage Analysis: ${
-        dto.competitiveAdvantageAnalysis
-          ?.map(
-            (c) =>
-              `Competitor: ${c.competitorName}
-         Offer: ${c.offer}
-         Pricing Strategy: ${c.pricingStrategy}`,
-          )
-          .join('\n\n') || 'Not provided'
-      }
-      Intellectual Property Status: ${dto.intellectualPropertyStatus}
-
-      Analyze the startup proposal and provide a concise three-sentence summary that covers:
-      1. Overall viability assessment (market potential and solution strength)
-      2. Key competitive advantages and growth strategy feasibility
-      3. Critical risks and primary recommendations
-      
-      Important: 
-      - Provide exactly three sentences
-      - Start directly with the analysis, no introductory phrases
-      - Be clear and direct about the startup's potential
-      - Focus on the most impactful insights
-      - Keep output concise while covering essential points`;
+    const prompt = LEGACY_SUMMARY_PROMPT(dto);
 
     const res = await this.ai.models.generateContent({
       model: ctx.config.model,

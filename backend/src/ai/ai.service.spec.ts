@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { AiService } from './ai.service';
+import { AiService, LEGACY_SUMMARY_PROMPT } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { AiRunContext } from './ai-run.service';
@@ -526,5 +526,46 @@ describe('AiService', () => {
       expect(ctx.tokens.completionTokens).toBe(90);
       expect(ctx.tokens.recorded).toBe(true);
     });
+  });
+});
+
+// Characterisation tests, not behaviour tests. They pin the shipped prompt so
+// the next task cannot alter the baseline arm while adding the adversarial one.
+describe('LEGACY_SUMMARY_PROMPT', () => {
+  const dto: any = {
+    title: 'T',
+    description: 'D',
+    problemStatement: 'P',
+    targetMarket: 'M',
+    solutionDescription: 'S',
+    objectives: ['O1', 'O2'],
+    proposalScope: 'SC',
+    methodology: 'ME',
+    historicalTimeline: [{ monthYear: '2026-01', description: 'H' }],
+    competitiveAdvantageAnalysis: [
+      { competitorName: 'C', offer: 'OF', pricingStrategy: 'PS' },
+    ],
+    intellectualPropertyStatus: 'IP',
+  };
+
+  it('still asks for the three original numbered items in order', () => {
+    const p = LEGACY_SUMMARY_PROMPT(dto);
+    const viability = p.indexOf('Overall viability assessment');
+    const advantages = p.indexOf('Key competitive advantages');
+    const risks = p.indexOf('Critical risks');
+    expect(viability).toBeGreaterThan(-1);
+    expect(advantages).toBeGreaterThan(viability);
+    expect(risks).toBeGreaterThan(advantages);
+  });
+
+  it('still requests exactly three sentences', () => {
+    expect(LEGACY_SUMMARY_PROMPT(dto)).toContain('Provide exactly three sentences');
+  });
+
+  it('interpolates every field the shipped prompt read', () => {
+    const p = LEGACY_SUMMARY_PROMPT(dto);
+    for (const v of ['T', 'D', 'P', 'M', 'S', 'O1', 'SC', 'ME', 'IP']) {
+      expect(p).toContain(v);
+    }
   });
 });
