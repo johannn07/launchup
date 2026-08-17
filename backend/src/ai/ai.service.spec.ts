@@ -4,6 +4,7 @@ import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
+import { StartupApplicationDto } from 'src/startup/dto/startup.dto';
 
 // Same pattern as ai-config.service.spec.ts's `configFrom`: a `get` returning
 // undefined, so AiConfigService falls back to DEFAULT_MODEL. The literal in
@@ -532,21 +533,70 @@ describe('AiService', () => {
 // Characterisation tests, not behaviour tests. They pin the shipped prompt so
 // the next task cannot alter the baseline arm while adding the adversarial one.
 describe('LEGACY_SUMMARY_PROMPT', () => {
-  const dto: any = {
-    title: 'T',
-    description: 'D',
-    problemStatement: 'P',
-    targetMarket: 'M',
-    solutionDescription: 'S',
-    objectives: ['O1', 'O2'],
-    proposalScope: 'SC',
-    methodology: 'ME',
-    historicalTimeline: [{ monthYear: '2026-01', description: 'H' }],
+  // Values are distinctive on purpose. Single-character fixtures made the
+  // interpolation test vacuous: 'T' matches "Title: ", 'P' matches "Please
+  // provide", so five of nine needles passed with nothing interpolated.
+  const dto = {
+    title: 'TITLE_X1',
+    description: 'DESC_X2',
+    problemStatement: 'PROBLEM_X3',
+    targetMarket: 'MARKET_X4',
+    solutionDescription: 'SOLUTION_X5',
+    objectives: ['OBJ_X6', 'OBJ_X7'],
+    proposalScope: 'SCOPE_X8',
+    methodology: 'METHOD_X9',
+    historicalTimeline: [{ monthYear: 'MONTH_X10', description: 'HIST_X11' }],
     competitiveAdvantageAnalysis: [
-      { competitorName: 'C', offer: 'OF', pricingStrategy: 'PS' },
+      {
+        competitorName: 'COMP_X12',
+        offer: 'OFFER_X13',
+        pricingStrategy: 'PRICE_X14',
+      },
     ],
-    intellectualPropertyStatus: 'IP',
-  };
+    intellectualPropertyStatus: 'IP_X15',
+  } as StartupApplicationDto;
+
+  // Golden value, generated from the shipped constant, not hand-typed. Written
+  // as lines joined with '\n' so the two trailing-whitespace lines live inside
+  // string literals where no formatter can strip them. Template-literal values
+  // normalise CRLF to LF, so this holds regardless of on-disk line endings.
+  const EXPECTED = [
+    'Please provide a comprehensive analysis of the following startup proposal:',
+    '',
+    '      Title: TITLE_X1',
+    '      Description: DESC_X2',
+    '      Problem Statement: PROBLEM_X3',
+    '      Target Market: MARKET_X4',
+    '      Solution Description: SOLUTION_X5',
+    '      Objectives: OBJ_X6',
+    'OBJ_X7',
+    '      Proposal Scope: SCOPE_X8',
+    '      Methodology: METHOD_X9',
+    '      Historical Timeline: MONTH_X10: HIST_X11',
+    '      Competitive Advantage Analysis: Competitor: COMP_X12',
+    '         Offer: OFFER_X13',
+    '         Pricing Strategy: PRICE_X14',
+    '      Intellectual Property Status: IP_X15',
+    '',
+    '      Analyze the startup proposal and provide a concise three-sentence summary that covers:',
+    '      1. Overall viability assessment (market potential and solution strength)',
+    '      2. Key competitive advantages and growth strategy feasibility',
+    '      3. Critical risks and primary recommendations',
+    '      ',
+    '      Important: ',
+    '      - Provide exactly three sentences',
+    '      - Start directly with the analysis, no introductory phrases',
+    "      - Be clear and direct about the startup's potential",
+    '      - Focus on the most impactful insights',
+    '      - Keep output concise while covering essential points',
+  ].join('\n');
+
+  // This is the assertion that actually enforces the doc comment's "do not
+  // edit". The substring tests below document intent but survive gutting most
+  // of the prompt, so they cannot police a frozen baseline on their own.
+  it('renders exactly the text that shipped, to the byte', () => {
+    expect(LEGACY_SUMMARY_PROMPT(dto)).toBe(EXPECTED);
+  });
 
   it('still asks for the three original numbered items in order', () => {
     const p = LEGACY_SUMMARY_PROMPT(dto);
@@ -559,12 +609,30 @@ describe('LEGACY_SUMMARY_PROMPT', () => {
   });
 
   it('still requests exactly three sentences', () => {
-    expect(LEGACY_SUMMARY_PROMPT(dto)).toContain('Provide exactly three sentences');
+    expect(LEGACY_SUMMARY_PROMPT(dto)).toContain(
+      'Provide exactly three sentences',
+    );
   });
 
   it('interpolates every field the shipped prompt read', () => {
     const p = LEGACY_SUMMARY_PROMPT(dto);
-    for (const v of ['T', 'D', 'P', 'M', 'S', 'O1', 'SC', 'ME', 'IP']) {
+    for (const v of [
+      'TITLE_X1',
+      'DESC_X2',
+      'PROBLEM_X3',
+      'MARKET_X4',
+      'SOLUTION_X5',
+      'OBJ_X6',
+      'OBJ_X7',
+      'SCOPE_X8',
+      'METHOD_X9',
+      'MONTH_X10',
+      'HIST_X11',
+      'COMP_X12',
+      'OFFER_X13',
+      'PRICE_X14',
+      'IP_X15',
+    ]) {
       expect(p).toContain(v);
     }
   });
