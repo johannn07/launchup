@@ -30,10 +30,10 @@ import { readinessLevelsByType } from '../common/readiness-levels.util';
  *
  * Preserved verbatim so the measurement's baseline arm is what production
  * actually did, not a reconstruction. Note it already asks for "Critical risks"
- * as item 3 of 3; the spec reports the model still leads with viability anyway,
- * which is the argument for implementing SO 4.2 as schema field ordering rather
- * than instruction wording. Not yet measured here - the comparison this
- * constant exists to enable is what would establish it.
+ * as item 3 of 3, yet nothing here constrains where the model leads - which is
+ * why SO 4.2 is schema field ordering rather than instruction wording. Whether
+ * this prompt actually skews positive is unmeasured; the comparison this
+ * constant exists to enable is what would settle it.
  *
  * Do not edit. If it needs to change, that is a new arm.
  */
