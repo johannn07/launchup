@@ -5,6 +5,10 @@ import { BaselineService } from './baseline.service';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 import { StartupApplicationDto } from 'src/startup/dto/startup.dto';
+// A real runtime import, deliberately: this spec does not mock '@google/genai'
+// (only rag-retrieval.spec.ts and embedding.service.spec.ts do), so it can hold
+// ai.service.ts's cast string literals against the SDK's actual enum.
+import { Type } from '@google/genai';
 
 // Same pattern as ai-config.service.spec.ts's `configFrom`: a `get` returning
 // undefined, so AiConfigService falls back to DEFAULT_MODEL. The literal in
@@ -697,6 +701,7 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     expect(request.config).not.toHaveProperty('responseSchema');
     expect(request.config).not.toHaveProperty('responseMimeType');
     expect(result).toEqual({
+      source: 'legacy',
       summary: 'A three sentence summary.',
       unmetCriteria: [],
       criticalRisks: [],
@@ -713,6 +718,17 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     const request = generateContent.mock.calls.at(-1)![0];
     expect(request.config.responseMimeType).toBe('application/json');
     expect(request.config.responseSchema).toBeDefined();
+    // ai.service.ts builds the schema from string literals cast to Type,
+    // because a runtime import of the enum breaks rag-retrieval.spec.ts's
+    // module mock. TypeScript accepts any string cast to a string enum, so
+    // these compare against the real enum - the only thing that would catch a
+    // typo before it reaches paid quota.
+    expect(request.config.responseSchema.type).toBe(Type.OBJECT);
+    expect(request.config.responseSchema.properties.summary.type).toBe(Type.STRING);
+    expect(request.config.responseSchema.properties.unmet_criteria.type).toBe(Type.ARRAY);
+    expect(request.config.responseSchema.properties.unmet_criteria.items.type).toBe(
+      Type.OBJECT,
+    );
     // The adversarial arm must not silently inherit the legacy instruction.
     expect(request.contents).not.toContain('Overall viability assessment');
   });
@@ -764,6 +780,7 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     expect(r.unmetCriteria[0].proposalField).toBe('historicalTimeline');
     expect(r.unmetCriteria[0].whyUnmet).toBe('no figure given');
     expect(r.criticalRisks[0].severity).toBe('high');
+    expect(r.source).toBe('schema');
   });
 
   // Spec §6: getCapsuleProposalInfo's parse failure hands the founder a blank
@@ -789,6 +806,96 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     expect(r.summary).toBe('Legacy summary text.');
     expect(r.unmetCriteria).toEqual([]);
     expect(r.criticalRisks).toEqual([]);
+    // Without this the degraded outcome is untraceable: the fallback ran the
+    // control arm's prompt inside a run recorded as adversarial, and an empty
+    // unmetCriteria here looks exactly like one a satisfied model returned.
+    expect(r.source).toBe('legacy');
+  });
+
+  // z.string() alone accepts '' and '   ', which reach the Manager's view as a
+  // blank ai_analysis_summary - the failure class spec §6 set out to remove,
+  // arriving by a different route than a parse error.
+  it('treats a whitespace-only summary as unparseable and falls back', async () => {
+    generateContent
+      .mockResolvedValueOnce(
+        structuredResponse({ unmet_criteria: [], critical_risks: [], summary: '   ' }),
+      )
+      .mockResolvedValueOnce(
+        structuredResponse({ unmet_criteria: [], critical_risks: [], summary: '' }),
+      )
+      .mockResolvedValueOnce({ text: 'Legacy summary text.' });
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(r.summary).toBe('Legacy summary text.');
+    expect(r.source).toBe('legacy');
+  });
+
+  it('trims a padded summary rather than storing the padding', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({
+        unmet_criteria: [],
+        critical_risks: [],
+        summary: '  Three sentence summary.  ',
+      }),
+    );
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    expect(r.summary).toBe('Three sentence summary.');
+    expect(r.source).toBe('schema');
+  });
+
+  // The pinned legacy test next door covers the flag-off arm only, which left
+  // spend attribution on the default arm asserted by nothing.
+  describe('token accumulation on the adversarial arm', () => {
+    const trackedCtx = (): AiRunContext =>
+      ({
+        ...ctxWith({ adversarialSummary: true }),
+        tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      }) as AiRunContext;
+
+    it('records one call on the happy path', async () => {
+      generateContent.mockResolvedValue({
+        text: JSON.stringify({ unmet_criteria: [], critical_risks: [], summary: 'S.' }),
+        usageMetadata: { promptTokenCount: 700, candidatesTokenCount: 90 },
+      });
+
+      const ctx = trackedCtx();
+      await service.generateStartupAnalysisSummary(ctx, dto);
+
+      expect(generateContent).toHaveBeenCalledTimes(1);
+      expect(ctx.tokens).toEqual({
+        promptTokens: 700,
+        completionTokens: 90,
+        recorded: true,
+      });
+    });
+
+    // Triples because the pathological path is bounded at 3, so this is also an
+    // independent check on that bound.
+    it('sums all three calls when the schema response cannot be parsed', async () => {
+      const usageMetadata = { promptTokenCount: 700, candidatesTokenCount: 90 };
+      generateContent
+        .mockResolvedValueOnce({ text: 'not json', usageMetadata })
+        .mockResolvedValueOnce({ text: 'still not json', usageMetadata })
+        .mockResolvedValueOnce({ text: 'Legacy summary text.', usageMetadata });
+
+      const ctx = trackedCtx();
+      const r = await service.generateStartupAnalysisSummary(ctx, dto);
+
+      expect(r.source).toBe('legacy');
+      expect(generateContent).toHaveBeenCalledTimes(3);
+      expect(ctx.tokens.completionTokens).toBe(270);
+      expect(ctx.tokens.promptTokens).toBe(2100);
+    });
   });
 
   // The generation-config passthrough added for this method runs through

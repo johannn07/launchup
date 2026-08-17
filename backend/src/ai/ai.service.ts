@@ -141,7 +141,11 @@ const analysisSummarySchema = z.object({
   critical_risks: z
     .array(z.object({ risk: z.string(), severity: z.string() }))
     .default([]),
-  summary: z.string(),
+  // trim().min(1), not min(1): a whitespace-only summary passes a bare length
+  // check and lands as '' in capsule_proposals.ai_analysis_summary - the blank
+  // screen spec §6 exists to prevent. Failing here routes it through the
+  // corrective retry and then the legacy call.
+  summary: z.string().trim().min(1),
 });
 
 /** The wire values of the SDK's Type enum, without importing it at runtime. */
@@ -208,6 +212,17 @@ export interface StartupAnalysisSummary {
   summary: string;
   unmetCriteria: UnmetCriterion[];
   criticalRisks: CriticalRisk[];
+  /**
+   * Which prompt produced `summary`. Without it the degraded path is
+   * untraceable: the fallback runs LEGACY_SUMMARY_PROMPT - the control arm's
+   * prompt - inside a run whose ai_generation_runs row says
+   * adversarialSummary: true, and an empty unmetCriteria from that fallback is
+   * indistinguishable from an empty one a satisfied model returned. A
+   * measurement pooling the two would average control output into the
+   * adversarial arm, which is what LEGACY_SUMMARY_PROMPT's own doc comment
+   * exists to prevent.
+   */
+  source: 'schema' | 'legacy';
 }
 
 /** How many context rows reach the prompt. Matches the previous keyword slice. */
@@ -652,14 +667,17 @@ export class AiService {
     temperatureOverride?: number,
     // Spread only when passed, so every existing caller's request object is
     // byte-identical to what it emitted before responseSchema existed here.
-    generationConfig?: GenerateContentConfig,
+    // `temperature` is excluded, and spread first regardless: it belongs to
+    // callAiExpectJson's corrective retry, and a caller smuggling it in here
+    // would silently cancel the deliberate +0.2 bump.
+    generationConfig?: Omit<GenerateContentConfig, 'temperature'>,
   ) {
     const res = await this.ai.models.generateContent({
       model: ctx.config.model,
       contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
-        temperature: temperatureOverride ?? ctx.config.temperature,
         ...generationConfig,
+        temperature: temperatureOverride ?? ctx.config.temperature,
       },
     });
 
@@ -710,7 +728,7 @@ export class AiService {
     fallback: T;
     correctivePrompt: string;
     /** Optional; omitted by every caller that predates responseSchema. */
-    generationConfig?: GenerateContentConfig;
+    generationConfig?: Omit<GenerateContentConfig, 'temperature'>;
   }): Promise<T> {
     const { ctx, prompt, schema, fallback, correctivePrompt, generationConfig } = options;
 
@@ -889,7 +907,8 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     }
 
     return {
-      summary: parsed.summary.trim(),
+      source: 'schema',
+      summary: parsed.summary,
       unmetCriteria: parsed.unmet_criteria.map((c) => ({
         criterion: c.criterion,
         proposalField: c.proposal_field,
@@ -923,7 +942,12 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       throw new Error('AI response did not contain any text');
     }
 
-    return { summary: res.text.trim(), unmetCriteria: [], criticalRisks: [] };
+    return {
+      source: 'legacy',
+      summary: res.text.trim(),
+      unmetCriteria: [],
+      criticalRisks: [],
+    };
   }
 
   async generateRNAsFromPrompt(
