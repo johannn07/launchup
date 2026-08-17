@@ -522,18 +522,25 @@ four, so the summary comparison has two addressable arms."
 
 - [ ] **Step 1: Write the characterisation test**
 
-Append to `backend/src/ai/ai.service.spec.ts`:
+Append to `backend/src/ai/ai.service.spec.ts`.
+
+**The single-character fixture below is a defect — corrected after review, kept visible because the failure mode is instructive.** Values like `'T'`, `'D'`, `'P'`, `'M'`, `'S'` collide with the prompt's own static labels (`Title:`, `Description:`, `Problem Statement:`, and `'P'` matches inside `Please provide` at index 0). Five of the nine needles therefore pass with **nothing interpolated at all**. Measured: a mutant deleting five `${dto.…}` interpolations left the whole spec file green, and the timeline and competitor fields had no needle whatsoever — the three tests together survive gutting **7 of the 11 fields** they claim to cover.
+
+So these three assertions do not enforce "do not edit". **A golden assertion over the full rendered output is required** — `toMatchInlineSnapshot()` against a fixture with distinctive values (`'TITLE_X1'`, `'DESC_X2'`, …), or a checked-in golden file. Keep the three tests below as intent documentation; two of them are genuinely non-vacuous (mutants that reordered the numbered items and deleted the three-sentence line were both killed). The snapshot is what makes the baseline tamper-evident.
 
 ```ts
 // Characterisation test, not a behaviour test. It pins the shipped prompt so
 // Task 5 cannot alter the baseline arm while adding the adversarial one.
 describe('LEGACY_SUMMARY_PROMPT', () => {
+  // Distinctive values: single characters collide with the prompt's own labels.
   const dto: any = {
-    title: 'T', description: 'D', problemStatement: 'P', targetMarket: 'M',
-    solutionDescription: 'S', objectives: ['O1', 'O2'], proposalScope: 'SC',
-    methodology: 'ME', historicalTimeline: [{ monthYear: '2026-01', description: 'H' }],
-    competitiveAdvantageAnalysis: [{ competitorName: 'C', offer: 'OF', pricingStrategy: 'PS' }],
-    intellectualPropertyStatus: 'IP',
+    title: 'TITLE_X1', description: 'DESC_X2', problemStatement: 'PROBLEM_X3',
+    targetMarket: 'MARKET_X4', solutionDescription: 'SOLUTION_X5',
+    objectives: ['OBJ_X6', 'OBJ_X7'], proposalScope: 'SCOPE_X8',
+    methodology: 'METHOD_X9',
+    historicalTimeline: [{ monthYear: '2026-01', description: 'HIST_X10' }],
+    competitiveAdvantageAnalysis: [{ competitorName: 'COMP_X11', offer: 'OFFER_X12', pricingStrategy: 'PRICE_X13' }],
+    intellectualPropertyStatus: 'IP_X14',
   };
 
   it('still asks for the three original numbered items in order', () => {
@@ -552,12 +559,22 @@ describe('LEGACY_SUMMARY_PROMPT', () => {
 
   it('interpolates every field the shipped prompt read', () => {
     const p = LEGACY_SUMMARY_PROMPT(dto);
-    for (const v of ['T', 'D', 'P', 'M', 'S', 'O1', 'SC', 'ME', 'IP']) {
+    for (const v of ['TITLE_X1', 'DESC_X2', 'PROBLEM_X3', 'MARKET_X4', 'SOLUTION_X5',
+                     'OBJ_X6', 'SCOPE_X8', 'METHOD_X9', 'HIST_X10', 'COMP_X11',
+                     'OFFER_X12', 'PRICE_X13', 'IP_X14']) {
       expect(p).toContain(v);
     }
   });
+
+  // The assertion that actually enforces "do not edit". The three above pass on
+  // a prompt with seven interpolations removed and every sentence reworded.
+  it('renders byte-for-byte what shipped', () => {
+    expect(LEGACY_SUMMARY_PROMPT(dto)).toMatchInlineSnapshot();
+  });
 });
 ```
+
+**Verify the golden test is not itself vacuous** before trusting it: mutate the constant (reorder the numbered items; delete an interpolation) and confirm it goes red. Assert each mutation landed — unique anchor, CRLF preserved, re-read from disk, original-absent and replacement-present — because on 2026-08-09 two mutants on this project reported as survivors when they had silently failed to apply.
 
 Export `LEGACY_SUMMARY_PROMPT` from `ai.service.ts` and import it in the spec.
 
@@ -578,9 +595,8 @@ Move the template literal currently at `ai.service.ts:669-702` out to module sco
  *
  * Preserved verbatim so the measurement's baseline arm is what production
  * actually did, not a reconstruction. Note it already asks for "Critical risks"
- * as item 3 of 3 and the model still leads with viability — which is the
- * evidence that instruction-level adversarial prompting is insufficient here,
- * and why SO 4.2 is implemented with schema field ordering instead.
+ * as item 3 of 3 — the argument for implementing SO 4.2 with schema field
+ * ordering rather than instruction wording (spec §1, not yet measured).
  *
  * Do not edit. If it needs to change, that is a new arm.
  */
@@ -721,10 +737,12 @@ const analysisSummarySchema = z.object({
  * SO 4.2 — adversarial pre-analysis.
  *
  * Field ORDER is the mechanism, not the wording. The legacy prompt already asks
- * for critical risks (item 3 of 3) and the model still leads with viability, so
- * an instruction the model can reorder is not a constraint. Generation is
- * autoregressive and the schema fixes order, so `summary` cannot be emitted
- * before `unmet_criteria`.
+ * for critical risks as item 3 of 3, so an instruction the model can reorder is
+ * not a constraint on where it leads. Generation is autoregressive and the
+ * schema fixes order, so `summary` cannot be emitted before `unmet_criteria`.
+ *
+ * Whether the legacy prompt's ordering actually biases output is the question
+ * the 12-call comparison exists to answer - do not restate it here as settled.
  */
 const ADVERSARIAL_SUMMARY_PROMPT = (dto: StartupApplicationDto): string => `You are a critical startup readiness evaluator. Treat this proposal as overstating its readiness until its own text proves otherwise.
 
