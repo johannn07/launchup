@@ -20,6 +20,17 @@ node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministi
   --only-probe=rna --level-condition=both --reps=2 \
   --out=measurement/results/<date>-supplied-level.json  # metric 5, see below — --only-arm is mandatory here
 
+# The summary-bias probe (SO 4.2 / SO 4.4). 2 arms x 2 startups x 3 reps = 12
+# calls. Unlike the others this boots a Nest context and calls the real
+# AiService.generateStartupAnalysisSummary, so it needs Neon reachable.
+node measurement/measure-summary-bias.js --fingerprint            # no calls
+node measurement/measure-summary-bias.js --dry-run --degrade=2 \
+  --out=<scratch>/x.json                                          # no calls; --degrade forces the
+                                                                  # schema-failure path. Writing into
+                                                                  # results/ is refused under --dry-run.
+node measurement/measure-summary-bias.js --reps=3 \
+  --out=measurement/results/<date>-summary-bias.json
+
 # One rep is what a free-tier day buys. Accumulate across days:
 node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-07-30-rep2.json
 node measurement/measure-grounding.js --merge measurement/results/*.json
@@ -32,6 +43,10 @@ node measurement/measure-grounding.js --merge measurement/results/*.json
 - `--dry-run` and `--fingerprint` — no generation calls. `--dry-run` still calls
   `embedContent` for the `sdd-semantic` arm, a separate and far higher ceiling.
 - `--retrieval-only` — no generation calls; Step A only.
+- `measure-summary-bias.js --dry-run` — stubs `generateContent` and nothing else,
+  so the container, both DTOs, the arm override, the loop order, `analyzeTone`,
+  every report and the results file are all exercised for zero quota. It does
+  append to `data/ai-metrics.json` when `--degrade` forces a schema miss.
 
 `--dry-run` exists because unit tests cannot tell you whether an assembled
 prompt *looks* right, and this harness has twice measured a property of the

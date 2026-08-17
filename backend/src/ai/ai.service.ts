@@ -114,8 +114,12 @@ Intellectual Property Status: ${dto.intellectualPropertyStatus}`;
  * of summary makes "before" a property of the generation. The legacy prompt
  * already asks for critical risks as item 3 of 3, and an instruction the model
  * can reorder is not a constraint on where it leads.
+ *
+ * Exported for measurement/measure-summary-bias.js's comparability block only.
+ * Unlike LEGACY_SUMMARY_PROMPT this one is not frozen - but a run whose prompt
+ * moved must not pool with an earlier one, so the harness hashes its source.
  */
-const ADVERSARIAL_SUMMARY_PROMPT = (
+export const ADVERSARIAL_SUMMARY_PROMPT = (
   dto: StartupApplicationDto,
 ): string => `You are a critical startup readiness evaluator. Treat this proposal as overstating its readiness until its own text proves otherwise.
 
