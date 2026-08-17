@@ -17,8 +17,31 @@
 const NEGATION =
   /\b(?:no|not|never|none|lacks?|lacking|without|absent)\b|n['’]t\b|\b(?:absence|lack)\s+of\b|\b(?:yet|has\s+yet|have\s+yet)\s+to\b/i;
 
+/**
+ * `need(?:s|ed|ing)?` rather than `need\s+to`: the model's modal form for a
+ * requirement is a label — "Needs: Advance to ORL 3", "Need: Draft an initial
+ * funding hypothesis", "Needs a defined financial model", "certifications
+ * needed". Seven of fourteen unclassified clauses on 2026-08-06 were this.
+ *
+ * Widening here cannot raise the fabrication rate: classifyClause tests
+ * recommendation before assertion, so a new match can only move a clause OUT of
+ * `asserted`.
+ *
+ * That widening is not free, though: `need(?:s|ed|ing)?` also matches the NOUN
+ * "needs", not just the modal, so it can pull a real assertion into
+ * `recommended` too. Measured on 2026-07-30-redesign-rep1.json (Investment,
+ * MediSync Cebu, deviation-deterministic arm — a corpus arm): "A funding plan
+ * has been drafted outlining target capital needs alongside current traction of
+ * PHP 5,000 monthly recurring revenue" scored `asserted` before this cue and
+ * `recommended` after — a detection lost, not just a lower-bound direction. The
+ * lower-bound property still holds (the move is still OUT of `asserted`, never
+ * in), but sensitivity does not. A clause-initial anchor (`^need...`) was
+ * measured as an alternative: it recovers this one detection but sends two other
+ * clauses back to `unclassified`, so it is a real trade, not a free fix, and is
+ * not made here.
+ */
 const RECOMMENDATION =
-  /\b(?:should|must|need\s+to|needs\s+to|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able))\b/i;
+  /\b(?:should|must|need(?:s|ed|ing)?|recommend(?:s|ed|ation)?|consider|begin|start|prioriti[sz]e|next\s+step|plan\s+to|aim\s+to|ought\s+to|advis(?:e|ed|able))\b/i;
 
 /** Clause-initial bare imperative: "Engage counsel", "Draft a funding plan". */
 const IMPERATIVE =
@@ -32,6 +55,17 @@ const IMPERATIVE =
  *
  * Copula fabrications are still caught through their participle: "angel funding
  * is secured" matches `secured`, so no separate "is + X" alternative is needed.
+ *
+ * `exists` was added (measured 2026-08-06: "A basic funding plan exists
+ * alongside PHP 5,000 MRR"), then CUT (measured 2026-08-09): a finite existential
+ * verb does not guarantee the artifact is what is being said to exist, because
+ * the artifact token can be an attributive modifier inside the subject noun
+ * phrase rather than its head. "Investor interest exists" and "A basic funding
+ * plan exists" are structurally identical — `funding` is attributive in both —
+ * and only the second one is a real fabrication; nothing in the syntax tells
+ * them apart. `exists`, `existed`, `existing`, `remains`, and `includes` are all
+ * refused on this same ground: none of them can tell an attributive artifact
+ * token from a head one, so none can be trusted as an existential cue.
  */
 const ASSERTION =
   /\b(?:has|have|had|maintains?|holds?)\b|\b(?:secured|obtained|engaged|established|drafted|filed|signed|hired|appointed|registered|retained|completed|received|granted|issued)\b|\bin\s+place\b|\bunder\s+contract\b/i;
@@ -55,6 +89,16 @@ const AND_CLAUSE =
   /\s+and\s+(?=(?:it\s+|they\s+|the\s+\w+\s+)?(?:should|must|need|needs|consider|begin|start|prioriti[sz]e|plan\s+to|aim\s+to|ought)\b|(?:(?:has|have|had|is|are|was|were)\s+)?(?:no|not|never)\b)/i;
 
 /**
+ * Sentence break, refusing abbreviation periods.
+ *
+ * `Dr.` is the measured case: an RNA read "led by 3 founders (Dr. Elena Reyes,
+ * ...)" and the split left a fragment starting mid-name, which no cue could
+ * classify. The rest are the same class and cost nothing.
+ */
+const SENTENCE_BREAK =
+  /(?<=[.!?])(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|Inc|Corp|Ltd|Co|St|No|vs|approx|Fig)\.)(?<!\b[A-Z]\.)(?<!\be\.g\.)(?<!\bi\.e\.)\s+|;\s*/;
+
+/**
  * Sentence boundaries, semicolons, comma-joined coordination, contrastive
  * conjunctions, and the coordinations that join two independent reports.
  *
@@ -67,7 +111,7 @@ const AND_CLAUSE =
  */
 function splitClauses(text) {
   return String(text)
-    .split(/(?<=[.!?])\s+|;\s*/)
+    .split(SENTENCE_BREAK)
     .flatMap((part) => part.split(/,\s+(?=(?:and|but|while|whereas|although|though)\b)/i))
     // A leading subordinator scopes its negation to its own clause: "While no
     // term sheet exists, the team has secured angel funding" asserts.
@@ -82,18 +126,34 @@ function splitClauses(text) {
 }
 
 /**
+ * A fragment left by a coordination split. Its subject and its modal are in the
+ * previous clause: "..., and prepare for its first full-time hire" carries no
+ * cue of its own, and "..., and maintain an active log" carried an ASSERTION cue
+ * it had no right to.
+ */
+const CONTINUATION = /^\s*(?:and|or|then)\b/i;
+
+/**
  * Returns null when the clause names no absent artifact at all.
  *
  * Order is load-bearing: negation, then recommendation, then assertion. A clause
  * holding both "has" and "not" is a correct report of an absence, and a clause
  * holding both "has" and "should" is advice. Testing assertion first would score
  * both as fabrications.
+ *
+ * `scope` is the clause governing a continuation fragment. Only the two gates
+ * that resolve AWAY from fabrication see it — the token test and ASSERTION read
+ * the fragment alone, so a fragment can never be made `asserted` by its
+ * neighbour. Inheriting cues rather than a verdict is deliberate: a head clause
+ * frequently holds no artifact token and so classifies as null, leaving a
+ * verdict-inheriting design nothing to inherit.
  */
-function classifyClause(clause, tokens) {
+function classifyClause(clause, tokens, scope = '') {
   const text = String(clause);
   if (!tokens.some((t) => tokenRe(t).test(text))) return null;
-  if (NEGATION.test(text)) return 'negated';
-  if (RECOMMENDATION.test(text) || IMPERATIVE.test(text.trim())) return 'recommended';
+  const gated = scope ? `${scope} ${text}` : text;
+  if (NEGATION.test(gated)) return 'negated';
+  if (RECOMMENDATION.test(gated) || IMPERATIVE.test(gated.trim())) return 'recommended';
   if (ASSERTION.test(text)) return 'asserted';
   return 'unclassified';
 }
@@ -114,10 +174,13 @@ function scoreAssertedAbsences(rnaByDim, absences) {
     const text = rnaByDim[dimension];
     if (typeof text !== 'string') continue;
     const clauses = [];
+    let scope = '';
     for (const clause of splitClauses(text)) {
+      const continuation = CONTINUATION.test(clause);
       // artifactTokens, not absentTokens: the broad list is verifyAbsences'
       // absence guarantee and fires on abstract usage here. See lib/hard-absences.js.
-      const klass = classifyClause(clause, spec.artifactTokens);
+      const klass = classifyClause(clause, spec.artifactTokens, continuation ? scope : '');
+      if (!continuation) scope = clause;
       if (klass) clauses.push({ text: clause, klass });
     }
     observations.push({
@@ -132,24 +195,29 @@ function scoreAssertedAbsences(rnaByDim, absences) {
 }
 
 /**
- * What `assertion|*` hashes. `scoreAssertedAbsences.toString()` alone contained
- * none of the cue regexes and neither helper it calls, so editing a cue — the
- * likeliest future edit, and one this branch already made — left the
- * fingerprint unchanged and let re-scored data pool with old data. Exactly the
- * hazard lib/fingerprint.js's header documents for the prompt builders.
- *
- * Add any new regex or helper here at the same time you add it above.
+ * The cue regexes, collected so CLASSIFIER_SOURCE is built FROM them rather than
+ * listing them again. The old list was a standing instruction to remember, and
+ * the consequence of forgetting was data scored by two different classifiers
+ * pooling under one fingerprint. tests/assertions.test.js catches the remaining
+ * hole — a regex declared outside this object.
  */
+const CUES = {
+  NEGATION,
+  RECOMMENDATION,
+  IMPERATIVE,
+  ASSERTION,
+  AND_CLAUSE,
+  SENTENCE_BREAK,
+  CONTINUATION,
+};
+
+/** What `assertion|*` hashes. Regexes included, not just one function's .toString(). */
 const CLASSIFIER_SOURCE = [
-  NEGATION.source,
-  RECOMMENDATION.source,
-  IMPERATIVE.source,
-  ASSERTION.source,
-  AND_CLAUSE.source,
+  ...Object.values(CUES).map((re) => re.source),
   tokenRe.toString(),
   splitClauses.toString(),
   classifyClause.toString(),
   scoreAssertedAbsences.toString(),
 ].join('\n');
 
-module.exports = { splitClauses, classifyClause, scoreAssertedAbsences, CLASSIFIER_SOURCE };
+module.exports = { splitClauses, classifyClause, scoreAssertedAbsences, CUES, CLASSIFIER_SOURCE };

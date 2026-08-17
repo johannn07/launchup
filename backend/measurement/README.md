@@ -901,6 +901,169 @@ headline claim — does the corpus reduce hallucination and improve
 differentiation — remains untested under the current, confound-free probe
 design; the 2026-07-29 numbers above cannot answer it either way.
 
+## Assertion classifier — 2026-08-07 repair and mutation log
+
+`lib/assertions.js` was repaired after hand-reading the 2026-08-06 run's
+`flaggedClauses`. Of its 14 `unclassified` clauses, **12 were recommendations
+mis-binned**, not missed assertions — the recorded "subject-less fragments"
+diagnosis was a third of the picture. Full record in
+`docs/superpowers/specs/2026-08-07-assertion-classifier-gaps-design.md`.
+
+**What shipped:** abbreviation-safe sentence splitting; `RECOMMENDATION` widened
+to `need(?:s|ed|ing)?` for the model's `Needs:` label form; coordination **scope
+inheritance**, where a continuation fragment inherits its governing clause's
+negation/recommendation cues but never its assertion; `CUES` with
+`CLASSIFIER_SOURCE` built from it plus a source scan catching a regex declared
+outside it.
+
+**What was refused, and this is the point:** five candidate assertion cues were
+built or specified and then cut — `require`, `existed`, `existing`, `exists`,
+and a whole accompaniment predicate. **The assertion branch is unchanged from
+before this work.** Every cue that could raise the measured rate failed the same
+test: the artifact token turned out to be an attributive modifier rather than
+the head of the phrase, so the cue fired on clauses asserting nothing.
+`"Investor interest exists"` and `"A basic funding plan exists"` are
+structurally identical; the accompaniment predicate false-positived on 14 of 14
+constructed realistic clauses. Both genuine missed assertions are now recorded
+as **known uncaught classes** with tests, which is itself a lower-bound
+statement.
+
+**A live counterexample to the lower-bound guarantee was found and removed:**
+`"and maintain an active log of investor pitches conducted."` had been stranded
+from its governing `must` by a comma-and split and scored `asserted` on
+`maintains?`.
+
+**Whole-branch effect over the 330 stored dimension texts:** `unclassified`
+clauses 36 → 2, `asserted` 14 → 11. The instrument got stricter about false
+positives, not more sensitive.
+
+**Fingerprint:** `assertion|baseline` moved `4c1429815dc7` → `529dd55beb2c`, so
+a re-run **cannot pool** with the 2026-08-06 data. That is the guard working; a
+fixed classifier means a fresh experiment.
+
+### The 2026-08-09 re-run on the repaired classifier
+
+`results/2026-08-09-supplied-level.json`, 16/16 calls, n=2, `gemini-3.6-flash`,
+54 corpus rows, floor 0.78 — identical to 2026-08-06 in every parameter except
+the classifier. **A separate experiment, not more n:** `--merge` correctly
+refused to pool it into any `assertion|*` or `assertion-inflated|*` group while
+pooling `levels|*`, `rna|*` and `fabrication|*`, whose fingerprints did not
+move. That per-(metric, arm) granularity is the point of the design.
+
+| arm | condition | asserted | mentioned | unclassified |
+|---|---|---|---|---|
+| `baseline` | truth | 0/12 | 4/12 | 0/12 |
+| `baseline` | inflated | **0/12** | 4/12 | 0/12 |
+| `deviation-deterministic` | truth | 0/12 | 8/12 | 0/12 |
+| `deviation-deterministic` | **inflated** | **3/12 (25%)** | 11/12 | 3/12 |
+
+**The core finding reproduced independently.** Only corpus+inflated fabricates;
+baseline is 0/12 under *both* conditions, so the wrong supplied level alone
+still produces nothing. All three asserted clauses are the same mechanism —
+IRL 3's funding plan asserted as drafted:
+
+> "Currently at IRL 3 with a funding plan drafted"
+> "MediSync Cebu is at IRL 3 with a drafted funding plan covering target raise and use of funds."
+> "Currently at IRL 3 with a drafted funding plan outlining target raise and use-of-funds."
+
+**AgroLink fabricated this time, which closes an open question.** On 2026-08-06
+every fabrication came from MediSync, and the notes recorded it as unresolved
+whether that was a property of the document or of chance. It was chance: the
+first of the three clauses above is AgroLink. The plan's decision *not* to buy
+that answer with extra AgroLink reps was right for the wrong reason — re-running
+the same design answered it for free.
+
+**The instrument repair is visible in the clause census, and it is the real
+result of this work:**
+
+| | 2026-08-06 | 2026-08-09 |
+|---|---|---|
+| `recommended` | 13 | **28** |
+| `unclassified` | **14** | **3** |
+| `negated` | 5 | 5 |
+| `asserted` | 3 | 3 |
+
+**The measured rate rose, 2/12 → 3/12, and the instrument cannot explain it.**
+The classifier's *assertion* branch is byte-identical to before this work — all
+five candidate cues were cut — and every change that did land (`Needs:`
+recognition, scope inheritance) can only move clauses **out of** `asserted`.
+A stricter instrument reading higher is sampling, not measurement drift.
+
+**Both pre-registered predictions were wrong, in opposite directions.** The spec
+predicted the cell would read *higher* because of added assertion cues; after
+those cues were cut the prediction was revised to *same or lower*. It read
+higher, and neither reason was the cause. Recorded because the predictions were
+committed in writing before the run, and a prediction that only gets reported
+when it lands is not a prediction.
+
+**Read the hand count, not the table.** `unclassified` is 3/12 on the cell that
+matters, and the design says not to quote a rate while that column is large.
+Reading all three by hand: **all three are genuine fabrications**, and all three
+fall in the classes deliberately recorded as uncaught —
+
+> "At ORL 3, the core team comprises 3 founders (…) **and a first non-founder contributor**." — coordination, no participle
+> "and Joy Tabotabo **along with a first non-founder contributor**." — accompaniment
+> "Currently at RRL 3 with a pending IPOPHL trademark application **and preliminary counsel opinion**." — `with`-coordination
+
+So the by-hand rate is **6/12**, and the reported 3/12 is a floor — which is
+the property the whole probe is built on. The known-uncaught classes are not a
+loose end; they are the reason the floor is trustworthy.
+
+**Metric 2 (stage-inappropriate recommendations) returned a non-zero reading**
+for the first time: baseline 2/24 (8%), corpus 1/24 (4%), scored on
+truth-condition text with an unchanged `lib/stage-markers.js`. The notes record
+this metric as saturated at 0% since 2026-07-29, so this is worth confirming
+against the earlier files before anyone quotes it — at n=2 and 2 flagged, it is
+a hint, not a result.
+
+**Limits:** n=2, 16 calls, one model, one window. Three of the four asserted
+observations are MediSync. Inflation is one rung above the ceiling, not two.
+
+### Mutation log
+
+Nine mutants, nine killed, against 205 passing tests. Scripted rather than
+hand-driven, restoring from an in-memory copy in a `finally` block — a first
+hand-driven attempt was interrupted and left a live mutation in the tree.
+
+| mutation | killed by |
+|---|---|
+| revert `SENTENCE_BREAK` to the naive split | `an abbreviation period is not a sentence end` |
+| `RECOMMENDATION` back to `need\s+to` only | all 7 labelled-requirement tests **+ 3 continuation tests** |
+| `classifyClause` ignores `scope` | `a stranded continuation does not assert off its own verb` + 4 more |
+| `scope` passed unconditionally | `a leading "While" scopes its negation to its own clause` |
+| `ASSERTION` tested against `scope + clause` | `a continuation fragment never inherits an assertion` |
+| drop `exists?` (before it was cut outright) | `an existential predicate on an artifact is an assertion` |
+| drop `CONTINUATION` from `CUES` | `every module-level constant is either a cue or a named non-cue` |
+| resurrect an accompaniment disjunct | `accompaniment-only assertion is a known uncaught class` |
+| readmit `existing` to `ASSERTION` | `"existing" is refused — an attributive adjective asserts no artifact` |
+
+Two results worth carrying forward:
+
+- **Reverting the `RECOMMENDATION` widening also breaks three of the
+  continuation fixtures.** Those fragments inherit a `Needs:` head, so scope
+  inheritance is only reachable through the widening. The two changes are
+  coupled and the suite now shows it.
+- **One genuine survivor, recorded not fixed:** removing `CONTINUATION` from
+  `CUES` *and* allowlisting it in the test's `NON_CUES` survives green. Both
+  guards pass — the scan allows the name, and the coverage test iterates `CUES`
+  so it passes vacuously. Closing it would mean guarding against an author who
+  edits the guard to accept its own bypass.
+
+**A harness caveat for anyone repeating this:** two mutants first reported as
+survivors were failures to apply. `String.replace(string, string)` takes only
+the first occurrence, and the doc comment quotes the regex above it — so the
+mutation edited the comment; and a multi-line anchor used `\n` against a CRLF
+file. **A mutation that fails to apply reports a green suite, which is
+indistinguishable from a decorative guard.** Assert the mutation landed.
+
+**Known sensitivity cost, measured:** the widened `RECOMMENDATION` also matches
+the *noun* "needs", which reclassifies one real fabrication in the stored data
+— `"A funding plan has been drafted outlining target capital needs…"`
+(`2026-07-30-redesign-rep1.json`, MediSync, `deviation-deterministic`) — from
+`asserted` to `recommended`. Conservative direction, so the lower bound holds,
+but it is a detection lost, not a free win. A clause-initial anchor recovers it
+and costs two other clauses.
+
 ## Reading the output
 
 Trust the **gap and its direction**, not the absolute levels — there is no

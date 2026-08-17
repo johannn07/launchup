@@ -1,8 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const fs = require('fs');
 
-const { splitClauses, classifyClause, scoreAssertedAbsences, CLASSIFIER_SOURCE } =
+const { splitClauses, classifyClause, scoreAssertedAbsences, CUES, CLASSIFIER_SOURCE } =
   require(path.resolve(__dirname, '../lib/assertions.js'));
 const { HARD_ABSENCES } = require(path.resolve(__dirname, '../lib/hard-absences.js'));
 
@@ -144,7 +145,10 @@ const ABSTRACT_USAGE = [
 
 for (const [dim, tokens, sentence] of ABSTRACT_USAGE) {
   test(`abstract usage asserts no artifact: ${dim} — "${sentence}"`, () => {
-    assert.notEqual(classifyClause(sentence, tokens), 'asserted');
+    // All five are rejected at the token-narrowing gate itself (classifyClause
+    // returns null before any cue runs), which is the mechanism this test is
+    // meant to pin — verified with node before tightening from notEqual.
+    assert.equal(classifyClause(sentence, tokens), null);
   });
 }
 
@@ -226,29 +230,45 @@ test('a coordinated noun phrase is not split', () => {
 });
 
 // --------------------------------------------------------------------------
-// CLASSIFIER_SOURCE is what `assertion|*` hashes. A cue regex added to this
-// module but left out of it would leave the fingerprint unchanged, and
-// re-scored data would pool with data scored by the old classifier.
+// CLASSIFIER_SOURCE is what `assertion|*` hashes. Building it from CUES makes a
+// forgotten regex impossible; these tests catch the other half — a regex
+// declared outside CUES entirely — and confirm every helper still lands in the
+// hash.
+//
+// This supersedes the old hand-maintained `distinctive`-substring test that
+// used to live here. That test's own name went false in Task 3: CONTINUATION
+// was added to the module but never added to the `distinctive` map, so a test
+// named "every cue regex" silently covered six of seven. A second hand-curated
+// list is the exact standing-instruction failure mode this task exists to
+// remove, so it is deleted rather than patched — the CUES-derived test below
+// cannot go stale the same way, because it walks CUES itself instead of a
+// second copy of the cue names.
 // --------------------------------------------------------------------------
 
-test('CLASSIFIER_SOURCE carries every cue regex, every helper and the token matcher', () => {
-  // Plain substrings, each unique to one regex or helper.
-  const distinctive = {
-    NEGATION: '(?:absence|lack)\\s+of',
-    RECOMMENDATION: 'advis(?:e|ed|able)',
-    IMPERATIVE: 'formali[sz]e',
-    ASSERTION: 'under\\s+contract',
-    AND_CLAUSE: '(?:no|not|never)',
-    tokenRe: '(?:s|es)?',
-    splitClauses: 'whereas',
-    classifyClause: "'recommended'",
-    scoreAssertedAbsences: 'rnaByDim',
-  };
-  for (const [name, fragment] of Object.entries(distinctive)) {
+test('every module-level constant is either a cue or a named non-cue', () => {
+  const src = fs.readFileSync(path.resolve(__dirname, '../lib/assertions.js'), 'utf8');
+  const NON_CUES = ['CLASSIFIER_SOURCE', 'CUES'];
+  const declared = [...src.matchAll(/^const ([A-Z][A-Z0-9_]*)\s*=/gm)].map((m) => m[1]);
+  assert.ok(declared.length >= 8, 'the scan found nothing — the regex stopped matching declarations');
+  for (const name of declared) {
     assert.ok(
-      CLASSIFIER_SOURCE.includes(fragment),
-      `CLASSIFIER_SOURCE is missing ${name} (looked for ${fragment})`,
+      Object.hasOwn(CUES, name) || NON_CUES.includes(name),
+      `${name} is a module constant in neither CUES nor NON_CUES, so it may be missing from CLASSIFIER_SOURCE`,
     );
+  }
+});
+
+test('CLASSIFIER_SOURCE carries every cue in CUES', () => {
+  for (const [name, re] of Object.entries(CUES)) {
+    assert.ok(CLASSIFIER_SOURCE.includes(re.source), `CLASSIFIER_SOURCE is missing ${name}`);
+  }
+});
+
+test('CLASSIFIER_SOURCE carries every helper, not just the cue regexes', () => {
+  // One distinctive substring per helper: tokenRe, splitClauses, classifyClause,
+  // scoreAssertedAbsences — the four .toString() entries alongside the cues.
+  for (const fragment of ['(?:s|es)?', 'whereas', "'recommended'", 'rnaByDim']) {
+    assert.ok(CLASSIFIER_SOURCE.includes(fragment), `CLASSIFIER_SOURCE is missing ${fragment}`);
   }
 });
 
@@ -261,4 +281,197 @@ test('a classifier edit moves the assertion fingerprint', () => {
   };
   const edited = { ...spec, sources: { ...spec.sources, assertion: `${CLASSIFIER_SOURCE}|edited` } };
   assert.notEqual(fingerprintMap(spec)['assertion|baseline'], fingerprintMap(edited)['assertion|baseline']);
+});
+
+// --------------------------------------------------------------------------
+// Gap 4a, measured 2026-08-06. `Dr.` inside a founder name was read as a
+// sentence end, so the accompaniment clause reached classifyClause as a
+// fragment starting mid-name and could never be classified.
+// --------------------------------------------------------------------------
+
+test('an abbreviation period is not a sentence end', () => {
+  const clauses = splitClauses(
+    'Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor. To achieve ORL 4, the startup must draft formal role definitions.',
+  );
+  assert.equal(clauses.length, 2, 'split at "Dr." would give 3');
+  assert.match(clauses[0], /^Currently at ORL 3/);
+  assert.match(clauses[0], /alongside a first non-founder contributor\.$/);
+});
+
+test('a real sentence boundary still splits', () => {
+  const clauses = splitClauses('The venture has secured angel funding. No term sheet exists.');
+  assert.equal(clauses.length, 2);
+});
+
+test('a bare initial is not a sentence end', () => {
+  const clauses = splitClauses('Founders are E. Reyes and M. Villanueva of the venture.');
+  assert.equal(clauses.length, 1);
+});
+
+// --------------------------------------------------------------------------
+// Gap 1, measured 2026-08-06: seven of the fourteen `unclassified` clauses were
+// recommendations wearing a label. RECOMMENDATION required `need\s+to`, so
+// "Needs:", "Need:", "Needs a ..." and "needed" all missed. Strings verbatim
+// from measurement/results/2026-08-06-supplied-level.json.
+// --------------------------------------------------------------------------
+
+const LABEL_FORM = [
+  [ORG, 'Needs: Advance to ORL 3 by engaging the first non-founder contributor, such as a contractor, advisor, or part-time hire.'],
+  [INVEST, 'Needs: Advance to IRL 2 by forming an informal funding hypothesis regarding future capital needs and potential target raise amounts.'],
+  [INVEST, 'Need: Draft an initial funding hypothesis, outline target raise requirements'],
+  [INVEST, 'Needs a defined financial model and funding strategy to support technology development and field operations.'],
+  [INVEST, 'Needs initial funding or capital investment to transition from prototype to working platform development.'],
+  [REGU, 'Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards'],
+  [INVEST, 'Needs: Complete a pitch deck or one-pager and conduct initial investor conversations, logging meetings held with targeted investors to reach IRL 4.'],
+];
+
+for (const [tokens, clause] of LABEL_FORM) {
+  test(`a labelled requirement is a recommendation: "${clause.slice(0, 40)}..."`, () => {
+    assert.equal(classifyClause(clause, tokens), 'recommended');
+  });
+}
+
+// --------------------------------------------------------------------------
+// Gap 2, measured 2026-08-06. A comma-and split strands a continuation fragment
+// from the modal governing it, leaving it cue-less. Five clauses landed in
+// `unclassified` this way — and one landed in `asserted`, which is a live
+// counterexample to this module's lower-bound guarantee.
+// --------------------------------------------------------------------------
+
+// THE FALSE POSITIVE. Source RNA: "To reach IRL 4, the startup must convert its
+// funding plan into an investor pitch deck or one-pager, initiate warm-intro
+// investor meetings, and maintain an active log of investor pitches conducted."
+// The fragment lost its `must`, and ASSERTION's `maintains?` fired.
+test('a stranded continuation does not assert off its own verb', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'To reach IRL 4, the startup must convert its funding plan into an investor pitch deck or one-pager, initiate warm-intro investor meetings, and maintain an active log of investor pitches conducted.' },
+    { Investment: HARD_ABSENCES.Investment },
+  );
+  assert.equal(r.observations[0].asserted, false, 'the governing "must" makes every fragment advice');
+  assert.equal(r.observations[0].unclassified, false);
+});
+
+const STRANDED = [
+  ['Organizational', ORG, 'To achieve ORL 4, the startup must draft formal role definitions for the core team, create initial operational process artifacts like onboarding checklists or decision logs, and prepare for its first full-time hire beyond the founding team.'],
+  ['Organizational', ORG, 'Need: Document role descriptions, establish operational decision processes, and bring on a first non-founder contributor.'],
+  ['Investment', INVEST, 'To advance investment readiness, AgroLink PH needs to create a written funding plan specifying target raise amounts and use of funds, prepare a pitch deck, and initiate preliminary investor discussions.'],
+  ['Investment', INVEST, 'Needs: Formulate a clear financial model, commercial pricing strategy, and investment pitch to secure initial funding.'],
+  ['Regulatory', REGU, 'Needs: Assemble a documented requirements checklist detailing the specific permits, regulatory standards, and compliance certifications needed for health referral software to reach RRL 4.'],
+];
+
+for (const [dim, tokens, sentence] of STRANDED) {
+  test(`a continuation fragment inherits its governing modal: ${dim} — "${sentence.slice(0, 40)}..."`, () => {
+    const r = scoreAssertedAbsences({ [dim]: sentence }, { [dim]: HARD_ABSENCES[dim] });
+    assert.equal(r.observations[0].asserted, false);
+    assert.equal(r.observations[0].unclassified, false, 'the fragment should be recommended, not unclassified');
+  });
+}
+
+// A fragment must never inherit `asserted` — inheritance carries only the two
+// gates that resolve AWAY from fabrication. Without that restriction this would
+// score asserted off the head clause's participle.
+test('a continuation fragment never inherits an assertion', () => {
+  assert.equal(
+    classifyClause('and a term sheet', INVEST, 'The venture has secured angel funding'),
+    'unclassified',
+    'inheriting `asserted` would manufacture a fabrication from a neighbour',
+  );
+});
+
+// --------------------------------------------------------------------------
+// Gap 3, measured 2026-08-06. Verbatim from the audit dump — MediSync,
+// corpus arm, inflated condition, rep 1.
+// --------------------------------------------------------------------------
+
+// KNOWN UNCAUGHT CLASS, recorded deliberately. This is a real fabrication — a
+// funding plan the source document never mentions, reported as present — and
+// the classifier does not catch it. `exists` was tried as a cue for exactly
+// this clause (measured 2026-08-06) and then cut (measured 2026-08-09): the
+// same cue also fires on "Investor interest exists but remains informal at
+// this stage," where `funding`/`investor` is attributive, not the thing being
+// said to exist. No syntactic restriction separates the two, so the cue was
+// refused and this clause reverted to a documented gap instead.
+test('an existential predicate on an artifact is a known uncaught class', () => {
+  const r = scoreAssertedAbsences(
+    { Investment: 'A basic funding plan exists alongside PHP 5,000 MRR.' },
+    { Investment: HARD_ABSENCES.Investment },
+  );
+  assert.equal(r.observations[0].asserted, false, 'the cue that would catch this also fires on "Investor interest exists"');
+  assert.equal(r.observations[0].mentioned, true, 'the artifact is still detected as mentioned');
+});
+
+test('a negated existential is still correct reporting', () => {
+  assert.equal(classifyClause('No funding plan exists at all', INVEST), 'negated');
+});
+
+test('a recommended existential is still advice', () => {
+  assert.equal(classifyClause('A written funding plan should exist by Q3', INVEST), 'recommended');
+});
+
+// Both were floated in SESSION_NOTES.md as likely additions alongside `exists`.
+// Both are refused: neither has a measured instance, and each has a plain
+// counterexample that would break the lower-bound guarantee.
+test('"remains" is refused — it asserts nothing about existence', () => {
+  assert.notEqual(classifyClause('A permit remains outstanding', REGU), 'asserted');
+});
+
+test('"includes" is refused — a plan is not an artifact in existence', () => {
+  assert.notEqual(classifyClause('The roadmap includes a contractor engagement', ORG), 'asserted');
+});
+
+// Constructed guard: the reason `exists` was cut. `investor` is attributive
+// here, not the head of the subject NP — the same shape as "A basic funding
+// plan exists", which IS a fabrication. Nothing in the syntax distinguishes
+// them, so the cue cannot be trusted for either.
+test('"exists" is refused — an attributive subject asserts no artifact', () => {
+  assert.notEqual(
+    classifyClause('Investor interest exists but remains informal at this stage.', INVEST),
+    'asserted',
+  );
+});
+
+// Constructed guard for `existed`, the one refused cue with no test before this.
+test('"existed" is refused — no measured instance and the same attributive hole as `exists`', () => {
+  assert.notEqual(
+    classifyClause('A significant funding gap existed between revenue and cost.', INVEST),
+    'asserted',
+  );
+});
+
+// Constructed guard, not a dump fixture. `existing` is an attributive
+// adjective: it modifies a topic word rather than predicating existence of an
+// artifact, so it asserts nothing. This is the same failure the bare-copula
+// exclusion above exists to prevent.
+test('"existing" is refused — an attributive adjective asserts no artifact', () => {
+  assert.notEqual(
+    classifyClause('Existing investor sentiment remains cautious despite early traction.', INVEST),
+    'asserted',
+  );
+});
+
+// KNOWN UNCAUGHT CLASS, recorded deliberately. This clause does assert a
+// non-founder contributor, and the classifier does not catch it: there is no
+// possession, no achievement participle, and no negation or recommendation —
+// the artifact hangs off "alongside" alone.
+//
+// A predicate for this was built and cut (spec section 3): it had no way to
+// require the token be the HEAD of the governed phrase, so 14 of 14 constructed
+// realistic clauses scored as fabrications. Missing a real assertion keeps the
+// reported rate a lower bound; inventing one does not. This test exists so the
+// gap is visible in the suite rather than only in a document.
+test('accompaniment-only assertion is a known uncaught class', () => {
+  const r = scoreAssertedAbsences(
+    { Organizational: 'Currently at ORL 3, led by 3 founders (Dr. Elena Reyes, Marco Villanueva, Joy Tabotabo) alongside a first non-founder contributor.' },
+    { Organizational: HARD_ABSENCES.Organizational },
+  );
+  assert.equal(r.observations[0].asserted, false, 'if this ever passes, the predicate came back — read spec section 3 first');
+  assert.equal(r.observations[0].mentioned, true, 'the artifact is still detected as mentioned');
+});
+
+test('an accompaniment assertion caught by its participle still works', () => {
+  assert.equal(
+    classifyClause('Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL.', REGU),
+    'asserted',
+    'this one is caught by `engaged`, not by accompaniment',
+  );
 });

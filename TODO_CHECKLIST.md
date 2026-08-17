@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; 1a and 4b partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured, 1b's instrument repaired and re-run 2026-08-09; 1a and 4b partial (**4b is the live next step**), 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -220,9 +220,32 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
   **Deliberately not done:** the classifier was not patched and this data not re-scored — that is the post-hoc move, and the fingerprint guard enforces it mechanically.
 
-- [ ] 🔬 **OBJECTIVE · S · Close the two measured classifier gaps, then re-run** — *next step for 1b*
-  Both are evidenced, not speculated: `exists` (and likely `remains`, `includes`) is absent from the assertion cue list, and `splitClauses` yields fragments whose subject is lost. Each cost a real detection in the 2026-08-06 run.
-  Fix both, then re-run at `--reps=2` on a fresh window. The run will correctly refuse to pool with 2026-08-06 — that is the fingerprint guard working. Worth adding AgroLink-side reps: it contributed zero fabrications and it isn't clear whether that's a property of the document or of its lower levels.
+- [x] ✅ **OBJECTIVE · S · Close the measured classifier gaps, then re-run** — *done 2026-08-09* (`measure/assertion-classifier-gaps`, 19 commits, **unpushed**)
+
+  **The diagnosis in this item was a third of the picture.** Dumping all 35 classified clauses from the 2026-08-06 run showed that of its 14 `unclassified` clauses, **12 were recommendations mis-binned** — via the model's `Needs:` label form, which `RECOMMENDATION` missed because it required `need\s+to`, and via coordination splits that strand a fragment from its governing modal. Only 2 were the missed assertions this item named.
+
+  **A live counterexample to the lower-bound guarantee was found in the collected data**: `"and maintain an active log of investor pitches conducted."` had been stranded from its governing `must` and scored `asserted` on `maintains?`. Fixed by scope inheritance — a continuation fragment inherits its governing clause's negation/recommendation cues but never its assertion.
+
+  **The assertion branch ships unchanged, and that is the finding.** Five candidate assertion cues were built or specified and then cut: `require`, `existed`, `existing`, `exists`, and a whole accompaniment predicate. Each failed the same way — the artifact token turned out to be an **attributive modifier** rather than the head of its phrase, so the cue fired on clauses asserting nothing. `"Investor interest exists"` and `"A basic funding plan exists"` are structurally identical; the accompaniment predicate false-positived on 14 of 14 constructed realistic clauses. Both genuine missed assertions are now recorded as **known uncaught classes with tests**, which is itself a lower-bound statement.
+
+  **The re-run** (`measurement/results/2026-08-09-supplied-level.json`, 16/16 calls, n=2, every parameter identical to 2026-08-06 except the classifier):
+
+  | arm | condition | asserted | mentioned | unclassified |
+  |---|---|---|---|---|
+  | `baseline` | truth | 0/12 | 4/12 | 0/12 |
+  | `baseline` | inflated | **0/12** | 4/12 | 0/12 |
+  | `deviation-deterministic` | truth | 0/12 | 8/12 | 0/12 |
+  | `deviation-deterministic` | **inflated** | **3/12 (25%)** | 11/12 | 3/12 |
+
+  **The core finding reproduced independently:** only corpus+inflated fabricates, baseline is 0/12 under both conditions, and all three clauses are the same IRL 3 funding-plan mechanism. **`--merge` correctly refused** to pool into any `assertion|*` group while pooling `levels|*`/`rna|*`/`fabrication|*` — a separate experiment, not more n.
+
+  **Instrument effect, which is the deliverable:** `unclassified` 14 → 3, `recommended` 13 → 28. **The rate rose 2/12 → 3/12 and the instrument cannot explain it** — the assertion branch is byte-identical and every landed change can only move clauses *out of* `asserted`, so a stricter instrument reading higher is sampling. **Both pre-registered predictions were wrong in opposite directions** (spec: higher, because of cues that were then cut; revised: same or lower). Recorded because they were committed in writing before the run.
+
+  **Quote the hand count, not the table.** All three `unclassified` clauses are genuine fabrications sitting in the deliberately-uncaught classes, so the by-hand rate is **6/12** and the reported 3/12 is a floor.
+
+  **AgroLink fabricated this time**, closing the open question from 2026-08-06: its zero was chance, not a property of the document. Adding AgroLink-specific reps was correctly declined — both startups sit at `O2 R1 I1`, so the manipulation is identical on both and extra reps could not have isolated the document.
+
+  Detail in `measurement/README.md`, including the nine-mutant log (nine killed) and a harness caveat: two mutants first read as survivors had silently failed to apply.
 
 ### Spec mismatch — resolved as documentation
 
