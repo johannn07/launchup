@@ -19,8 +19,12 @@ const ctxWith = (overrides: Partial<AiRunContext['config']> = {}): AiRunContext 
       temperature: 0,
       grounding: true,
       rag: true,
+      ragStrategy: 'semantic',
+      ragCorpus: true,
+      rubricMode: 'deterministic',
       biasReview: true,
       scoreNormalization: true,
+      adversarialSummary: true,
       ...overrides,
     }),
   }) as AiRunContext;

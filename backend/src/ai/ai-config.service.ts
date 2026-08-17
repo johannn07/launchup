@@ -38,6 +38,9 @@ export class AiConfigService {
       AI_SCORE_NORMALIZATION_ENABLED: this.config.get<string>(
         'AI_SCORE_NORMALIZATION_ENABLED',
       ),
+      AI_ADVERSARIAL_SUMMARY_ENABLED: this.config.get<string>(
+        'AI_ADVERSARIAL_SUMMARY_ENABLED',
+      ),
       AI_ALLOW_REQUEST_OVERRIDE: this.config.get<string>(
         'AI_ALLOW_REQUEST_OVERRIDE',
       ),
@@ -64,6 +67,7 @@ export class AiConfigService {
       rubricMode: env.AI_RAG_RUBRIC_MODE,
       biasReview: env.AI_BIAS_REVIEW_ENABLED,
       scoreNormalization: env.AI_SCORE_NORMALIZATION_ENABLED,
+      adversarialSummary: env.AI_ADVERSARIAL_SUMMARY_ENABLED,
     });
 
     this.allowRequestOverride = env.AI_ALLOW_REQUEST_OVERRIDE;
