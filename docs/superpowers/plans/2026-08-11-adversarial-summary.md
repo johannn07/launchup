@@ -12,7 +12,8 @@
 
 ## Global Constraints
 
-- **Suite baselines, both run from `backend/`.** Jest: `pnpm test` → **216 passing / 1 failing**; the one failure (`AiService › passes valid task responses through unchanged`) is pre-existing and documented — *a second Jest failure is a real regression*. Measurement: `pnpm test:measurement` → **207 passing / 0 failing**.
+- **Suite baselines, both run from `backend/`.** Jest: `pnpm test` → **233 passing / 1 failing** at Task 4's tip (`81553b8`); the one failure (`AiService › passes valid task responses through unchanged`) is pre-existing and documented — *a second Jest failure is a real regression*. Measurement: `pnpm test:measurement` → **207 passing / 0 failing**. (The counts written against individual tasks below were drafted from a 216 baseline and are stale; the per-task expected totals have been corrected in place.)
+- **`npx tsc --noEmit -p tsconfig.json` is a required gate on Tasks 5 and 6, and it is currently clean (exit 0).** Jest cannot substitute for it here: ts-jest only type-checks files it transforms, **no spec imports `startup/startup.service.ts`**, and `src/startup/` has no spec file at all. So a type error in the summary's only production call site does not turn `pnpm test` red. `tsc --noEmit` writes nothing, so unlike `pnpm build` it is safe while `pnpm dev` is watching.
 - **`node --test measurement/tests/` (directory form) does not work** — use `pnpm test:measurement`, or `node --test measurement/tests/<file>.test.js`.
 - **Never run `pnpm build` while `pnpm dev` is watching** — both write `dist/` and the race breaks module resolution.
 - **Do not change `reviewBiasScore`'s behaviour.** Its two call sites (`rns.service.ts:373`, `roadblock.service.ts:224`) stay exactly as they are.
@@ -621,7 +622,12 @@ order - viability, advantages, then critical risks third of three."
 
 **Files:**
 - Modify: `backend/src/ai/ai.service.ts` (`generateStartupAnalysisSummary`)
+- Modify: `backend/src/startup/startup.service.ts` — **minimal call-site adaptation only** (see Step 3b)
 - Test: `backend/src/ai/ai.service.spec.ts`
+
+**The return-type change breaks the only production caller, and the test suite cannot see it.** `startup.service.ts:425` assigns the result into a `string` column at `:454` and `:485`. Widening the return type to an object makes that a type error — but **no spec imports `startup.service.ts`**, so ts-jest never type-checks it and `pnpm test` stays green. Combined with the standing "no `pnpm build` while dev watches" rule, the break could survive to the end of the branch and surface only on next server start. Worse, if MikroORM's loosely-typed `em.create()` accepted the object at `:485`, Postgres would receive `[object Object]` in the column the Manager reads.
+
+So Task 5 adapts the call site in the same commit that changes the signature — three lines, no behaviour change — and Task 6 does the real persistence work on top. A commit that leaves the tree non-compiling is not a completed task.
 
 **Interfaces:**
 - Consumes: `LEGACY_SUMMARY_PROMPT` (Task 4); `ctx.config.adversarialSummary` (Task 3).
@@ -746,7 +752,23 @@ Extract the shared field interpolation into `proposalFieldsBlock(dto)` for the a
 
 The method becomes: if `!ctx.config.adversarialSummary`, run the legacy free-text path and return `{summary, unmetCriteria: [], criticalRisks: []}`. Otherwise call with `responseMimeType: 'application/json'` and a `responseSchema` whose `properties` are declared in the order `unmet_criteria, critical_risks, summary`, validate with `analysisSummarySchema`, and map snake_case to the camelCase interface. On parse failure after `callAiExpectJson`'s existing corrective retry, fall through to the legacy path.
 
-- [ ] **Step 4: Run**
+- [ ] **Step 3b: Adapt the call site — the minimum that compiles, nothing more**
+
+In `startup.service.ts`, `createStartupProposal`:
+
+```ts
+const analysis = await this.aiService.generateStartupAnalysisSummary(ctx, dto);
+```
+then `proposal.aiAnalysisSummary = analysis.summary;` at `:454` and `aiAnalysisSummary: analysis.summary,` at `:485`.
+
+**Stop there.** No `analyzeTone`, no `recordAiRecommendation`, no new persistence — that is Task 6's work and doing it here makes two tasks one unreviewable commit. Behaviour is byte-identical to today: the same text lands in the same column.
+
+- [ ] **Step 4: Run — type-check FIRST, because Jest cannot see the call site**
+
+```bash
+npx tsc --noEmit -p tsconfig.json
+```
+Expected: exit 0, no output. This is the only check that covers `startup.service.ts`. It writes nothing, so it is safe while `pnpm dev` runs.
 
 ```bash
 pnpm test -- ai.service
@@ -755,12 +777,12 @@ Expected: PASS.
 ```bash
 pnpm test
 ```
-Expected: 216+8 passing / 1 failing.
+Expected: **238 passing / 1 failing** (233 + the 5 new tests). The single failure must still be the documented `AiService › passes valid task responses through unchanged`.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/src/ai/ai.service.ts backend/src/ai/ai.service.spec.ts
+git add backend/src/ai/ai.service.ts backend/src/ai/ai.service.spec.ts backend/src/startup/startup.service.ts
 git commit -m "feat(ai): adversarial pre-analysis before the readiness summary
 
 SO 4.2 asks the evaluator to seek weaknesses, gaps and unmet criteria
@@ -780,8 +802,14 @@ the blank screen getCapsuleProposalInfo produces."
 ### Task 6: Wire the tone check and persist the criteria
 
 **Files:**
-- Modify: `backend/src/startup/startup.service.ts:424-425`, `:454`, `:485`
-- Test: `backend/src/startup/startup.service.spec.ts`
+- Modify: `backend/src/startup/startup.service.ts` — the tone check and the `recordAiRecommendation` call (Task 5 already moved the call site to `analysis.summary`)
+- **Create:** `backend/src/startup/startup.service.spec.ts`
+
+**This spec does not exist yet — this task writes the first test for a 1393-line service.** `src/startup/` currently has no spec at all, which is why Task 5's type break was invisible. Budget for it: `StartupService`'s constructor takes four dependencies (`EntityManager`, `AiService`, `AiRunService`, `OcrService`), all of which need doubles before a single assertion runs.
+
+Two consequences:
+- **Do not trust this plan's test-call signatures.** The snippets below write `service.create(dto, 1, ctx)`; that was drafted without opening the file. Find the real public entry point that reaches `createStartupProposal` (which is `private`) and adapt. If the reachable entry point drags in OCR or upload paths that make the test unreasonable, say so and propose narrowing rather than mocking half the service into existence.
+- **Scope the spec to the summary path only.** Do not attempt coverage of the other ~1300 lines. A first spec that tests one path well is the deliverable; a broad one is a different task.
 
 **Interfaces:**
 - Consumes: `generateStartupAnalysisSummary`'s new return shape (Task 5); `analyzeTone` (Task 2); the existing `recordAiRecommendation`.
@@ -830,7 +858,7 @@ describe('analysis summary persistence', () => {
 ```bash
 pnpm test -- startup.service
 ```
-Expected: FAIL — the call site still assigns a string and records nothing.
+Expected: FAIL — the call site records nothing. Note that before the spec file exists this command reports *"No tests found"* rather than a useful failure, so confirm the new spec is actually being collected before reading its result as evidence.
 
 - [ ] **Step 3: Implement**
 
@@ -863,9 +891,14 @@ await this.aiService.recordAiRecommendation({
 - [ ] **Step 4: Run**
 
 ```bash
+npx tsc --noEmit -p tsconfig.json
+```
+Expected: exit 0. Still the only gate covering `startup.service.ts`.
+
+```bash
 pnpm test
 ```
-Expected: 216+11 passing / 1 failing.
+Expected: **241 passing / 1 failing** (238 + the 3 new tests), with the documented pre-existing failure as the only red.
 
 - [ ] **Step 5: Commit**
 
