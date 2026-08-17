@@ -770,6 +770,10 @@ Extract the shared field interpolation into `proposalFieldsBlock(dto)` for the a
 
 The method becomes: if `!ctx.config.adversarialSummary`, run the legacy free-text path and return `{summary, unmetCriteria: [], criticalRisks: []}`. Otherwise call with `responseMimeType: 'application/json'` and a `responseSchema` whose `properties` are declared in the order `unmet_criteria, critical_risks, summary`, validate with `analysisSummarySchema`, and map snake_case to the camelCase interface. On parse failure after `callAiExpectJson`'s existing corrective retry, fall through to the legacy path.
 
+**Unsettled when this plan was written, resolved here: neither helper can carry a schema today.** `generate()` hardcodes `config: { temperature }` and `callAiExpectJson` routes through it, so there is no passthrough for `responseMimeType`/`responseSchema` — and `responseSchema` appears nowhere in `src/`, making this its first use in the codebase.
+
+Thread an **optional** generation-config parameter through `generate()` and `callAiExpectJson` rather than bypassing them. Bypassing would mean reimplementing the corrective-retry loop, which is the one piece of hard-won behaviour here. The parameter must be spread only when provided, so the request object emitted for the five existing `callAiExpectJson` sites (`:228`, `:740`, `:754`, `:787`, `:823`) is **unchanged** — assert that in a test rather than assuming it. A shared helper touched for one caller's benefit is exactly where a silent regression lands.
+
 - [ ] **Step 3b: Adapt the call site — the minimum that compiles, nothing more**
 
 In `startup.service.ts`, `createStartupProposal`:
