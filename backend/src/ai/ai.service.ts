@@ -1,4 +1,8 @@
 import { GoogleGenAI } from '@google/genai';
+// Type-only: rag-retrieval.spec.ts factory-mocks '@google/genai' down to
+// GoogleGenAI alone, so a runtime value import from it (the Type enum) is
+// undefined at module load and the whole suite fails to run.
+import type { GenerateContentConfig, Schema, Type } from '@google/genai';
 import { EntityManager } from '@mikro-orm/core';
 import { Injectable } from '@nestjs/common';
 import { AiMetricsService } from './ai-metrics.service';
@@ -37,6 +41,12 @@ import { readinessLevelsByType } from '../common/readiness-levels.util';
  *
  * Do not edit. If it needs to change, that is a new arm.
  */
+// DO NOT DRY this with proposalFieldsBlock(). This prompt is a frozen
+// measurement baseline: the arm it defines has to be what production
+// actually did, byte for byte. Sharing the interpolation would mean a
+// later edit to the shared block silently changes the control - which is
+// the confound that invalidated the first grounding run, where production
+// emitted readiness levels for every arm and the harness for none.
 export const LEGACY_SUMMARY_PROMPT = (dto: StartupApplicationDto): string =>
   `Please provide a comprehensive analysis of the following startup proposal:
 
@@ -72,6 +82,133 @@ export const LEGACY_SUMMARY_PROMPT = (dto: StartupApplicationDto): string =>
       - Be clear and direct about the startup's potential
       - Focus on the most impactful insights
       - Keep output concise while covering essential points`;
+
+/** The proposal fields the adversarial summary prompt reads. */
+const proposalFieldsBlock = (dto: StartupApplicationDto): string => `Title: ${dto.title}
+Description: ${dto.description}
+Problem Statement: ${dto.problemStatement}
+Target Market: ${dto.targetMarket}
+Solution Description: ${dto.solutionDescription}
+Objectives: ${dto.objectives.join('\n')}
+Proposal Scope: ${dto.proposalScope}
+Methodology: ${dto.methodology}
+Historical Timeline: ${dto.historicalTimeline?.map((h) => `${h.monthYear}: ${h.description}`).join('\n') || 'Not provided'}
+Competitive Advantage Analysis: ${
+  dto.competitiveAdvantageAnalysis
+    ?.map(
+      (c) =>
+        `Competitor: ${c.competitorName}
+Offer: ${c.offer}
+Pricing Strategy: ${c.pricingStrategy}`,
+    )
+    .join('\n\n') || 'Not provided'
+}
+Intellectual Property Status: ${dto.intellectualPropertyStatus}`;
+
+/**
+ * SO 4.2 - adversarial pre-analysis.
+ *
+ * The wording asks for gaps first, but the wording is not what enforces it:
+ * ANALYSIS_SUMMARY_RESPONSE_SCHEMA's field order is. Generation is
+ * autoregressive, so a schema declaring unmet_criteria and critical_risks ahead
+ * of summary makes "before" a property of the generation. The legacy prompt
+ * already asks for critical risks as item 3 of 3, and an instruction the model
+ * can reorder is not a constraint on where it leads.
+ */
+const ADVERSARIAL_SUMMARY_PROMPT = (
+  dto: StartupApplicationDto,
+): string => `You are a critical startup readiness evaluator. Treat this proposal as overstating its readiness until its own text proves otherwise.
+
+${proposalFieldsBlock(dto)}
+
+First, list every unmet criterion. For each, name the proposal field it comes from and why it is unmet. A field that is empty, missing, or marked "Not provided" IS a finding - record it as unmet, not as neutral. Do not invent evidence the proposal does not contain.
+
+Second, list the critical risks that follow from those gaps, each with a severity of low, medium, or high.
+
+Only then write the summary: exactly three sentences, which must be consistent with the criteria and risks you just listed. Do not lead with strengths.`;
+
+/** Wire shape of the adversarial summary. snake_case; mapped to camelCase below. */
+const analysisSummarySchema = z.object({
+  unmet_criteria: z
+    .array(
+      z.object({
+        criterion: z.string(),
+        proposal_field: z.string(),
+        why_unmet: z.string(),
+      }),
+    )
+    .default([]),
+  critical_risks: z
+    .array(z.object({ risk: z.string(), severity: z.string() }))
+    .default([]),
+  summary: z.string(),
+});
+
+/** The wire values of the SDK's Type enum, without importing it at runtime. */
+const T = {
+  OBJECT: 'OBJECT' as Type,
+  ARRAY: 'ARRAY' as Type,
+  STRING: 'STRING' as Type,
+};
+
+/**
+ * The mechanism for SO 4.2, not decoration.
+ *
+ * `propertyOrdering` is what Gemini actually honours - JSON object key order is
+ * not transported on its own - so the model must emit the findings before it
+ * can emit the conclusion drawn from them.
+ */
+const ANALYSIS_SUMMARY_RESPONSE_SCHEMA: Schema = {
+  type: T.OBJECT,
+  properties: {
+    unmet_criteria: {
+      type: T.ARRAY,
+      items: {
+        type: T.OBJECT,
+        properties: {
+          criterion: { type: T.STRING },
+          proposal_field: { type: T.STRING },
+          why_unmet: { type: T.STRING },
+        },
+        propertyOrdering: ['criterion', 'proposal_field', 'why_unmet'],
+        required: ['criterion', 'proposal_field', 'why_unmet'],
+      },
+    },
+    critical_risks: {
+      type: T.ARRAY,
+      items: {
+        type: T.OBJECT,
+        properties: {
+          risk: { type: T.STRING },
+          severity: { type: T.STRING },
+        },
+        propertyOrdering: ['risk', 'severity'],
+        required: ['risk', 'severity'],
+      },
+    },
+    summary: { type: T.STRING },
+  },
+  propertyOrdering: ['unmet_criteria', 'critical_risks', 'summary'],
+  required: ['unmet_criteria', 'critical_risks', 'summary'],
+};
+
+/** A criterion the proposal's own text does not meet, with the field it came from. */
+export interface UnmetCriterion {
+  criterion: string;
+  proposalField: string;
+  whyUnmet: string;
+}
+
+export interface CriticalRisk {
+  risk: string;
+  severity: string;
+}
+
+export interface StartupAnalysisSummary {
+  summary: string;
+  unmetCriteria: UnmetCriterion[];
+  criticalRisks: CriticalRisk[];
+}
 
 /** How many context rows reach the prompt. Matches the previous keyword slice. */
 export const RAG_TOP_K = 3;
@@ -513,12 +650,16 @@ export class AiService {
     ctx: AiRunContext,
     prompt: string,
     temperatureOverride?: number,
+    // Spread only when passed, so every existing caller's request object is
+    // byte-identical to what it emitted before responseSchema existed here.
+    generationConfig?: GenerateContentConfig,
   ) {
     const res = await this.ai.models.generateContent({
       model: ctx.config.model,
       contents: ctx.config.grounding ? this.groundPrompt(prompt) : prompt,
       config: {
         temperature: temperatureOverride ?? ctx.config.temperature,
+        ...generationConfig,
       },
     });
 
@@ -568,14 +709,17 @@ export class AiService {
     schema: z.ZodType<T>;
     fallback: T;
     correctivePrompt: string;
+    /** Optional; omitted by every caller that predates responseSchema. */
+    generationConfig?: GenerateContentConfig;
   }): Promise<T> {
-    const { ctx, prompt, schema, fallback, correctivePrompt } = options;
+    const { ctx, prompt, schema, fallback, correctivePrompt, generationConfig } = options;
 
     for (let attempt = 1; attempt <= 2; attempt++) {
       const res = await this.generate(
         ctx,
         attempt === 1 ? prompt : `${prompt}\n\n${correctivePrompt}`,
         attempt === 1 ? ctx.config.temperature : ctx.config.temperature + 0.2,
+        generationConfig,
       );
 
       const text = res?.text?.trim();
@@ -710,10 +854,59 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     return res.text;
   }
 
+  /**
+   * SO 4.2 - seeks unmet criteria and critical risks before writing the summary.
+   *
+   * Bounded at three calls in the worst case: two schema attempts through
+   * callAiExpectJson's corrective retry, then the legacy free-text call. That
+   * last step is an explicit non-regression - a schema failure must degrade to
+   * what production already did, not to the blank extraction screen
+   * getCapsuleProposalInfo's parse failure produces.
+   */
   async generateStartupAnalysisSummary(
     ctx: AiRunContext,
     dto: StartupApplicationDto,
-  ): Promise<string> {
+  ): Promise<StartupAnalysisSummary> {
+    if (!ctx.config.adversarialSummary) {
+      return this.legacySummaryOnly(ctx, dto);
+    }
+
+    const parsed = await this.callAiExpectJson({
+      ctx,
+      prompt: ADVERSARIAL_SUMMARY_PROMPT(dto),
+      schema: analysisSummarySchema.nullable(),
+      fallback: null,
+      correctivePrompt:
+        'The previous answer was invalid. Return only JSON with unmet_criteria (criterion, proposal_field, why_unmet), critical_risks (risk, severity), and summary, in that order.',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: ANALYSIS_SUMMARY_RESPONSE_SCHEMA,
+      },
+    });
+
+    if (!parsed) {
+      return this.legacySummaryOnly(ctx, dto);
+    }
+
+    return {
+      summary: parsed.summary.trim(),
+      unmetCriteria: parsed.unmet_criteria.map((c) => ({
+        criterion: c.criterion,
+        proposalField: c.proposal_field,
+        whyUnmet: c.why_unmet,
+      })),
+      criticalRisks: parsed.critical_risks.map((r) => ({
+        risk: r.risk,
+        severity: r.severity,
+      })),
+    };
+  }
+
+  /** The pre-2026-08-11 free-text call, unchanged, in the new return shape. */
+  private async legacySummaryOnly(
+    ctx: AiRunContext,
+    dto: StartupApplicationDto,
+  ): Promise<StartupAnalysisSummary> {
     const prompt = LEGACY_SUMMARY_PROMPT(dto);
 
     const res = await this.ai.models.generateContent({
@@ -730,7 +923,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       throw new Error('AI response did not contain any text');
     }
 
-    return res.text.trim();
+    return { summary: res.text.trim(), unmetCriteria: [], criticalRisks: [] };
   }
 
   async generateRNAsFromPrompt(

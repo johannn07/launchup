@@ -421,8 +421,10 @@ export class StartupService {
     ctx: AiRunContext,
   ) {
     try {
-      const aiAnalysisSummary =
-        await this.aiService.generateStartupAnalysisSummary(ctx, dto);
+      const analysis = await this.aiService.generateStartupAnalysisSummary(
+        ctx,
+        dto,
+      );
 
         if (startup.capsuleProposal) {
         const proposal = startup.capsuleProposal;
@@ -451,7 +453,7 @@ export class StartupService {
         proposal.scope = dto.proposalScope ?? 'Pending AI Generation';
         proposal.methodology = dto.methodology ?? 'Pending AI Generation';
         proposal.curriculumVitae = dto.curriculumVitae ?? undefined;
-        proposal.aiAnalysisSummary = aiAnalysisSummary;
+        proposal.aiAnalysisSummary = analysis.summary;
 
         await this.em.flush();
         return proposal;
@@ -482,7 +484,7 @@ export class StartupService {
         scope: dto.proposalScope ?? 'Pending AI Generation',
         methodology: dto.methodology ?? 'Pending AI Generation',
         curriculumVitae: dto.curriculumVitae ?? undefined,
-        aiAnalysisSummary,
+        aiAnalysisSummary: analysis.summary,
         startup,
       });
 

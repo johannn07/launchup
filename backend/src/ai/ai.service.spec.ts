@@ -505,13 +505,19 @@ describe('AiService', () => {
       expect(ctx.tokens.completionTokens).toBe(420);
     });
 
+    // Pinned to the legacy arm. With adversarialSummary on, a non-JSON mock
+    // takes the corrective retry and then the legacy fallback — three calls, so
+    // the assertion below would read 270 and stop testing accumulation.
     it('accumulates token usage from the analysis summary', async () => {
       generateContent.mockResolvedValue({
         text: 'A three sentence summary.',
         usageMetadata: { promptTokenCount: 700, candidatesTokenCount: 90 },
       });
 
-      const ctx = trackedCtx();
+      const ctx = {
+        ...ctxWith({ adversarialSummary: false }),
+        tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      } as AiRunContext;
       await service.generateStartupAnalysisSummary(ctx, {
         title: 'T',
         description: 'D',
@@ -635,5 +641,169 @@ describe('LEGACY_SUMMARY_PROMPT', () => {
     ]) {
       expect(p).toContain(v);
     }
+  });
+});
+
+describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
+  let service: AiService;
+  let generateContent: jest.Mock;
+
+  const dto = {
+    title: 'AgroLink',
+    description: 'A marketplace for smallholder farmers',
+    problemStatement: 'Middlemen capture most of the margin',
+    targetMarket: 'Smallholder farmers in Region VII',
+    solutionDescription: 'A mobile app matching farmers to buyers',
+    objectives: ['Onboard 500 farmers'],
+    proposalScope: 'Cebu province',
+    methodology: 'Agile, three sprints',
+    intellectualPropertyStatus: 'None filed',
+  } as StartupApplicationDto;
+
+  const structuredResponse = (payload: unknown) => ({
+    text: JSON.stringify(payload),
+    usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 10 },
+  });
+
+  beforeEach(() => {
+    generateContent = jest.fn();
+
+    service = new AiService(
+      { get: jest.fn() } as unknown as ConfigService,
+      { recordFailure: jest.fn().mockResolvedValue(undefined) } as unknown as AiMetricsService,
+      { normalizeScore: jest.fn().mockResolvedValue({ scaled: 5, z: 0 }) } as any,
+      {} as any,
+      new AiConfigService(undefinedConfigService),
+      { indexRagContext: jest.fn().mockResolvedValue(true) } as any,
+      { embed: jest.fn().mockResolvedValue(null) } as any,
+    );
+
+    (service as unknown as { ai: { models: { generateContent: jest.Mock } } }).ai = {
+      models: { generateContent },
+    } as any;
+  });
+
+  it('emits the legacy prompt unchanged when the flag is off', async () => {
+    generateContent.mockResolvedValue({ text: 'A three sentence summary.' });
+
+    const result = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: false }),
+      dto,
+    );
+
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    const request = generateContent.mock.calls[0][0];
+    expect(request.contents).toContain('Overall viability assessment');
+    expect(request.config).not.toHaveProperty('responseSchema');
+    expect(request.config).not.toHaveProperty('responseMimeType');
+    expect(result).toEqual({
+      summary: 'A three sentence summary.',
+      unmetCriteria: [],
+      criticalRisks: [],
+    });
+  });
+
+  it('sends a schema-constrained request when the flag is on', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({ unmet_criteria: [], critical_risks: [], summary: 'S.' }),
+    );
+
+    await service.generateStartupAnalysisSummary(ctxWith({ adversarialSummary: true }), dto);
+
+    const request = generateContent.mock.calls.at(-1)![0];
+    expect(request.config.responseMimeType).toBe('application/json');
+    expect(request.config.responseSchema).toBeDefined();
+    // The adversarial arm must not silently inherit the legacy instruction.
+    expect(request.contents).not.toContain('Overall viability assessment');
+  });
+
+  // Field order IS the mechanism. If summary can precede unmet_criteria in the
+  // schema, the model may write its conclusion first and the objective is unmet.
+  it('orders unmet_criteria before summary in the schema', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({ unmet_criteria: [], critical_risks: [], summary: 'S.' }),
+    );
+
+    await service.generateStartupAnalysisSummary(ctxWith({ adversarialSummary: true }), dto);
+
+    const schema = generateContent.mock.calls.at(-1)![0].config.responseSchema;
+    const props = Object.keys(schema.properties);
+    expect(props.indexOf('unmet_criteria')).toBeLessThan(props.indexOf('summary'));
+    expect(props.indexOf('critical_risks')).toBeLessThan(props.indexOf('summary'));
+    // Gemini honours declaration order only when propertyOrdering says so; the
+    // key order above is not transported by JSON serialization on its own.
+    expect(schema.propertyOrdering).toEqual([
+      'unmet_criteria',
+      'critical_risks',
+      'summary',
+    ]);
+  });
+
+  it('returns parsed criteria alongside the summary', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({
+        unmet_criteria: [
+          {
+            criterion: 'No revenue evidence',
+            proposal_field: 'historicalTimeline',
+            why_unmet: 'no figure given',
+          },
+        ],
+        critical_risks: [{ risk: 'Buyer demand unvalidated', severity: 'high' }],
+        summary: 'Three sentence summary.',
+      }),
+    );
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    expect(r.summary).toBe('Three sentence summary.');
+    expect(r.unmetCriteria[0].proposalField).toBe('historicalTimeline');
+    expect(r.unmetCriteria[0].whyUnmet).toBe('no figure given');
+    expect(r.criticalRisks[0].severity).toBe('high');
+  });
+
+  // Spec §6: getCapsuleProposalInfo's parse failure hands the founder a blank
+  // extraction screen with only a console.error. A schema failure here must
+  // degrade to today's behaviour, never to nothing.
+  it('falls back to the legacy free-text call when the schema call cannot be parsed', async () => {
+    generateContent
+      .mockResolvedValueOnce({ text: 'not json' })
+      .mockResolvedValueOnce({ text: 'still not json' })
+      .mockResolvedValueOnce({ text: 'Legacy summary text.' });
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    // Bounded at 3: two schema attempts, then one legacy call.
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(generateContent.mock.calls[2][0].contents).toContain(
+      'Overall viability assessment',
+    );
+    expect(generateContent.mock.calls[2][0].config).not.toHaveProperty('responseSchema');
+    expect(r.summary).toBe('Legacy summary text.');
+    expect(r.unmetCriteria).toEqual([]);
+    expect(r.criticalRisks).toEqual([]);
+  });
+
+  // The generation-config passthrough added for this method runs through
+  // generate()/callAiExpectJson(), which five other call sites share. Their
+  // request object must stay byte-identical to what shipped.
+  it('leaves the request of an existing callAiExpectJson caller unchanged', async () => {
+    generateContent.mockResolvedValue({
+      text: '[{"readiness_level_type":"Technology","rna":"Ship a prototype"}]',
+    });
+
+    await service.generateRNAsFromPrompt(ctxWith({ temperature: 0.4 }), 'prompt');
+
+    const request = generateContent.mock.calls[0][0];
+    expect(request.config).toEqual({ temperature: 0.4 });
+    expect(request.config).not.toHaveProperty('responseMimeType');
+    expect(request.config).not.toHaveProperty('responseSchema');
   });
 });
