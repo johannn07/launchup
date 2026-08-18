@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured, 1b's instrument repaired and re-run 2026-08-09; 1a and 4b partial (**4b is the live next step**), 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 detection built and measured, **alerting not delivered**; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -76,7 +76,7 @@ Everything in §1–§5 not marked 🎯 above. Each section carries a **Deferred
 
 ### Inside §0, if time is squeezed there too
 
-- **4b is the one to fix.** The objective specifies adversarial prompting that hunts unmet criteria *before* scoring; `reviewBiasScore()` is a post-hoc "correct only if inflated". Different mechanism, and these docs already say so — a panel reading the proposal against the code finds it. It is a **prompt change, not a system**: cheapest gap-to-credibility ratio left.
+- ~~**4b is the one to fix.**~~ **Superseded 2026-08-18.** SO 4.2 is delivered and measured on the application-summary path — the artifact the objective text actually names. The *scoring* path is still unadversarial, so the remaining 4b work is a separate, larger job than "a prompt change". See the 4b and 4.4 rows in §0.
 - **3b is the one to descope explicitly.** The `sketchDetected`/`sketchConfidence`/`visionLabels` columns exist with no canvas-mapping logic. "We shipped OCR and instrumented the vision path; sketch-section mapping was scoped out" is defensible. 3c and 4a aren't code at all — they need datasets, so they are write-ups regardless.
 - **The position being protected is good, not desperate:** 1b, 1c, 2a, 2b, 2c and 4c are built and measured, and 1b has a reference-free result (baseline 61% unsupported claims vs corpus 0%).
 
@@ -98,7 +98,8 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **3b** Sketch / canvas recognition (BMC, lean canvas fields) | 🟡 Minimal — **descope explicitly (2026-08-07)** | `sketchDetected`, `sketchConfidence`, `visionLabels` columns exist; no canvas-section mapping logic. Present as "OCR shipped and the vision path is instrumented; sketch-section mapping was scoped out" rather than leaving it ambiguous |
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
-| **4b** **Adversarial** prompting (find weaknesses *before* scoring) | 🟡 Partial / mislabelled — **highest-value §0 item left (2026-08-07)** | `reviewBiasScore()` (`ai.service.ts:85-164`) is a **post-hoc review** — "correct the score only if it appears inflated". The objective calls for pre-scoring adversarial prompting that actively hunts unmet criteria. Different mechanism, and a panel reading the proposal against the code finds it. **It is a prompt change, not a system** — cheapest gap-to-credibility ratio remaining |
+| **4b** **Adversarial** prompting (SO 4.2, find weaknesses *before* the readiness summary) | 🟡 Partial — **delivered on the summary path, not the scoring path (2026-08-18)** | **Delivered:** `generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, measured against the shipped prompt — 100% schema adherence, 3 vs 1 mean critical observations, 4 mean unmet criteria where the baseline has no criteria field at all. **Not delivered:** the readiness-*scoring* path is unchanged — `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are all untouched on this branch. Different pipeline stages, so this row stays 🟡. **`reviewBiasScore` (`ai.service.ts:339`) is mislabelled, not misplaced:** its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither of which is a readiness summary. Behaviour deliberately unchanged |
+| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Two gaps, both open:** (1) the shipped rule `flagged = criticalCount === 0` is **measured wrong** — it fired 0/10 in both arms because the legacy prompt mandates a risk sentence, so it cannot fire against the prompt it polices. `ratio >= 0.75` is the calibrated replacement the run supplied (baseline tops out at 0.50, adversarial sits at 1.00, no overlap) and is **not implemented**. (2) **No Manager can see the verdict** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
 ### Objective 1b — what was built and what it's worth
@@ -246,6 +247,89 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   **AgroLink fabricated this time**, closing the open question from 2026-08-06: its zero was chance, not a property of the document. Adding AgroLink-specific reps was correctly declined — both startups sit at `O2 R1 I1`, so the manipulation is identical on both and extra reps could not have isolated the document.
 
   Detail in `measurement/README.md`, including the nine-mutant log (nine killed) and a harness caveat: two mutants first read as survivors had silently failed to apply.
+
+### Objectives SO 4.2 / SO 4.4 — measured 2026-08-18
+
+`results/2026-08-18-summary-bias.json`, `gemini-3.6-flash`, temp 0, reps=3.
+**Partial: 10/12 calls, 12 API requests spent.** Two adversarial cells 503'd on
+model overload (not quota) and were deliberately not re-run; every mean is over
+surviving rows. Validity gate passed — all 4 completed adversarial calls used
+`source=schema`, so no control output wears the adversarial label.
+
+| arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate | meanUnmetCriteria | meanCriticalRisks |
+|---|---|---|---|---|---|---|---|---|
+| baseline | 6 | 1 | 1.67 | 0.39 | 0 | 0 | 0 (structural) | 0 (structural) |
+| adversarial | 4 | 3 | 0 | 1.00 | 0 | 0 | 4 | 3.75 |
+
+`structural` = the baseline arm has no criteria field at all
+(`legacySummaryOnly` returns `[]` by construction), so its zero is not a
+measurement.
+
+- [x] 🟢 **OBJECTIVE · M · SO 4.2 adversarial summary** — the mechanism works.
+  What was tested is the mechanism (field-ordered `responseSchema` +
+  `propertyOrdering`), not prompt wording, and Gemini honouring
+  `propertyOrdering` is now supported by this run rather than assumed.
+
+- [ ] 🔴 **OBJECTIVE · S · Replace the SO 4.4 flag rule with `ratio >= 0.75`.**
+  `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both
+  arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy
+  prompt mandates *"3. Critical risks and primary recommendations"*, so every
+  baseline summary ends with a risk sentence. **The rule cannot fire against
+  the prompt it exists to police.** The baseline summaries are plainly lenient
+  (they open *"demonstrates strong market viability"*) with a token risk
+  sentence appended, so the bias is positive framing, not absent critical
+  language — the instrument tested for the wrong property. Per-call `ratio`
+  separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50
+  0.50`, adversarial `1.00 1.00 1.00 1.00`. A threshold at ~0.75 flags all six
+  baseline summaries and none of the adversarial ones. This is exactly what
+  spec §3 planned — ship uncalibrated, let the run supply the distribution.
+  **Not implemented:** `summary-tone.ts` still ships `criticalCount === 0`.
+
+- [ ] 🔴 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager.**
+  Nothing in `frontend/src` reads `confidenceStatus`,
+  `positive-language-flagged` or `analysis_summary`, and the only two
+  `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`, so
+  the `analysis_summary` row is never read. The summary *text* is already shown
+  to Managers (`PendingDialog.svelte:86` and its Waitlisted/Qualified/Completed
+  siblings) — the verdict beside it is what is missing. Decision taken: ship
+  detection now, surface it as its own task. An alert nobody sees is not an
+  alert.
+
+- [ ] ❓ **OPEN · The differentiation guard did NOT pass.** Both arms returned
+  `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail before the run,
+  so it is reported failed, not explained away. The adversarial arm is
+  **saturated** — all four calls at `criticalCount: 3`, the maximum available
+  in a three-sentence summary — so that column cannot discriminate. `unmetGap`
+  is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means while the
+  underlying values differ in no consistent direction. The **baseline arm also
+  fails**, uniformly at `criticalCount: 1`. So this run **cannot distinguish
+  genuine overcorrection from instrument ceiling**; resolving it needs a
+  non-saturating metric, not more reps. The precedent that motivated the guard
+  stands: `gemini-2.5-flash-lite` read as lenient but was floor-bound and
+  blind, and the real defect was differentiation.
+
+- [ ] ❓ **OPEN · `propertyOrdering` enforces sequence, not substance.**
+  `unmet_criteria: []` is a valid response — `required` requires the key, not a
+  non-empty array — and nothing cross-checks the summary against the criteria.
+  A model could emit empty findings then a glowing summary. The tone check is
+  the only guard against that, and it is the one that goes nowhere.
+
+- [ ] 🐞 **BUG · S · A literal JSON `null` degrades with no `recordFailure`.**
+  `analysisSummarySchema.nullable()` means `null` *parses successfully*, returns
+  `null`, and falls back to legacy — costing 2 calls instead of 3 and emitting
+  no failure metric. Its only trace is `notes.source === 'legacy'`, which is
+  why `source` is load-bearing.
+
+- [ ] 🧹 **DEBT · S · `measurement/tests/demo-proposals.test.js` asserts on
+  source text, not behaviour.** It regex-matches the `.ts` file rather than
+  importing `toApplicationDto`, so a `title:` inside a comment satisfies it and
+  a changed *value* is undetectable. `pnpm test:measurement` baseline is **210**
+  (some docs said 207).
+
+- [ ] ❓ **OPEN · SO 5.3's premise is false in the code.** It describes the
+  summary as generated "from URAT answers". `UratQuestionAnswer` is CRUD-only
+  and no AI call reads it — the summary is built from the capsule-proposal DTO.
+  Out of scope; recorded so it is not discovered during a demo.
 
 ### Spec mismatch — resolved as documentation
 

@@ -15,6 +15,7 @@ const config = (over: Partial<AiPipelineConfig> = {}): AiPipelineConfig => ({
   rubricMode: 'deterministic',
   biasReview: true,
   scoreNormalization: true,
+  adversarialSummary: true,
   ...over,
 });
 

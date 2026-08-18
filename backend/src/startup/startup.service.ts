@@ -27,7 +27,8 @@ import {
   ChangeMentorDto,
   UpdateCapsuleProposalDto,
 } from './dto';
-import { AiService } from '../ai/ai.service';
+import { AiService, StartupAnalysisSummary } from '../ai/ai.service';
+import { analyzeTone } from '../ai/summary-tone';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
@@ -421,8 +422,10 @@ export class StartupService {
     ctx: AiRunContext,
   ) {
     try {
-      const aiAnalysisSummary =
-        await this.aiService.generateStartupAnalysisSummary(ctx, dto);
+      const analysis = await this.aiService.generateStartupAnalysisSummary(
+        ctx,
+        dto,
+      );
 
         if (startup.capsuleProposal) {
         const proposal = startup.capsuleProposal;
@@ -451,9 +454,10 @@ export class StartupService {
         proposal.scope = dto.proposalScope ?? 'Pending AI Generation';
         proposal.methodology = dto.methodology ?? 'Pending AI Generation';
         proposal.curriculumVitae = dto.curriculumVitae ?? undefined;
-        proposal.aiAnalysisSummary = aiAnalysisSummary;
+        proposal.aiAnalysisSummary = analysis.summary;
 
         await this.em.flush();
+        await this.recordSummaryProvenance(startup, analysis, ctx);
         return proposal;
       }
 
@@ -482,15 +486,70 @@ export class StartupService {
         scope: dto.proposalScope ?? 'Pending AI Generation',
         methodology: dto.methodology ?? 'Pending AI Generation',
         curriculumVitae: dto.curriculumVitae ?? undefined,
-        aiAnalysisSummary,
+        aiAnalysisSummary: analysis.summary,
         startup,
       });
 
       await this.em.persistAndFlush(proposal);
+      await this.recordSummaryProvenance(startup, analysis, ctx);
       return proposal;
     } catch (err) {
       console.error(`Error creating capsule proposal`, err);
       throw err;
+    }
+  }
+
+  /**
+   * SO 4.4 tone verdict plus the criteria the summary was built from, into
+   * ai_recommendations. Reuses that table rather than adding a column: one
+   * summary per generation run, so the (generationRun, dimensionKey) collision
+   * open on the validator path cannot occur here.
+   *
+   * Never fails the submission. The proposal and its summary are written by the
+   * time this runs, but not committed — create() wraps everything in
+   * em.transactional(), which commits only when its callback returns. This row
+   * is supplementary provenance, so losing it costs the Manager a flag, whereas
+   * throwing here rolls back the founder's whole application. Logged loudly
+   * because nothing else would show the flag went missing.
+   */
+  private async recordSummaryProvenance(
+    startup: Startup,
+    analysis: StartupAnalysisSummary,
+    ctx: AiRunContext,
+  ) {
+    const tone = analyzeTone(analysis.summary);
+
+    try {
+      await this.aiService.recordAiRecommendation({
+        startupId: startup.id,
+        dimensionKey: 'overall', // the summary is not per-dimension
+        recommendationKind: 'analysis_summary',
+        content: analysis.summary,
+        // Tells the Manager to look harder before a status change.
+        confidenceStatus: tone.flagged ? 'positive-language-flagged' : 'balanced',
+        notes: JSON.stringify({
+          unmetCriteria: analysis.unmetCriteria,
+          criticalRisks: analysis.criticalRisks,
+          tone: {
+            positiveCount: tone.positiveCount,
+            criticalCount: tone.criticalCount,
+            ratio: tone.ratio,
+          },
+          // Which prompt actually produced this. A schema parse failure degrades
+          // to the baseline arm's prompt, and without this the row is
+          // indistinguishable from a genuine adversarial result.
+          source: analysis.source,
+        }),
+        generationRun: ctx.run,
+      });
+    } catch (err) {
+      console.error(
+        `Failed to record the analysis-summary provenance for startup ${startup.id} ` +
+          `(run ${ctx.runId}): the SO 4.4 tone verdict "${tone.flagged ? 'positive-language-flagged' : 'balanced'}" ` +
+          `and ${analysis.unmetCriteria.length} unmet criteria were not persisted. ` +
+          `The proposal and its summary were written; whether they commit depends on the rest of create().`,
+        err,
+      );
     }
   }
 

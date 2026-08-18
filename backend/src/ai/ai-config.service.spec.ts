@@ -16,6 +16,7 @@ describe('AiConfigService', () => {
         AI_RAG_STRATEGY: 'keyword',
         AI_BIAS_REVIEW_ENABLED: 'false',
         AI_SCORE_NORMALIZATION_ENABLED: 'false',
+        AI_ADVERSARIAL_SUMMARY_ENABLED: 'false',
         AI_ALLOW_REQUEST_OVERRIDE: 'true',
       }),
     );
@@ -30,6 +31,7 @@ describe('AiConfigService', () => {
       rubricMode: 'deterministic',
       biasReview: false,
       scoreNormalization: false,
+      adversarialSummary: false,
     });
     expect(service.allowRequestOverride).toBe(true);
   });
@@ -51,6 +53,7 @@ describe('AiConfigService', () => {
       rubricMode: 'deterministic',
       biasReview: true,
       scoreNormalization: true,
+      adversarialSummary: true,
     });
     expect(service.allowRequestOverride).toBe(false);
   });
@@ -119,6 +122,7 @@ describe('AiConfigService.resolve', () => {
       rubricMode: 'deterministic',
       biasReview: true,
       scoreNormalization: true,
+      adversarialSummary: true,
     });
   });
 
@@ -185,6 +189,41 @@ describe('corpus configuration', () => {
     // generations — that would make the arm comparison unattributable.
     expect(() => svc({ AI_RAG_RUBRIC_MODE: 'determinstic' })).toThrow(
       /Invalid AI pipeline configuration/,
+    );
+  });
+});
+
+describe('adversarialSummary flag (SO 4.2)', () => {
+  it('defaults to true when the env var is unset', () => {
+    expect(new AiConfigService(configFrom({})).defaults.adversarialSummary).toBe(true);
+  });
+
+  it('reads AI_ADVERSARIAL_SUMMARY_ENABLED', () => {
+    const service = new AiConfigService(
+      configFrom({ AI_ADVERSARIAL_SUMMARY_ENABLED: 'false' }),
+    );
+    expect(service.defaults.adversarialSummary).toBe(false);
+  });
+
+  it('accepts 0 and 1 like the other flags', () => {
+    expect(
+      new AiConfigService(configFrom({ AI_ADVERSARIAL_SUMMARY_ENABLED: '0' })).defaults
+        .adversarialSummary,
+    ).toBe(false);
+  });
+
+  it('honours a privileged per-request override', () => {
+    const permissive = () =>
+      new AiConfigService(configFrom({ AI_ALLOW_REQUEST_OVERRIDE: 'true' }));
+    const resolved = permissive().resolve('{"adversarialSummary":false}', true);
+    expect(resolved.adversarialSummary).toBe(false);
+  });
+
+  it('rejects an override from an unprivileged caller', () => {
+    const permissive = () =>
+      new AiConfigService(configFrom({ AI_ALLOW_REQUEST_OVERRIDE: 'true' }));
+    expect(() => permissive().resolve('{"adversarialSummary":false}', false)).toThrow(
+      ForbiddenException,
     );
   });
 });

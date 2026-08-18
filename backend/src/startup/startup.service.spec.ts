@@ -1,0 +1,148 @@
+import { StartupService } from './startup.service';
+import { Startup } from 'src/entities/startup.entity';
+import { StartupApplicationDto } from './dto';
+import { AiRunContext } from '../ai/ai-run.service';
+import { StartupAnalysisSummary } from '../ai/ai.service';
+
+/**
+ * First spec for src/startup/. Scoped to the summary path only — the service is
+ * ~1400 lines and broad coverage is a different task. This path had none, which
+ * is why widening generateStartupAnalysisSummary's return type to an object was
+ * invisible to `pnpm test`.
+ */
+
+const dto: StartupApplicationDto = {
+  title: 'AgroLink PH',
+  description: 'd',
+  problemStatement: 'p',
+  targetMarket: 'm',
+  solutionDescription: 's',
+  historicalTimeline: [],
+  competitiveAdvantageAnalysis: [],
+  objectives: [],
+  members: [],
+};
+
+const ctx = {
+  runId: 77,
+  run: { id: 77 },
+  tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+  config: Object.freeze({ model: 'gemini-2.5-flash-lite', temperature: 0 }),
+} as unknown as AiRunContext;
+
+function build(analysis: StartupAnalysisSummary) {
+  // Created capsule proposals, in creation order. Nothing outside the
+  // em.transactional callback can push here, so a non-empty array is proof the
+  // callback actually ran — a `transactional: jest.fn()` double that never
+  // invokes its argument passes every assertion about the mocks otherwise.
+  const proposals: any[] = [];
+
+  const startup: any = {
+    id: 42,
+    members: { add: jest.fn() },
+    capsuleProposal: undefined,
+  };
+
+  const em = {
+    transactional: jest.fn((cb: (em: unknown) => unknown) => cb(em)),
+    findOne: jest.fn().mockResolvedValue({ id: 7 }),
+    create: jest.fn((entity: unknown, data: Record<string, unknown>) => {
+      if (entity === Startup) return Object.assign(startup, data);
+      const proposal = { ...data };
+      proposals.push(proposal);
+      return proposal;
+    }),
+    persistAndFlush: jest.fn().mockResolvedValue(undefined),
+    flush: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const aiService = {
+    generateStartupAnalysisSummary: jest.fn().mockResolvedValue(analysis),
+    recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+    recordRagContext: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const aiRunService = { attribute: jest.fn().mockResolvedValue(undefined) };
+
+  const service = new StartupService(
+    em as any,
+    aiService as any,
+    aiRunService as any,
+    {} as any, // OcrService — the summary path never reaches it
+  );
+
+  return { service, em, aiService, proposals };
+}
+
+const notesOf = (aiService: { recordAiRecommendation: jest.Mock }) =>
+  JSON.parse(aiService.recordAiRecommendation.mock.calls[0][0].notes);
+
+describe('StartupService analysis summary persistence', () => {
+  it('stores only the summary text on the proposal', async () => {
+    const { service, aiService, proposals } = build({
+      summary: 'S.',
+      unmetCriteria: [{ criterion: 'c', proposalField: 'f', whyUnmet: 'w' }],
+      criticalRisks: [],
+      source: 'schema',
+    });
+
+    await service.create(dto, 7, ctx);
+
+    expect(proposals).toHaveLength(1);
+    // The whole return object in a text column reaches Postgres as
+    // "[object Object]" and the Manager reads that.
+    expect(proposals[0].aiAnalysisSummary).toBe('S.');
+    expect(aiService.generateStartupAnalysisSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('records the criteria and the tone verdict as an ai_recommendation', async () => {
+    // Verified against the real analyzeTone: positiveCount 1, criticalCount 0.
+    const summary = 'The venture shows strong potential.';
+    const { service, aiService, proposals } = build({
+      summary,
+      unmetCriteria: [{ criterion: 'No revenue evidence', proposalField: 'historicalTimeline', whyUnmet: 'no figure given' }],
+      criticalRisks: [{ risk: 'Buyer demand unvalidated', severity: 'high' }],
+      source: 'legacy',
+    });
+
+    await service.create(dto, 7, ctx);
+
+    expect(proposals).toHaveLength(1);
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupId: 42,
+        dimensionKey: 'overall',
+        recommendationKind: 'analysis_summary',
+        content: summary,
+        confidenceStatus: 'positive-language-flagged',
+        generationRun: ctx.run,
+      }),
+    );
+
+    const notes = notesOf(aiService);
+    expect(notes.unmetCriteria[0].proposalField).toBe('historicalTimeline');
+    expect(notes.criticalRisks[0].severity).toBe('high');
+    expect(notes.tone).toEqual({ positiveCount: 1, criticalCount: 0, ratio: 0 });
+    // Task 7 reads this as a validity gate: a degraded run used the baseline
+    // arm's prompt, so without it the row looks like a genuine adversarial one.
+    expect(notes.source).toBe('legacy');
+  });
+
+  it('does not flag a summary carrying a critical observation', async () => {
+    // Verified against the real analyzeTone: criticalCount 1, so flagged false.
+    const { service, aiService, proposals } = build({
+      summary: 'Strong team, but buyer demand is unvalidated and there is no revenue.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+
+    await service.create(dto, 7, ctx);
+
+    expect(proposals).toHaveLength(1);
+    expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
+      expect.objectContaining({ confidenceStatus: 'balanced' }),
+    );
+    expect(notesOf(aiService).tone.criticalCount).toBe(1);
+  });
+});

@@ -1,9 +1,14 @@
 import { ConfigService } from '@nestjs/config';
-import { AiService } from './ai.service';
+import { AiService, LEGACY_SUMMARY_PROMPT } from './ai.service';
 import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
+import { StartupApplicationDto } from 'src/startup/dto/startup.dto';
+// A real runtime import, deliberately: this spec does not mock '@google/genai'
+// (only rag-retrieval.spec.ts and embedding.service.spec.ts do), so it can hold
+// ai.service.ts's cast string literals against the SDK's actual enum.
+import { Type } from '@google/genai';
 
 // Same pattern as ai-config.service.spec.ts's `configFrom`: a `get` returning
 // undefined, so AiConfigService falls back to DEFAULT_MODEL. The literal in
@@ -21,6 +26,7 @@ const ctxWith = (overrides: Partial<AiRunContext['config']> = {}): AiRunContext 
       rag: true,
       biasReview: true,
       scoreNormalization: true,
+      adversarialSummary: true,
       ...overrides,
     }),
   }) as AiRunContext;
@@ -503,13 +509,19 @@ describe('AiService', () => {
       expect(ctx.tokens.completionTokens).toBe(420);
     });
 
+    // Pinned to the legacy arm. With adversarialSummary on, a non-JSON mock
+    // takes the corrective retry and then the legacy fallback — three calls, so
+    // the assertion below would read 270 and stop testing accumulation.
     it('accumulates token usage from the analysis summary', async () => {
       generateContent.mockResolvedValue({
         text: 'A three sentence summary.',
         usageMetadata: { promptTokenCount: 700, candidatesTokenCount: 90 },
       });
 
-      const ctx = trackedCtx();
+      const ctx = {
+        ...ctxWith({ adversarialSummary: false }),
+        tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      } as AiRunContext;
       await service.generateStartupAnalysisSummary(ctx, {
         title: 'T',
         description: 'D',
@@ -525,5 +537,380 @@ describe('AiService', () => {
       expect(ctx.tokens.completionTokens).toBe(90);
       expect(ctx.tokens.recorded).toBe(true);
     });
+  });
+});
+
+// Characterisation tests, not behaviour tests. They pin the shipped prompt so
+// the next task cannot alter the baseline arm while adding the adversarial one.
+describe('LEGACY_SUMMARY_PROMPT', () => {
+  // Values are distinctive on purpose. Single-character fixtures made the
+  // interpolation test vacuous: 'T' matches "Title: ", 'P' matches "Please
+  // provide", so five of nine needles passed with nothing interpolated.
+  const dto = {
+    title: 'TITLE_X1',
+    description: 'DESC_X2',
+    problemStatement: 'PROBLEM_X3',
+    targetMarket: 'MARKET_X4',
+    solutionDescription: 'SOLUTION_X5',
+    objectives: ['OBJ_X6', 'OBJ_X7'],
+    proposalScope: 'SCOPE_X8',
+    methodology: 'METHOD_X9',
+    historicalTimeline: [{ monthYear: 'MONTH_X10', description: 'HIST_X11' }],
+    competitiveAdvantageAnalysis: [
+      {
+        competitorName: 'COMP_X12',
+        offer: 'OFFER_X13',
+        pricingStrategy: 'PRICE_X14',
+      },
+    ],
+    intellectualPropertyStatus: 'IP_X15',
+  } as StartupApplicationDto;
+
+  // Golden value, generated from the shipped constant, not hand-typed. Written
+  // as lines joined with '\n' so the two trailing-whitespace lines live inside
+  // string literals where no formatter can strip them. Template-literal values
+  // normalise CRLF to LF, so this holds regardless of on-disk line endings.
+  const EXPECTED = [
+    'Please provide a comprehensive analysis of the following startup proposal:',
+    '',
+    '      Title: TITLE_X1',
+    '      Description: DESC_X2',
+    '      Problem Statement: PROBLEM_X3',
+    '      Target Market: MARKET_X4',
+    '      Solution Description: SOLUTION_X5',
+    '      Objectives: OBJ_X6',
+    'OBJ_X7',
+    '      Proposal Scope: SCOPE_X8',
+    '      Methodology: METHOD_X9',
+    '      Historical Timeline: MONTH_X10: HIST_X11',
+    '      Competitive Advantage Analysis: Competitor: COMP_X12',
+    '         Offer: OFFER_X13',
+    '         Pricing Strategy: PRICE_X14',
+    '      Intellectual Property Status: IP_X15',
+    '',
+    '      Analyze the startup proposal and provide a concise three-sentence summary that covers:',
+    '      1. Overall viability assessment (market potential and solution strength)',
+    '      2. Key competitive advantages and growth strategy feasibility',
+    '      3. Critical risks and primary recommendations',
+    '      ',
+    '      Important: ',
+    '      - Provide exactly three sentences',
+    '      - Start directly with the analysis, no introductory phrases',
+    "      - Be clear and direct about the startup's potential",
+    '      - Focus on the most impactful insights',
+    '      - Keep output concise while covering essential points',
+  ].join('\n');
+
+  // This is the assertion that actually enforces the doc comment's "do not
+  // edit". The substring tests below document intent but survive gutting most
+  // of the prompt, so they cannot police a frozen baseline on their own.
+  it('renders exactly the text that shipped, to the byte', () => {
+    expect(LEGACY_SUMMARY_PROMPT(dto)).toBe(EXPECTED);
+  });
+
+  it('still asks for the three original numbered items in order', () => {
+    const p = LEGACY_SUMMARY_PROMPT(dto);
+    const viability = p.indexOf('Overall viability assessment');
+    const advantages = p.indexOf('Key competitive advantages');
+    const risks = p.indexOf('Critical risks');
+    expect(viability).toBeGreaterThan(-1);
+    expect(advantages).toBeGreaterThan(viability);
+    expect(risks).toBeGreaterThan(advantages);
+  });
+
+  it('still requests exactly three sentences', () => {
+    expect(LEGACY_SUMMARY_PROMPT(dto)).toContain(
+      'Provide exactly three sentences',
+    );
+  });
+
+  it('interpolates every field the shipped prompt read', () => {
+    const p = LEGACY_SUMMARY_PROMPT(dto);
+    for (const v of [
+      'TITLE_X1',
+      'DESC_X2',
+      'PROBLEM_X3',
+      'MARKET_X4',
+      'SOLUTION_X5',
+      'OBJ_X6',
+      'OBJ_X7',
+      'SCOPE_X8',
+      'METHOD_X9',
+      'MONTH_X10',
+      'HIST_X11',
+      'COMP_X12',
+      'OFFER_X13',
+      'PRICE_X14',
+      'IP_X15',
+    ]) {
+      expect(p).toContain(v);
+    }
+  });
+});
+
+describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
+  let service: AiService;
+  let generateContent: jest.Mock;
+
+  const dto = {
+    title: 'AgroLink',
+    description: 'A marketplace for smallholder farmers',
+    problemStatement: 'Middlemen capture most of the margin',
+    targetMarket: 'Smallholder farmers in Region VII',
+    solutionDescription: 'A mobile app matching farmers to buyers',
+    objectives: ['Onboard 500 farmers'],
+    proposalScope: 'Cebu province',
+    methodology: 'Agile, three sprints',
+    intellectualPropertyStatus: 'None filed',
+  } as StartupApplicationDto;
+
+  const structuredResponse = (payload: unknown) => ({
+    text: JSON.stringify(payload),
+    usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 10 },
+  });
+
+  beforeEach(() => {
+    generateContent = jest.fn();
+
+    service = new AiService(
+      { get: jest.fn() } as unknown as ConfigService,
+      { recordFailure: jest.fn().mockResolvedValue(undefined) } as unknown as AiMetricsService,
+      { normalizeScore: jest.fn().mockResolvedValue({ scaled: 5, z: 0 }) } as any,
+      {} as any,
+      new AiConfigService(undefinedConfigService),
+      { indexRagContext: jest.fn().mockResolvedValue(true) } as any,
+      { embed: jest.fn().mockResolvedValue(null) } as any,
+    );
+
+    (service as unknown as { ai: { models: { generateContent: jest.Mock } } }).ai = {
+      models: { generateContent },
+    } as any;
+  });
+
+  it('emits the legacy prompt unchanged when the flag is off', async () => {
+    generateContent.mockResolvedValue({ text: 'A three sentence summary.' });
+
+    const result = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: false }),
+      dto,
+    );
+
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    const request = generateContent.mock.calls[0][0];
+    expect(request.contents).toContain('Overall viability assessment');
+    expect(request.config).not.toHaveProperty('responseSchema');
+    expect(request.config).not.toHaveProperty('responseMimeType');
+    expect(result).toEqual({
+      source: 'legacy',
+      summary: 'A three sentence summary.',
+      unmetCriteria: [],
+      criticalRisks: [],
+    });
+  });
+
+  it('sends a schema-constrained request when the flag is on', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({ unmet_criteria: [], critical_risks: [], summary: 'S.' }),
+    );
+
+    await service.generateStartupAnalysisSummary(ctxWith({ adversarialSummary: true }), dto);
+
+    const request = generateContent.mock.calls.at(-1)![0];
+    expect(request.config.responseMimeType).toBe('application/json');
+    expect(request.config.responseSchema).toBeDefined();
+    // ai.service.ts builds the schema from string literals cast to Type,
+    // because a runtime import of the enum breaks rag-retrieval.spec.ts's
+    // module mock. TypeScript accepts any string cast to a string enum, so
+    // these compare against the real enum - the only thing that would catch a
+    // typo before it reaches paid quota.
+    expect(request.config.responseSchema.type).toBe(Type.OBJECT);
+    expect(request.config.responseSchema.properties.summary.type).toBe(Type.STRING);
+    expect(request.config.responseSchema.properties.unmet_criteria.type).toBe(Type.ARRAY);
+    expect(request.config.responseSchema.properties.unmet_criteria.items.type).toBe(
+      Type.OBJECT,
+    );
+    // The adversarial arm must not silently inherit the legacy instruction.
+    expect(request.contents).not.toContain('Overall viability assessment');
+  });
+
+  // Field order IS the mechanism. If summary can precede unmet_criteria in the
+  // schema, the model may write its conclusion first and the objective is unmet.
+  it('orders unmet_criteria before summary in the schema', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({ unmet_criteria: [], critical_risks: [], summary: 'S.' }),
+    );
+
+    await service.generateStartupAnalysisSummary(ctxWith({ adversarialSummary: true }), dto);
+
+    const schema = generateContent.mock.calls.at(-1)![0].config.responseSchema;
+    const props = Object.keys(schema.properties);
+    expect(props.indexOf('unmet_criteria')).toBeLessThan(props.indexOf('summary'));
+    expect(props.indexOf('critical_risks')).toBeLessThan(props.indexOf('summary'));
+    // Gemini honours declaration order only when propertyOrdering says so; the
+    // key order above is not transported by JSON serialization on its own.
+    expect(schema.propertyOrdering).toEqual([
+      'unmet_criteria',
+      'critical_risks',
+      'summary',
+    ]);
+  });
+
+  it('returns parsed criteria alongside the summary', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({
+        unmet_criteria: [
+          {
+            criterion: 'No revenue evidence',
+            proposal_field: 'historicalTimeline',
+            why_unmet: 'no figure given',
+          },
+        ],
+        critical_risks: [{ risk: 'Buyer demand unvalidated', severity: 'high' }],
+        summary: 'Three sentence summary.',
+      }),
+    );
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    expect(generateContent).toHaveBeenCalledTimes(1);
+    expect(r.summary).toBe('Three sentence summary.');
+    expect(r.unmetCriteria[0].proposalField).toBe('historicalTimeline');
+    expect(r.unmetCriteria[0].whyUnmet).toBe('no figure given');
+    expect(r.criticalRisks[0].severity).toBe('high');
+    expect(r.source).toBe('schema');
+  });
+
+  // Spec §6: getCapsuleProposalInfo's parse failure hands the founder a blank
+  // extraction screen with only a console.error. A schema failure here must
+  // degrade to today's behaviour, never to nothing.
+  it('falls back to the legacy free-text call when the schema call cannot be parsed', async () => {
+    generateContent
+      .mockResolvedValueOnce({ text: 'not json' })
+      .mockResolvedValueOnce({ text: 'still not json' })
+      .mockResolvedValueOnce({ text: 'Legacy summary text.' });
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    // Bounded at 3: two schema attempts, then one legacy call.
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(generateContent.mock.calls[2][0].contents).toContain(
+      'Overall viability assessment',
+    );
+    expect(generateContent.mock.calls[2][0].config).not.toHaveProperty('responseSchema');
+    expect(r.summary).toBe('Legacy summary text.');
+    expect(r.unmetCriteria).toEqual([]);
+    expect(r.criticalRisks).toEqual([]);
+    // Without this the degraded outcome is untraceable: the fallback ran the
+    // control arm's prompt inside a run recorded as adversarial, and an empty
+    // unmetCriteria here looks exactly like one a satisfied model returned.
+    expect(r.source).toBe('legacy');
+  });
+
+  // z.string() alone accepts '' and '   ', which reach the Manager's view as a
+  // blank ai_analysis_summary - the failure class spec §6 set out to remove,
+  // arriving by a different route than a parse error.
+  it('treats a whitespace-only summary as unparseable and falls back', async () => {
+    generateContent
+      .mockResolvedValueOnce(
+        structuredResponse({ unmet_criteria: [], critical_risks: [], summary: '   ' }),
+      )
+      .mockResolvedValueOnce(
+        structuredResponse({ unmet_criteria: [], critical_risks: [], summary: '' }),
+      )
+      .mockResolvedValueOnce({ text: 'Legacy summary text.' });
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(r.summary).toBe('Legacy summary text.');
+    expect(r.source).toBe('legacy');
+  });
+
+  it('trims a padded summary rather than storing the padding', async () => {
+    generateContent.mockResolvedValue(
+      structuredResponse({
+        unmet_criteria: [],
+        critical_risks: [],
+        summary: '  Three sentence summary.  ',
+      }),
+    );
+
+    const r = await service.generateStartupAnalysisSummary(
+      ctxWith({ adversarialSummary: true }),
+      dto,
+    );
+
+    expect(r.summary).toBe('Three sentence summary.');
+    expect(r.source).toBe('schema');
+  });
+
+  // The pinned legacy test next door covers the flag-off arm only, which left
+  // spend attribution on the default arm asserted by nothing.
+  describe('token accumulation on the adversarial arm', () => {
+    const trackedCtx = (): AiRunContext =>
+      ({
+        ...ctxWith({ adversarialSummary: true }),
+        tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      }) as AiRunContext;
+
+    it('records one call on the happy path', async () => {
+      generateContent.mockResolvedValue({
+        text: JSON.stringify({ unmet_criteria: [], critical_risks: [], summary: 'S.' }),
+        usageMetadata: { promptTokenCount: 700, candidatesTokenCount: 90 },
+      });
+
+      const ctx = trackedCtx();
+      await service.generateStartupAnalysisSummary(ctx, dto);
+
+      expect(generateContent).toHaveBeenCalledTimes(1);
+      expect(ctx.tokens).toEqual({
+        promptTokens: 700,
+        completionTokens: 90,
+        recorded: true,
+      });
+    });
+
+    // Triples because the pathological path is bounded at 3, so this is also an
+    // independent check on that bound.
+    it('sums all three calls when the schema response cannot be parsed', async () => {
+      const usageMetadata = { promptTokenCount: 700, candidatesTokenCount: 90 };
+      generateContent
+        .mockResolvedValueOnce({ text: 'not json', usageMetadata })
+        .mockResolvedValueOnce({ text: 'still not json', usageMetadata })
+        .mockResolvedValueOnce({ text: 'Legacy summary text.', usageMetadata });
+
+      const ctx = trackedCtx();
+      const r = await service.generateStartupAnalysisSummary(ctx, dto);
+
+      expect(r.source).toBe('legacy');
+      expect(generateContent).toHaveBeenCalledTimes(3);
+      expect(ctx.tokens.completionTokens).toBe(270);
+      expect(ctx.tokens.promptTokens).toBe(2100);
+    });
+  });
+
+  // The generation-config passthrough added for this method runs through
+  // generate()/callAiExpectJson(), which five other call sites share. Their
+  // request object must stay byte-identical to what shipped.
+  it('leaves the request of an existing callAiExpectJson caller unchanged', async () => {
+    generateContent.mockResolvedValue({
+      text: '[{"readiness_level_type":"Technology","rna":"Ship a prototype"}]',
+    });
+
+    await service.generateRNAsFromPrompt(ctxWith({ temperature: 0.4 }), 'prompt');
+
+    const request = generateContent.mock.calls[0][0];
+    expect(request.config).toEqual({ temperature: 0.4 });
+    expect(request.config).not.toHaveProperty('responseMimeType');
+    expect(request.config).not.toHaveProperty('responseSchema');
   });
 });

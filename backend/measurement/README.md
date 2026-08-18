@@ -20,6 +20,17 @@ node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministi
   --only-probe=rna --level-condition=both --reps=2 \
   --out=measurement/results/<date>-supplied-level.json  # metric 5, see below — --only-arm is mandatory here
 
+# The summary-bias probe (SO 4.2 / SO 4.4). 2 arms x 2 startups x 3 reps = 12
+# calls. Unlike the others this boots a Nest context and calls the real
+# AiService.generateStartupAnalysisSummary, so it needs Neon reachable.
+node measurement/measure-summary-bias.js --fingerprint            # no calls
+node measurement/measure-summary-bias.js --dry-run --degrade=2 \
+  --out=<scratch>/x.json                                          # no calls; --degrade forces the
+                                                                  # schema-failure path. Writing into
+                                                                  # results/ is refused under --dry-run.
+node measurement/measure-summary-bias.js --reps=3 \
+  --out=measurement/results/<date>-summary-bias.json
+
 # One rep is what a free-tier day buys. Accumulate across days:
 node measurement/measure-grounding.js --reps=1 --out=measurement/results/2026-07-30-rep2.json
 node measurement/measure-grounding.js --merge measurement/results/*.json
@@ -27,11 +38,18 @@ node measurement/measure-grounding.js --merge measurement/results/*.json
 
 ### Quota-free paths
 
-- `pnpm test:measurement` — `node --test measurement/tests/*.test.js`, 64 tests,
-  no network at all. Every scorer and prompt builder runs as a pure function.
+- `pnpm test:measurement` — `node --test measurement/tests/*.test.js`, **210
+  tests** (2026-08-18), no network at all. Every scorer and prompt builder runs
+  as a pure function. Known-weak: `tests/demo-proposals.test.js` regex-matches
+  the `.ts` source instead of importing `toApplicationDto`, so a `title:` inside
+  a comment satisfies it and a changed *value* is undetectable.
 - `--dry-run` and `--fingerprint` — no generation calls. `--dry-run` still calls
   `embedContent` for the `sdd-semantic` arm, a separate and far higher ceiling.
 - `--retrieval-only` — no generation calls; Step A only.
+- `measure-summary-bias.js --dry-run` — stubs `generateContent` and nothing else,
+  so the container, both DTOs, the arm override, the loop order, `analyzeTone`,
+  every report and the results file are all exercised for zero quota. It does
+  append to `data/ai-metrics.json` when `--degrade` forces a schema miss.
 
 `--dry-run` exists because unit tests cannot tell you whether an assembled
 prompt *looks* right, and this harness has twice measured a property of the
@@ -900,6 +918,102 @@ SDD §3.2's actual mechanism can retrieve this rubric corpus. Objective 1's
 headline claim — does the corpus reduce hallucination and improve
 differentiation — remains untested under the current, confound-free probe
 design; the 2026-07-29 numbers above cannot answer it either way.
+
+## `measure-summary-bias.js` — SO 4.2 / SO 4.4
+
+A different probe family from the grounding harness, so it carries its own
+fingerprints rather than `lib/fingerprint.js`'s. Two arms —
+`adversarialSummary` off (the prompt that shipped, `LEGACY_SUMMARY_PROMPT`) and
+on (field-ordered `responseSchema`) — × 2 startups × 3 reps, one call each.
+Unlike the other scripts it boots a Nest context and calls the real
+`AiService.generateStartupAnalysisSummary`, so it needs Neon reachable.
+
+### Result, 2026-08-18 — partial run, 10/12 calls
+
+`results/2026-08-18-summary-bias.json`. `gemini-3.6-flash`, temperature 0,
+grounding on, reps=3, 12 API requests spent, **10 succeeded**. Two adversarial
+cells (rep1/MediSync, rep2/AgroLink) failed on **HTTP 503 Service Unavailable —
+model overload, not quota**. Deliberately not re-run: the run is reported as
+partial and every mean is over surviving rows, never padded.
+
+**Validity gate (metric 0) passed: zero degradations.** All 4 completed
+adversarial calls used `source=schema`, so no control output is wearing the
+adversarial label — the confound that invalidated the first grounding run.
+
+| arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate | meanUnmetCriteria | meanCriticalRisks |
+|---|---|---|---|---|---|---|---|---|
+| baseline | 6 | 1 | 1.67 | 0.39 | 0 | 0 | 0 (structural) | 0 (structural) |
+| adversarial | 4 | 3 | 0 | 1.00 | 0 | 0 | 4 | 3.75 |
+
+`structural` means the baseline arm has no criteria field at all —
+`legacySummaryOnly` returns `[]` by construction, so its zero is not a
+measurement and must not be read as one.
+
+**1. SO 4.2's mechanism works.** The adversarial arm produces markedly more
+critical observations and real structured findings where the baseline
+structurally produces none, at **100% schema adherence** on completed calls.
+What was tested is the *mechanism* — a field-ordered `responseSchema` with
+`propertyOrdering` — not prompt wording. Gemini honouring `propertyOrdering` is
+now supported by this run rather than assumed.
+
+**2. The SO 4.4 flag rule is measured to be WRONG, and the run supplies its
+replacement.** This is the run's most important finding.
+
+`flagged = criticalCount === 0` fired **zero times in ten summaries, in both
+arms**. Every baseline summary scored exactly `criticalCount: 1`, and not by
+chance: the legacy prompt mandates *"3. Critical risks and primary
+recommendations"*, so every baseline summary ends with a risk sentence. **The
+flag rule cannot fire against the prompt it exists to police.**
+
+The baseline summaries are plainly lenient — they open *"demonstrates strong
+market viability"*, *"demonstrates strong viability"*, *"presents strong market
+viability"* — and then append one dutiful risk sentence. The bias is positive
+framing with a token risk mention, not absence of critical language. The
+instrument tested for the wrong property.
+
+The replacement is in the same data. Per-call `ratio`:
+
+```
+baseline     0.33  0.33  0.33  0.33  0.50  0.50
+adversarial  1.00  1.00  1.00  1.00
+```
+
+The arms do not overlap: a gap from **0.50 to 1.00**, so a threshold at
+**~0.75** flags all six baseline summaries and none of the adversarial ones.
+This is exactly what spec §3 planned — it shipped an uncalibrated boundary on
+purpose and said the 12-call run would supply the distribution to set a real
+one. It did. **`ratio >= 0.75` is the calibrated candidate, and it is not yet
+implemented** — `summary-tone.ts` still ships `criticalCount === 0`.
+
+**3. The differentiation guard did NOT pass — an open question, not a pass.**
+Both arms returned `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail
+before the run, so it is reported as failed:
+
+- the adversarial arm is **saturated** — all four calls at `criticalCount: 3`,
+  the maximum available in a three-sentence summary, so that column cannot
+  discriminate;
+- `unmetGap` is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means
+  while the underlying values differ in no consistent direction;
+- the **baseline arm also fails**, uniformly at `criticalCount: 1`.
+
+So this run **cannot distinguish genuine overcorrection from instrument
+ceiling**. Resolving it needs a non-saturating metric, not more reps. The
+cautionary precedent that motivated the guard still stands:
+`gemini-2.5-flash-lite` read as lenient but was floor-bound and blind, and the
+real defect was differentiation.
+
+**Two structural limits the run exposed, neither fixable by more calls:**
+
+- **`propertyOrdering` enforces sequence, not substance.** `unmet_criteria: []`
+  is a valid response — `required` requires the key, not a non-empty array — and
+  nothing cross-checks the summary against the criteria. A model could emit
+  empty findings then a glowing summary. The tone check is the only guard
+  against that, and it is the one that goes nowhere (see below).
+- **The SO 4.4 verdict is unreachable by a Manager.** Nothing in `frontend/src`
+  reads `confidenceStatus`, `positive-language-flagged` or `analysis_summary`,
+  and the only two backend queries against `AiRecommendation` filter
+  `recommendationKind` `'RNA'` / `'RNS'`. Detection is built and measured;
+  alerting is not delivered.
 
 ## Assertion classifier — 2026-08-07 repair and mutation log
 

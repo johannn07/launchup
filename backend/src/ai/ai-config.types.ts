@@ -9,6 +9,7 @@ import { z } from 'zod';
  *   rag                - Objective 1b, AiService.getRelevantRagContexts()
  *   biasReview         - Objective 4b, AiService.reviewBiasScore()
  *   scoreNormalization - Objective 4c, AiService.normalizeAiScore()
+ *   adversarialSummary - Objective SO 4.2, AiService.generateStartupAnalysisSummary()
  */
 export interface AiPipelineConfig {
   model: string;
@@ -20,6 +21,7 @@ export interface AiPipelineConfig {
   rubricMode: RubricMode;
   biasReview: boolean;
   scoreNormalization: boolean;
+  adversarialSummary: boolean;
 }
 
 /**
@@ -88,6 +90,7 @@ export const aiEnvSchema = z.object({
   AI_RAG_RUBRIC_MODE: z.enum(RUBRIC_MODES).optional().default('deterministic'),
   AI_BIAS_REVIEW_ENABLED: envBoolean(true),
   AI_SCORE_NORMALIZATION_ENABLED: envBoolean(true),
+  AI_ADVERSARIAL_SUMMARY_ENABLED: envBoolean(true),
   AI_ALLOW_REQUEST_OVERRIDE: envBoolean(false),
 });
 
@@ -103,6 +106,7 @@ export const aiOverrideSchema = z
     rubricMode: z.enum(RUBRIC_MODES),
     biasReview: z.boolean(),
     scoreNormalization: z.boolean(),
+    adversarialSummary: z.boolean(),
   })
   .partial()
   .strict();
