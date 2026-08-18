@@ -21,10 +21,17 @@ documents — that needs different source material and is out of scope.
 ## Why this is a separate experiment by construction
 
 `tone|*` and `differentiation|*` fingerprints changed when `summary-tone.ts`
-was edited (verified: `bbb846c48639` → `d193238ccc86` on `tone|baseline`), so
-`--merge` will refuse to pool tone across the boundary. `criteria|*` is
-unchanged (`77b5fec7b535`, `82fc2961c7ff`), so the SO 4.2 criteria result
-legitimately gains n.
+was edited (verified: `bbb846c48639` → `d193238ccc86` on `tone|baseline`).
+`criteria|*` is unchanged (`77b5fec7b535`, `82fc2961c7ff`), so the SO 4.2
+criteria result legitimately gains n.
+
+**Correction, made after the run:** this section originally said `--merge`
+would refuse to pool tone across the boundary. **`--merge` does not exist on
+this harness** — it is `measure-grounding.js` only. `measure-summary-bias.js`
+*records* fingerprints in its output but nothing acts on them, so here the
+guard is documentary, not enforced. The separation is still real and legible
+in the files; it just is not mechanical. Worth closing that gap if the summary
+family ever accumulates reps.
 
 ## Predictions
 

@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` after the shipped one measured unfirable, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag and a held-out validation run; 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -99,7 +99,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
 | **4b** **Adversarial** prompting (SO 4.2, find weaknesses *before* the readiness summary) | 🟡 Partial — **delivered on the summary path, not the scoring path (2026-08-18)** | **Delivered:** `generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, measured against the shipped prompt — 100% schema adherence, 3 vs 1 mean critical observations, 4 mean unmet criteria where the baseline has no criteria field at all. **Not delivered:** the readiness-*scoring* path is unchanged — `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are all untouched on this branch. Different pipeline stages, so this row stays 🟡. **`reviewBiasScore` (`ai.service.ts:339`) is mislabelled, not misplaced:** its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither of which is a readiness summary. Behaviour deliberately unchanged |
-| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Both gaps closed 2026-08-18:** (1) ~~the shipped rule `flagged = criticalCount === 0` is **measured wrong**~~ — now `flagged = ratio < 0.75`, calibrated on the run that measured the old rule firing 0/10 (baseline tops out at 0.50, adversarial sits at 1.00, no overlap). Not yet validated on a held-out run. (2) ~~**No Manager can see the verdict**~~ — `summaryVerdict` now rides on `GET /startups/all` and renders as a badge in all four Manager dialogs, recorded-row-first with a live recompute fallback (Neon has no `analysis_summary` rows, so a row-only badge would have been empty). **What remains for this objective is an *action* on the flag, not its visibility** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
+| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Both gaps closed 2026-08-18:** (1) ~~the shipped rule `flagged = criticalCount === 0` is **measured wrong**~~ — now `flagged = ratio < 0.75`, calibrated on the run that measured the old rule firing 0/10 and **validated on a held-out run the same day — baseline 5/5 flagged, adversarial 0/4, perfect separation**. (2) ~~**No Manager can see the verdict**~~ — `summaryVerdict` now rides on `GET /startups/all` and renders as a badge in all four Manager dialogs, recorded-row-first with a live recompute fallback (Neon has no `analysis_summary` rows, so a row-only badge would have been empty). **What remains for this objective is an *action* on the flag, not its visibility** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
 ### Objective 1b — what was built and what it's worth
@@ -300,13 +300,22 @@ measurement.
   while silently unflagging the **two measured baseline rows at exactly 0.500**.
   The constraining value is the observed one nearest the boundary, not the most
   frequent. 5/5 mutants killed, each verified as landed.
-  ⚠️ **Not validated against a fresh run.** 0.75 was calibrated on the same 10
-  summaries it is now scored against, and re-scoring that file under the new
-  threshold is the post-hoc move the fingerprint guard forbids. **Four of six
-  fingerprints are invalidated** — `tone|*` *and* `differentiation|*`, both of
-  which embed the file text (`summary-fingerprint.js:60-64`); `criteria|*` is
-  unaffected, so SO 4.2's result stays poolable. Validating the threshold needs
-  a new run, and it should be a **held-out** one.
+  ✅ **Validated on a held-out run, 2026-08-18** (`results/2026-08-18-threshold-validation.json`,
+  9/12 calls, 3 lost to 503). **Baseline 5/5 flagged (flagRate 1.00), adversarial
+  0/4 flagged — perfect separation on generations the threshold had never seen.**
+  The original defect reproduced independently too: every baseline summary again
+  scored `criticalCount: 1`, so the old rule would have fired **0/9** here.
+  **Held out is the *generations*, not the documents** — same two startups, same
+  prompts — so this rules out resampling and nothing more. **Baseline ratio was
+  0.333 on all five calls, zero variance**, so the wide margin to 0.75 reflects a
+  very stable prompt structure rather than a demonstrated robustness. The
+  informative next test is a *different prompt or third document*, not more reps.
+  **Four of six fingerprints changed** — `tone|*` *and* `differentiation|*`, both
+  embedding the file text (`summary-fingerprint.js:60-64`), verified against the
+  real stored values; `criteria|*` unchanged, so SO 4.2's result gains n.
+  ⚠️ **The fingerprint guard is documentary here, not mechanical** — `--merge`
+  exists only on `measure-grounding.js`; `measure-summary-bias.js` records
+  fingerprints but nothing acts on them.
 
 - [x] 🟢 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager** — *done
   2026-08-18* (`fix/so-4-4-flag-threshold`). `GET /startups/all` carries a
@@ -331,8 +340,8 @@ measurement.
   the recorded+flagged path and was removed.
   **`PendingTab.svelte` deliberately not wired** — it renders these dialogs but
   is imported nowhere. See the 🎯 deletion item in §4.
-  **Still open:** no Manager *action* is attached to the flag, and the
-  threshold behind it is calibrated but not validated on a held-out run.
+  **Still open:** no Manager *action* is attached to the flag. (The threshold
+  behind it was validated on a held-out run 2026-08-18 — see the item above.)
 
 - [ ] ❓ **OPEN · The differentiation guard did NOT pass.** Both arms returned
   `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail before the run,

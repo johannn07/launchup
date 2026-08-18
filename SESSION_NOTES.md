@@ -260,16 +260,75 @@ Same branch. `GET /startups/all` now carries a `summaryVerdict` per startup, and
 
 ---
 
+### Then: the threshold validated on held-out generations
+
+`results/2026-08-18-threshold-validation.json`, `gemini-3.6-flash`, temp 0,
+reps=3. **Partial: 9/12 calls, 12 API requests** — three cells lost to 503 model
+overload (not quota), deliberately not re-run. Pre-registered in
+`docs/superpowers/specs/2026-08-18-threshold-validation-design.md` and committed
+**before** the first call.
+
+| arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate |
+|---|---|---|---|---|---|---|
+| baseline | 5 | 1 | 2 | 0.33 | **5** | **1.00** |
+| adversarial | 4 | 2.25 | 0 | 1.00 | **0** | **0.00** |
+
+**`ratio < 0.75` separates the arms perfectly on generations it has never seen.**
+Every baseline summary flagged, no adversarial summary did. And the original
+defect reproduced independently: every baseline summary again scored exactly
+`criticalCount: 1`, so **the old `criticalCount === 0` rule would have fired 0/9
+here too**.
+
+**What this does and does not establish.** Held out is the *generations*, not the
+documents — same two startups, same prompts. It rules out the weakest failure
+(resampling) and says nothing about other source material. **Baseline ratio was
+0.333 on all five calls — zero variance.** The margin to 0.75 is wide, but the
+distribution is degenerate: the legacy prompt reliably yields two positive
+sentences and one risk sentence. So this is robustness to resampling of a very
+stable structure, not evidence the threshold survives a different prompt. The
+2026-08-18 calibration run had *some* spread (0.333 and 0.500); this one had
+none, which is weaker in that one respect.
+
+**A pre-registered prediction was wrong, in the direction that matters.** I
+predicted the differentiation guard would fail again for both arms. Baseline did
+fail (`FAIL - uniform`). **Adversarial read `PASS`** — but on `nEarly=1` vs
+`nMid=3`, an unbalanced pool the project's own rule says not to quote from, so
+the PASS is an artifact, not a result. The stated *reason* for the prediction also
+failed: the adversarial arm was **not** saturated this time (`criticalCount`
+2, 2, 2, 3 against the previous run's uniform 3), so "saturated at the ceiling of
+a three-sentence summary" does not reproduce as a general property.
+
+**Correction to the pre-registration, made after the run.** It claimed `--merge`
+would refuse to pool tone across the fingerprint boundary. **`--merge` does not
+exist on this harness** — it is `measure-grounding.js` only. `measure-summary-bias.js`
+records fingerprints but nothing acts on them, so the guard here is documentary
+rather than mechanical. The four changed fingerprints were verified against the
+real stored values (`tone|baseline` `bbb846c48639` → `d193238ccc86`), and
+`criteria|*` is unchanged, so the SO 4.2 criteria result can still legitimately
+gain n.
+
+**Quota note that cost time.** `ai_generation_runs` is **not** a usable quota
+ledger for measurement runs — the harness header says this path "opens no
+`ai_generation_runs` row and touches no EntityManager", and the table's most
+recent rows are from 2026-07-31. Budget from `apiRequests` in results files plus
+UI-driven generation. Also: Neon went unreachable for ~40 minutes mid-session
+(TCP accepted, then `ECONNRESET`) and recovered on its own; the harness needs
+Neon reachable even for `--dry-run`.
+
+---
+
 ## Open at end of 2026-08-18
 
 **Branch state.** `feat/adversarial-summary` **merged via PR #25** (merge commit `70a66c4`) — the 2026-08-18 block above was written before that landed and said "25 commits, unpushed"; it is stale and left as written. `measure/assertion-classifier-gaps` merged via PR #24 (`2195df8`). Not in `master`:
-- **`fix/so-4-4-flag-threshold` — 4 commits, local.** The flag rule and the Manager-facing verdict.
+- **`fix/so-4-4-flag-threshold` — 7 commits, local.** The flag rule, the Manager-facing verdict, and the held-out validation run.
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step.** A **held-out run** to validate `ratio < 0.75` — it was calibrated on the same 10 summaries it now scores, and the `tone|*` / `differentiation|*` fingerprints already refuse to pool the old file, so this is a fresh run by construction. Then a non-saturating differentiation metric (the 2026-08-18 guard could not distinguish overcorrection from instrument ceiling, and that needs a different metric, not more reps). SO 4.4 now has a visible verdict but **no Manager action attached to it** — decide whether that is in scope before submission.
+**Next step.** A **non-saturating differentiation metric**. Two runs have now failed that guard on the baseline arm, and the second showed the adversarial arm is not reliably saturated either — so the instrument, not the arm, is what needs work, and no number of reps fixes it. After that, SO 4.4 has a validated flag and a visible verdict but **no Manager action attached to it** — decide whether that is in scope before submission.
+
+**A cheaper validation than more reps:** `ratio < 0.75` is now tested against one prompt whose output structure barely varies. The informative next test is a *different* summary prompt or a third document, not a fourth rep of the same two.
 
 **Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 

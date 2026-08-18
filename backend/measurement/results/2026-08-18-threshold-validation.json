@@ -1,0 +1,504 @@
+{
+  "generatedAt": "2026-08-18T13:20:10.150Z",
+  "mode": "live",
+  "genModel": "gemini-3.6-flash",
+  "temperature": 0,
+  "grounding": true,
+  "reps": 3,
+  "plannedCalls": 12,
+  "succeededCalls": 9,
+  "apiRequests": 12,
+  "fingerprints": {
+    "tone|baseline": "d193238ccc86",
+    "criteria|baseline": "77b5fec7b535",
+    "differentiation|baseline": "488380cc7068",
+    "tone|adversarial": "e6304665e036",
+    "criteria|adversarial": "82fc2961c7ff",
+    "differentiation|adversarial": "cad88c3d01ed"
+  },
+  "summary": {
+    "planned": 12,
+    "succeeded": 9,
+    "source": [
+      {
+        "arm": "baseline",
+        "planned": 6,
+        "ok": 5,
+        "schema": 0,
+        "legacy": 5,
+        "degraded": 0,
+        "degradedBySchema": 0,
+        "degradedByRateLimit": 0,
+        "rateLimited": 0,
+        "errored": 1,
+        "skipped": 0,
+        "analyzed": 5
+      },
+      {
+        "arm": "adversarial",
+        "planned": 6,
+        "ok": 4,
+        "schema": 4,
+        "legacy": 0,
+        "degraded": 0,
+        "degradedBySchema": 0,
+        "degradedByRateLimit": 0,
+        "rateLimited": 0,
+        "errored": 2,
+        "skipped": 0,
+        "analyzed": 4
+      }
+    ],
+    "validity": {
+      "degraded": 0,
+      "degradedBySchema": 0,
+      "inconclusive": false,
+      "reason": null
+    },
+    "tone": [
+      {
+        "arm": "baseline",
+        "n": 5,
+        "meanCritical": 1,
+        "meanPositive": 2,
+        "meanRatio": 0.33,
+        "flagged": 5,
+        "flagRate": 1
+      },
+      {
+        "arm": "adversarial",
+        "n": 4,
+        "meanCritical": 2.25,
+        "meanPositive": 0,
+        "meanRatio": 1,
+        "flagged": 0,
+        "flagRate": 0
+      }
+    ],
+    "criteria": [
+      {
+        "arm": "baseline",
+        "n": 5,
+        "meanUnmetCriteria": 0,
+        "meanCriticalRisks": 0,
+        "structuralZero": true
+      },
+      {
+        "arm": "adversarial",
+        "n": 4,
+        "meanUnmetCriteria": 4,
+        "meanCriticalRisks": 3.25,
+        "structuralZero": false
+      }
+    ],
+    "differentiation": [
+      {
+        "arm": "baseline",
+        "nEarly": 3,
+        "nMid": 2,
+        "earlyCritical": 1,
+        "midCritical": 1,
+        "criticalGap": 0,
+        "earlyUnmet": 0,
+        "midUnmet": 0,
+        "unmetGap": 0,
+        "verdict": "FAIL - uniform"
+      },
+      {
+        "arm": "adversarial",
+        "nEarly": 1,
+        "nMid": 3,
+        "earlyCritical": 2,
+        "midCritical": 2.33,
+        "criticalGap": -0.33,
+        "earlyUnmet": 4,
+        "midUnmet": 4,
+        "unmetGap": 0,
+        "verdict": "PASS"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "rep": 0,
+      "arm": "baseline",
+      "adversarialSummary": false,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "legacy",
+      "degradeCause": null,
+      "summary": "AgroLink PH demonstrates viable market potential across approximately 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac, supported by a strong mobile-first solution with SMS fallback that enables lot aggregation and direct matching with institutional buyers. The startup leverages a distinct competitive advantage over generic B2B marketplaces and traditional traders through cooperative-specific features, making its first-year growth plan to onboard 25 cooperatives and 1,200 members feasible following prototype testing and a provisional buyer agreement. Key risks stem from excluding physical logistics, storage, and credit while competing against traders who offer immediate cash at the farm gate, making it critical for the founders to validate cooperative willingness to pay transaction commissions and register the \"AgroLink PH\" wordmark with IPOPHL.",
+      "unmetCriteria": 0,
+      "criticalRisks": 0,
+      "tone": {
+        "positiveCount": 2,
+        "criticalCount": 1,
+        "ratio": 0.3333333333333333,
+        "flagged": true,
+        "clauses": [
+          {
+            "text": "AgroLink PH demonstrates viable market potential across approximately 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac, supported by a strong mobile-first solution with SMS fallback that enables lot aggregation and direct matching with institutional buyers.",
+            "valence": "positive"
+          },
+          {
+            "text": "The startup leverages a distinct competitive advantage over generic B2B marketplaces and traditional traders through cooperative-specific features, making its first-year growth plan to onboard 25 cooperatives and 1,200 members feasible following prototype testing and a provisional buyer agreement.",
+            "valence": "positive"
+          },
+          {
+            "text": "Key risks stem from excluding physical logistics, storage, and credit while competing against traders who offer immediate cash at the farm gate, making it critical for the founders to validate cooperative willingness to pay transaction commissions and register the \"AgroLink PH\" wordmark with IPOPHL.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 16062,
+      "tokens": {
+        "promptTokens": 687,
+        "completionTokens": 157,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 0,
+      "arm": "baseline",
+      "adversarialSummary": false,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "legacy",
+      "degradeCause": null,
+      "summary": "MediSync Cebu demonstrates strong market viability across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary referral centres by offering a structured solution that transmits bed availability, triage categories, and clinical histories. The growth strategy is feasible and reinforced by early traction reaching PHP 5,000 in monthly recurring revenue, effectively capitalizing on its competitive positioning against costly six-figure hospital information systems and inefficient paper processes. To address regulatory exposure and operational adoption risks, the startup should focus on completing its Data Privacy Act review, registering its processing system with the NPC, and achieving its target of reducing median referral acknowledgement times to under 30 minutes.",
+      "unmetCriteria": 0,
+      "criticalRisks": 0,
+      "tone": {
+        "positiveCount": 2,
+        "criticalCount": 1,
+        "ratio": 0.3333333333333333,
+        "flagged": true,
+        "clauses": [
+          {
+            "text": "MediSync Cebu demonstrates strong market viability across Cebu's 44 rural health units, 8 district hospitals, and 3 tertiary referral centres by offering a structured solution that transmits bed availability, triage categories, and clinical histories.",
+            "valence": "positive"
+          },
+          {
+            "text": "The growth strategy is feasible and reinforced by early traction reaching PHP 5,000 in monthly recurring revenue, effectively capitalizing on its competitive positioning against costly six-figure hospital information systems and inefficient paper processes.",
+            "valence": "positive"
+          },
+          {
+            "text": "To address regulatory exposure and operational adoption risks, the startup should focus on completing its Data Privacy Act review, registering its processing system with the NPC, and achieving its target of reducing median referral acknowledgement times to under 30 minutes.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 12338,
+      "tokens": {
+        "promptTokens": 721,
+        "completionTokens": 134,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 0,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The AgroLink PH proposal omits critical operational capabilities by explicitly excluding physical logistics, storage, credit, and crop insurance from its scope. Additionally, the project lacks registered intellectual property protection and fails to match the immediate cash settlement offered by competing traditional traders. As a result, the platform faces high execution and adoption risks among target cooperatives and buyers.",
+      "unmetCriteria": 4,
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The AgroLink PH proposal omits critical operational capabilities by explicitly excluding physical logistics, storage, credit, and crop insurance from its scope.",
+            "valence": null
+          },
+          {
+            "text": "Additionally, the project lacks registered intellectual property protection and fails to match the immediate cash settlement offered by competing traditional traders.",
+            "valence": "critical"
+          },
+          {
+            "text": "As a result, the platform faces high execution and adoption risks among target cooperatives and buyers.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 35932,
+      "tokens": {
+        "promptTokens": 692,
+        "completionTokens": 362,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 0,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal fails to provide details regarding team qualifications, future financial plans, risk mitigation strategies, and infrastructure requirements for rural deployment. These missing elements create severe operational and financial risks that threaten the platform's execution and long-term sustainability. A comprehensive plan addressing offline connectivity, founder capacity, and budget models is required to establish true readiness.",
+      "unmetCriteria": 4,
+      "criticalRisks": 4,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal fails to provide details regarding team qualifications, future financial plans, risk mitigation strategies, and infrastructure requirements for rural deployment.",
+            "valence": "critical"
+          },
+          {
+            "text": "These missing elements create severe operational and financial risks that threaten the platform's execution and long-term sustainability.",
+            "valence": "critical"
+          },
+          {
+            "text": "A comprehensive plan addressing offline connectivity, founder capacity, and budget models is required to establish true readiness.",
+            "valence": null
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 33209,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 393,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 1,
+      "arm": "baseline",
+      "adversarialSummary": false,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "legacy",
+      "degradeCause": null,
+      "summary": "AgroLink PH presents strong viability by utilizing a mobile-first platform with SMS fallback to address low farmgate prices and unverified supply across roughly 400 target rice and vegetable cooperatives in Nueva Ecija and Tarlac connecting to institutional buyers. Its growth strategy is feasible because its core advantage lies in cooperative-specific lot aggregation over generic B2B listings, aiming to onboard 25 cooperatives and 1,200 members in the first year. Critical risks include traditional traders offering immediate cash at the farm gate and the platform's explicit exclusion of physical logistics and storage, requiring recommendations to validate the commission model against cooperative willingness to pay and register the \"AgroLink PH\" wordmark with IPOPHL.",
+      "unmetCriteria": 0,
+      "criticalRisks": 0,
+      "tone": {
+        "positiveCount": 2,
+        "criticalCount": 1,
+        "ratio": 0.3333333333333333,
+        "flagged": true,
+        "clauses": [
+          {
+            "text": "AgroLink PH presents strong viability by utilizing a mobile-first platform with SMS fallback to address low farmgate prices and unverified supply across roughly 400 target rice and vegetable cooperatives in Nueva Ecija and Tarlac connecting to institutional buyers.",
+            "valence": "positive"
+          },
+          {
+            "text": "Its growth strategy is feasible because its core advantage lies in cooperative-specific lot aggregation over generic B2B listings, aiming to onboard 25 cooperatives and 1,200 members in the first year.",
+            "valence": "positive"
+          },
+          {
+            "text": "Critical risks include traditional traders offering immediate cash at the farm gate and the platform's explicit exclusion of physical logistics and storage, requiring recommendations to validate the commission model against cooperative willingness to pay and register the \"AgroLink PH\" wordmark with IPOPHL.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 33732,
+      "tokens": {
+        "promptTokens": 687,
+        "completionTokens": 147,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 1,
+      "arm": "baseline",
+      "adversarialSummary": false,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "legacy",
+      "degradeCause": null,
+      "summary": "MediSync Cebu shows strong viability by targeting 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu with a structured platform that tracks bed availability, triage categories, and clinical histories. Its growth strategy is feasible as an affordable alternative to six-figure hospital information systems, leveraging open FHIR standards to scale beyond its PHP 5,000 monthly recurring revenue toward deploying across 12 rural health units and 3 district hospitals. Key risks include entrenched competition from zero-cost paper processes and regulatory hurdles, making it essential to complete the Data Privacy Act compliance review and NPC registration while validating its goal of reducing median acknowledgement times to under 30 minutes.",
+      "unmetCriteria": 0,
+      "criticalRisks": 0,
+      "tone": {
+        "positiveCount": 2,
+        "criticalCount": 1,
+        "ratio": 0.3333333333333333,
+        "flagged": true,
+        "clauses": [
+          {
+            "text": "MediSync Cebu shows strong viability by targeting 44 rural health units, 8 district hospitals, and 3 tertiary referral centres in Cebu with a structured platform that tracks bed availability, triage categories, and clinical histories.",
+            "valence": "positive"
+          },
+          {
+            "text": "Its growth strategy is feasible as an affordable alternative to six-figure hospital information systems, leveraging open FHIR standards to scale beyond its PHP 5,000 monthly recurring revenue toward deploying across 12 rural health units and 3 district hospitals.",
+            "valence": "positive"
+          },
+          {
+            "text": "Key risks include entrenched competition from zero-cost paper processes and regulatory hurdles, making it essential to complete the Data Privacy Act compliance review and NPC registration while validating its goal of reducing median acknowledgement times to under 30 minutes.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 34555,
+      "tokens": {
+        "promptTokens": 721,
+        "completionTokens": 140,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 1,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "error",
+      "error": "got status: 503 Service Unavailable. {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+      "apiCalls": 1,
+      "latencyMs": 45470
+    },
+    {
+      "rep": 1,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal lacks critical details regarding its pricing model, founder qualifications, and specific target completion dates for its objectives. Without a defined monetization strategy and documented team capabilities, the project faces financial and execution risks during provincial expansion. Additionally, pending trademark registration and uncompleted Data Privacy Act compliance introduce legal and operational uncertainty.",
+      "unmetCriteria": 4,
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal lacks critical details regarding its pricing model, founder qualifications, and specific target completion dates for its objectives.",
+            "valence": "critical"
+          },
+          {
+            "text": "Without a defined monetization strategy and documented team capabilities, the project faces financial and execution risks during provincial expansion.",
+            "valence": "critical"
+          },
+          {
+            "text": "Additionally, pending trademark registration and uncompleted Data Privacy Act compliance introduce legal and operational uncertainty.",
+            "valence": null
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 15929,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 339,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 2,
+      "arm": "baseline",
+      "adversarialSummary": false,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "legacy",
+      "degradeCause": null,
+      "summary": "AgroLink PH addresses a viable target market of roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac alongside institutional buyers using a mobile-first platform with SMS fallback designed to aggregate harvest volumes and settle transactions. The solution gains a distinct competitive advantage over generic B2B marketplaces and traditional traders by integrating directly into cooperative structures, utilizing a structured three-month acceleration plan built on prior field testing and a provisional buyer agreement to target 25 cooperatives in year one. However, excluding physical logistics, storage, credit, and insurance from its scope while competing against traders who offer immediate cash on collection presents significant risks, requiring the team to validate cooperative willingness to pay transaction commissions, establish support for off-scope operational gaps, and formally register its wordmark with IPOPHL.",
+      "unmetCriteria": 0,
+      "criticalRisks": 0,
+      "tone": {
+        "positiveCount": 2,
+        "criticalCount": 1,
+        "ratio": 0.3333333333333333,
+        "flagged": true,
+        "clauses": [
+          {
+            "text": "AgroLink PH addresses a viable target market of roughly 400 rice and vegetable cooperatives in Nueva Ecija and Tarlac alongside institutional buyers using a mobile-first platform with SMS fallback designed to aggregate harvest volumes and settle transactions.",
+            "valence": "positive"
+          },
+          {
+            "text": "The solution gains a distinct competitive advantage over generic B2B marketplaces and traditional traders by integrating directly into cooperative structures, utilizing a structured three-month acceleration plan built on prior field testing and a provisional buyer agreement to target 25 cooperatives in year one.",
+            "valence": "positive"
+          },
+          {
+            "text": "However, excluding physical logistics, storage, credit, and insurance from its scope while competing against traders who offer immediate cash on collection presents significant risks, requiring the team to validate cooperative willingness to pay transaction commissions, establish support for off-scope operational gaps, and formally register its wordmark with IPOPHL.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 43230,
+      "tokens": {
+        "promptTokens": 687,
+        "completionTokens": 160,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 2,
+      "arm": "baseline",
+      "adversarialSummary": false,
+      "startup": "MediSync Cebu",
+      "status": "error",
+      "error": "got status: 503 Service Unavailable. {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+      "apiCalls": 1,
+      "latencyMs": 18455
+    },
+    {
+      "rep": 2,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "error",
+      "error": "got status: 503 Service Unavailable. {\"error\":{\"code\":503,\"message\":\"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.\",\"status\":\"UNAVAILABLE\"}}",
+      "apiCalls": 1,
+      "latencyMs": 19453
+    },
+    {
+      "rep": 2,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal fails to establish operational readiness due to missing information on MediSync's pricing model, founder qualifications, budget planning, and risk mitigations. These significant gaps create high risks for financial sustainability, team execution, and smooth deployment across rural health facilities. Until detailed financial structures, team capabilities, and risk mitigation plans are provided, the startup's readiness claims remain unproven.",
+      "unmetCriteria": 4,
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 3,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal fails to establish operational readiness due to missing information on MediSync's pricing model, founder qualifications, budget planning, and risk mitigations.",
+            "valence": "critical"
+          },
+          {
+            "text": "These significant gaps create high risks for financial sustainability, team execution, and smooth deployment across rural health facilities.",
+            "valence": "critical"
+          },
+          {
+            "text": "Until detailed financial structures, team capabilities, and risk mitigation plans are provided, the startup's readiness claims remain unproven.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 56515,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 523,
+        "recorded": true
+      }
+    }
+  ]
+}
