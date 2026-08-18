@@ -206,6 +206,8 @@ Branch `feat/adversarial-summary`. Spec and plan under `docs/superpowers/`; the 
 - **`propertyOrdering` enforces sequence, not substance.** `unmet_criteria: []` is a valid response — `required` requires the key, not a non-empty array — and nothing cross-checks the summary against the criteria. A model could emit empty findings then a glowing summary. The tone check is the only guard, and it is the one that goes nowhere.
 - **A literal JSON `null` degrades with no `recordFailure`.** `analysisSummarySchema.nullable()` means `null` *parses*, returns `null`, and falls back to legacy — 2 calls instead of 3, no failure metric. Its only trace is `notes.source === 'legacy'`, which is why `source` is load-bearing.
 - **`measurement/tests/demo-proposals.test.js` asserts on source text, not behaviour** — it regex-matches the `.ts` file rather than importing `toApplicationDto`, so a `title:` inside a comment satisfies it and a changed *value* is undetectable.
+- **Only the create path of `createStartupProposal` is tested.** Deleting the update branch's `recordSummaryProvenance` call leaves all three `startup.service.spec.ts` tests green — verified by mutation. Both paths do record in code; only one is covered. Mitigating: the update branch looks unreachable from its sole caller (`create()` always passes a brand-new `Startup`, whose `capsuleProposal` inverse side is necessarily undefined), and it predates this branch. Do not describe the spec as covering "both persistence paths".
+- **`TONE_CUES` is an unused export** (`summary-tone.ts:48`) — zero consumers, not even its own spec. Harmless; dead at HEAD.
 - **SO 5.3's premise is false in the code.** It describes the summary as generated "from URAT answers"; `UratQuestionAnswer` is CRUD-only and no AI call reads it — the summary is built from the capsule-proposal DTO. Out of scope, recorded so it is not discovered during a demo.
 - **`CLAUDE.md` is wrong about the model.** It says `GEMINI_MODEL` "still defaults to `gemini-2.5-flash-lite`" and warns that model is unsuitable for bias work. Both `.env` and `ai-config.service.ts:21` say **`gemini-3.6-flash`**, and the switch is already recorded above. Flagged for John rather than edited.
 
@@ -215,15 +217,18 @@ Branch `feat/adversarial-summary`. Spec and plan under `docs/superpowers/`; the 
 
 ---
 
-## Open at end of 2026-08-06
+## Open at end of 2026-08-18
 
-**Branch state — verified with `git branch --no-merged master`, not transcribed.** Earlier notes claimed four measurement branches were unmerged and unpushed; **all four are merged** (`measure/grounding-arms`, `measure/grounding-rep2`, `measure/ground-truth-audit`, `measure/supplied-level-fabrication` — the last via PR #22). Only two branches are not in `master`:
+**Branch state — verified with `git branch -r --contains` and `git log origin/master..`, not transcribed.** `measure/assertion-classifier-gaps` **merged 2026-08-18 via PR #24** (merge commit `2195df8`), so the classifier repair and the 2026-08-09 probe re-run are on `master`. Not in `master`:
+- **`feat/adversarial-summary` — 25 commits, unpushed.** This session's work. Cut from the classifier branch's tip, so now that its parent is merged its PR diff is exactly its own 25 commits; no rebase needed (`master` merges with merge commits, not squash, so `3184859` stayed an ancestor).
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step (superseded twice).** Done 2026-08-09: both parts were wrong — the gaps were mostly *recommendation* detection rather than assertion detection, and AgroLink's zero was chance. The follow-on "the live next step is 4b" is **superseded 2026-08-18**: SO 4.2 is delivered and measured on the summary path, and the two live items are now SO 4.4's calibrated threshold and its missing UI surface.
+**Next step.** Push and PR `feat/adversarial-summary` (John tests before anything reaches `master`). Then, in order: the SO 4.4 threshold swap to `ratio >= 0.75` (S, the run already supplies the distribution), then surfacing the verdict in `PendingDialog` and its three siblings (M, and the first frontend change of this work), then a non-saturating differentiation metric.
+
+**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.
