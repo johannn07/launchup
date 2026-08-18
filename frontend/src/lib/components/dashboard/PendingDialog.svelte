@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button/index.js';
+  import SummaryToneBadge from './SummaryToneBadge.svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import WaitlistDialog from './sub/WaitlistDialog.svelte';
   import ApprovalDialog from './sub/ApprovalDialog.svelte';
@@ -85,9 +86,10 @@
         <!-- AI Analysis Summary Section -->
         {#if startup.capsuleProposal?.aiAnalysisSummary}
           <div class="mb-6 rounded-lg border border-border p-4">
-            <h3 class="mb-3 text-lg font-semibold text-foreground">
-              AI Analysis Summary
-            </h3>
+            <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h3 class="text-lg font-semibold text-foreground">AI Analysis Summary</h3>
+              <SummaryToneBadge verdict={startup.summaryVerdict} />
+            </div>
             <p class="leading-relaxed text-muted-foreground">
               {startup.capsuleProposal.aiAnalysisSummary}
             </p>
