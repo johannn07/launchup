@@ -19,7 +19,11 @@
  *   criteria        -> the arm's prompt(s) and the common block ONLY. unmet_criteria
  *                      counts come from the model, not from summary-tone.ts, so a
  *                      cue edit must NOT invalidate criteria data.
- *   differentiation -> same as tone; it reads criticalCount and unmet-criteria counts
+ *   differentiation -> the arm's prompt(s), the common block, summary-tone.ts AND
+ *                      lib/field-overlap.js. It reports the tone/criteria counts as
+ *                      descriptive columns but is SCORED by the overlap statistic, so
+ *                      an edit to the normaliser or the Jaccard rule is a different
+ *                      measurement even on byte-identical generations.
  *
  * The ADVERSARIAL arm's material includes the LEGACY prompt as well, because the
  * adversarial arm's fallback runs it. Degraded rows are excluded from the means,
@@ -37,8 +41,9 @@ const hash = (material) =>
  *                               is in here because groundPrompt() appends an instruction to
  *                               the prompt, so it changes what was measured; `startups` is
  *                               the two DTOs as sent, since a fixture edit is a new experiment
- * @param {object} spec.sources  { legacyPrompt, adversarialPrompt, tone } - prompt-builder
- *                               `.toString()`s and summary-tone.ts's file text
+ * @param {object} spec.sources  { legacyPrompt, adversarialPrompt, tone, overlap } - prompt-builder
+ *                               `.toString()`s, summary-tone.ts's and
+ *                               lib/field-overlap.js's file text
  * @param {Array}  spec.arms     [{ name, adversarialSummary }]
  */
 function summaryFingerprintMap(spec) {
@@ -57,10 +62,13 @@ function summaryFingerprintMap(spec) {
     out[`tone|${arm.name}`] = hash({ ...base, metric: 'tone', toneSrc: sources.tone });
     // No toneSrc: these are the model's own counts.
     out[`criteria|${arm.name}`] = hash({ ...base, metric: 'criteria' });
+    // overlapSrc as well as toneSrc: the counts are descriptive, but the metric
+    // is scored by lib/field-overlap.js.
     out[`differentiation|${arm.name}`] = hash({
       ...base,
       metric: 'differentiation',
       toneSrc: sources.tone,
+      overlapSrc: sources.overlap,
     });
   }
 

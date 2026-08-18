@@ -73,6 +73,7 @@
  */
 const path = require('path');
 const fs = require('fs');
+const { fieldSet, overlapStats } = require(path.join(__dirname, 'lib/field-overlap.js'));
 
 const BACKEND = path.resolve(__dirname, '..');
 // dotenv 17 prints a ROTATING "tip" line to stdout on every config() call, which
@@ -174,6 +175,9 @@ const MID = 'MediSync Cebu';
 
 /** A degraded cell costs three requests, not one. See the header. */
 const CALLS_PER_DEGRADED_CELL = 3;
+
+/** Below this a cell mean is not readable, so it can feed no verdict. */
+const MIN_CELL_N = 2;
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 const round = (n, d = 2) => (Number.isFinite(n) ? Number(n.toFixed(d)) : null);
@@ -379,7 +383,10 @@ async function runArms(aiService, baseConfig, opts) {
           // a finding; only the prompt cause is.
           degradeCause: degraded ? (rateLimited ? 'rate-limit' : 'schema') : null,
           summary: analysis.summary,
+          // Count unchanged: the criteria|* fingerprint hashes this metric, so
+          // SO 4.2's result stays poolable across the metric-3 rebuild.
           unmetCriteria: analysis.unmetCriteria.length,
+          unmetCriteriaDetail: criteriaDetail(analysis),
           criticalRisks: analysis.criticalRisks.length,
           tone: analyzeTone(analysis.summary),
           apiCalls: apiCalls - before,
@@ -496,15 +503,43 @@ function criteriaTable(rows, arms) {
 }
 
 /**
+ * The criteria detail metric 3 consumes. The harness previously kept only
+ * `.length`, so the criterion and proposal_field text never reached a results
+ * file - which is why neither stored run can be re-scored for field overlap.
+ *
+ * `whyUnmet` is kept on purpose: it is the audit trail for a hand-check, and
+ * hand-checks have caught instrument errors twice on this project.
+ */
+function criteriaDetail(analysis) {
+  return (analysis?.unmetCriteria ?? []).map((c) => ({
+    criterion: c.criterion,
+    proposalField: c.proposalField,
+    whyUnmet: c.whyUnmet,
+  }));
+}
+
+/**
  * Metric 3, the overcorrection guard. An arm that criticises the early-stage and
  * the mid-stage proposal equally has not counterbalanced leniency, it has
  * replaced it with uniform harshness - bias with the sign flipped.
  *
- * Two signals, because they fail differently:
- *   criticalCount  - coarse. The summary is three sentences, so it saturates at
- *                    3 and can read as "no separation" purely from the ceiling.
- *   unmetCriteria  - unbounded, and the adversarial arm's actual output. The
- *                    baseline arm has none, so this column is adversarial-only.
+ * REBUILT. The previous rule was `separates = (critGap !== 0) || (unmetGap !== 0)`,
+ * an exact-inequality test on a mean of 1-3 small integers, and it had three
+ * defects: `criticalCount` saturates at 3 in a three-sentence summary; there was
+ * no noise floor, so ONE call against a 3-call mean produced a PASS; and there
+ * was no sign check, so an arm criticising the MID-stage proposal harder - the
+ * opposite of the rationale - earned the same PASS.
+ *
+ * Both count columns are now DESCRIPTIVE ONLY. They are kept because they are
+ * cheap and legible, but they own no verdict: across the two 2026-08-18 runs
+ * `unmetCriteria` read 4,4 / 3,5 / 4 / 4,4,4 - coinciding means over values
+ * differing in no consistent direction - so no statistic over those integers can
+ * separate these two startups. Field overlap is the statistic that can, because
+ * uniform harshness means citing the SAME proposal fields about both.
+ *
+ * No PASS/FAIL is returned at all. `separation` needs a margin, that margin has
+ * never been observed, and setting it from the run it would score is the
+ * post-hoc move the fingerprint guard exists to forbid. Part 3 pre-registers it.
  */
 function differentiationTable(rows, arms) {
   const usable = analyzableRows(rows);
@@ -512,26 +547,66 @@ function differentiationTable(rows, arms) {
     const mine = usable.filter((r) => r.arm === arm.name);
     const early = mine.filter((r) => r.startup === EARLY);
     const mid = mine.filter((r) => r.startup === MID);
+
     const earlyCrit = mean(early.map((r) => r.tone.criticalCount));
     const midCrit = mean(mid.map((r) => r.tone.criticalCount));
     const earlyUnmet = mean(early.map((r) => r.unmetCriteria));
     const midUnmet = mean(mid.map((r) => r.unmetCriteria));
     const critGap = earlyCrit - midCrit;
     const unmetGap = earlyUnmet - midUnmet;
-    const separates = (Number.isFinite(critGap) && critGap !== 0) || (Number.isFinite(unmetGap) && unmetGap !== 0);
+
+    const overlap = overlapStats(
+      early.map((r) => fieldSet(r.unmetCriteriaDetail)),
+      mid.map((r) => fieldSet(r.unmetCriteriaDetail)),
+    );
+
+    // A mean over one call is not readable. reps=3 is the ceiling and this
+    // harness loses cells to 503 routinely, so requiring 3 would be brittle.
+    const underpowered = early.length < MIN_CELL_N || mid.length < MIN_CELL_N;
+
     return {
       arm: arm.name,
       nEarly: early.length,
       nMid: mid.length,
+      underpowered,
       earlyCritical: round(earlyCrit),
       midCritical: round(midCrit),
       criticalGap: round(critGap),
+      criticalFavours: favours(critGap),
       earlyUnmet: round(earlyUnmet),
       midUnmet: round(midUnmet),
       unmetGap: round(unmetGap),
-      verdict: early.length && mid.length ? (separates ? 'PASS' : 'FAIL - uniform') : 'n/a',
+      unmetFavours: favours(unmetGap),
+      // 3dp, not the default 2: these ratios are the raw material for part 3's
+      // pre-registered margin, and small-set Jaccard lands on thirds and sevenths.
+      crossOverlap: round(overlap.crossOverlap, 3),
+      nCrossPairs: overlap.nCrossPairs,
+      withinOverlap: round(overlap.withinOverlap, 3),
+      nWithinPairs: overlap.nWithinPairs,
+      separation: round(overlap.separation, 3),
+      verdict: verdictFor(underpowered, overlap.separation),
     };
   });
+}
+
+/**
+ * Which startup a signed gap favours. The guard's rationale expects the
+ * early-stage proposal to be criticised MORE, so `early` is the expected
+ * direction - printed as a word because a reader scanning `-0.33` cannot see
+ * that it points the wrong way.
+ */
+function favours(gap) {
+  if (!Number.isFinite(gap)) return null;
+  if (gap > 0) return 'early';
+  if (gap < 0) return 'mid';
+  return 'neither';
+}
+
+/** Always n/a, with the reason. See the header: the margin is not ours to set. */
+function verdictFor(underpowered, separation) {
+  if (underpowered) return 'n/a - underpowered';
+  if (separation === null) return 'n/a - no scoreable field citations';
+  return 'n/a - margin not pre-registered';
 }
 
 /**
@@ -618,11 +693,15 @@ function printReports(rows, { apiCalls, arms = ARMS } = {}) {
   console.table(s.criteria);
 
   console.log(`\n--- Metric 3: DIFFERENTIATION guard - ${EARLY} (early) vs ${MID} (mid) ---`);
-  console.log('(PASS/FAIL, not a nice-to-have: an arm that criticises both equally has overcorrected');
-  console.log(' into uniform harshness. criticalCount saturates at 3 on a three-sentence summary, so');
-  console.log(' unmetGap is the sharper signal where the arm produces criteria at all.)\n');
+  console.log('(An arm that criticises both equally has overcorrected into uniform harshness -');
+  console.log(' bias with the sign flipped. Read `separation` = withinOverlap - crossOverlap:');
+  console.log(' how much the arm repeats ITSELF across reps of one startup, minus how much it');
+  console.log(' says the same about BOTH. Positive means it distinguishes them by more than');
+  console.log(' its own rep-to-rep noise. The count columns are DESCRIPTIVE ONLY.)\n');
   console.table(s.differentiation);
-  console.log('n=3 per cell separates nothing statistically - a nonzero gap is a sign, not significance.');
+  console.log('No PASS/FAIL is issued: `separation` needs a margin, none has been observed, and');
+  console.log('setting one from the run it scores is the post-hoc move the fingerprints forbid.');
+  console.log(`Cells below n=${MIN_CELL_N} read n/a - one call against a multi-call mean is not a gap.`);
 
   printSummaries(rows);
   return s;
@@ -677,6 +756,13 @@ function toneSource() {
     .replace(/\r\n/g, '\n');
 }
 
+/** Metric 3's scorer. Line endings normalised for the same reason toneSource does it. */
+function overlapSource() {
+  return fs
+    .readFileSync(path.join(__dirname, 'lib/field-overlap.js'), 'utf8')
+    .replace(/\r\n/g, '\n');
+}
+
 function currentFingerprints() {
   const b = loadBackend();
   const startups = Object.fromEntries(
@@ -696,6 +782,7 @@ function currentFingerprints() {
       legacyPrompt: b.LEGACY_SUMMARY_PROMPT.toString(),
       adversarialPrompt: b.ADVERSARIAL_SUMMARY_PROMPT.toString(),
       tone: toneSource(),
+      overlap: overlapSource(),
     },
     arms: ARMS,
   });
@@ -957,6 +1044,7 @@ module.exports = {
   EARLY,
   MID,
   CALLS_PER_DEGRADED_CELL,
+  MIN_CELL_N,
   callDescriptors,
   validateArgs,
   is429,
@@ -966,6 +1054,7 @@ module.exports = {
   sourceBreakdown,
   toneTable,
   criteriaTable,
+  criteriaDetail,
   differentiationTable,
   validity,
   summarize,
@@ -976,5 +1065,6 @@ module.exports = {
   makeStub,
   currentFingerprints,
   toneSource,
+  overlapSource,
   mean,
 };
