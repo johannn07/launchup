@@ -23,6 +23,7 @@ import { RagRetrievalLog } from './rag-retrieval-log.entity';
 import { ReadinessEvaluation } from './readiness-evaluation.entity';
 import { Sector } from './enums/sector.enum';
 import { BusinessModel } from './enums/business-model.enum';
+import type { SummaryVerdict } from '../ai/summary-verdict';
 
 @Entity({ tableName: 'startups' })
 export class Startup {
@@ -65,6 +66,20 @@ export class Startup {
     nullable: true,
   })
   capsuleProposal?: CapsuleProposal;
+
+  /**
+   * SO 4.4 tone verdict, computed per request by
+   * `StartupService.attachSummaryVerdicts` — never stored.
+   *
+   * `persist: false` keeps it out of the schema, which matters more here than
+   * usual: `main.ts` runs `updateSchema()` on every boot, so a persisted
+   * property would silently add a column to whatever DB is configured.
+   * Decorated rather than assigned ad hoc because MikroORM builds `toJSON()`
+   * from declared properties, and an undeclared one is dropped on the way to
+   * the frontend.
+   */
+  @Property({ persist: false, nullable: true })
+  summaryVerdict?: SummaryVerdict;
 
   @ManyToMany(() => User, undefined, { deleteRule: 'cascade' })
   mentors = new Collection<User>(this);

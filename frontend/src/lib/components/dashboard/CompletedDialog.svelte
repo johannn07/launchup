@@ -1,5 +1,6 @@
 <script lang="ts">
   import * as Dialog from '$lib/components/ui/dialog/index.js';
+  import SummaryToneBadge from './SummaryToneBadge.svelte';
   import * as Table from '$lib/components/ui/table/index.js';
   import { getBadgeColorObject, getStartupMemberCount } from '$lib/utils';
 
@@ -88,9 +89,10 @@
         <!-- AI Analysis Summary Section -->
         {#if startup.capsuleProposal?.aiAnalysisSummary}
           <div class="bg-primary/10 mb-6 rounded-lg border border-border p-4">
-            <h3 class="mb-3 text-lg font-semibold text-foreground">
-              AI Analysis Summary
-            </h3>
+            <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h3 class="text-lg font-semibold text-foreground">AI Analysis Summary</h3>
+              <SummaryToneBadge verdict={startup.summaryVerdict} />
+            </div>
             <p class="leading-relaxed text-foreground">
               {startup.capsuleProposal.aiAnalysisSummary}
             </p>

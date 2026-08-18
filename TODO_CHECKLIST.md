@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 detection built and measured, **alerting not delivered**; 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -99,7 +99,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
 | **4b** **Adversarial** prompting (SO 4.2, find weaknesses *before* the readiness summary) | 🟡 Partial — **delivered on the summary path, not the scoring path (2026-08-18)** | **Delivered:** `generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, measured against the shipped prompt — 100% schema adherence, 3 vs 1 mean critical observations, 4 mean unmet criteria where the baseline has no criteria field at all. **Not delivered:** the readiness-*scoring* path is unchanged — `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are all untouched on this branch. Different pipeline stages, so this row stays 🟡. **`reviewBiasScore` (`ai.service.ts:339`) is mislabelled, not misplaced:** its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither of which is a readiness summary. Behaviour deliberately unchanged |
-| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Two gaps, both open:** (1) the shipped rule `flagged = criticalCount === 0` is **measured wrong** — it fired 0/10 in both arms because the legacy prompt mandates a risk sentence, so it cannot fire against the prompt it polices. `ratio >= 0.75` is the calibrated replacement the run supplied (baseline tops out at 0.50, adversarial sits at 1.00, no overlap) and is **not implemented**. (2) **No Manager can see the verdict** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
+| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Both gaps closed 2026-08-18:** (1) ~~the shipped rule `flagged = criticalCount === 0` is **measured wrong**~~ — now `flagged = ratio < 0.75`, calibrated on the run that measured the old rule firing 0/10 and **validated on a held-out run the same day — baseline 5/5 flagged, adversarial 0/4, perfect separation**. (2) ~~**No Manager can see the verdict**~~ — `summaryVerdict` now rides on `GET /startups/all` and renders as a badge in all four Manager dialogs, recorded-row-first with a live recompute fallback (Neon has no `analysis_summary` rows, so a row-only badge would have been empty). **What remains for this objective is an *action* on the flag, not its visibility** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
 ### Objective 1b — what was built and what it's worth
@@ -270,7 +270,9 @@ measurement.
   `propertyOrdering`), not prompt wording, and Gemini honouring
   `propertyOrdering` is now supported by this run rather than assumed.
 
-- [ ] 🔴 **OBJECTIVE · S · Replace the SO 4.4 flag rule with `ratio >= 0.75`.**
+- [x] 🟢 **OBJECTIVE · S · Replace the SO 4.4 flag rule** — *done 2026-08-18*
+  (`fix/so-4-4-flag-threshold`). `summary-tone.ts` now ships
+  `flagged = ratio < 0.75`.
   `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both
   arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy
   prompt mandates *"3. Critical risks and primary recommendations"*, so every
@@ -280,33 +282,111 @@ measurement.
   sentence appended, so the bias is positive framing, not absent critical
   language — the instrument tested for the wrong property. Per-call `ratio`
   separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50
-  0.50`, adversarial `1.00 1.00 1.00 1.00`. A threshold at ~0.75 flags all six
-  baseline summaries and none of the adversarial ones. This is exactly what
-  spec §3 planned — ship uncalibrated, let the run supply the distribution.
-  **Not implemented:** `summary-tone.ts` still ships `criticalCount === 0`.
+  0.50`, adversarial `1.00 1.00 1.00 1.00`, so 0.75 is the midpoint of the gap.
+  This is exactly what spec §3 planned — ship uncalibrated, let the run supply
+  the distribution.
+  **This item's old title said `ratio >= 0.75`, which states the predicate
+  backwards** — a high ratio means *more* critical, so flagging the lenient arm
+  is `ratio < 0.75`. Read as naming the *balanced* condition it was right;
+  read as the flag rule it inverts the objective. Corrected here.
+  **Exactly 0.75 is balanced** (strict `<`) — the one place this module does not
+  resolve ambiguity toward flagging, because 3-of-4-critical is not the leniency
+  SO 4.4 polices and flagging it would train Managers to ignore the flag.
+  Unobserved in the run, so a judgement, not a measurement.
+  **The old rule is subsumed** (`criticalCount === 0` forces `ratio 0`), so the
+  new rule flags a strict superset and trades away no existing detection.
+  **Mutation testing changed the tests, not the code:** with only baseline's
+  *modal* 0.333 covered, mutating the threshold to 0.5 survived a green suite
+  while silently unflagging the **two measured baseline rows at exactly 0.500**.
+  The constraining value is the observed one nearest the boundary, not the most
+  frequent. 5/5 mutants killed, each verified as landed.
+  ✅ **Validated on a held-out run, 2026-08-18** (`results/2026-08-18-threshold-validation.json`,
+  9/12 calls, 3 lost to 503). **Baseline 5/5 flagged (flagRate 1.00), adversarial
+  0/4 flagged — perfect separation on generations the threshold had never seen.**
+  The original defect reproduced independently too: every baseline summary again
+  scored `criticalCount: 1`, so the old rule would have fired **0/9** here.
+  **Held out is the *generations*, not the documents** — same two startups, same
+  prompts — so this rules out resampling and nothing more. **Baseline ratio was
+  0.333 on all five calls, zero variance**, so the wide margin to 0.75 reflects a
+  very stable prompt structure rather than a demonstrated robustness. The
+  informative next test is a *different prompt or third document*, not more reps.
+  **Four of six fingerprints changed** — `tone|*` *and* `differentiation|*`, both
+  embedding the file text (`summary-fingerprint.js:60-64`), verified against the
+  real stored values; `criteria|*` unchanged, so SO 4.2's result gains n.
+  ⚠️ **The fingerprint guard is documentary here, not mechanical** — `--merge`
+  exists only on `measure-grounding.js`; `measure-summary-bias.js` records
+  fingerprints but nothing acts on them.
 
-- [ ] 🔴 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager.**
-  Nothing in `frontend/src` reads `confidenceStatus`,
+- [x] 🟢 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager** — *done
+  2026-08-18* (`fix/so-4-4-flag-threshold`). `GET /startups/all` carries a
+  `summaryVerdict` per startup, and one `SummaryToneBadge` renders it in all
+  four dialogs a Manager reviews from `/applications`.
+  Previously nothing in `frontend/src` read `confidenceStatus`,
   `positive-language-flagged` or `analysis_summary`, and the only two
   `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`, so
-  the `analysis_summary` row is never read. The summary *text* is already shown
-  to Managers (`PendingDialog.svelte:86` and its Waitlisted/Qualified/Completed
-  siblings) — the verdict beside it is what is missing. Decision taken: ship
-  detection now, surface it as its own task. An alert nobody sees is not an
-  alert.
+  the `analysis_summary` row was never read.
+  **The row-only design specified here would have shipped an empty badge.**
+  Neon has **zero** `analysis_summary` rows: the persistence path only runs for
+  proposals created through `createStartupProposal`, and both demo proposals
+  were written directly by `seed-demo-full.js`. So the verdict resolves from a
+  recorded row *when one exists* and is otherwise recomputed live from the
+  summary text, with `source` shown in the UI. A recorded row always wins over a
+  disagreeing fresh reading — it is attributable to a generation run and a fresh
+  reading is not.
+  **Live-verified end to end**, because neither risk is visible to the suite:
+  the `persist: false` property produces **0** schema DDL statements (`main.ts`
+  runs `updateSchema()` on every boot) and survives `toJSON()`; both branches
+  render correctly in both themes; a temporary `ai_recommendations` row proved
+  the recorded+flagged path and was removed.
+  **`PendingTab.svelte` deliberately not wired** — it renders these dialogs but
+  is imported nowhere. See the 🎯 deletion item in §4.
+  **Still open:** no Manager *action* is attached to the flag. (The threshold
+  behind it was validated on a held-out run 2026-08-18 — see the item above.)
 
-- [ ] ❓ **OPEN · The differentiation guard did NOT pass.** Both arms returned
-  `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail before the run,
-  so it is reported failed, not explained away. The adversarial arm is
-  **saturated** — all four calls at `criticalCount: 3`, the maximum available
-  in a three-sentence summary — so that column cannot discriminate. `unmetGap`
-  is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means while the
-  underlying values differ in no consistent direction. The **baseline arm also
-  fails**, uniformly at `criticalCount: 1`. So this run **cannot distinguish
-  genuine overcorrection from instrument ceiling**; resolving it needs a
-  non-saturating metric, not more reps. The precedent that motivated the guard
-  stands: `gemini-2.5-flash-lite` read as lenient but was floor-bound and
-  blind, and the real defect was differentiation.
+- [ ] 🔴 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3).**
+  *Diagnosed 2026-08-18 across both runs; design agreed, not yet implemented.*
+  Originally logged as "the guard did not pass". **The guard itself is the
+  defect** — `differentiationTable` (`measure-summary-bias.js:509`) decides
+  `separates = (critGap !== 0) || (unmetGap !== 0)`, an exact-inequality test on
+  a mean of 1–3 small integers. **Three defects, in ascending order of severity:**
+  1. **Saturation** (the originally recorded concern). `criticalCount` ceilings
+     at 3 in a three-sentence summary. Calibration run: adversarial early `[3,3]`
+     vs mid `[3,3]` — that is the ceiling, not agreement.
+  2. **No noise floor.** Validation run passed the adversarial arm on
+     `criticalGap −0.33`, produced by **one** early-stage call against a 3-call
+     mean. A single call flips the verdict.
+  3. **No sign check — the worst of the three.** That −0.33 means the arm
+     criticised the *mid*-stage proposal **more** than the early-stage one, the
+     opposite of the guard's own rationale. **A PASS can be earned by
+     differentiating in the wrong direction.**
+
+  **The deeper finding: both columns are degenerate, for different reasons.**
+  `criticalCount` is ceiling-bound. `unmetCriteria` is *structurally* unbounded
+  — the prompt says "list **every** unmet criterion", the schema sets no
+  `maxItems` — yet it returned **exactly 4 on all 8 successful adversarial calls
+  across both runs**. Not a cap; convergent model behaviour at temp 0. **So no
+  count-based metric can separate these two startups**, and a cleverer statistic
+  over the same numbers will not help. What differs, if anything, is *which*
+  criteria are cited — and the harness stores `unmetCriteria` as a **count
+  only**, discarding the `criterion` / `proposalField` text before it reaches
+  the results file.
+
+  **Agreed design, three parts** (branch `measure/non-saturating-differentiation`,
+  to be cut off `fix/so-4-4-flag-threshold`):
+  1. **Harden the verdict rule** — require direction (early > mid), a minimum
+     magnitude, and a minimum n per cell so a 1-vs-3 split reports `n/a` rather
+     than PASS. Zero quota. Re-scoring the two existing runs under this is
+     legitimate as a *rule* correction — report it as "what the old runs would
+     have said", never as a new result.
+  2. **Persist the criteria detail** the harness currently discards, then measure
+     differentiation as **overlap between the two startups' cited proposal
+     fields**. Uniform harshness means saying the *same things* about both, which
+     is what the objective actually claims to test, and it cannot saturate the
+     way a three-sentence count does. Zero quota to build.
+  3. **Pre-register and run fresh** — ~8–12 calls, needs a full quota window.
+
+  The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as
+  lenient but was floor-bound and blind, and the real defect was differentiation.
 
 - [ ] ❓ **OPEN · `propertyOrdering` enforces sequence, not substance.**
   `unmet_criteria: []` is a valid response — `required` requires the key, not a
