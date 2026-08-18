@@ -20,7 +20,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 ---
 
-## Compressed history — 2026-07-26 → 2026-08-03
+## Compressed history — 2026-07-26 → 2026-08-05
 
 **AI pipeline config and run provenance (2026-07-26, PR #7).** `AiConfigService` resolves `{model, temperature, grounding, rag, biasReview, scoreNormalization}` from env, with a Manager/Admin-gated `X-Ai-Pipeline-Config` override; every generation opens an `ai_generation_runs` row and every artifact carries a `generation_run_id`, so runs are attributable to an exact arm. Score normalization was decoupled from bias review (two of four arms were previously unreachable). **Real bug fixed:** `temperature`/`maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them — every call had run at the API default, never at the configured `0`, so baseline results gathered before this are not sampling-comparable with results after.
 
@@ -46,147 +46,9 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 **Reps 2 and 3 (2026-08-03).** Rep 2 (n=2 pooled) showed the corpus arm's per-dimension deltas were **reproducible, not noisy** — MediSync `+2 +2 +2 −3 −2 −2` then `+2 +2 +2 −2 −2 −2`, while baseline wobbled more. That retracted the standing "54 rubric rows destabilise placement" hypothesis: systematic displacement, not instability. Rep 3 lost its twelfth call to a transient **503** (not a 429) in the single cell carrying the finding, which exposed that **metric 3 cannot resolve these arms** — the byte-identical control pair spans 1.67–3.33 gap points across three reps, wider than the effect being measured. Do not quote a pooled MAE from an unbalanced pool; the missing cell biased the corpus arm in its own favour. Both harness gaps were then closed TDD-first: `--only-arm=`/`--only-startup=` (refilling one cell costs 2 calls, not 12; a filter matching nothing hard-errors before any network call) and a bounded 503 retry that **never retries 429**. Mutation testing again earned its keep — the `is429` guard passed with the guard *removed*, because a real 429 body contains neither `503` nor `UNAVAILABLE`; it was decorative.
 
----
+**Three streams (2026-08-04).** Output validation (1c, PR #18) and sector-aware weighted scoring (2b, PR #19) merged; the grounding n=3 volume ladder did not. **1c is a length-and-confidence validator, not "full output validation"** — groundedness and stage-appropriateness were excluded because both probes measured saturated, a rationale partly refuted on 2026-08-06. No backfill by design, so a `'validated'` status on a pre-existing row is *not* evidence the validator ran. **2b: `TierConfig.weights` was deleted rather than used** — keyed per tier, so a startup crossing a boundary could see its composite *fall* as a dimension improved. Two findings that correct earlier framing: the ÷5 → ÷9 fix **narrows** differentiation (AgroLink/MediSync gap 44 → 24) and is a correctness fix, and **the measured sector effect is about one point**, so 2b is correctness and configurability, not a differentiation win. `tier_configs` is empty on Neon, so the hardcoded 85/70/55/40/25 ladder is what runs and is now harsher against ÷9 scores. The volume-ladder result stands in direction (an 87% cut in rubric text left aggregate placement flat, and stripping bodies made Technology/Acceptance *worse*) but its magnitudes were scored against the reference broken below. **Branch-hygiene lesson:** a long-lived measurement branch that edits shared docs should merge `master` **before** writing to them.
 
-## 2026-08-04 — three streams
-
-| stream | outcome | where |
-|---|---|---|
-| Output validation (1c) | merged | `master` via PR #18 |
-| Sector-aware weighted scoring (2b) | merged | `master` via PR #19 |
-| Grounding n=3 + volume ladder | **not merged** | `measure/grounding-rep2`, 8 commits, unpushed |
-
-### Output validation (Objective 1c)
-
-`OutputValidatorService.validate({content, retrievalLowConfidence, maxLength?})` replaces three stub methods and the dead `recommendation-storage.service.ts` + `recommendation.entity.ts` (both deleted, along with the orphaned `recommendations` table). It checks exactly two things: **retrieval confidence** (`ragContext.lowConfidence` — a signal RAG already computed and the code was throwing away) and **length** against the limit each prompt itself declares to the model. Wired into RNA, RNS **and roadblock** generation, writing a real verdict to `ai_recommendations` in place of hardcoded literals.
-
-**Scope decisions, and why:**
-- **Groundedness and stage-appropriateness checks deliberately excluded** — both probes measured saturated (0/15 fabrication, 0% stage-inappropriate at n=3), so there was no observed failure mode to validate against. This is a length-and-confidence validator, not "full output validation". *(Partly refuted 2026-08-06 — see below.)*
-- **No model-judged validation** — deterministic only, so the validator is testable without a live call.
-- **Three separate `*_MAX_LENGTH` constants, not one shared limit** — separate contracts to separate prompts, no reason to move together.
-- **No backfill, by design.** Pre-existing rows keep their old `'validated'`/`'high-confidence'` literals, so a `'validated'` status on an old row is **not** evidence the validator ran. Retroactively computing a verdict would be fabricating provenance.
-
-**Two open design decisions, escalated rather than patched:**
-1. **The RNS correlation key `(generationRun, dimensionKey)` is not unique** when `no_of_tasks_to_create` produces more than one task per dimension per run — the lookup `Map` keeps only the last, so a flagged task can be invisible in the payload. A proper fix needs an artifact FK on `ai_recommendations`, unavailable at record time (persist-then-flush) — schema change, not a patch.
-2. **The verdict goes stale** if `update()` or `refineRna()` later rewrites the text. Revalidate-on-write vs null-the-stale-verdict is a design choice.
-
-**Caught along the way:** `roadblock.service.ts` was a third hardcoded writer the spec's own final grep missed (the spec assumed only two generation call sites). The RNA list payload was spreading the entire `AiGenerationRun` — model, config, tokens, error — into the response; the plan's own reference snippet did that.
-
-### Sector-aware weighted scoring (Objective 2b)
-
-New `weight_profiles` table + `WeightProfileService.resolve(sector, businessModel)` walking `(sector, businessModel)` → `(sector, null)` → global `(null, null)` → `DEFAULT_WEIGHTS`. `Startup` gained `sector`/`businessModel`. Invalid profiles (missing a dimension, or not summing to 1.0 ±0.001) are **skipped with a warning and the cascade continues** — returning zeros would be a silent scoring failure.
-
-**Weights are keyed by sector/business model, not by tier — and `TierConfig.weights` was deleted.** The checklist had instructed reading weights from `TierConfig`; that column was keyed per **tier**, so a startup crossing a boundary would have its weight vector swapped underneath it and the composite could *fall* as a dimension improved. Non-monotonic in its own inputs is indefensible in a readiness score.
-
-**Two findings that correct earlier framing, and both matter before anyone cites them to a panel:**
-
-- **The ÷5 → ÷9 fix *narrows* differentiation, it doesn't widen it.** Levels run 1–9 but the old code clamped to 5 and divided by 5, so any level ≥5 read as 100% — inflating both scores and the *stronger* one more. AgroLink/MediSync gap fell **44 → 24** (32→17, 76→41). This is a **correctness** fix, full stop.
-- **The measured sector effect is about one point** (MediSync 41 → 40 under healthtech). A weighted mean diverges from an unweighted one only in proportion to the spread of its inputs, and MediSync's per-dimension percentages are 33/44/56/44/33/33. Sector weighting would move a genuinely lopsided startup; it cannot manufacture separation between two internally flat ones. **2b is a correctness and configurability deliverable, not a differentiation win.**
-
-**Live-verified against Neon** (real server, authenticated): schema landed, `tier_configs.weights` gone, four composites exactly as hand-predicted, six dimensions including `regulatory`. **The null-matching proof needed strengthening** — `DEFAULT_WEIGHTS` is numerically identical to the seeded global row, so `fintech → 41` was equally consistent with "IS NULL matched" and "IS NULL silently failed and we fell back to the constant". Closed with a query-logged read-only probe showing the real `is null` SQL. Worth recording: that coincidence would have hidden a broken cascade indefinitely.
-
-**`backend/update-demo-tiers.js` deleted** — it carried its own copy of the old five-dimension weights and `/5` divisor and would have silently invalidated the 17/41 figures the fixtures and docs depend on. Also: `tier_configs` is **empty on Neon**, so the hardcoded 85/70/55/40/25 ladder is what actually runs, and it is now effectively harsher against ÷9 scores — a deliberate calibration question left open, not quietly retuned.
-
-### Grounding measurement — n=3 and the volume ladder
-
-n=3 complete and balanced. Two new arms tested the standing volume hypothesis by holding level coverage fixed while stripping rubric text:
-
-| arm | levels block | MAE | within1 |
-|---|---|---|---|
-| `baseline` | none | 0.78 | 30/36 |
-| `deviation-deterministic` | 31,850 ch | 1.36 | 13/36 |
-| `deviation-titles` | 12,552 ch | 1.69 | 15/36 |
-| `deviation-bare` | 4,002 ch | 1.78 | 12/36 |
-
-An **87% cut in block size left aggregate placement flat**, refuting the volume hypothesis by experiment rather than by argument. Per-dimension, two effects were hiding inside one number: Organizational and Investment are **volume-invariant** (−1.17 / −1.00 signed, identical to two decimals across the whole cut), while Technology and Acceptance **do** track volume and get *worse* as text is stripped — a bare title is an aspirational label with no criteria attached, so the body was the restraint.
-
-**The control kept earning its keep:** `sdd-semantic` "beat" baseline in all three reps despite byte-identical prompts, so a consistent direction across three reps is **not** evidence of an effect in this study.
-
-**All of these numbers were later retracted** — see 2026-08-05. They were scored against a broken reference.
-
-**Harness:** `--only-probe=<rna|levels>` (metric 2 had been saturated at 0% on every arm since the redesign, so half of every rep bought nothing); ambiguous `--only-arm` prefixes now hard-error, because over-selection costs as much as under-selection against a 20/day cap; three separate renderers kept deliberately un-parameterised, because every fingerprint hashes `renderRubricBlock`'s source and editing it in place would have stopped three reps of data from pooling.
-
-### Branch hygiene lesson
-
-`measure/grounding-rep2` forked from `master` and sat through **two** merges, so its copies of the shared docs were two work streams stale and the write-up landed on a checklist still describing 1c as a stub. Both merge conflicts had the same shape — **each branch held the current version of a different row** — so resolution was "best of both", not "take one side". **A long-lived measurement branch that edits shared docs should merge `master` before writing to them, not after.**
-
----
-
-## 2026-08-05 — the ground-truth audit inverted Objective 1b
-
-Branch `measure/ground-truth-audit`, 6 commits off `master` at `2fa24a9`, **nothing pushed**.
-
-The session started on the stated next step: recalibrate the O/R/I rubric rows to match the seeded ground truth. **Checking that ground truth first is why the session didn't do the work it set out to do, and that was the right outcome.**
-
-### The reference was contradicted by its own documents
-
-Metric 1 scored placement against the seeded `StartupReadinessLevel` rows — demo fixtures written for the UI, never derived from the capsule documents the model is shown. `metrics.js` justified them as *"independent of the prompt"*: true, a sound fix for a real problem, but **independence and correctness are different properties and only the first was secured.** Five cells are negated by their own document with no judgement call required:
-
-| startup | dim | seeded level's own rubric text | the document |
-|---|---|---|---|
-| MediSync | Market 4 | "no prospect has yet indicated a specific willingness to pay" | PHP 5,000 MRR |
-| MediSync | Organizational 4 | "first full-time hire beyond the founders" | "team grew to 3 founders" |
-| MediSync | Investment 3 | "a written funding plan document with a stated amount" | no funding activity |
-| MediSync | Technology 5 | "has not yet gone live for actual users" | paid subscriptions, 6 live facilities |
-| AgroLink | Acceptance 1 | "no user has interacted with the product in any form" | paper prototype, 3 cooperatives |
-
-Re-scoring the same 30 calls (`audit-ground-truth.js`, zero quota) **reversed the direction**: corpus arm 1.36 → **0.28** MAE against a document-derived reference, within-one-rung 13/36 → **36/36**. The O/R/I "displacement" was the corpus **correcting** baseline, not drifting from truth. Independent corroboration: the byte-identical control pair differs by 0.36 MAE under the seeded reference and by 0.03–0.08 under derived ones.
-
-### The claim was restated to need no reference at all
-
-Adjudicating the cells personally exposed why a model-set reference cannot carry the positive claim: **an adjudicator reading the document with the full rubric ladder in front of it is approximately the `deviation-deterministic` condition**, so agreement is near-circular. So the load-bearing claim was rebuilt on document facts only. Three rungs require an artifact class **neither document mentions anywhere** — ORL 3+ a non-founder contributor, RRL 3+ counsel engaged, IRL 3+ a written funding plan. `verifyAbsences` asserts those absences at run time rather than trusting the list, and ceilings are one rung *more* generous than the documents support, so the rates are lower bounds:
-
-| arm | asserts absent evidence | rate |
-|---|---|---|
-| `baseline` | 11/18 | **61%** |
-| `sdd-semantic` *(control)* | 10/18 | 56% |
-| `deviation-deterministic` | **0/18** | **0%** |
-| `deviation-titles` | 1/18 | 6% |
-| `deviation-bare` | 1/18 | 6% |
-
-Baseline places MediSync's Investment at 4–5 (*"initial investor conversations"*, *"angel funding secured"*) for a document containing no funding token of any kind. **This is an unsupported-claim rate measured directly against the source document** — Objective 1b's actual claim, doubling as an Objective 4 leniency result — and it is the strongest number the study has produced *because* it survives the reference being contested. Directional: silent on under-placement.
-
-A mutation pass earned its keep again — changing `placed > spec.ceiling` to `>=` passed all nine tests while silently inflating every arm's rate.
-
-### Demo levels corrected, and the duplication fixed first
-
-John adjudicated by choosing the **strict** reading: AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`.
-
-**The duplication was the actual bug.** `main.ts` and the harness each held their own copy of these levels and `seed-demo-full.js` held none — which is how the app and the study drifted apart unnoticed. New `src/demo-readiness-levels.ts` is the single source; a measurement test **parses the TS source** and fails if seeder and harness disagree. Because `seedDemoStartup` returns early on `if (existing)`, editing the constant alone would never reach an existing database, so `seed-demo-full.js` repoints rows — but **only rows still carrying the seeder's own remark**, since replacing a mentor's rating with a seed value would be worse than leaving it stale. `--check-levels` reports and exits *before step 1*; naming it `--dry-run` would have been a lie, because the seeder's other six steps still write.
-
-Applied to Neon: 8 rows changed, 0 skipped, re-run reports 0, verified by querying `startups_readiness_level` directly. Composites moved **AgroLink 17 → 26** (crossing the 25 tier threshold) and **MediSync 40 → 41**.
-
-**Fingerprint consequence, and it is correct.** Levels sit inside `common`, so all 15 fingerprints changed and pre-correction runs are a closed historical set. `audit-ground-truth.js`'s `SEEDED` is deliberately **frozen** at the old values — that is what the collected runs were scored against — with a test asserting it does *not* track the harness, so a well-meaning sync cannot land quietly.
-
-### The measurement against the corrected reference
-
-18/18 calls. `measurement/results/2026-08-05-corrected-reference.json`. **First measurement scored against a reference fixed *before* the generations existed**, so unlike the re-scoring it carries no post-hoc exposure.
-
-| arm | MAE | exact | within 1 |
-|---|---|---|---|
-| `baseline` | 0.69 | 20/36 (56%) | 29/36 |
-| `sdd-semantic` *(null control)* | 0.94 | 15/36 (42%) | 28/36 |
-| `deviation-deterministic` | **0.22** | **28/36 (78%)** | **36/36** |
-
-**Read it against the control, never against baseline alone.** The byte-identical pair's difference *is* the noise floor: 0.25 MAE and **1** on `within1`. The corpus arm beats baseline by 0.47 MAE (1.9× that spread) and by **7** on `within1` against a control spread of 1. `within1` is the discriminating number.
-
-Per-dimension signed error (+ = placed too high):
-
-| arm | Tech | Mark | Acce | Orga | Regu | Inve |
-|---|---|---|---|---|---|---|
-| `baseline` | +0.33 | +0.00 | +0.00 | **+1.67** | **+0.67** | **+1.17** |
-| `sdd-semantic` | +0.00 | −0.33 | −0.33 | **+1.33** | **+0.83** | **+1.83** |
-| `deviation-deterministic` | +0.50 | +0.83 | +0.00 | **0.00** | **0.00** | **0.00** |
-
-Exactly right on O/R/I across all 36 observations; both corpus-free arms inflate them. The corpus arm's entire residual is Technology/Market on MediSync, where it places `T7 M6` on all three reps — **exactly the permissive reading of those two cells**. Scored permissive: corpus **0.19**, baseline 0.94. The direction survives either reading.
-
-**Limits to quote:** this is the **levels probe, a harness construct** — production does not ask the model to assign readiness levels, mentors set them. n=3, two startups, one model. **Metric 3 is unresolvable and should not be quoted** (control pair spread 0.62 exceeds the corpus arm's 0.38 deficit). Metric 2 is **n/a, not 0%** — `--only-probe=levels` generated no RNA to score.
-
-**The O/R/I rubric recalibration is cancelled, not deferred.** It existed to make the corpus reproduce the seeded levels; those levels were the error, and O/R/I is now exactly right. Editing them would break what works.
-
-### The methodological lesson
-
-A reference can be *independent of the prompt* and still be *wrong*. Three reps across five arms agreed in direction for a week — not because the effect was real, but because the reference was consistently wrong. **Agreement across reps tests sampling noise, not the reference.** The study's own null control had been quietly reporting this all along.
+**The ground-truth audit inverted Objective 1b (2026-08-05).** The session set out to recalibrate the O/R/I rubric rows and instead found the reference was wrong. Metric 1 had scored placement against seeded `StartupReadinessLevel` rows — UI demo fixtures, **contradicted by their own documents in ten of twelve cells** (seeded Market 4 requires "no prospect has yet indicated a specific willingness to pay" beside a document stating PHP 5,000 MRR). Re-scoring the same calls reversed the direction. Against a reference fixed *before* the generations existed (`2026-08-05-corrected-reference.json`, 18/18): **corpus 0.22 MAE / 36-36 within one rung vs baseline 0.69 / 29-36**, read against a byte-identical null control whose own spread is 0.25 MAE and 1 rung. The corpus arm is *exactly* right on O/R/I where both corpus-free arms inflate. **The reference-free figure is the one to quote:** three rungs require an artifact class neither document mentions, so any placement above them asserts absent evidence — baseline **61%**, corpus **0%**. `src/demo-readiness-levels.ts` became the single source for the levels (`main.ts`, the harness and `seed-demo-full.js` had held three states between them, which is how the app and the study drifted). The O/R/I recalibration is **cancelled, not deferred** — those rows are now exactly right. **Methodological lesson:** a reference can be independent of the prompt and still be wrong; three reps agreeing in direction tested sampling noise, not the reference. **Limit that must travel with every figure:** this is the levels probe, a harness construct — production never asks the model to assign levels.
 
 ---
 
@@ -311,6 +173,48 @@ This is the substantive outcome. `require`, `existed`, `existing`, `exists`, and
 
 ---
 
+## 2026-08-18 — the adversarial summary, measured
+
+Branch `feat/adversarial-summary`. Spec and plan under `docs/superpowers/`; the run is `backend/measurement/results/2026-08-18-summary-bias.json`.
+
+### What shipped
+
+`generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, with the shipped prompt preserved verbatim as `LEGACY_SUMMARY_PROMPT` for the baseline arm. `src/ai/summary-tone.ts` is the SO 4.4 instrument, one copy imported by both the service and the harness. The verdict persists as an `analysis_summary` `AiRecommendation`.
+
+**SO 4.2 targets the readiness *summary*, not a score** — the objective text names the summary, and the branch delivers it there. **The readiness-scoring path is untouched**: `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are unchanged, so checklist objective 4b stays 🟡. `reviewBiasScore` (`ai.service.ts:339`) is **mislabelled, not misplaced** — its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither a readiness summary. Behaviour deliberately unchanged.
+
+### The run — partial, 10/12 calls
+
+`gemini-3.6-flash`, temp 0, grounding on, reps=3, 12 API requests spent. Two adversarial cells (rep1/MediSync, rep2/AgroLink) failed on **503 model overload, not quota**, and were deliberately not re-run: reported as partial, every mean over surviving rows, never padded. Validity gate passed — all 4 completed adversarial calls used `source=schema`, so no control output wears the adversarial label.
+
+| arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate | meanUnmetCriteria | meanCriticalRisks |
+|---|---|---|---|---|---|---|---|---|
+| baseline | 6 | 1 | 1.67 | 0.39 | 0 | 0 | 0 (structural) | 0 (structural) |
+| adversarial | 4 | 3 | 0 | 1.00 | 0 | 0 | 4 | 3.75 |
+
+`structural` = the baseline arm has no criteria field at all, so its zero is not a measurement.
+
+**1. The mechanism works.** More critical observations and real structured findings where the baseline structurally produces none, at 100% schema adherence. What was tested is the mechanism — field-ordered `responseSchema` + `propertyOrdering` — not wording, and Gemini honouring `propertyOrdering` is now supported by this run rather than assumed.
+
+**2. The SO 4.4 flag rule is measured WRONG, and the run supplies its replacement.** `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy prompt mandates *"3. Critical risks and primary recommendations"*, so every baseline summary ends with a risk sentence. **The rule cannot fire against the prompt it exists to police.** The baseline summaries are plainly lenient (*"demonstrates strong market viability"*) with one dutiful risk sentence appended, so the bias is positive framing with a token risk mention, not absent critical language — the instrument tested for the wrong property. Per-call `ratio` separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50 0.50`, adversarial `1.00 ×4`. A threshold at **~0.75** flags all six baseline summaries and none of the adversarial ones. Spec §3 planned exactly this — ship uncalibrated, let the run supply the distribution, the order `RAG_MIN_SIMILARITY = 0.78` was set in. **Not implemented:** `summary-tone.ts` still ships `criticalCount === 0`.
+
+**3. The differentiation guard did NOT pass.** Both arms `FAIL - uniform`, `criticalGap 0`. Specified pass/fail before the run, so reported failed. The adversarial arm is **saturated** — all four calls at `criticalCount: 3`, the maximum a three-sentence summary allows — so that column cannot discriminate; `unmetGap` is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means while the values differ in no consistent direction; and the **baseline arm also fails**, uniformly at 1. **This run cannot distinguish genuine overcorrection from instrument ceiling.** Resolving it needs a non-saturating metric, not more reps. The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as lenient but was floor-bound and blind, and the real defect was differentiation.
+
+### Open items the review surfaced
+
+- **The SO 4.4 verdict is unreachable by a Manager.** Nothing in `frontend/src` reads `confidenceStatus`, `positive-language-flagged` or `analysis_summary`, and both backend `AiRecommendation` queries filter `recommendationKind` `'RNA'`/`'RNS'`. The summary *text* is shown to Managers (`PendingDialog.svelte:86` and its Waitlisted/Qualified/Completed siblings); the verdict beside it is not. Decision taken: ship detection now, surface it as its own task. **An alert nobody sees is not an alert.**
+- **`propertyOrdering` enforces sequence, not substance.** `unmet_criteria: []` is a valid response — `required` requires the key, not a non-empty array — and nothing cross-checks the summary against the criteria. A model could emit empty findings then a glowing summary. The tone check is the only guard, and it is the one that goes nowhere.
+- **A literal JSON `null` degrades with no `recordFailure`.** `analysisSummarySchema.nullable()` means `null` *parses*, returns `null`, and falls back to legacy — 2 calls instead of 3, no failure metric. Its only trace is `notes.source === 'legacy'`, which is why `source` is load-bearing.
+- **`measurement/tests/demo-proposals.test.js` asserts on source text, not behaviour** — it regex-matches the `.ts` file rather than importing `toApplicationDto`, so a `title:` inside a comment satisfies it and a changed *value* is undetectable.
+- **SO 5.3's premise is false in the code.** It describes the summary as generated "from URAT answers"; `UratQuestionAnswer` is CRUD-only and no AI call reads it — the summary is built from the capsule-proposal DTO. Out of scope, recorded so it is not discovered during a demo.
+- **`CLAUDE.md` is wrong about the model.** It says `GEMINI_MODEL` "still defaults to `gemini-2.5-flash-lite`" and warns that model is unsuitable for bias work. Both `.env` and `ai-config.service.ts:21` say **`gemini-3.6-flash`**, and the switch is already recorded above. Flagged for John rather than edited.
+
+### Fixes landed alongside
+
+`seed-demo-full.js` hardcoded `./dist/src/` for the capsule proposals while building a layout-agnostic resolver four lines earlier; `recordSummaryProvenance`'s comment and `console.error` claimed the proposal was "already committed" when `flush()` inside `em.transactional()` only issues SQL — the commit happens when `create()`'s callback returns. `.superpowers/sdd/.../task-3-report.md` was untracked (`.gitignore:30` lists `.superpowers/` as scratch).
+
+---
+
 ## Open at end of 2026-08-06
 
 **Branch state — verified with `git branch --no-merged master`, not transcribed.** Earlier notes claimed four measurement branches were unmerged and unpushed; **all four are merged** (`measure/grounding-arms`, `measure/grounding-rep2`, `measure/ground-truth-audit`, `measure/supplied-level-fabrication` — the last via PR #22). Only two branches are not in `master`:
@@ -319,7 +223,7 @@ This is the substantive outcome. `require`, `existed`, `existing`, `exists`, and
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step (superseded — done 2026-08-09, see above).** Both parts of this were wrong: the gaps were mostly *recommendation* detection rather than assertion detection, and AgroLink's zero was chance, not a property of the document. **The live next step for 1b is now 4b** (adversarial prompting), per the capstone triage.
+**Next step (superseded twice).** Done 2026-08-09: both parts were wrong — the gaps were mostly *recommendation* detection rather than assertion detection, and AgroLink's zero was chance. The follow-on "the live next step is 4b" is **superseded 2026-08-18**: SO 4.2 is delivered and measured on the summary path, and the two live items are now SO 4.4's calibrated threshold and its missing UI surface.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.
@@ -329,8 +233,8 @@ This is the substantive outcome. `require`, `existed`, `existing`, `exists`, and
 5. **`mikro-orm.config.ts` disables TLS verification against Neon** (`rejectUnauthorized: false`); Neon uses a public CA, so this is probably just tightenable.
 6. **One manual login + click-through of the auth-guard work is still owed** — browser automation could not drive the SvelteKit login form.
 7. **Check VS Code's `git.postCommitCommand`.** Two branches reached GitHub with no `git push` issued in-session; a `push`/`sync` setting would quietly defeat the local-first rule.
-8. **Two checklist claims need confirming rather than trusting.** §1's "Guard the remaining unauthenticated modules" names exactly the six controllers the P0 fix above says it guarded and live-verified — left open with a warning rather than ticked. And the 216 passing / 1 failing baseline was carried from the 2026-08-04 notes, not re-run.
+8. **One checklist claim still needs confirming rather than trusting.** §1's "Guard the remaining unauthenticated modules" names exactly the six controllers the P0 fix above says it guarded and live-verified — left open with a warning rather than ticked. *(The suite baseline half of this item was closed 2026-08-18: re-run, 247/1 and 210/210.)*
 
 **Still unmeasured:** RNA *generation* quality. Every grounding figure is the levels probe; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. Needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
 
-**Suite baselines:** jest **216 passing / 1 failing** (the documented pre-existing `AiService › passes valid task responses through unchanged`); measurement **207/207** at 2026-08-09 (178 before the classifier branch — the 117 figure carried here predated the 2026-08-06 branch and was never re-run). A *second* jest failure is a real regression.
+**Suite baselines (re-run 2026-08-18):** jest **247 passing / 1 failing** — the documented pre-existing `AiService › passes valid task responses through unchanged`; a *second* jest failure is a real regression. Measurement **210/210** (some docs said 207). `npx tsc --noEmit -p tsconfig.json` exit 0, and it is the only gate covering `startup.service.ts` — no spec imports it, so ts-jest never type-checks it.
