@@ -281,8 +281,12 @@ last:
 **The finding that decides the redesign:** both columns are degenerate for
 different reasons. `criticalCount` is ceiling-bound; `unmetCriteria` is
 structurally unbounded (prompt says "list *every*", schema sets no `maxItems`)
-yet came back **exactly 4 on all 8 successful adversarial calls across both
-runs**. Convergent model behaviour, not a cap. **So no count-based metric can
+yet its **means coincide**: AgroLink `4,4` vs MediSync `3,5` on the calibration
+run, `4` vs `4,4,4` on the validation run. (⚠️ This block originally read
+"exactly 4 on all 8 successful adversarial calls" — **wrong**, corrected
+2026-08-19 from the results files. Six of eight are 4, with a 3 and a 5. The
+column is unsigned variance whose means coincide, not a constant; the conclusion
+survives, since variance with no direction still cannot separate arms.) **So no count-based metric can
 separate these two startups** — a better statistic over the same numbers cannot
 help. What may differ is *which* criteria are cited, and the harness stores
 `unmetCriteria` as a **count only**, discarding `criterion`/`proposalField`
@@ -308,25 +312,142 @@ and produces 0 DDL statements.
 
 ---
 
-## Open at end of 2026-08-18
+## 2026-08-19 — metric 3 rebuilt, parts 1 and 2
 
-**Branch state.** `feat/adversarial-summary` **merged via PR #25** (merge commit `70a66c4`) — the 2026-08-18 block above was written before that landed and said "25 commits, unpushed"; it is stale and left as written. `measure/assertion-classifier-gaps` merged via PR #24 (`2195df8`). Not in `master`:
-- **`fix/so-4-4-flag-threshold` — 7 commits, local.** The flag rule, the Manager-facing verdict, and the held-out validation run.
+Branch `measure/non-saturating-differentiation` off `master` at `67f6071`.
+**Zero Gemini quota** — every number below is re-scored from stored runs or from
+pure functions.
+
+### The count-based verdict was retired, not hardened
+
+The checklist prescribed hardening `separates` with direction, magnitude and a
+minimum n. Once field overlap owns the verdict that is the wrong move: hardening
+a rule over columns diagnosed as unable to separate these two startups makes a
+broken instrument stricter, not fixed. So `separates` and its PASS/FAIL are
+gone. The counts stay as descriptive columns, cells below `MIN_CELL_N = 2` carry
+`underpowered`, and each gap prints `criticalFavours` / `unmetFavours`
+(`early` / `mid` / `neither`) — defect 3 made legible rather than tested for.
+
+### `lib/field-overlap.js`
+
+`crossOverlap` (Jaccard over early-rep × mid-rep normalised proposal-field sets)
+read against `withinOverlap` (same-startup rep pairs, pooled) as an **intrinsic
+noise floor**; `separation = within − cross`. The old guard had no floor at all,
+which is how one call produced a PASS.
+
+**Two decisions that carry the metric's validity:**
+
+- **Jaccard of two empty sets is `null`, never `1`.** The baseline arm cites no
+  proposal fields anywhere — `legacySummaryOnly` has no criteria field to fill,
+  which `criteriaTable` already guards as `structuralZero`. Scoring `0/0` as
+  perfect agreement would have reported that arm as **maximally uniform**: a
+  damning-looking finding manufactured entirely from a missing schema field.
+- **Normalisation is load-bearing, not cosmetic.** `proposal_field` is a bare
+  `STRING` in the response schema (`ai.service.ts:178`), *not* an enum over the
+  DTO's fields — the observed values only look like a controlled vocabulary
+  because the prompt names the DTO. Without normalising, one field in two
+  spellings reads as two fields and every overlap number is low for a formatting
+  reason.
+
+### No PASS/FAIL is issued, by decision
+
+`separation` needs a margin; none has been observed, and setting one from the
+run it would score is the post-hoc move the fingerprint guard forbids. The
+verdict reads `n/a` with a reason (`underpowered`, `no scoreable field
+citations`, `margin not pre-registered`). Part 3 pre-registers it. **This was
+John's call** — the alternative on the table was shipping `0.15` as a pinned
+judgement.
+
+### What the stored runs would have said
+
+A *rule* correction on the same generations, never a new result. Overlap cannot
+be replayed: the criteria detail was never stored, which is the defect part 2
+fixes.
+
+| run | arm | was | now |
+|---|---|---|---|
+| calibration | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+| calibration | adversarial | `FAIL - uniform` | `n/a - no scoreable field citations` |
+| validation | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+| validation | **adversarial** | **`PASS`** | **`n/a - underpowered`** |
+
+The withdrawn PASS also now prints `criticalGap −0.33 (favours mid)` — the arm
+criticised the *mid*-stage proposal harder, and that direction is visible in the
+output instead of buried in an absolute test.
+
+### Fingerprints, verified rather than assumed
+
+Computed against both stored files: `criteria|*` **byte-identical to both**, so
+SO 4.2's result stays poolable; `tone|*` identical to the validation run and
+differing from the calibration run only by the pre-existing 0.75 threshold
+change; `differentiation|*` moved for both arms against both runs, which is
+correct — it gained `overlapSrc` and its definition changed.
+
+### The harness that produced every published SO 4.2/4.4 number had no tests
+
+`measure-summary-bias.js` and `lib/summary-fingerprint.js` had **zero** test
+coverage. The measurement suite's 210 tests all cover the *grounding* harness;
+the `differentiationGap` hits in `metrics.test.js` belong to
+`measure-grounding.js`, a different metric. 27 tests added (field-overlap 17,
+summary-differentiation 8, summary-fingerprint 2). **Still untested:**
+`toneTable`, `criteriaTable`, `validity`, `sourceBreakdown`, `callDescriptors`.
+
+### Mutation testing changed the tests, not the code — again
+
+9/9 killed. The one survivor was `favours` mutating `gap > 0` → `gap >= 0`,
+because no test covered a gap of **exactly 0** — the uniform-harshness case the
+metric exists to detect, which the mutant relabels as differentiating in the
+expected direction. It is also the modal reading in the real data: 7 of 8 gap
+readings across both runs are 0. Identical shape to the 2026-08-18 lesson.
+
+**A scripted edit silently failed to apply mid-session, and the suite went green
+anyway.** A Python replacement whose anchor contained `
+` reached the
+interpreter with the backslash collapsed, so it matched a real newline and found
+nothing; the follow-up test run printed 24/24 pass, indistinguishable from
+success. Only `assert s.count(old) == 1` caught it. **Every scripted edit here
+needs a landed-assertion** — the 2026-08-09 mutation lesson generalises beyond
+mutation.
+
+### Correction carried into the older blocks
+
+The 2026-08-18 diagnosis said `unmetCriteria` "came back exactly 4 on all 8
+successful adversarial calls". **Wrong** — it is 4,4 / 3,5 / 4 / 4,4,4. Six of
+eight are 4, with a 3 and a 5, so the column is unsigned variance whose means
+coincide rather than a constant. The conclusion holds (variance with no
+direction cannot separate arms), but "convergent model behaviour at temp 0" was
+overstated. Corrected in place in both documents.
+
+**Gates:** jest **262 passing / 1 failing** — the documented pre-existing
+`AiService › passes valid task responses through unchanged`, confirmed **by
+name**; this branch touches only `measurement/`. Measurement **237/237**
+(baseline 210, +27). `npx tsc --noEmit` exit 0.
+
+**Branch state:** local, nothing pushed. 2 files modified
+(`measure-summary-bias.js`, `lib/summary-fingerprint.js`), 4 added
+(`lib/field-overlap.js` + 3 test files).
+
+---
+
+## Open at end of 2026-08-19
+
+**Branch state.** `fix/so-4-4-flag-threshold` **merged via PR #26** (merge commit `67f6071`) — the block above was written before that landed and describes it as unmerged; stale, left as written. `feat/adversarial-summary` merged via PR #25 (`70a66c4`), `measure/assertion-classifier-gaps` via PR #24 (`2195df8`). Not in `master`:
+- **`measure/non-saturating-differentiation` — local.** Metric 3 parts 1 and 2.
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
 **Next step — in order.**
-1. **Merge or review `fix/so-4-4-flag-threshold`** (John tests first). It is complete and self-contained; nothing below depends on it staying unmerged.
-2. **Rebuild metric 3**, parts 1 and 2 — harden the verdict rule (direction, magnitude, minimum n) and persist the criteria detail so differentiation can be measured on *which* fields are cited rather than how many. **Both are zero-quota and can start immediately.**
-3. **Then** pre-register and run part 3 (~8–12 calls, full window).
+1. **Review `measure/non-saturating-differentiation`** (John tests first). Zero-quota, self-contained, gates green.
+2. **Pre-register part 3** — the margin that turns `separation` into PASS/FAIL must be fixed **in writing before the first call**, since the instrument now deliberately ships without one. ~8–12 calls, needs a full window.
+3. **A cheaper test than part 3 exists and is still unclaimed:** `ratio < 0.75` is validated against one prompt whose output structure barely varies. A *different* summary prompt or a third document is more informative than a fourth rep of the same two.
 
 **A cheaper validation than more reps:** `ratio < 0.75` is now tested against one prompt whose output structure barely varies. The informative next test is a *different* summary prompt or a third document, not a fourth rep of the same two.
 
-**Quota at close:** 12 of 20 spent in the window that opened 15:00 Manila 2026-08-18; ~8 remain until the next reset.
+**Quota at close:** the 2026-08-19 session spent **zero**. The window has reset since the 12-of-20 recorded on 2026-08-18, so budget part 3 against a fresh count — confirm from `apiRequests` in the results files, never from `ai_generation_runs` (the harness opens no rows there).
 
-**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
+**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-19 retired "harden the verdict rule" — with overlap owning the verdict, the count rule was retired rather than hardened, and the margin was deliberately left unset. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.

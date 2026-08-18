@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; **metric 3 rebuilt 2026-08-19** — the count-based verdict is retired and field-overlap scoring ships, with the verdict held at `n/a` until a margin is pre-registered (part 3, the only piece needing quota); 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -343,12 +343,13 @@ measurement.
   **Still open:** no Manager *action* is attached to the flag. (The threshold
   behind it was validated on a held-out run 2026-08-18 — see the item above.)
 
-- [ ] 🔴 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3).**
-  *Diagnosed 2026-08-18 across both runs; design agreed, not yet implemented.*
-  Originally logged as "the guard did not pass". **The guard itself is the
-  defect** — `differentiationTable` (`measure-summary-bias.js:509`) decides
-  `separates = (critGap !== 0) || (unmetGap !== 0)`, an exact-inequality test on
-  a mean of 1–3 small integers. **Three defects, in ascending order of severity:**
+- [ ] 🟡 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3).**
+  **Parts 1 and 2 done 2026-08-19** (`measure/non-saturating-differentiation`,
+  zero quota). **Part 3 — the fresh pre-registered run — is what remains.**
+  Originally logged as "the guard did not pass". **The guard itself was the
+  defect** — `differentiationTable` decided `separates = (critGap !== 0) ||
+  (unmetGap !== 0)`, an exact-inequality test on a mean of 1–3 small integers.
+  **Three defects, in ascending order of severity:**
   1. **Saturation** (the originally recorded concern). `criticalCount` ceilings
      at 3 in a three-sentence summary. Calibration run: adversarial early `[3,3]`
      vs mid `[3,3]` — that is the ceiling, not agreement.
@@ -357,33 +358,95 @@ measurement.
      mean. A single call flips the verdict.
   3. **No sign check — the worst of the three.** That −0.33 means the arm
      criticised the *mid*-stage proposal **more** than the early-stage one, the
-     opposite of the guard's own rationale. **A PASS can be earned by
+     opposite of the guard's own rationale. **A PASS could be earned by
      differentiating in the wrong direction.**
 
   **The deeper finding: both columns are degenerate, for different reasons.**
   `criticalCount` is ceiling-bound. `unmetCriteria` is *structurally* unbounded
   — the prompt says "list **every** unmet criterion", the schema sets no
-  `maxItems` — yet it returned **exactly 4 on all 8 successful adversarial calls
-  across both runs**. Not a cap; convergent model behaviour at temp 0. **So no
-  count-based metric can separate these two startups**, and a cleverer statistic
-  over the same numbers will not help. What differs, if anything, is *which*
-  criteria are cited — and the harness stores `unmetCriteria` as a **count
-  only**, discarding the `criterion` / `proposalField` text before it reaches
-  the results file.
+  `maxItems` — yet its **means coincide**: AgroLink `4,4` vs MediSync `3,5` on
+  the calibration run, `4` vs `4,4,4` on the validation run. ⚠️ **These docs
+  previously said "exactly 4 on all 8 successful adversarial calls"; that is
+  wrong** — corrected 2026-08-19 by reading the two results files. Six of the
+  eight are 4, with a 3 and a 5. The column is not degenerate-constant, it is
+  **unsigned variance whose means happen to coincide**, which weakens the
+  "convergent model behaviour" reading without changing the conclusion: variance
+  with no direction still cannot separate arms. What differs, if anything, is
+  *which* criteria are cited — and the harness stored `unmetCriteria` as a
+  **count only**, discarding the `criterion` / `proposalField` text before it
+  reached the results file.
 
-  **Agreed design, three parts** (branch `measure/non-saturating-differentiation`,
-  to be cut off `fix/so-4-4-flag-threshold`):
-  1. **Harden the verdict rule** — require direction (early > mid), a minimum
-     magnitude, and a minimum n per cell so a 1-vs-3 split reports `n/a` rather
-     than PASS. Zero quota. Re-scoring the two existing runs under this is
-     legitimate as a *rule* correction — report it as "what the old runs would
-     have said", never as a new result.
-  2. **Persist the criteria detail** the harness currently discards, then measure
-     differentiation as **overlap between the two startups' cited proposal
-     fields**. Uniform harshness means saying the *same things* about both, which
-     is what the objective actually claims to test, and it cannot saturate the
-     way a three-sentence count does. Zero quota to build.
-  3. **Pre-register and run fresh** — ~8–12 calls, needs a full quota window.
+  **Part 1 — done. The count-based verdict was retired, not hardened.** Once
+  overlap owns the verdict, hardening a count rule would only make a broken
+  instrument stricter. `separates` and the count-derived PASS/FAIL are gone;
+  the count columns remain, descriptive only. Cells below `MIN_CELL_N = 2`
+  report `underpowered` and can feed no verdict, and each gap now carries a
+  `criticalFavours` / `unmetFavours` label (`early` / `mid` / `neither`) so a
+  backwards gap is legible without mental arithmetic.
+
+  **Part 2 — done. `lib/field-overlap.js`** stores `unmetCriteriaDetail`
+  (criterion, proposalField, whyUnmet — `whyUnmet` kept as the hand-check audit
+  trail) and scores **Jaccard overlap of normalised proposal-field sets**:
+  `crossOverlap` (early reps × mid reps) against `withinOverlap` (same-startup
+  rep pairs, pooled) as an **intrinsic noise floor**, with
+  `separation = within − cross`. Normalisation is load-bearing, not cosmetic:
+  `proposal_field` is a bare `STRING` in the response schema
+  (`ai.service.ts:178`), not an enum, so `historicalTimeline` and
+  `historical_timeline` would otherwise count as two fields.
+  **Two decisions worth keeping:** a Jaccard of two *empty* sets returns `null`,
+  never `1` — the baseline arm cites no fields at all (no criteria field in its
+  schema), so scoring `0/0` as perfect agreement would report that arm as
+  maximally uniform on the strength of a missing schema field; and unscoreable
+  pairs are **dropped** from the means rather than averaged in as 0.
+
+  **No PASS/FAIL is issued at all, by decision (2026-08-19).** `separation`
+  needs a margin, no margin has ever been observed, and setting one from the run
+  it would score is the post-hoc move the fingerprint guard exists to forbid.
+  The verdict reads `n/a` with a reason: `underpowered`, `no scoreable field
+  citations`, or `margin not pre-registered`. **Part 3 pre-registers the margin.**
+
+  **What the two stored runs would have said** under the corrected rule (a
+  *rule* correction on the same generations — never quotable as a new result;
+  overlap cannot be replayed because the detail was never stored):
+
+  | run | arm | was | now |
+  |---|---|---|---|
+  | calibration | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+  | calibration | adversarial | `FAIL - uniform` | `n/a - no scoreable field citations` |
+  | validation | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+  | validation | **adversarial** | **`PASS`** | **`n/a - underpowered`** |
+
+  The validation run's PASS is withdrawn on `nEarly=1`, and its `criticalGap
+  −0.33` now prints `favours mid` — the backwards direction is visible in the
+  output rather than hidden inside an absolute test.
+
+  **Fingerprints:** `differentiation|*` gains `overlapSrc` and moved for **both
+  arms against both runs** (correct — the metric's definition changed).
+  `criteria|*` is **byte-identical to both stored runs**, so SO 4.2's result
+  (4 unmet criteria, 3.75 critical risks) keeps its poolability; `tone|*` is
+  identical to the validation run and differs from the calibration run only by
+  the pre-existing 0.75 threshold change. Verified by computing current
+  fingerprints against both files, not assumed.
+
+  ⚠️ **`measure-summary-bias.js` and `lib/summary-fingerprint.js` had NO tests
+  before this** — the measurement suite's 210 tests all cover the *grounding*
+  harness, so the harness that produced every published SO 4.2 and SO 4.4 number
+  was itself unexercised. 27 tests added here (`field-overlap` 17,
+  `summary-differentiation` 8, `summary-fingerprint` 2), which covers the
+  rebuilt metric and the fingerprint contract but **not** `toneTable`,
+  `criteriaTable`, `validity`, `sourceBreakdown` or `callDescriptors`. Those
+  remain untested.
+
+  **Mutation testing: 9/9 killed, and it changed the tests, not the code.** The
+  survivor was `favours` mutating `gap > 0` → `gap >= 0`, uncovered because no
+  test exercised a gap of **exactly 0** — the *uniform harshness* case the metric
+  exists to detect, which the mutant relabels as differentiating in the expected
+  direction. It is also the modal reading in the real data (7 of 8 gap readings
+  across both runs are 0). Same shape as the 2026-08-18 lesson: the constraining
+  value is the one on the boundary, not the most frequent.
+
+  **3. Pre-register and run fresh — NOT DONE.** ~8–12 calls, needs a full quota
+  window. Pre-registration must fix the margin **before** the first call.
 
   The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as
   lenient but was floor-bound and blind, and the real defect was differentiation.
