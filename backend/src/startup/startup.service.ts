@@ -29,6 +29,8 @@ import {
 } from './dto';
 import { AiService, StartupAnalysisSummary } from '../ai/ai.service';
 import { analyzeTone } from '../ai/summary-tone';
+import { resolveSummaryVerdict } from '../ai/summary-verdict';
+import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
@@ -90,6 +92,41 @@ export class StartupService {
     });
   }
 
+  /**
+   * SO 4.4 — attaches the tone verdict a reviewing Manager sees beside each
+   * summary. Mutates in place because the callers return raw entities that the
+   * frontend reads many fields off; remapping to a DTO would risk dropping one.
+   *
+   * One query for the whole list, not one per startup: the Manager's list is
+   * every startup in the system.
+   */
+  async attachSummaryVerdicts(startups: Startup[]): Promise<void> {
+    const withSummary = startups.filter((s) => s.capsuleProposal?.aiAnalysisSummary?.trim());
+    if (!withSummary.length) return;
+
+    const rows = await this.em.find(
+      AiRecommendation,
+      {
+        startup: { $in: withSummary.map((s) => s.id) },
+        recommendationKind: 'analysis_summary',
+      },
+      { populate: ['generationRun'], orderBy: { createdAt: 'ASC' } },
+    );
+
+    // Ascending + overwrite leaves the newest row per startup. A regenerated
+    // proposal writes a second row, and showing the older verdict beside newer
+    // text is worse than recomputing.
+    const latest = new Map<number, AiRecommendation>();
+    for (const row of rows) if (row.startup) latest.set(row.startup.id, row);
+
+    for (const s of withSummary) {
+      (s as Startup & { summaryVerdict?: unknown }).summaryVerdict = resolveSummaryVerdict(
+        s.capsuleProposal?.aiAnalysisSummary,
+        latest.get(s.id),
+      );
+    }
+  }
+
   async getAllStartups(): Promise<Startup[]> {
     const t = await this.em.find(
       Startup,
@@ -106,6 +143,8 @@ export class StartupService {
         ],
       },
     );
+
+    await this.attachSummaryVerdicts(t);
 
     return t;
   }

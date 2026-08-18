@@ -77,6 +77,89 @@ function build(analysis: StartupAnalysisSummary) {
 const notesOf = (aiService: { recordAiRecommendation: jest.Mock }) =>
   JSON.parse(aiService.recordAiRecommendation.mock.calls[0][0].notes);
 
+/** Bare service with a stubbed `em.find`, for the read paths. */
+function buildWithRows(rows: unknown[]) {
+  const em = { find: jest.fn().mockResolvedValue(rows) };
+  const service = new StartupService(em as any, {} as any, {} as any, {} as any);
+  return { service, em };
+}
+
+const withSummary = (id: number, aiAnalysisSummary?: string) => ({
+  id,
+  capsuleProposal: aiAnalysisSummary === undefined ? undefined : { aiAnalysisSummary },
+});
+
+describe('StartupService.attachSummaryVerdicts', () => {
+  it('recomputes when no row exists, which is every seeded proposal', async () => {
+    const { service } = buildWithRows([]);
+    const startups: any[] = [
+      withSummary(1, 'The venture demonstrates strong market viability. The team is impressive. One risk: revenue is unproven.'),
+    ];
+
+    await service.attachSummaryVerdicts(startups);
+
+    expect(startups[0].summaryVerdict).toMatchObject({
+      status: 'positive-language-flagged',
+      source: 'recomputed',
+    });
+  });
+
+  it('prefers a recorded row over a fresh reading', async () => {
+    const { service } = buildWithRows([
+      { startup: { id: 1 }, confidenceStatus: 'balanced', createdAt: new Date('2026-01-01'), generationRun: { id: 5 } },
+    ]);
+    const startups: any[] = [withSummary(1, 'Strong team. Excellent traction. One risk: no revenue.')];
+
+    await service.attachSummaryVerdicts(startups);
+
+    expect(startups[0].summaryVerdict).toMatchObject({ status: 'balanced', source: 'recorded', runId: 5 });
+  });
+
+  // A proposal regenerated after a rejection writes a second row. Showing an
+  // older verdict beside newer text is worse than recomputing.
+  it('takes the newest row when a startup has several', async () => {
+    const { service } = buildWithRows([
+      { startup: { id: 1 }, confidenceStatus: 'balanced', createdAt: new Date('2026-01-01'), generationRun: { id: 1 } },
+      { startup: { id: 1 }, confidenceStatus: 'positive-language-flagged', createdAt: new Date('2026-06-01'), generationRun: { id: 9 } },
+    ]);
+    const startups: any[] = [withSummary(1, 'Some summary text.')];
+
+    await service.attachSummaryVerdicts(startups);
+
+    expect(startups[0].summaryVerdict).toMatchObject({ status: 'positive-language-flagged', runId: 9 });
+  });
+
+  it('leaves a startup with no summary untouched', async () => {
+    const { service } = buildWithRows([]);
+    const startups: any[] = [withSummary(1), { id: 2, capsuleProposal: { aiAnalysisSummary: null } }];
+
+    await service.attachSummaryVerdicts(startups);
+
+    expect(startups[0].summaryVerdict).toBeUndefined();
+    expect(startups[1].summaryVerdict).toBeUndefined();
+  });
+
+  // The Manager list is every startup in the system. An N+1 here passes every
+  // behavioural assertion above while issuing a query per row.
+  it('issues one query regardless of how many startups it is given', async () => {
+    const { service, em } = buildWithRows([]);
+    const startups: any[] = Array.from({ length: 25 }, (_, i) => withSummary(i + 1, 'Demand is unvalidated.'));
+
+    await service.attachSummaryVerdicts(startups);
+
+    expect(em.find).toHaveBeenCalledTimes(1);
+    expect(startups.every((s) => s.summaryVerdict.status === 'balanced')).toBe(true);
+  });
+
+  it('does not query at all when no startup has a summary', async () => {
+    const { service, em } = buildWithRows([]);
+
+    await service.attachSummaryVerdicts([withSummary(1) as any]);
+
+    expect(em.find).not.toHaveBeenCalled();
+  });
+});
+
 describe('StartupService analysis summary persistence', () => {
   it('stores only the summary text on the proposal', async () => {
     const { service, aiService, proposals } = build({
