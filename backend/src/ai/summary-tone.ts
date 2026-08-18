@@ -14,8 +14,8 @@
  * TOWARD flagging and an unflagged summary is the trustworthy signal.
  *
  * KNOWN LIMITATION, recorded deliberately, do not "fix" by adding cue words: a
- * `CRITICAL` cue firing pushes toward NOT flagging, so a false positive in that
- * list is the dangerous error here — the opposite of the usual instinct to widen
+ * `CRITICAL` cue firing raises the ratio and so pushes toward NOT flagging, so a
+ * false positive in that list is the dangerous error here — the opposite of the usual instinct to widen
  * a word list. "Limited competition", "risk is well managed", "the barrier
  * protects the venture", and "no gap in coverage" all fire `CRITICAL` while
  * describing a favourable position, and the classifier cannot tell a noun used
@@ -47,7 +47,36 @@ const CRITICAL =
 
 export const TONE_CUES = { POSITIVE, CRITICAL };
 
-/** Sentence-ish split. Coarse on purpose — the flag rule is a zero-check, not a ratio threshold. */
+/**
+ * Minimum critical share for a summary to pass unflagged. Calibrated, not
+ * guessed — the distribution comes from measurement/results/2026-08-18-summary-bias.json
+ * (gemini-3.6-flash, temp 0, 10 summaries):
+ *
+ *   baseline     0.333 0.333 0.333 0.333 0.500 0.500
+ *   adversarial  1.000 1.000 1.000 1.000
+ *
+ * The arms do not overlap, so any threshold in (0.50, 1.00) separates them
+ * perfectly; 0.75 is the midpoint, i.e. the value furthest from both observed
+ * edges. The comparison is strict (`< 0.75` flags), so exactly 0.75 is
+ * BALANCED — see the boundary test in the spec for why that one case does not
+ * follow this module's resolve-toward-flagging direction.
+ *
+ * RE-CALIBRATE if the summary prompt changes. The rule this replaced was
+ * `criticalCount === 0`, and it failed precisely because the prompt moved out
+ * from under it: the legacy prompt mandates "3. Critical risks and primary
+ * recommendations", so every baseline summary carried exactly one risk
+ * sentence and the rule fired 0 times in 10 — it could not fire against the
+ * prompt it exists to police. A threshold is only as good as the distribution
+ * it was set against.
+ *
+ * Do NOT re-score that results file under this threshold. Editing this file
+ * changes the `tone|*` fingerprint (measurement/lib/summary-fingerprint.js
+ * hashes this file's text), so those results correctly refuse to pool with any
+ * future run. Validating 0.75 needs a fresh run, not a re-read of the old one.
+ */
+const BALANCED_MIN_RATIO = 0.75;
+
+/** Sentence-ish split. Coarse on purpose — a cue either appears in a sentence or it doesn't. */
 const splitSentences = (text: string): string[] =>
   String(text)
     .split(/(?<=[.!?])\s+|;\s*/)
@@ -74,14 +103,19 @@ export function analyzeTone(text: string): ToneResult {
   const criticalCount = clauses.filter((c) => c.valence === 'critical').length;
   const positiveCount = clauses.filter((c) => c.valence === 'positive').length;
   const total = criticalCount + positiveCount;
+  // Load-bearing, not reportage — the flag rule reads it. A cue-less summary
+  // scores 0 rather than NaN, so it flags, which is the safe direction.
+  const ratio = total === 0 ? 0 : criticalCount / total;
 
   return {
     positiveCount,
     criticalCount,
-    ratio: total === 0 ? 0 : criticalCount / total,
-    // Exactly `criticalCount === 0`. No ratio threshold — that needs calibration
-    // this study has not done. Task 7 produces the distribution.
-    flagged: criticalCount === 0,
+    ratio,
+    // `criticalCount === 0` is not OR'd in because it is subsumed — no critical
+    // observation forces ratio 0, which is below any positive threshold. So this
+    // rule flags a strict superset of what the old one flagged and can never
+    // trade away an existing detection.
+    flagged: ratio < BALANCED_MIN_RATIO,
     clauses,
   };
 }

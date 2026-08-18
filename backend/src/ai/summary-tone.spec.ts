@@ -17,14 +17,68 @@ describe('analyzeTone', () => {
     expect(r.flagged).toBe(false);
   });
 
-  // The flag rule is exactly `criticalCount === 0`. A ratio threshold would need
-  // calibration this study has not done, and the repo's uncalibrated tier
-  // thresholds are the cautionary case.
-  it('does not flag on a low ratio alone', () => {
+  // The rule this replaced was `criticalCount === 0`, which measured firing 0
+  // times in 10 summaries across both arms (2026-08-18): the legacy prompt
+  // mandates a risk sentence, so every baseline summary scored exactly
+  // criticalCount 1 and the rule could not fire against the prompt it polices.
+  // The leniency is positive framing with a token risk appended — a low ratio,
+  // not an absent critical observation. This case is that failure shape.
+  it('flags a lenient summary that appends a token risk sentence', () => {
     const r = analyzeTone(
       'Strong team. Excellent traction. Promising market. Compelling advantage. One risk: no revenue.',
     );
+    expect(r.criticalCount).toBe(1);
     expect(r.ratio).toBeLessThan(0.5);
+    expect(r.flagged).toBe(true);
+  });
+
+  // Every distinct shape results/2026-08-18-summary-bias.json actually produced,
+  // not just the common one. Baseline came in at two ratios — 1 critical / 2
+  // positive = 0.333 (x4) and 1 critical / 1 positive = 0.500 (x2) — and
+  // adversarial at 3 critical / 0 positive = 1.000 (x4). Every baseline row must
+  // flag and no adversarial row may.
+  //
+  // The 0.500 case is the one that constrains the threshold, and it is here
+  // because mutation testing said so: with only the 0.333 case covered, mutating
+  // BALANCED_MIN_RATIO to 0.5 survived a green suite while silently unflagging
+  // two of the six measured baseline summaries. Cover the observed value nearest
+  // the boundary, not the most frequent one.
+  it('flags every measured baseline shape and no measured adversarial shape', () => {
+    const lenientModal = analyzeTone(
+      'The venture demonstrates strong market viability. The founding team is impressive. One risk: revenue is unproven.',
+    );
+    expect([lenientModal.criticalCount, lenientModal.positiveCount]).toEqual([1, 2]);
+    expect(lenientModal.ratio).toBeCloseTo(1 / 3);
+    expect(lenientModal.flagged).toBe(true);
+
+    const lenientNearBoundary = analyzeTone(
+      'The venture shows strong commercial traction. Regulatory approval is absent.',
+    );
+    expect([lenientNearBoundary.criticalCount, lenientNearBoundary.positiveCount]).toEqual([1, 1]);
+    expect(lenientNearBoundary.ratio).toBe(0.5);
+    expect(lenientNearBoundary.flagged).toBe(true);
+
+    const adversarial = analyzeTone(
+      'Buyer demand is unvalidated. Regulatory approval is absent. The team lacks a commercial hire.',
+    );
+    expect([adversarial.criticalCount, adversarial.positiveCount]).toEqual([3, 0]);
+    expect(adversarial.ratio).toBe(1);
+    expect(adversarial.flagged).toBe(false);
+  });
+
+  // Boundary decision, taken deliberately: exactly 0.75 is BALANCED, so the
+  // rule reads "balanced iff ratio >= 0.75". This is the one place the module's
+  // "resolve ambiguity toward flagging" direction is not followed, because a
+  // 3-of-4-critical summary is not the leniency SO 4.4 polices and flagging it
+  // would train the reviewing Manager to ignore the flag. Unobserved in the
+  // run — both arms sit far from it (baseline tops out at 0.50, adversarial at
+  // 1.00), so this is a judgement, not a measurement.
+  it('treats an exactly-0.75 ratio as balanced', () => {
+    const r = analyzeTone(
+      'Demand is unvalidated. Regulatory clearance is missing. Capital runway is insufficient. The team is strong.',
+    );
+    expect([r.criticalCount, r.positiveCount]).toEqual([3, 1]);
+    expect(r.ratio).toBe(0.75);
     expect(r.flagged).toBe(false);
   });
 
