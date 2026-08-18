@@ -13,6 +13,9 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **Gemini free tier: 20 generation calls/day on `gemini-3.6-flash`, window resets 15:00 Philippine time** (midnight US Pacific). A run started before 15:00 draws on the *previous* window. One UI generation fans out into several calls — budget 3–5/day, not 20. 429s surface in the backend terminal, not the browser. Embedding has a separate 100/min quota.
 - **`pg` is not resolvable from `backend/`** (pnpm-isolated under `@mikro-orm/postgresql`). Use `MikroORM.init(require('./dist/src/mikro-orm.config').default)` + `orm.em.getConnection().execute(sql)`. Tables are **pluralised**: `startups`, `startups_readiness_level`, `rag_contexts`, `rag_retrieval_logs`.
 - **`nest build` emits to `dist/src/`, not `dist/`** (because `seed-dummy.ts` sits at the backend root). `seed-admin.js` and `seed-demo-runner.js` hardcode `./dist/` and are broken.
+- **`mikro-orm.config.ts` hardcodes `entities: ['./dist/**/*.entity.js']`.** A build emitted anywhere else still loads **stale** entities from `dist/`, silently. Any probe compiled to a scratch dir must override `entities`, or it is measuring the last build — this produced a convincing false negative once (a new property read as "not in metadata").
+- **To browser-test as any role without the login form:** `POST /auth/signin` for a token, then set it as the `Access` cookie via `javascript_tool` (`document.cookie`). `hooks.server.ts` verifies that cookie locally with `jose`, so no backend round-trip and no form automation is needed. The form itself still resists automation.
+- **Dark mode is class-based** (`html.dark`, mode-watcher) — `prefers-color-scheme` does not drive it, so a devtools colour-scheme toggle proves nothing. Toggle the class.
 - **`pnpm lint` runs `eslint --fix`** and rewrites the whole tree over a CRLF/prettier conflict (checklist §4). Check `git status` before committing after anyone runs it.
 - **A fired scheduled task is not evidence it ran.** One fired, started its MCP servers, and never ran the command. Check for the artifact.
 - **Use Node, not PowerShell, for storage probes.** PS 5.1's `Invoke-WebRequest` reported a *successful* Supabase PUT as failed with no status code.
@@ -237,20 +240,38 @@ Branch `fix/so-4-4-flag-threshold` off `master` at `70a66c4`. One predicate, one
 
 **Gates:** jest **249 passing / 1 failing** (baseline 247/1; +2 net tests, and the single failure is the documented pre-existing `AiService › passes valid task responses through unchanged` — confirmed by name, not by count). Measurement **210/210**. `tsc --noEmit` exit 0.
 
+### Then: the verdict reaches the Manager
+
+Same branch. `GET /startups/all` now carries a `summaryVerdict` per startup, and one `SummaryToneBadge` renders it in all four dialogs a Manager opens from `/applications`. `PendingTab.svelte` renders those dialogs too and was **not** wired — it is imported nowhere and §4 already lists it for deletion.
+
+**The specified design would have shipped an empty badge, and only a live probe showed it.** `ai_recommendations` holds RNA 6 / RNS 8 / Roadblock 3 and **zero** `analysis_summary` rows: the persistence path only runs for proposals created through `createStartupProposal`, and both demo proposals were written directly by `seed-demo-full.js`. A row-only badge would render nothing on the only two startups a demo opens — the same "alert nobody sees" one layer out. So the verdict is recorded-row-first with a live recompute fallback, and `source` is shown in the UI rather than smoothed over. A recorded row **wins over a disagreeing fresh reading**: it is attributable to a generation run and a fresh reading is not. Verified live — with a temporary row in place, AgroLink reported `recorded`/flagged while its text reads balanced at ratio 1.0.
+
+**Two things the unit tests structurally cannot see, both live-verified:**
+- **Serialization.** MikroORM builds `toJSON()` from *declared* properties, so the 9/9 green service tests — which assert on the in-memory entity — would have passed with the field never reaching the browser. Declared as `@Property({ persist: false })` and confirmed through `toObject`/`toJSON`/`JSON.stringify` and a real HTTP round-trip.
+- **Schema.** `main.ts` runs `updateSchema()` on every boot, so a persisted property would silently add a column to whatever DB is configured. `getUpdateSchemaSQL()` (dry run) returns **0** statements.
+
+**A false negative that nearly became a bug report.** The first serialization probe reported the field ABSENT. The cause was the probe, not the code: **`mikro-orm.config.ts` hardcodes `entities: ['./dist/**/*.entity.js']`**, so a build emitted anywhere else silently loads *stale* entities from `dist/`. Any out-of-dist probe must override `entities`, or it is measuring the last build. Same family as the known `seed-admin.js` hardcoded-`./dist/` breakage.
+
+**Login without the login form.** Browser automation still cannot drive the SvelteKit login form (open item 6), and typing passwords into forms is off the table anyway. `hooks.server.ts` verifies the `Access` cookie locally with `jose`, so a token from `POST /auth/signin` set as a cookie via `javascript_tool` produces a fully authenticated Manager session. This is the cheap way to browser-test any role. **Item 6 is NOT closed** — a human click-through is still owed.
+
+**Also worth knowing:** dark mode is **class-based** (`html.dark`, mode-watcher), so `prefers-color-scheme` does not drive it and a colour-scheme toggle in devtools proves nothing. Toggle the class. Both palettes verified (amber-100/900 light, amber-900/100 dark).
+
+**Gates:** jest **262 passing / 1 failing** (+6 service tests, +7 resolver tests; same single documented failure). `tsc --noEmit` exit 0. `svelte-check` **160 errors / 16 warnings / 46 files — byte-identical to the baseline measured with the changes stashed**, and none in the touched files. That baseline was not recorded anywhere before; it is large and pre-existing, so `pnpm check` can only be read as a delta here.
+
 ---
 
 ## Open at end of 2026-08-18
 
 **Branch state.** `feat/adversarial-summary` **merged via PR #25** (merge commit `70a66c4`) — the 2026-08-18 block above was written before that landed and said "25 commits, unpushed"; it is stale and left as written. `measure/assertion-classifier-gaps` merged via PR #24 (`2195df8`). Not in `master`:
-- **`fix/so-4-4-flag-threshold` — 1 commit, local.** The flag rule above.
+- **`fix/so-4-4-flag-threshold` — 4 commits, local.** The flag rule and the Manager-facing verdict.
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step.** Surface the SO 4.4 verdict in `PendingDialog` and its three siblings (M, and the first frontend change of this work) — the flag now fires, so the alert nobody sees is the whole remaining gap. Then a non-saturating differentiation metric, and a held-out run to validate 0.75.
+**Next step.** A **held-out run** to validate `ratio < 0.75` — it was calibrated on the same 10 summaries it now scores, and the `tone|*` / `differentiation|*` fingerprints already refuse to pool the old file, so this is a fresh run by construction. Then a non-saturating differentiation metric (the 2026-08-18 guard could not distinguish overcorrection from instrument ceiling, and that needs a different metric, not more reps). SO 4.4 now has a visible verdict but **no Manager action attached to it** — decide whether that is in scope before submission.
 
-**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself, and corrected its stated predicate direction.
+**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.

@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 detection built, measured, and its flag rule recalibrated to `ratio < 0.75` after the shipped one measured unfirable — but **alerting still not delivered**; 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` after the shipped one measured unfirable, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag and a held-out validation run; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -99,7 +99,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
 | **4b** **Adversarial** prompting (SO 4.2, find weaknesses *before* the readiness summary) | 🟡 Partial — **delivered on the summary path, not the scoring path (2026-08-18)** | **Delivered:** `generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, measured against the shipped prompt — 100% schema adherence, 3 vs 1 mean critical observations, 4 mean unmet criteria where the baseline has no criteria field at all. **Not delivered:** the readiness-*scoring* path is unchanged — `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are all untouched on this branch. Different pipeline stages, so this row stays 🟡. **`reviewBiasScore` (`ai.service.ts:339`) is mislabelled, not misplaced:** its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither of which is a readiness summary. Behaviour deliberately unchanged |
-| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Two gaps, one closed:** (1) ~~the shipped rule `flagged = criticalCount === 0` is **measured wrong**~~ — **fixed 2026-08-18**, now `flagged = ratio < 0.75`, calibrated on the run that measured the old rule firing 0/10 (baseline tops out at 0.50, adversarial sits at 1.00, no overlap). Not yet validated on a held-out run. (2) **still open — no Manager can see the verdict** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
+| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Both gaps closed 2026-08-18:** (1) ~~the shipped rule `flagged = criticalCount === 0` is **measured wrong**~~ — now `flagged = ratio < 0.75`, calibrated on the run that measured the old rule firing 0/10 (baseline tops out at 0.50, adversarial sits at 1.00, no overlap). Not yet validated on a held-out run. (2) ~~**No Manager can see the verdict**~~ — `summaryVerdict` now rides on `GET /startups/all` and renders as a badge in all four Manager dialogs, recorded-row-first with a live recompute fallback (Neon has no `analysis_summary` rows, so a row-only badge would have been empty). **What remains for this objective is an *action* on the flag, not its visibility** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
 ### Objective 1b — what was built and what it's worth
@@ -308,15 +308,31 @@ measurement.
   unaffected, so SO 4.2's result stays poolable. Validating the threshold needs
   a new run, and it should be a **held-out** one.
 
-- [ ] 🔴 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager.**
-  Nothing in `frontend/src` reads `confidenceStatus`,
+- [x] 🟢 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager** — *done
+  2026-08-18* (`fix/so-4-4-flag-threshold`). `GET /startups/all` carries a
+  `summaryVerdict` per startup, and one `SummaryToneBadge` renders it in all
+  four dialogs a Manager reviews from `/applications`.
+  Previously nothing in `frontend/src` read `confidenceStatus`,
   `positive-language-flagged` or `analysis_summary`, and the only two
   `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`, so
-  the `analysis_summary` row is never read. The summary *text* is already shown
-  to Managers (`PendingDialog.svelte:86` and its Waitlisted/Qualified/Completed
-  siblings) — the verdict beside it is what is missing. Decision taken: ship
-  detection now, surface it as its own task. An alert nobody sees is not an
-  alert.
+  the `analysis_summary` row was never read.
+  **The row-only design specified here would have shipped an empty badge.**
+  Neon has **zero** `analysis_summary` rows: the persistence path only runs for
+  proposals created through `createStartupProposal`, and both demo proposals
+  were written directly by `seed-demo-full.js`. So the verdict resolves from a
+  recorded row *when one exists* and is otherwise recomputed live from the
+  summary text, with `source` shown in the UI. A recorded row always wins over a
+  disagreeing fresh reading — it is attributable to a generation run and a fresh
+  reading is not.
+  **Live-verified end to end**, because neither risk is visible to the suite:
+  the `persist: false` property produces **0** schema DDL statements (`main.ts`
+  runs `updateSchema()` on every boot) and survives `toJSON()`; both branches
+  render correctly in both themes; a temporary `ai_recommendations` row proved
+  the recorded+flagged path and was removed.
+  **`PendingTab.svelte` deliberately not wired** — it renders these dialogs but
+  is imported nowhere. See the 🎯 deletion item in §4.
+  **Still open:** no Manager *action* is attached to the flag, and the
+  threshold behind it is calibrated but not validated on a held-out run.
 
 - [ ] ❓ **OPEN · The differentiation guard did NOT pass.** Both arms returned
   `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail before the run,
