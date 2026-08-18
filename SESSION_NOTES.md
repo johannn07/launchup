@@ -196,7 +196,7 @@ Branch `feat/adversarial-summary`. Spec and plan under `docs/superpowers/`; the 
 
 **1. The mechanism works.** More critical observations and real structured findings where the baseline structurally produces none, at 100% schema adherence. What was tested is the mechanism — field-ordered `responseSchema` + `propertyOrdering` — not wording, and Gemini honouring `propertyOrdering` is now supported by this run rather than assumed.
 
-**2. The SO 4.4 flag rule is measured WRONG, and the run supplies its replacement.** `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy prompt mandates *"3. Critical risks and primary recommendations"*, so every baseline summary ends with a risk sentence. **The rule cannot fire against the prompt it exists to police.** The baseline summaries are plainly lenient (*"demonstrates strong market viability"*) with one dutiful risk sentence appended, so the bias is positive framing with a token risk mention, not absent critical language — the instrument tested for the wrong property. Per-call `ratio` separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50 0.50`, adversarial `1.00 ×4`. A threshold at **~0.75** flags all six baseline summaries and none of the adversarial ones. Spec §3 planned exactly this — ship uncalibrated, let the run supply the distribution, the order `RAG_MIN_SIMILARITY = 0.78` was set in. **Not implemented:** `summary-tone.ts` still ships `criticalCount === 0`.
+**2. The SO 4.4 flag rule is measured WRONG, and the run supplies its replacement.** `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy prompt mandates *"3. Critical risks and primary recommendations"*, so every baseline summary ends with a risk sentence. **The rule cannot fire against the prompt it exists to police.** The baseline summaries are plainly lenient (*"demonstrates strong market viability"*) with one dutiful risk sentence appended, so the bias is positive framing with a token risk mention, not absent critical language — the instrument tested for the wrong property. Per-call `ratio` separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50 0.50`, adversarial `1.00 ×4`. A threshold at **~0.75** flags all six baseline summaries and none of the adversarial ones. Spec §3 planned exactly this — ship uncalibrated, let the run supply the distribution, the order `RAG_MIN_SIMILARITY = 0.78` was set in. ~~**Not implemented.**~~ **Implemented 2026-08-18**, see below.
 
 **3. The differentiation guard did NOT pass.** Both arms `FAIL - uniform`, `criticalGap 0`. Specified pass/fail before the run, so reported failed. The adversarial arm is **saturated** — all four calls at `criticalCount: 3`, the maximum a three-sentence summary allows — so that column cannot discriminate; `unmetGap` is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means while the values differ in no consistent direction; and the **baseline arm also fails**, uniformly at 1. **This run cannot distinguish genuine overcorrection from instrument ceiling.** Resolving it needs a non-saturating metric, not more reps. The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as lenient but was floor-bound and blind, and the real defect was differentiation.
 
@@ -217,18 +217,40 @@ Branch `feat/adversarial-summary`. Spec and plan under `docs/superpowers/`; the 
 
 ---
 
+## 2026-08-18 (later) — the SO 4.4 flag rule, calibrated
+
+Branch `fix/so-4-4-flag-threshold` off `master` at `70a66c4`. One predicate, one file, TDD + mutation testing. **No Gemini quota spent** — `analyzeTone` is pure.
+
+`summary-tone.ts` ships `flagged = ratio < 0.75`, replacing `criticalCount === 0`. The calibration was read out of `results/2026-08-18-summary-bias.json` directly rather than from these notes: baseline `0.333 ×4, 0.500 ×2`, adversarial `1.000 ×4`, all ten `flagged: false`. 0.75 is the midpoint of the (0.50, 1.00) gap.
+
+**The checklist item's title stated the predicate backwards.** It said "replace with `ratio >= 0.75`", but a *high* ratio means *more* critical, so flagging the lenient baseline is `ratio < 0.75`. Read as naming the balanced condition it was right; read as the flag rule it inverts the objective. Corrected in the checklist.
+
+**Exactly 0.75 is balanced**, decided rather than measured — both arms sit far from it. This is the one place the module does not resolve ambiguity toward flagging: a 3-of-4-critical summary is not the leniency SO 4.4 polices, and flagging it would train the reviewing Manager to ignore the flag. Pinned by a test so a later "tightening" to `<=` has to re-open the trade-off.
+
+**The old rule is subsumed** — `criticalCount === 0` forces `ratio 0`, so the new rule flags a strict superset and can trade away no existing detection. That is why the `criticalCount === 0` branch was dropped rather than OR'd in.
+
+**Mutation testing changed the tests, not the code — and this is the transferable bit.** Five mutants; two survived a green suite. Both pointed at the same hole: the "measured shapes" test covered baseline's *modal* ratio (0.333, ×4) and not its *maximum* (0.500, ×2), so mutating the threshold to 0.5 passed while silently unflagging **two of the six** baseline summaries the change exists to catch. **Testing against the most frequent observed value felt like testing against the data; the value that constrains a threshold is the one nearest the boundary.** Added that case, re-ran, 5/5 killed, each asserted as landed per the 2026-08-09 lesson. The mutation script restores in a `finally`.
+
+**Four of six fingerprints invalidated, not one as first assumed** — `tone|*` *and* `differentiation|*`, because `summary-fingerprint.js:60-64` embeds `toneSrc` in differentiation too (it is computed from `analyzeTone`'s counts). `criteria|*` is untouched, so **SO 4.2's result — 4 unmet criteria, 3.75 critical risks — stays poolable**. Verified by hashing HEAD's file text against the working copy with every other input held to a placeholder, so the delta is attributable to this file alone.
+
+⚠️ **0.75 is calibrated, not validated.** It was set on the same 10 summaries it now scores, and re-scoring that file under it is the post-hoc move the fingerprint guard exists to forbid. Validation needs a **held-out** run.
+
+**Gates:** jest **249 passing / 1 failing** (baseline 247/1; +2 net tests, and the single failure is the documented pre-existing `AiService › passes valid task responses through unchanged` — confirmed by name, not by count). Measurement **210/210**. `tsc --noEmit` exit 0.
+
+---
+
 ## Open at end of 2026-08-18
 
-**Branch state — verified with `git branch -r --contains` and `git log origin/master..`, not transcribed.** `measure/assertion-classifier-gaps` **merged 2026-08-18 via PR #24** (merge commit `2195df8`), so the classifier repair and the 2026-08-09 probe re-run are on `master`. Not in `master`:
-- **`feat/adversarial-summary` — 25 commits, unpushed.** This session's work. Cut from the classifier branch's tip, so now that its parent is merged its PR diff is exactly its own 25 commits; no rebase needed (`master` merges with merge commits, not squash, so `3184859` stayed an ancestor).
+**Branch state.** `feat/adversarial-summary` **merged via PR #25** (merge commit `70a66c4`) — the 2026-08-18 block above was written before that landed and said "25 commits, unpushed"; it is stale and left as written. `measure/assertion-classifier-gaps` merged via PR #24 (`2195df8`). Not in `master`:
+- **`fix/so-4-4-flag-threshold` — 1 commit, local.** The flag rule above.
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step.** Push and PR `feat/adversarial-summary` (John tests before anything reaches `master`). Then, in order: the SO 4.4 threshold swap to `ratio >= 0.75` (S, the run already supplies the distribution), then surfacing the verdict in `PendingDialog` and its three siblings (M, and the first frontend change of this work), then a non-saturating differentiation metric.
+**Next step.** Surface the SO 4.4 verdict in `PendingDialog` and its three siblings (M, and the first frontend change of this work) — the flag now fires, so the alert nobody sees is the whole remaining gap. Then a non-saturating differentiation metric, and a held-out run to validate 0.75.
 
-**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path.
+**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself, and corrected its stated predicate direction.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.

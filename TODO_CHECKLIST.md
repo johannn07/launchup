@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 detection built and measured, **alerting not delivered**; 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 detection built, measured, and its flag rule recalibrated to `ratio < 0.75` after the shipped one measured unfirable — but **alerting still not delivered**; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -99,7 +99,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 | **3c** Accuracy evaluation (Character Error Rate + SUS) | ⚪ Research task | Not a code deliverable — needs a ground-truth dataset |
 | **4a** Controlled bias measurement vs expert ratings | ⚪ Research task | Needs expert-rated profiles; `data/ai-baseline.json` is the intended home |
 | **4b** **Adversarial** prompting (SO 4.2, find weaknesses *before* the readiness summary) | 🟡 Partial — **delivered on the summary path, not the scoring path (2026-08-18)** | **Delivered:** `generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, measured against the shipped prompt — 100% schema adherence, 3 vs 1 mean critical observations, 4 mean unmet criteria where the baseline has no criteria field at all. **Not delivered:** the readiness-*scoring* path is unchanged — `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are all untouched on this branch. Different pipeline stages, so this row stays 🟡. **`reviewBiasScore` (`ai.service.ts:339`) is mislabelled, not misplaced:** its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither of which is a readiness summary. Behaviour deliberately unchanged |
-| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Two gaps, both open:** (1) the shipped rule `flagged = criticalCount === 0` is **measured wrong** — it fired 0/10 in both arms because the legacy prompt mandates a risk sentence, so it cannot fire against the prompt it polices. `ratio >= 0.75` is the calibrated replacement the run supplied (baseline tops out at 0.50, adversarial sits at 1.00, no overlap) and is **not implemented**. (2) **No Manager can see the verdict** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
+| **4.4** Flag predominantly-positive summaries to alert the reviewing Manager | 🟡 **Detection built and measured; alerting NOT delivered (2026-08-18)** | Was tracked by nothing until now. `src/ai/summary-tone.ts` computes the verdict and `startup.service.ts` persists it as an `analysis_summary` `AiRecommendation`. **Two gaps, one closed:** (1) ~~the shipped rule `flagged = criticalCount === 0` is **measured wrong**~~ — **fixed 2026-08-18**, now `flagged = ratio < 0.75`, calibrated on the run that measured the old rule firing 0/10 (baseline tops out at 0.50, adversarial sits at 1.00, no overlap). Not yet validated on a held-out run. (2) **still open — no Manager can see the verdict** — nothing in `frontend/src` reads `confidenceStatus` / `positive-language-flagged` / `analysis_summary`, and the only two `AiRecommendation` queries filter `recommendationKind` `'RNA'` / `'RNS'`. An alert nobody sees is not an alert |
 | **4c** Score normalization against a baseline distribution | 🟢 Built | `BaselineService` + `normalizeAiScore()` + `ai_bias_audits` + `/admin/ai/bias-audits`. Now independent of 4b |
 
 ### Objective 1b — what was built and what it's worth
@@ -270,7 +270,9 @@ measurement.
   `propertyOrdering`), not prompt wording, and Gemini honouring
   `propertyOrdering` is now supported by this run rather than assumed.
 
-- [ ] 🔴 **OBJECTIVE · S · Replace the SO 4.4 flag rule with `ratio >= 0.75`.**
+- [x] 🟢 **OBJECTIVE · S · Replace the SO 4.4 flag rule** — *done 2026-08-18*
+  (`fix/so-4-4-flag-threshold`). `summary-tone.ts` now ships
+  `flagged = ratio < 0.75`.
   `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both
   arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy
   prompt mandates *"3. Critical risks and primary recommendations"*, so every
@@ -280,10 +282,31 @@ measurement.
   sentence appended, so the bias is positive framing, not absent critical
   language — the instrument tested for the wrong property. Per-call `ratio`
   separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50
-  0.50`, adversarial `1.00 1.00 1.00 1.00`. A threshold at ~0.75 flags all six
-  baseline summaries and none of the adversarial ones. This is exactly what
-  spec §3 planned — ship uncalibrated, let the run supply the distribution.
-  **Not implemented:** `summary-tone.ts` still ships `criticalCount === 0`.
+  0.50`, adversarial `1.00 1.00 1.00 1.00`, so 0.75 is the midpoint of the gap.
+  This is exactly what spec §3 planned — ship uncalibrated, let the run supply
+  the distribution.
+  **This item's old title said `ratio >= 0.75`, which states the predicate
+  backwards** — a high ratio means *more* critical, so flagging the lenient arm
+  is `ratio < 0.75`. Read as naming the *balanced* condition it was right;
+  read as the flag rule it inverts the objective. Corrected here.
+  **Exactly 0.75 is balanced** (strict `<`) — the one place this module does not
+  resolve ambiguity toward flagging, because 3-of-4-critical is not the leniency
+  SO 4.4 polices and flagging it would train Managers to ignore the flag.
+  Unobserved in the run, so a judgement, not a measurement.
+  **The old rule is subsumed** (`criticalCount === 0` forces `ratio 0`), so the
+  new rule flags a strict superset and trades away no existing detection.
+  **Mutation testing changed the tests, not the code:** with only baseline's
+  *modal* 0.333 covered, mutating the threshold to 0.5 survived a green suite
+  while silently unflagging the **two measured baseline rows at exactly 0.500**.
+  The constraining value is the observed one nearest the boundary, not the most
+  frequent. 5/5 mutants killed, each verified as landed.
+  ⚠️ **Not validated against a fresh run.** 0.75 was calibrated on the same 10
+  summaries it is now scored against, and re-scoring that file under the new
+  threshold is the post-hoc move the fingerprint guard forbids. **Four of six
+  fingerprints are invalidated** — `tone|*` *and* `differentiation|*`, both of
+  which embed the file text (`summary-fingerprint.js:60-64`); `criteria|*` is
+  unaffected, so SO 4.2's result stays poolable. Validating the threshold needs
+  a new run, and it should be a **held-out** one.
 
 - [ ] 🔴 **OBJECTIVE · M · Surface the SO 4.4 verdict to the Manager.**
   Nothing in `frontend/src` reads `confidenceStatus`,
