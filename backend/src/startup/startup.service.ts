@@ -505,12 +505,12 @@ export class StartupService {
    * summary per generation run, so the (generationRun, dimensionKey) collision
    * open on the validator path cannot occur here.
    *
-   * Never fails the submission. The proposal and its summary are already
-   * committed by the time this runs, and this row is supplementary provenance —
-   * losing it costs the Manager a flag, whereas throwing rolls back the
-   * founder's whole application inside create()'s transaction. Logged loudly
-   * because nothing else would show the flag went missing; a genuinely broken
-   * transaction still surfaces at create()'s next flush.
+   * Never fails the submission. The proposal and its summary are written by the
+   * time this runs, but not committed — create() wraps everything in
+   * em.transactional(), which commits only when its callback returns. This row
+   * is supplementary provenance, so losing it costs the Manager a flag, whereas
+   * throwing here rolls back the founder's whole application. Logged loudly
+   * because nothing else would show the flag went missing.
    */
   private async recordSummaryProvenance(
     startup: Startup,
@@ -547,7 +547,7 @@ export class StartupService {
         `Failed to record the analysis-summary provenance for startup ${startup.id} ` +
           `(run ${ctx.runId}): the SO 4.4 tone verdict "${tone.flagged ? 'positive-language-flagged' : 'balanced'}" ` +
           `and ${analysis.unmetCriteria.length} unmet criteria were not persisted. ` +
-          `The proposal and its summary are stored; the application was not rejected.`,
+          `The proposal and its summary were written; whether they commit depends on the rest of create().`,
         err,
       );
     }

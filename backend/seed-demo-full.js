@@ -52,7 +52,7 @@ const FOUNDERS = {
   'MediSync Cebu': { email: 'founder.medisync@launchup.local', firstName: 'Elena', lastName: 'Reyes' },
 };
 
-const { DEMO_CAPSULE_PROPOSALS: PROPOSALS } = require('./dist/src/demo-capsule-proposals');
+const { DEMO_CAPSULE_PROPOSALS: PROPOSALS } = req('demo-capsule-proposals');
 
 // One RNA per readiness type for MediSync, so RNS/initiative/roadblock
 // generation has something to generate from immediately.
