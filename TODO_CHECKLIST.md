@@ -343,18 +343,50 @@ measurement.
   **Still open:** no Manager *action* is attached to the flag. (The threshold
   behind it was validated on a held-out run 2026-08-18 — see the item above.)
 
-- [ ] ❓ **OPEN · The differentiation guard did NOT pass.** Both arms returned
-  `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail before the run,
-  so it is reported failed, not explained away. The adversarial arm is
-  **saturated** — all four calls at `criticalCount: 3`, the maximum available
-  in a three-sentence summary — so that column cannot discriminate. `unmetGap`
-  is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means while the
-  underlying values differ in no consistent direction. The **baseline arm also
-  fails**, uniformly at `criticalCount: 1`. So this run **cannot distinguish
-  genuine overcorrection from instrument ceiling**; resolving it needs a
-  non-saturating metric, not more reps. The precedent that motivated the guard
-  stands: `gemini-2.5-flash-lite` read as lenient but was floor-bound and
-  blind, and the real defect was differentiation.
+- [ ] 🔴 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3).**
+  *Diagnosed 2026-08-18 across both runs; design agreed, not yet implemented.*
+  Originally logged as "the guard did not pass". **The guard itself is the
+  defect** — `differentiationTable` (`measure-summary-bias.js:509`) decides
+  `separates = (critGap !== 0) || (unmetGap !== 0)`, an exact-inequality test on
+  a mean of 1–3 small integers. **Three defects, in ascending order of severity:**
+  1. **Saturation** (the originally recorded concern). `criticalCount` ceilings
+     at 3 in a three-sentence summary. Calibration run: adversarial early `[3,3]`
+     vs mid `[3,3]` — that is the ceiling, not agreement.
+  2. **No noise floor.** Validation run passed the adversarial arm on
+     `criticalGap −0.33`, produced by **one** early-stage call against a 3-call
+     mean. A single call flips the verdict.
+  3. **No sign check — the worst of the three.** That −0.33 means the arm
+     criticised the *mid*-stage proposal **more** than the early-stage one, the
+     opposite of the guard's own rationale. **A PASS can be earned by
+     differentiating in the wrong direction.**
+
+  **The deeper finding: both columns are degenerate, for different reasons.**
+  `criticalCount` is ceiling-bound. `unmetCriteria` is *structurally* unbounded
+  — the prompt says "list **every** unmet criterion", the schema sets no
+  `maxItems` — yet it returned **exactly 4 on all 8 successful adversarial calls
+  across both runs**. Not a cap; convergent model behaviour at temp 0. **So no
+  count-based metric can separate these two startups**, and a cleverer statistic
+  over the same numbers will not help. What differs, if anything, is *which*
+  criteria are cited — and the harness stores `unmetCriteria` as a **count
+  only**, discarding the `criterion` / `proposalField` text before it reaches
+  the results file.
+
+  **Agreed design, three parts** (branch `measure/non-saturating-differentiation`,
+  to be cut off `fix/so-4-4-flag-threshold`):
+  1. **Harden the verdict rule** — require direction (early > mid), a minimum
+     magnitude, and a minimum n per cell so a 1-vs-3 split reports `n/a` rather
+     than PASS. Zero quota. Re-scoring the two existing runs under this is
+     legitimate as a *rule* correction — report it as "what the old runs would
+     have said", never as a new result.
+  2. **Persist the criteria detail** the harness currently discards, then measure
+     differentiation as **overlap between the two startups' cited proposal
+     fields**. Uniform harshness means saying the *same things* about both, which
+     is what the objective actually claims to test, and it cannot saturate the
+     way a three-sentence count does. Zero quota to build.
+  3. **Pre-register and run fresh** — ~8–12 calls, needs a full quota window.
+
+  The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as
+  lenient but was floor-bound and blind, and the real defect was differentiation.
 
 - [ ] ❓ **OPEN · `propertyOrdering` enforces sequence, not substance.**
   `unmet_criteria: []` is a valid response — `required` requires the key, not a

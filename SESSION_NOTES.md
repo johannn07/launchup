@@ -23,7 +23,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 ---
 
-## Compressed history — 2026-07-26 → 2026-08-05
+## Compressed history — 2026-07-26 → 2026-08-06
 
 **AI pipeline config and run provenance (2026-07-26, PR #7).** `AiConfigService` resolves `{model, temperature, grounding, rag, biasReview, scoreNormalization}` from env, with a Manager/Admin-gated `X-Ai-Pipeline-Config` override; every generation opens an `ai_generation_runs` row and every artifact carries a `generation_run_id`, so runs are attributable to an exact arm. Score normalization was decoupled from bias review (two of four arms were previously unreachable). **Real bug fixed:** `temperature`/`maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them — every call had run at the API default, never at the configured `0`, so baseline results gathered before this are not sampling-comparable with results after.
 
@@ -55,64 +55,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 ---
 
-## 2026-08-06 — supplied-level fabrication probe
-
-Branch `measure/supplied-level-fabrication`, 22 commits off `master` at `41afeb4`, **nothing pushed**. Spec and plan under `docs/superpowers/`, 7 subagent tasks with an independent review after each, then a whole-branch review.
-
-Closes the gap named as the highest-value measurement left: every grounding number to date is the **levels** probe, where the model *infers* the level. Production does the opposite — mentors set levels and the RNA path consumes them.
-
-### Why it needed a manipulation
-
-The fabrication was observed while the seeded levels were still wrong (MediSync IRL 3). The 2026-08-05 correction moved MediSync to IRL 1, so retrieval now pulls IRL 1/2 and the funding-plan text never enters the prompt. **The fix removed the trigger without touching the vulnerability** — an observational re-run measures 0 and proves nothing. So `--level-condition=truth|inflated|both` runs the RNA probe per condition, inflating O/R/I to 3 while T/M/A stay at truth as a within-call control. `lib/assertions.js` scores each RNA per (call, dimension) for clauses that *assert* an absent artifact, separating that from correctly *recommending* it — at IRL 1, "draft a funding plan" is the RNA doing its job; "the venture has drafted a funding plan" is the defect.
-
-### Three design defects, none findable by testing
-
-All three were in the spec, not the implementation — the tests were written from the same mistaken model that produced the spec.
-
-1. **The classifier admitted bare copulas.** "Investor interest is growing" scored as fabrication, inverting the lower-bound property the whole claim rests on.
-2. **`absentTokens` had `contractor` but not `contributor`** — the word ORL 3's own rubric uses. Organizational would have read 0 for the wrong reason, and 0 is the conclusion favourable to the corpus. Caught by the quota-free pre-flight, not by any unit test.
-3. **Inflating to 4 skipped the row the probe was about.** Retrieval pulls `(L, L+1)`, so 4 pulls 4–5 and IRL 3 — the literal source of the observed instance — lands in neither condition. Changed to **3**.
-
-A fourth, a real Critical: `--level-condition=inflated` let the **levels** probe run rubric-less under an *unchanged* fingerprint, so degraded calls would have pooled into the six collected levels files.
-
-### The result (`measurement/results/2026-08-06-supplied-level.json`, 16/16 calls, n=2)
-
-| arm | condition | asserted | mentioned | unclassified |
-|---|---|---|---|---|
-| baseline | truth | 0/12 | 2/12 | 1/12 |
-| baseline | inflated | **0/12** | 2/12 | 2/12 |
-| corpus | truth | 0/12 | 8/12 | 4/12 |
-| corpus | **inflated** | **2/12 (17%)** | 11/12 | 4/12 |
-
-**Only corpus+inflated fabricates; the wrong number alone produces nothing** — baseline is 0/12 under both conditions. Both flagged clauses weld a fabricated artifact to a true document fact, which is the insidious form:
-
-> "Currently at RRL 3, with **legal counsel engaged** and a trademark application pending with IPOPHL."
-> "Currently at IRL 3, with **a drafted funding plan** and PHP 5,000 in monthly recurring revenue achieved by February 2026."
-
-The second reproduces the 2026-08-05 instance almost verbatim.
-
-**Reading `flaggedClauses` by hand changed the finding.** Two more genuine fabrications sat in `unclassified` — *"A basic funding plan **exists**…"* and *"…alongside a **first non-founder contributor**"* — missed because `exists` is not an assertion cue and clause fragments lose their subject. So the effect reproduced across **both** reps and Organizational fabricated too. **The measured 17% is a floor**; the lower-bound property held, and the audit dump is the only reason it is visible.
-
-**The level-isolating cell is the strongest part.** Truth pulls ORL 2+3, inflated pulls ORL 3+4 — so ORL 3 reaches the model under *both*. Same rubric text, only the supplied level differs: *"Needs: Advance to ORL 3 by engaging the first non-founder contributor"* under truth, asserted as present under inflation. **That rules out "the corpus added new text" as the explanation.** Investment and Regulatory confound level with text; Organizational separates them. Recorded in the spec *before* the run.
-
-**Limits:** n=2, 16 calls, and **every fabrication came from MediSync** — AgroLink produced none. `unclassified` is 4/12 on corpus arms, and the design says do not quote a rate when that column is large. The Organizational finding is qualitative. Inflation is one rung above the ceiling, not two, so a null would have supported only "a one-rung error did not induce fabrication" — the interpretation table was rescoped for that before the run.
-
-**Deliberately not done: the classifier was not patched and this data not re-scored.** That is the post-hoc move, and the fingerprint guard enforces it — editing the classifier changes the `assertion*` hash, so re-scored results refuse to pool. A fixed classifier means a fresh run as a separate experiment.
-
-**Process notes:** the 15 pinned fingerprints held across 22 commits, verified byte-identical rather than claimed. A subagent reported RED-phase test figures that were arithmetically impossible (131 + 8 = 132) — the code was fine, the transcript was reconstructed from memory. **Assume reconstruction whenever reported numbers don't reconcile.**
-
-### Documentation maintenance pass (same day, later)
-
-`SESSION_NOTES.md` 1106 → 262 lines, `TODO_CHECKLIST.md` 602 → 527 with a new **Objective | Status** table between "Recently completed" and §0. Sessions before 2026-08-04 compressed to outcome-only paragraphs; cross-session gotchas hoisted into one standing-notes block rather than re-narrated per session. All 48 open checklist items survive. Rules recorded in `CLAUDE.md` under **Documentation maintenance** so this happens proactively.
-
-Three checklist changes that are state claims, not wording:
-- **Closed two §5 items** the document already described as done — storage provider (code + credentials live-verified) and model selection (default raised and verified).
-- **Added three items previously buried in prose:** `responseSchema` (marked "still unaddressed" inside the model item), and the two 1c design decisions (RNS correlation-key uniqueness, stale verdicts on edit) that existed only in these notes.
-- **Failing-test count corrected to 216/1** from the 2026-08-04 notes — *not* from a run in this session.
-
-Branch `docs/trim-notes-and-status-table` (`5e844b0`), pushed, **PR not yet opened**.
-
----
+**Supplied-level fabrication probe (2026-08-06).** Closed the gap that every grounding number to date was the *levels* probe, where the model infers the level; production does the opposite — mentors set levels and the RNA path consumes them. Needed a manipulation, because the 2026-08-05 ground-truth correction had removed the trigger without touching the vulnerability: `--level-condition=truth|inflated` inflates O/R/I to 3 while T/M/A stay at truth as a within-call control. **Result (n=2, 16/16 calls): only corpus+inflated fabricates — `deviation-deterministic` 2/12 (17%), baseline 0/12 under *both* conditions.** The wrong supplied level alone produces nothing. Both flagged clauses weld a fabricated artifact to a true document fact (*"Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL"*). **Organizational is the level-isolating cell** — ORL 3 reaches the model under both conditions, so identical rubric text with only the supplied level differing flips *"Needs: advance to ORL 3 by engaging the first non-founder contributor"* into an assertion that one exists; that rules out "the corpus added new text" as the explanation, and it was recorded in the spec before the run. Reading `flaggedClauses` by hand found two more genuine fabrications sitting in `unclassified`, so **17% was a floor**. **Three design defects, all in the spec rather than the implementation** (the tests were written from the same mistaken model): the classifier admitted bare copulas, `absentTokens` had `contractor` but not `contributor` — the word ORL 3's own rubric uses, so Organizational would have read 0 for the wrong reason — and inflating to 4 would have skipped the very row the probe was about. The classifier was deliberately **not** patched and the data not re-scored; the fingerprint guard enforces that mechanically. Superseded by the 2026-08-09 re-run.
 
 ## 2026-08-09 — the classifier repair, and five cues that did not survive review
 
@@ -317,6 +260,54 @@ Neon reachable even for `--dry-run`.
 
 ---
 
+### Then: metric 3 diagnosed, not yet rebuilt
+
+No quota spent — the diagnosis came from re-scoring both stored runs.
+
+**The differentiation guard is itself the defect**, not merely saturating.
+`differentiationTable` decides `separates = (critGap !== 0) || (unmetGap !== 0)`
+— an exact-inequality test on a mean of 1–3 small integers. Three defects, worst
+last:
+
+1. **Saturation** (the recorded concern): `criticalCount` ceilings at 3 in a
+   three-sentence summary; adversarial early `[3,3]` vs mid `[3,3]` is the
+   ceiling, not agreement.
+2. **No noise floor:** the validation run's adversarial `PASS` came from
+   `criticalGap −0.33` — **one** early call against a 3-call mean.
+3. **No sign check:** that −0.33 means the arm criticised the *mid*-stage
+   proposal more than the early-stage one. **A PASS can be earned by
+   differentiating backwards.**
+
+**The finding that decides the redesign:** both columns are degenerate for
+different reasons. `criticalCount` is ceiling-bound; `unmetCriteria` is
+structurally unbounded (prompt says "list *every*", schema sets no `maxItems`)
+yet came back **exactly 4 on all 8 successful adversarial calls across both
+runs**. Convergent model behaviour, not a cap. **So no count-based metric can
+separate these two startups** — a better statistic over the same numbers cannot
+help. What may differ is *which* criteria are cited, and the harness stores
+`unmetCriteria` as a **count only**, discarding `criterion`/`proposalField`
+before the results file.
+
+Design agreed, implementation not started — see the metric 3 item in
+`TODO_CHECKLIST.md` for the three parts.
+
+### Branch state at close
+
+`fix/so-4-4-flag-threshold`, **7 commits, local, nothing pushed.** Assessed
+mergeable: `master` is an ancestor (fast-forwardable), `merge-tree` reports no
+conflicts, working tree clean, 16 files all intentional. Gates **re-run at the
+tip**, not carried over: jest **262/1**, measurement **210/210**, `tsc` 0,
+`svelte-check` **160/16/46 — identical to master's baseline**. The single jest
+failure is the documented `AiService › passes valid task responses through
+unchanged`, and the branch touches neither `ai.service.ts` nor its spec.
+
+Two notes for whoever merges: the branch is **wider than its name** (flag rule →
+`0b92c86`, Manager UI → `7507490`, measurement → `282294e`, if they want
+splitting), and **no migration is needed** — `summaryVerdict` is `persist: false`
+and produces 0 DDL statements.
+
+---
+
 ## Open at end of 2026-08-18
 
 **Branch state.** `feat/adversarial-summary` **merged via PR #25** (merge commit `70a66c4`) — the 2026-08-18 block above was written before that landed and said "25 commits, unpushed"; it is stale and left as written. `measure/assertion-classifier-gaps` merged via PR #24 (`2195df8`). Not in `master`:
@@ -326,9 +317,14 @@ Neon reachable even for `--dry-run`.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
-**Next step.** A **non-saturating differentiation metric**. Two runs have now failed that guard on the baseline arm, and the second showed the adversarial arm is not reliably saturated either — so the instrument, not the arm, is what needs work, and no number of reps fixes it. After that, SO 4.4 has a validated flag and a visible verdict but **no Manager action attached to it** — decide whether that is in scope before submission.
+**Next step — in order.**
+1. **Merge or review `fix/so-4-4-flag-threshold`** (John tests first). It is complete and self-contained; nothing below depends on it staying unmerged.
+2. **Rebuild metric 3**, parts 1 and 2 — harden the verdict rule (direction, magnitude, minimum n) and persist the criteria detail so differentiation can be measured on *which* fields are cited rather than how many. **Both are zero-quota and can start immediately.**
+3. **Then** pre-register and run part 3 (~8–12 calls, full window).
 
 **A cheaper validation than more reps:** `ratio < 0.75` is now tested against one prompt whose output structure barely varies. The informative next test is a *different* summary prompt or a third document, not a fourth rep of the same two.
+
+**Quota at close:** 12 of 20 spent in the window that opened 15:00 Manila 2026-08-18; ~8 remain until the next reset.
 
 **Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 
