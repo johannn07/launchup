@@ -46,11 +46,20 @@ function jaccard(a, b) {
   return shared / union.size;
 }
 
-/** Mean of the scoreable pairs. Nulls are dropped, never averaged in as 0. */
-function meanScoreable(values) {
+/**
+ * The scoreable pairs and their mean. Nulls are dropped, never averaged in as 0
+ * and never present as a low value - an unscoreable pair is an absent
+ * observation. The values themselves are returned because the pre-registered
+ * rule is min/max over them, not a comparison of means.
+ */
+function scoreablePairs(values) {
   const scoreable = values.filter((v) => v !== null);
-  if (!scoreable.length) return { mean: null, n: 0 };
-  return { mean: scoreable.reduce((a, b) => a + b, 0) / scoreable.length, n: scoreable.length };
+  if (!scoreable.length) return { mean: null, n: 0, values: [] };
+  return {
+    mean: scoreable.reduce((a, b) => a + b, 0) / scoreable.length,
+    n: scoreable.length,
+    values: scoreable,
+  };
 }
 
 /** Jaccard for every unordered pair of distinct members of one list. */
@@ -81,17 +90,79 @@ function overlapStats(earlySets, midSets) {
   for (const e of earlySets) for (const m of midSets) cross.push(jaccard(e, m));
   const within = [...selfPairs(earlySets), ...selfPairs(midSets)];
 
-  const c = meanScoreable(cross);
-  const w = meanScoreable(within);
+  const c = scoreablePairs(cross);
+  const w = scoreablePairs(within);
   return {
     nEarly: earlySets.length,
     nMid: midSets.length,
     crossOverlap: c.mean,
     nCrossPairs: c.n,
+    crossPairValues: c.values,
     withinOverlap: w.mean,
     nWithinPairs: w.n,
+    withinPairValues: w.values,
     separation: c.mean === null || w.mean === null ? null : w.mean - c.mean,
   };
 }
 
-module.exports = { normalizeField, fieldSet, jaccard, overlapStats };
+/**
+ * The n bar, pre-registered with the rule. BOTH conditions are required:
+ * MIN_QUOTABLE_REPS alone would admit grids whose chance reference is weak, and
+ * MAX_CHANCE_REFERENCE alone would admit a lopsided 4x2 grid carrying a single
+ * mid-side within-pair. Below the bar a comparison is still reported - it is
+ * just not quotable.
+ */
+const MIN_QUOTABLE_REPS = 3;
+const MAX_CHANCE_REFERENCE = 0.001;
+
+/**
+ * The decision rule, pre-registered in
+ * docs/superpowers/specs/2026-08-19-differentiation-margin-design.md BEFORE any
+ * generation it scores. The two pair distributions must not overlap at all.
+ *
+ * No constant, deliberately. This is the same logic that made `ratio < 0.75`
+ * quotable - that threshold was defensible because the arms sat in a gap with no
+ * overlap, not because 0.75 was independently justified. Complete separation
+ * states the condition instead of encoding it as a number.
+ *
+ * Strict `>`, so a TIE FAILS. The rule does not resolve ambiguity toward PASS:
+ * PASS is the claim being made and should cost something. Same call as exactly
+ * 0.75 counting as balanced in summary-tone.ts.
+ */
+function completeSeparation(crossValues, withinValues) {
+  if (!crossValues.length || !withinValues.length) return null;
+  return Math.min(...withinValues) > Math.max(...crossValues);
+}
+
+/** C(n, k), multiplicatively so the intermediate terms stay small. */
+function binomial(n, k) {
+  const kk = Math.min(k, n - k);
+  let out = 1;
+  for (let i = 1; i <= kk; i += 1) out = (out * (n - kk + i)) / i;
+  return out;
+}
+
+/**
+ * Probability that every within pair lands above every cross pair under random
+ * relabelling of the pooled pairs: 1 / C(nCross + nWithin, nWithin).
+ *
+ * OPTIMISTIC, and the pre-registration says so: this assumes the pair values are
+ * exchangeable and independent, and they are neither - pairs share reps. It is
+ * part of a pre-registered decision rule, NOT a significance test, and must
+ * never be reported as a p-value.
+ */
+function chanceReference(nCross, nWithin) {
+  if (!nCross || !nWithin) return null;
+  return 1 / binomial(nCross + nWithin, nWithin);
+}
+
+module.exports = {
+  MIN_QUOTABLE_REPS,
+  MAX_CHANCE_REFERENCE,
+  normalizeField,
+  fieldSet,
+  jaccard,
+  overlapStats,
+  completeSeparation,
+  chanceReference,
+};

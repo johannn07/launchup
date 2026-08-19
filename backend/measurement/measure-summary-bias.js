@@ -73,7 +73,14 @@
  */
 const path = require('path');
 const fs = require('fs');
-const { fieldSet, overlapStats } = require(path.join(__dirname, 'lib/field-overlap.js'));
+const {
+  fieldSet,
+  overlapStats,
+  completeSeparation,
+  chanceReference,
+  MIN_QUOTABLE_REPS,
+  MAX_CHANCE_REFERENCE,
+} = require(path.join(__dirname, 'lib/field-overlap.js'));
 
 const BACKEND = path.resolve(__dirname, '..');
 // dotenv 17 prints a ROTATING "tip" line to stdout on every config() call, which
@@ -96,7 +103,7 @@ const flagValue = (name) => {
 };
 
 const KNOWN_EXACT_FLAGS = new Set(['--dry-run', '--fingerprint']);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--degrade=', '--max-api-calls='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--degrade=', '--max-api-calls=', '--only-arm='];
 
 const RESULTS_DIR = path.join(__dirname, 'results');
 
@@ -106,6 +113,65 @@ const RESULTS_DIR = path.join(__dirname, 'results');
  * Called only from the `require.main` block, never at module load: when this
  * file is `require()`d by node --test, process.argv belongs to the test runner.
  */
+/**
+ * Resolves --only-arm into the arms to run. Case-insensitive prefix match over
+ * comma-separated names, mirroring measure-grounding.js's selectCells so the two
+ * harnesses behave the same way.
+ *
+ * Metric 3 is scoreable on the ADVERSARIAL arm only - the baseline cites no
+ * proposal fields, so every one of its overlap pairs is null by construction -
+ * and a full run spends 6 baseline calls that cannot contribute to it.
+ *
+ * An entry matching nothing is an error, never a silent drop, and an ambiguous
+ * prefix is refused rather than expanded. Both failures cost calls against a
+ * 20/day cap, in opposite directions.
+ */
+function selectArms(filter, arms = ARMS) {
+  if (filter == null) return { arms, errors: [] };
+
+  const entries = String(filter)
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+
+  const matchesFor = (e) => {
+    const lower = e.toLowerCase();
+    // Exact wins, so one arm's name being another's prefix never makes it
+    // unselectable.
+    const exact = arms.filter((a) => a.name.toLowerCase() === lower);
+    if (exact.length) return exact;
+    return arms.filter((a) => a.name.toLowerCase().startsWith(lower));
+  };
+
+  const available = arms.map((a) => a.name).join(', ');
+  const unmatched = entries.filter((e) => matchesFor(e).length === 0);
+  if (unmatched.length) {
+    return {
+      arms: [],
+      errors: [
+        `--only-arm=${filter} matched no arm: ${unmatched.map((u) => `"${u}"`).join(', ')}. ` +
+          `Available: ${available}.`,
+      ],
+    };
+  }
+
+  const ambiguous = entries.filter((e) => matchesFor(e).length > 1);
+  if (ambiguous.length) {
+    return {
+      arms: [],
+      errors: [
+        `--only-arm=${filter} is ambiguous: ${ambiguous.map((a) => `"${a}"`).join(', ')}. ` +
+          `Available: ${available}.`,
+      ],
+    };
+  }
+
+  const chosen = new Set(entries.flatMap((e) => matchesFor(e).map((a) => a.name)));
+  // Declaration order, not the order they were typed - arm order is the run
+  // order and must not depend on how the flag was written.
+  return { arms: arms.filter((a) => chosen.has(a.name)), errors: [] };
+}
+
 function validateArgs(argv) {
   const errors = [];
 
@@ -118,7 +184,8 @@ function validateArgs(argv) {
     if (KNOWN_VALUE_FLAG_PREFIXES.some((p) => arg.startsWith(p))) continue;
     errors.push(
       `Unrecognized flag "${arg}". Known flags: --dry-run, --fingerprint, ` +
-        `--out=<file>, --reps=N, --degrade=N (--dry-run only), --max-api-calls=N.`,
+        `--out=<file>, --reps=N, --degrade=N (--dry-run only), --max-api-calls=N, `+
+        `--only-arm=<names>.`,
     );
   }
 
@@ -150,6 +217,8 @@ function validateArgs(argv) {
     }
   }
 
+  errors.push(...selectArms(flagValue('only-arm')).errors);
+
   return errors;
 }
 
@@ -168,6 +237,13 @@ const ARMS = [
   { name: 'baseline', adversarialSummary: false },
   { name: 'adversarial', adversarialSummary: true },
 ];
+
+/**
+ * The arms this invocation actually runs. A bad --only-arm resolves to [] and is
+ * reported by validateArgs before main does anything, so it never reaches a
+ * network call.
+ */
+const SELECTED_ARMS = selectArms(flagValue('only-arm')).arms;
 
 /** Early-stage vs mid-stage. Metric 3 is the gap between these two. */
 const EARLY = 'AgroLink PH';
@@ -320,7 +396,7 @@ function ctxFor(baseConfig, arm) {
 async function runArms(aiService, baseConfig, opts) {
   const {
     reps = REPS,
-    arms = ARMS,
+    arms = SELECTED_ARMS,
     startups,
     dtos,
     analyzeTone,
@@ -584,7 +660,12 @@ function differentiationTable(rows, arms) {
       withinOverlap: round(overlap.withinOverlap, 3),
       nWithinPairs: overlap.nWithinPairs,
       separation: round(overlap.separation, 3),
-      verdict: verdictFor(underpowered, overlap.separation),
+      // Raw pair values, not just their means: the pre-registered rule is
+      // min/max over these, so they must survive into the results file.
+      crossPairValues: overlap.crossPairValues.map((v) => round(v, 3)),
+      withinPairValues: overlap.withinPairValues.map((v) => round(v, 3)),
+      chanceReference: chanceReference(overlap.nCrossPairs, overlap.nWithinPairs),
+      ...verdictFor({ nEarly: early.length, nMid: mid.length, underpowered, overlap }),
     };
   });
 }
@@ -602,11 +683,36 @@ function favours(gap) {
   return 'neither';
 }
 
-/** Always n/a, with the reason. See the header: the margin is not ours to set. */
-function verdictFor(underpowered, separation) {
-  if (underpowered) return 'n/a - underpowered';
-  if (separation === null) return 'n/a - no scoreable field citations';
-  return 'n/a - margin not pre-registered';
+/**
+ * The pre-registered rule (docs/superpowers/specs/2026-08-19-differentiation-margin-design.md).
+ *
+ * Two n/a gates come first and are about readability, not the rule: a mean over
+ * one call says nothing, and an arm citing no fields cannot be scored at all.
+ * Past those, complete separation decides PASS/FAIL and the n bar decides only
+ * whether the answer is QUOTABLE - a comparison below the bar is still reported,
+ * because declining to overclaim is not the same as having no result.
+ */
+function verdictFor({ nEarly, nMid, underpowered, overlap }) {
+  if (underpowered) return { verdict: 'n/a - underpowered', separated: null, quotable: false };
+
+  const separated = completeSeparation(overlap.crossPairValues, overlap.withinPairValues);
+  if (separated === null) {
+    return { verdict: 'n/a - no scoreable field citations', separated: null, quotable: false };
+  }
+
+  const chance = chanceReference(overlap.nCrossPairs, overlap.nWithinPairs);
+  const quotable =
+    nEarly >= MIN_QUOTABLE_REPS &&
+    nMid >= MIN_QUOTABLE_REPS &&
+    chance !== null &&
+    chance <= MAX_CHANCE_REFERENCE;
+
+  const outcome = separated ? 'PASS' : 'FAIL - uniform';
+  return {
+    verdict: quotable ? outcome : `${separated ? 'PASS' : 'FAIL'} - not quotable`,
+    separated,
+    quotable,
+  };
 }
 
 /**
@@ -630,7 +736,7 @@ function validity(rows, arms) {
   };
 }
 
-function summarize(rows, arms = ARMS) {
+function summarize(rows, arms = SELECTED_ARMS) {
   const ok = rows.filter(isOk).length;
   return {
     planned: rows.length,
@@ -647,7 +753,7 @@ function summarize(rows, arms = ARMS) {
 // Reports
 // --------------------------------------------------------------------------
 
-function printReports(rows, { apiCalls, arms = ARMS } = {}) {
+function printReports(rows, { apiCalls, arms = SELECTED_ARMS } = {}) {
   const s = summarize(rows, arms);
 
   const banner = `${s.succeeded}/${s.planned} calls succeeded`;
@@ -694,14 +800,49 @@ function printReports(rows, { apiCalls, arms = ARMS } = {}) {
 
   console.log(`\n--- Metric 3: DIFFERENTIATION guard - ${EARLY} (early) vs ${MID} (mid) ---`);
   console.log('(An arm that criticises both equally has overcorrected into uniform harshness -');
-  console.log(' bias with the sign flipped. Read `separation` = withinOverlap - crossOverlap:');
-  console.log(' how much the arm repeats ITSELF across reps of one startup, minus how much it');
-  console.log(' says the same about BOTH. Positive means it distinguishes them by more than');
-  console.log(' its own rep-to-rep noise. The count columns are DESCRIPTIVE ONLY.)\n');
-  console.table(s.differentiation);
-  console.log('No PASS/FAIL is issued: `separation` needs a margin, none has been observed, and');
-  console.log('setting one from the run it scores is the post-hoc move the fingerprints forbid.');
+  console.log(' bias with the sign flipped. The verdict is COMPLETE SEPARATION, pre-registered');
+  console.log(' 2026-08-19: every within-startup pair must beat every cross-startup pair.)\n');
+
+  console.log('Counts - DESCRIPTIVE ONLY, they own no verdict:');
+  console.table(
+    s.differentiation.map((d) => ({
+      arm: d.arm,
+      nEarly: d.nEarly,
+      nMid: d.nMid,
+      earlyCritical: d.earlyCritical,
+      midCritical: d.midCritical,
+      criticalGap: d.criticalGap,
+      criticalFavours: d.criticalFavours,
+      earlyUnmet: d.earlyUnmet,
+      midUnmet: d.midUnmet,
+      unmetGap: d.unmetGap,
+      unmetFavours: d.unmetFavours,
+    })),
+  );
+
+  console.log('\nField overlap - SCORED. separation = withinOverlap - crossOverlap:');
+  // The raw pair arrays are deliberately not printed - they are what the rule
+  // is evaluated on, so they go to the results file where they can be re-read,
+  // not to a console.table that truncates them to "... 6 more items".
+  console.table(
+    s.differentiation.map((d) => ({
+      arm: d.arm,
+      crossOverlap: d.crossOverlap,
+      withinOverlap: d.withinOverlap,
+      separation: d.separation,
+      nCrossPairs: d.nCrossPairs,
+      nWithinPairs: d.nWithinPairs,
+      chance: d.chanceReference === null ? null : Number(d.chanceReference.toPrecision(2)),
+      separated: d.separated,
+      quotable: d.quotable,
+      verdict: d.verdict,
+    })),
+  );
+  console.log(`Quotable requires n>=${MIN_QUOTABLE_REPS} per startup AND chance <= ${MAX_CHANCE_REFERENCE}.`);
+  console.log('Below that the comparison is reported and explicitly NOT quotable.');
   console.log(`Cells below n=${MIN_CELL_N} read n/a - one call against a multi-call mean is not a gap.`);
+  console.log('The chance reference assumes exchangeable independent pairs; pairs share reps,');
+  console.log('so it is OPTIMISTIC and is not a p-value.');
 
   printSummaries(rows);
   return s;
@@ -784,7 +925,7 @@ function currentFingerprints() {
       tone: toneSource(),
       overlap: overlapSource(),
     },
-    arms: ARMS,
+    arms: SELECTED_ARMS,
   });
 }
 
@@ -796,6 +937,9 @@ function writeResults(file, { rows, apiCalls, plannedCalls, baseConfig, mode }) 
     temperature: baseConfig.temperature,
     grounding: baseConfig.grounding,
     reps: REPS,
+    // Records the --only-arm selection, so a filtered file is self-describing
+    // rather than looking like a run whose other arms all failed.
+    armsRun: SELECTED_ARMS.map((a) => a.name),
     plannedCalls,
     succeededCalls: rows.filter(isOk).length,
     apiRequests: apiCalls,
@@ -987,7 +1131,7 @@ async function main() {
 
     console.log(`model=${baseConfig.model} temperature=${baseConfig.temperature} grounding=${baseConfig.grounding}`);
 
-    const stub = DRY_RUN ? makeStub({ degradeCount: DEGRADE, reps: REPS, arms: ARMS, startups }) : null;
+    const stub = DRY_RUN ? makeStub({ degradeCount: DEGRADE, reps: REPS, arms: SELECTED_ARMS, startups }) : null;
     if (stub) {
       console.log(
         `--dry-run: stubbing generateContent only. degrade plan (${DEGRADE}): ` +
@@ -996,14 +1140,14 @@ async function main() {
     }
 
     console.log('\nCall order (rep OUTERMOST - a quota stop must leave a balanced pool):');
-    callDescriptors({ reps: REPS, arms: ARMS, startups }).forEach((d, i) =>
+    callDescriptors({ reps: REPS, arms: SELECTED_ARMS, startups }).forEach((d, i) =>
       console.log(`  ${String(i + 1).padStart(2)}. rep ${d.rep} / ${d.arm} / ${d.startup}`),
     );
     console.log('');
 
     const { rows, apiCalls, plannedCalls } = await runArms(aiService, baseConfig, {
       reps: REPS,
-      arms: ARMS,
+      arms: SELECTED_ARMS,
       startups,
       dtos,
       analyzeTone: b.analyzeTone,
@@ -1041,6 +1185,8 @@ if (require.main === module) {
 
 module.exports = {
   ARMS,
+  selectArms,
+  SELECTED_ARMS,
   EARLY,
   MID,
   CALLS_PER_DEGRADED_CELL,

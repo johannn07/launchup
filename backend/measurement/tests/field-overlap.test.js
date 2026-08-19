@@ -148,3 +148,59 @@ test('unscoreable pairs are excluded from the mean rather than counted as 0', ()
 function round(x) {
   return x === null ? null : Math.round(x * 1000) / 1000;
 }
+
+// The pre-registered rule (2026-08-19) is defined on min/max of the RAW pair
+// values, not the means, so those values have to survive into the results file.
+// Persisting only means is the same defect that left both 2026-08-18 runs
+// un-rescoreable for overlap.
+test('overlapStats exposes the scoreable pair values, not just their means', () => {
+  const r = overlapStats([S('a', 'b'), S('a', 'c')], [S('a', 'b')]);
+  // cross: ({a,b},{a,b}) = 1 ; ({a,c},{a,b}) = 1/3
+  assert.deepEqual(r.crossPairValues.map(round).sort(), [0.333, 1]);
+  // within: ({a,b},{a,c}) = 1/3
+  assert.deepEqual(r.withinPairValues.map(round), [0.333]);
+});
+
+test('unscoreable pairs are absent from the pair values, not present as 0', () => {
+  // (empty,empty) = null, dropped ; ({a},empty) = 0, kept
+  const r = overlapStats([S(), S('a')], [S()]);
+  assert.deepEqual(r.crossPairValues, [0]);
+  assert.equal(r.crossPairValues.length, r.nCrossPairs);
+});
+
+const { completeSeparation, chanceReference } =
+  require(path.resolve(__dirname, '../lib/field-overlap.js'));
+
+// The rule pre-registered 2026-08-19: the two pair distributions must not
+// overlap at all. No constant - the same logic that made ratio < 0.75 quotable.
+test('complete separation holds when every within pair beats every cross pair', () => {
+  assert.equal(completeSeparation([0.1, 0.3], [0.6, 0.8]), true);
+});
+
+// Strict >, pinned by the pre-registration: the rule does not resolve ambiguity
+// toward PASS, because PASS is the claim being made and should cost something.
+// Same call as exactly 0.75 counting as balanced.
+test('a tie between the distributions is a FAIL, not a PASS', () => {
+  assert.equal(completeSeparation([0.3, 0.5], [0.5, 0.6]), false);
+});
+
+test('overlapping distributions do not separate', () => {
+  assert.equal(completeSeparation([0.3, 0.7], [0.6, 0.8]), false);
+});
+
+test('complete separation is null when either side has no scoreable pair', () => {
+  assert.equal(completeSeparation([], [0.5]), null);
+  assert.equal(completeSeparation([0.5], []), null);
+});
+
+// Probability that all nWithin values land above all nCross values under random
+// relabelling: 1 / C(nCross + nWithin, nWithin).
+test('chanceReference is 1 over the binomial of the pooled pairs', () => {
+  assert.equal(round(chanceReference(9, 6) * 5005), 1); // full 3x3 grid
+  assert.equal(round(chanceReference(4, 2) * 15), 1); // 2x2 grid
+});
+
+test('chanceReference is null when either side has no pairs', () => {
+  assert.equal(chanceReference(0, 6), null);
+  assert.equal(chanceReference(9, 0), null);
+});
