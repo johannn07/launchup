@@ -423,9 +423,67 @@ overstated. Corrected in place in both documents.
 name**; this branch touches only `measurement/`. Measurement **237/237**
 (baseline 210, +27). `npx tsc --noEmit` exit 0.
 
-**Branch state:** local, nothing pushed. 2 files modified
-(`measure-summary-bias.js`, `lib/summary-fingerprint.js`), 4 added
-(`lib/field-overlap.js` + 3 test files).
+### Then: the margin pre-registered, and both prerequisites built
+
+`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`, committed
+**before** any generation it scores. Rule: **complete separation** —
+`min(within-startup pair) > max(cross-startup pair)`. **No constant**, which is
+the point: the same logic that made `ratio < 0.75` quotable, stated as a
+condition rather than encoded as a number. Strict `>`, so a **tie FAILS** — the
+rule does not resolve ambiguity toward PASS, because PASS is the claim being
+made.
+
+**The n bar needs both conditions, and writing the spec is what showed why.**
+`nEarly >= 3 && nMid >= 3` alone is satisfiable while **null pairs shrink the
+scoreable grid underneath it** — reachable whenever a call returns
+`unmet_criteria: []`, which the schema permits. The chance reference
+`1/C(nCross+nWithin, nWithin) <= 0.001` alone admits a lopsided 4×2 grid with a
+single mid-side within-pair. Each covers the other's hole. That test is also the
+only thing that kills the `MAX_CHANCE_REFERENCE` mutant.
+
+**The spec self-review found a defect in the spec I had just written.** The rule
+is defined on `min`/`max` of raw pair values, and `overlapStats` returned only
+means — so the rule I had pre-registered **could not have been evaluated from a
+stored run**, the identical defect that left both 2026-08-18 runs un-rescoreable
+for overlap. Fixed as prerequisite 1, and verified on a dry run: recomputing
+`min(within) > max(cross)` from the written JSON reproduces the recorded
+`separated`.
+
+**Prerequisite 2, `--only-arm`,** matching `measure-grounding.js`'s semantics
+(exact beats prefix, unmatched is a hard error, ambiguous is refused). Metric 3
+is scoreable on the **adversarial arm only** — the baseline cites no proposal
+fields, so all its pairs are `null` by construction — so a full run spent 6
+baseline calls that could not contribute. `--only-arm=adversarial --reps=5` = 10
+cells, verified from real `argv`, and results files now record `armsRun` so a
+filtered file is self-describing.
+
+**Three things the dry run caught that no unit test could.** It printed
+*"No PASS/FAIL is issued"* directly beneath a table reading `FAIL - uniform` —
+the guidance text had become false the moment the margin was pre-registered. The
+table had grown to 24 columns with the pair arrays truncated to `... 6 more
+items`, so it is now split into "Counts — DESCRIPTIVE ONLY" and "Field overlap —
+SCORED", with the raw arrays going to the results file rather than a console
+that mangles them. And `console.table` was the only place the descriptive/scored
+distinction was invisible.
+
+**Mutation testing 16/16, and the guard earned its keep a second time.** One
+mutant's anchor no longer existed — `verdictFor` had been rewritten to return an
+object — and **without the landed-assertion it would have reported as KILLED**.
+That is the 2026-08-09 lesson recurring within a single session: a mutation that
+cannot apply is indistinguishable from a decorative guard.
+
+**Also worth knowing:** `node -e "..."` cannot be given `--flag=value`
+arguments — node parses them as its own options and exits. Probing a harness
+whose config comes from `process.argv` needs a real script file.
+
+**Gates:** measurement **257/257** (baseline 210). `npx tsc --noEmit` exit 0.
+jest unchanged at **262/1** — this work touches only `measurement/`.
+
+**What remains for metric 3 is the run itself**, `--only-arm=adversarial
+--reps=5`, one full quota window. Predicted FAIL, with the informative failure
+mode named in the spec.
+
+**Branch state:** local, nothing pushed.
 
 ---
 
@@ -440,7 +498,7 @@ name**; this branch touches only `measurement/`. Measurement **237/237**
 
 **Next step — in order.**
 1. **Review `measure/non-saturating-differentiation`** (John tests first). Zero-quota, self-contained, gates green.
-2. **Pre-register part 3** — the margin that turns `separation` into PASS/FAIL must be fixed **in writing before the first call**, since the instrument now deliberately ships without one. ~8–12 calls, needs a full window.
+2. **Run part 3.** Pre-registration is committed and both prerequisites are built, so this is now just the run: `--only-arm=adversarial --reps=5` = 10 cells, one full quota window. Predicted FAIL; the informative failure mode is named in the spec.
 3. **A cheaper test than part 3 exists and is still unclaimed:** `ratio < 0.75` is validated against one prompt whose output structure barely varies. A *different* summary prompt or a third document is more informative than a fourth rep of the same two.
 
 **A cheaper validation than more reps:** `ratio < 0.75` is now tested against one prompt whose output structure barely varies. The informative next test is a *different* summary prompt or a third document, not a fourth rep of the same two.

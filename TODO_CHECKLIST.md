@@ -399,11 +399,39 @@ measurement.
   maximally uniform on the strength of a missing schema field; and unscoreable
   pairs are **dropped** from the means rather than averaged in as 0.
 
-  **No PASS/FAIL is issued at all, by decision (2026-08-19).** `separation`
-  needs a margin, no margin has ever been observed, and setting one from the run
-  it would score is the post-hoc move the fingerprint guard exists to forbid.
-  The verdict reads `n/a` with a reason: `underpowered`, `no scoreable field
-  citations`, or `margin not pre-registered`. **Part 3 pre-registers the margin.**
+  **The margin is now pre-registered** —
+  `docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`, committed
+  before any generation it scores. The rule is **complete separation**:
+  `min(within-startup pair) > max(cross-startup pair)`, so the two pair
+  distributions must not overlap. **No constant** — the same logic that made
+  `ratio < 0.75` quotable. Strict `>`, so a **tie FAILS**; `null` pairs are
+  excluded; `min`/`max` are over raw pair values, not means.
+  **The n bar requires both** `nEarly >= 3 && nMid >= 3` **and** a chance
+  reference `1 / C(nCross + nWithin, nWithin) <= 0.001`. Neither alone suffices:
+  the chance bar alone admits a lopsided 4×2 grid carrying one mid-side
+  within-pair, and the reps bar alone can be satisfied while **null pairs shrink
+  the scoreable grid underneath it** — reachable whenever a call returns
+  `unmet_criteria: []`, which the schema permits (see the open item below).
+  Below the bar the comparison is still reported, as `PASS - not quotable` /
+  `FAIL - not quotable`.
+  ⚠️ **The chance reference is optimistic and is not a p-value** — it assumes the
+  pair values are exchangeable and independent, and they share reps.
+
+  **Both zero-quota prerequisites are done (2026-08-19).**
+  1. **`overlapStats` persists the per-pair values.** It returned only means, so
+     the pre-registered rule could not have been evaluated from a stored run —
+     the same defect that left both 2026-08-18 runs un-rescoreable. Verified on a
+     dry run: recomputing `min(within) > max(cross)` from the written JSON
+     reproduces the recorded `separated`.
+  2. **`--only-arm` on `measure-summary-bias.js`**, matching
+     `measure-grounding.js`'s semantics (exact beats prefix; an entry matching
+     nothing is a hard error, an ambiguous prefix is refused). Metric 3 is
+     scoreable on the **adversarial arm only** — the baseline cites no proposal
+     fields, so all its pairs are `null` by construction — and a full run spent 6
+     baseline calls that could not contribute. `--only-arm=adversarial --reps=5`
+     resolves to 10 cells, verified from real `argv`. Results files record
+     `armsRun`, so a filtered file is self-describing rather than looking like a
+     run whose other arms all failed.
 
   **What the two stored runs would have said** under the corrected rule (a
   *rule* correction on the same generations — never quotable as a new result;
@@ -437,16 +465,23 @@ measurement.
   `criteriaTable`, `validity`, `sourceBreakdown` or `callDescriptors`. Those
   remain untested.
 
-  **Mutation testing: 9/9 killed, and it changed the tests, not the code.** The
-  survivor was `favours` mutating `gap > 0` → `gap >= 0`, uncovered because no
-  test exercised a gap of **exactly 0** — the *uniform harshness* case the metric
+  **Mutation testing: 16/16 killed, and it changed the tests, not the code.** The
+  first survivor was `favours` mutating `gap > 0` → `gap >= 0`, uncovered because
+  no test exercised a gap of **exactly 0** — the *uniform harshness* case the metric
   exists to detect, which the mutant relabels as differentiating in the expected
   direction. It is also the modal reading in the real data (7 of 8 gap readings
   across both runs are 0). Same shape as the 2026-08-18 lesson: the constraining
   value is the one on the boundary, not the most frequent.
 
-  **3. Pre-register and run fresh — NOT DONE.** ~8–12 calls, needs a full quota
-  window. Pre-registration must fix the margin **before** the first call.
+  **3. Run fresh — NOT DONE, and it is all that remains.** Pre-registration is
+  written and committed; both prerequisites are built. The run is
+  `--only-arm=adversarial --reps=5` = 10 cells, capped with `--max-api-calls`,
+  needing a full quota window. **Predicted verdict: FAIL** — the DTO exposes a
+  small shared field vocabulary and both documents lack the same things, so
+  cross-overlap should be high. The pre-registration names the failure mode that
+  would matter: if `crossOverlap > 0.5` and `separation < 0.1`, field *identity*
+  is too coarse for the same structural reason `criticalCount` was capped, and
+  the answer lies in the criterion **text**.
 
   The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as
   lenient but was floor-bound and blind, and the real defect was differentiation.
