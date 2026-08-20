@@ -502,6 +502,46 @@ the `measure-summary-bias.js` section.
 
 ---
 
+### Then: a recorded bug that does not exist
+
+The checklist's 🐞 *"a literal JSON `null` degrades with no `recordFailure`"*
+was **refuted by probe. No production change made.** Measured against the real
+service with a stubbed `generateContent`:
+
+| model returns | calls | source | failures recorded |
+|---|---|---|---|
+| bare `null` | **3** | `legacy` | `no_json`, `no_json` |
+| `{"result": null}` | **3** | `legacy` | `schema_invalid`, `schema_invalid` |
+
+All three claims in the item were wrong — it is 3 calls not 2, the corrective
+retry does run, and failures are recorded. **The null branch of
+`analysisSummarySchema.nullable()` is unreachable at runtime:**
+`extractJsonPayload` requires a brace or bracket *and* a matching closer, so a
+bare `null` never reaches `safeParse`, and a payload that does start with a brace
+cannot `JSON.parse` to `null`. **`.nullable()` is a compile-time accommodation** —
+`callAiExpectJson<T>` pairs `schema: z.ZodType<T>` with `fallback: T`, so
+`fallback: null` needs `T` to include null. It was read as a runtime permission.
+
+Pinned by two characterization tests, because the degradation *would* be real if
+`extractJsonPayload` were relaxed to accept bare scalars.
+
+**The mutation lesson has a sharper edge than recorded.** The first mutation —
+disabling the guard — landed in the file, and reported **SURVIVED**. It was
+*semantically inert*: `'null'.substring(-1, 0)` returns `''`, which is falsy and
+still trips `no_json`. Only mutating it to return `text` produced the real bug,
+and then the test KILLED it. **So "assert the mutation landed" (2026-08-09) is
+necessary but not sufficient — assert it changed behaviour.** A textually-applied
+mutation that alters nothing is a third way to get a green suite that means
+nothing.
+
+**Why this was worth the time rather than just fixing it:** three recorded
+diagnoses on this project have now turned out wrong on inspection — the assertion
+classifier's ("a third of the picture"), SO 4.4's predicate direction (stated
+backwards), and this one. Implementing the recorded fix would have added a
+`recordFailure` call to a path that already has two.
+
+---
+
 ## Open at end of 2026-08-20
 
 **Branch state.** `fix/so-4-4-flag-threshold` **merged via PR #26** (merge commit `67f6071`) — the block above was written before that landed and describes it as unmerged; stale, left as written. `feat/adversarial-summary` merged via PR #25 (`70a66c4`), `measure/assertion-classifier-gaps` via PR #24 (`2195df8`). Not in `master`:

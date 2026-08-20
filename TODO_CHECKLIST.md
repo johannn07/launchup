@@ -538,11 +538,37 @@ measurement.
   A model could emit empty findings then a glowing summary. The tone check is
   the only guard against that, and it is the one that goes nowhere.
 
-- [ ] 🐞 **BUG · S · A literal JSON `null` degrades with no `recordFailure`.**
-  `analysisSummarySchema.nullable()` means `null` *parses successfully*, returns
-  `null`, and falls back to legacy — costing 2 calls instead of 3 and emitting
-  no failure metric. Its only trace is `notes.source === 'legacy'`, which is
-  why `source` is load-bearing.
+- [x] ✅ **NOT A BUG · The literal-JSON-`null` silent degradation does not
+  exist** — *diagnosis refuted 2026-08-20 by probe, no production change made.*
+  This item claimed `analysisSummarySchema.nullable()` let a literal `null`
+  parse successfully, return `null`, and degrade to legacy "costing 2 calls
+  instead of 3 and emitting no failure metric", with `notes.source === 'legacy'`
+  as its only trace. **Measured, all three claims are false:**
+
+  | model returns | calls | source | failures recorded |
+  |---|---|---|---|
+  | bare `null` | **3** | `legacy` | `no_json`, `no_json` |
+  | `{"result": null}` | **3** | `legacy` | `schema_invalid`, `schema_invalid` |
+
+  **The null branch is unreachable at runtime.** `extractJsonPayload` requires a
+  `{` or `[` **and** a matching closer, so a bare `null` never reaches
+  `safeParse`; and a payload that *does* start with a brace can never
+  `JSON.parse` to `null`. **`.nullable()` is a compile-time accommodation, not a
+  runtime permission** — `callAiExpectJson<T>` pairs `schema: z.ZodType<T>` with
+  `fallback: T`, so passing `fallback: null` requires `T` to include `null`. It
+  was read as the latter.
+  **Consequence for a claim elsewhere:** "its only trace is `notes.source`" is
+  wrong — two `recordFailure` rows accompany every degradation. `source` is
+  still load-bearing, but for the *validity gate* (schema vs rate-limit
+  degradation), which is a different and valid reason.
+  **Pinned by two tests** in `ai.service.spec.ts`, because the silent
+  degradation *would* become real if `extractJsonPayload` were relaxed to accept
+  bare scalars. Mutation-verified: making that change kills the bare-null test.
+  ⚠️ **The first mutation attempted was semantically inert** — disabling the
+  guard makes `'null'.substring(-1, 0)` return `''`, still falsy, still
+  `no_json`. It landed textually and changed nothing, and reported SURVIVED.
+  **Asserting a mutation landed in the file is necessary but not sufficient;
+  confirm it changed behaviour.**
 
 - [ ] 🧹 **DEBT · S · `measurement/tests/demo-proposals.test.js` asserts on
   source text, not behaviour.** It regex-matches the `.ts` file rather than
