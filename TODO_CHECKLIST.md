@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; **metric 3 rebuilt 2026-08-19** — the count-based verdict is retired and field-overlap scoring ships, with the verdict held at `n/a` until a margin is pre-registered (part 3, the only piece needing quota); 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; **metric 3 rebuilt and run (2026-08-19/20)** — the count-based verdict is retired, field-overlap scoring ships against a rule pre-registered a day before the run, and the run returned a quotable **FAIL** whose cause is noise-floor instability on one document rather than uniform harshness; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -343,9 +343,15 @@ measurement.
   **Still open:** no Manager *action* is attached to the flag. (The threshold
   behind it was validated on a held-out run 2026-08-18 — see the item above.)
 
-- [ ] 🟡 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3).**
-  **Parts 1 and 2 done 2026-08-19** (`measure/non-saturating-differentiation`,
-  zero quota). **Part 3 — the fresh pre-registered run — is what remains.**
+- [x] 🟢 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3)** —
+  *rebuilt 2026-08-19, run 2026-08-20* (`measure/non-saturating-differentiation`).
+  **All three parts done.** Result: **`FAIL - uniform`, quotable**, on the first
+  full grid this harness has produced (5×5, 10/10 calls, zero degradations) —
+  see the run below and `measurement/README.md`.
+  ⚠️ **Two different metrics are called "metric 3" in this project.** The
+  *grounding* harness's metric 3 is the differentiation **gap** over readiness
+  levels (declared unresolvable 2026-08-03, §0 above). This one is the
+  overcorrection **guard** over generated summaries. Unrelated; never pooled.
   Originally logged as "the guard did not pass". **The guard itself was the
   defect** — `differentiationTable` decided `separates = (critGap !== 0) ||
   (unmetGap !== 0)`, an exact-inequality test on a mean of 1–3 small integers.
@@ -473,15 +479,55 @@ measurement.
   across both runs are 0). Same shape as the 2026-08-18 lesson: the constraining
   value is the one on the boundary, not the most frequent.
 
-  **3. Run fresh — NOT DONE, and it is all that remains.** Pre-registration is
-  written and committed; both prerequisites are built. The run is
-  `--only-arm=adversarial --reps=5` = 10 cells, capped with `--max-api-calls`,
-  needing a full quota window. **Predicted verdict: FAIL** — the DTO exposes a
-  small shared field vocabulary and both documents lack the same things, so
-  cross-overlap should be high. The pre-registration names the failure mode that
-  would matter: if `crossOverlap > 0.5` and `separation < 0.1`, field *identity*
-  is too coarse for the same structural reason `criticalCount` was capped, and
-  the answer lies in the criterion **text**.
+  **3. Run — done 2026-08-20** (`results/2026-08-20-differentiation-overlap.json`,
+  10 API requests, **10/10 succeeded**, zero degradations, first full grid:
+  5 early / 5 mid, 25 cross pairs, 20 within).
+
+  | statistic | value |
+  |---|---|
+  | `crossOverlap` | 0.303 (range 0 – 0.500) |
+  | `withinOverlap` | 0.612 (range 0.125 – 1.000) |
+  | `separation` | +0.309 |
+  | chance reference | 3.2e-13 |
+  | **verdict** | **`FAIL - uniform`**, quotable |
+
+  **The prediction was right in outcome, wrong in mechanism.** FAIL was
+  predicted *because* cross-overlap would be high (0.35–0.65) and separation
+  small (0.05–0.25). Cross-overlap came in **below** that band and separation
+  **above** it — the arm differentiates more than predicted.
+
+  **What failed is the noise floor, not the signal.** Cross-overlap never exceeds
+  0.5, so the arm never cites more than half the same fields for both startups.
+  Complete separation fails on a single *within* pair at 0.125. Split by startup:
+  **AgroLink 0.800, MediSync 0.424** — the arm cites the same four fields for
+  AgroLink nearly every time (reps 0/1/2 **identical**) and wanders on MediSync.
+  So the `- uniform` label misdescribes this instance. **Pooling the within-startup
+  floor across both documents hid that one is stable and the other is not.** A
+  per-startup floor would have separated them — recorded as an observation only,
+  since re-scoring this run under it is the post-hoc move the pre-registration
+  forbids.
+
+  **The positive result: the instrument is not degenerate.** The pre-registered
+  "field identity is too coarse" failure mode required `crossOverlap > 0.5` **and**
+  `separation < 0.1`; neither holds. Field overlap carries real signal, unlike the
+  count columns it replaced — which stayed degenerate here too (`criticalGap` 0
+  favours neither, `unmetGap` −0.2 favours mid).
+
+  **Stability came in below prediction:** `withinOverlap` 0.612 against a predicted
+  >0.7, and **bimodal** rather than uniformly mid. The model is less deterministic
+  on MediSync than temperature 0 implies.
+
+  **Two fingerprint-verified n gains.** `criteria|adversarial` `82fc2961c7ff`,
+  identical to both prior runs → SO 4.2 gains 10 calls (**3.9** mean unmet
+  criteria, **3.2** critical risks, against 4 / 3.75 at n=4).
+  `tone|adversarial` `e6304665e036`, identical to the validation run → **0/10
+  flagged, ratio 1.00 on all ten**, a third confirmation that `ratio < 0.75` does
+  not fire on the arm that is behaving.
+
+  **Next, if metric 3 is pursued further:** a *separately* pre-registered rule
+  with a **per-startup** noise floor, scored on new data. This run supplies the
+  first observed overlap distribution to design it against — but calibrating on
+  this run and reporting the fit as a result is exactly the forbidden move.
 
   The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as
   lenient but was floor-bound and blind, and the real defect was differentiation.

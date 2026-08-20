@@ -1,0 +1,746 @@
+{
+  "generatedAt": "2026-08-20T07:16:24.912Z",
+  "mode": "live",
+  "genModel": "gemini-3.6-flash",
+  "temperature": 0,
+  "grounding": true,
+  "reps": 5,
+  "armsRun": [
+    "adversarial"
+  ],
+  "plannedCalls": 10,
+  "succeededCalls": 10,
+  "apiRequests": 10,
+  "fingerprints": {
+    "tone|adversarial": "e6304665e036",
+    "criteria|adversarial": "82fc2961c7ff",
+    "differentiation|adversarial": "2ddb92a91be5"
+  },
+  "summary": {
+    "planned": 10,
+    "succeeded": 10,
+    "source": [
+      {
+        "arm": "adversarial",
+        "planned": 10,
+        "ok": 10,
+        "schema": 10,
+        "legacy": 0,
+        "degraded": 0,
+        "degradedBySchema": 0,
+        "degradedByRateLimit": 0,
+        "rateLimited": 0,
+        "errored": 0,
+        "skipped": 0,
+        "analyzed": 10
+      }
+    ],
+    "validity": {
+      "degraded": 0,
+      "degradedBySchema": 0,
+      "inconclusive": false,
+      "reason": null
+    },
+    "tone": [
+      {
+        "arm": "adversarial",
+        "n": 10,
+        "meanCritical": 2.4,
+        "meanPositive": 0,
+        "meanRatio": 1,
+        "flagged": 0,
+        "flagRate": 0
+      }
+    ],
+    "criteria": [
+      {
+        "arm": "adversarial",
+        "n": 10,
+        "meanUnmetCriteria": 3.9,
+        "meanCriticalRisks": 3.2,
+        "structuralZero": false
+      }
+    ],
+    "differentiation": [
+      {
+        "arm": "adversarial",
+        "nEarly": 5,
+        "nMid": 5,
+        "underpowered": false,
+        "earlyCritical": 2.4,
+        "midCritical": 2.4,
+        "criticalGap": 0,
+        "criticalFavours": "neither",
+        "earlyUnmet": 3.8,
+        "midUnmet": 4,
+        "unmetGap": -0.2,
+        "unmetFavours": "mid",
+        "crossOverlap": 0.303,
+        "nCrossPairs": 25,
+        "withinOverlap": 0.612,
+        "nWithinPairs": 20,
+        "separation": 0.309,
+        "crossPairValues": [
+          0.167,
+          0.333,
+          0.5,
+          0.333,
+          0.333,
+          0.167,
+          0.333,
+          0.5,
+          0.333,
+          0.333,
+          0.167,
+          0.333,
+          0.5,
+          0.333,
+          0.333,
+          0,
+          0.167,
+          0.333,
+          0.167,
+          0.167,
+          0.2,
+          0.4,
+          0.333,
+          0.4,
+          0.4
+        ],
+        "withinPairValues": [
+          1,
+          1,
+          0.75,
+          0.75,
+          1,
+          0.75,
+          0.75,
+          0.75,
+          0.75,
+          0.5,
+          0.4,
+          0.143,
+          0.4,
+          0.4,
+          0.286,
+          1,
+          0.6,
+          0.286,
+          0.125,
+          0.6
+        ],
+        "chanceReference": 3.154702679037085e-13,
+        "verdict": "FAIL - uniform",
+        "separated": false,
+        "quotable": true
+      }
+    ]
+  },
+  "rows": [
+    {
+      "rep": 0,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal fails to establish intellectual property protection, founder qualifications, concrete financial projections, or physical fulfillment capabilities. Excluding logistics and storage creates severe operational friction against traditional traders who provide immediate cash and farmgate collection. Consequently, the startup overstates its execution readiness for end-to-end buyer-cooperative transactions.",
+      "unmetCriteria": 4,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Intellectual Property Protection",
+          "proposalField": "Intellectual Property Status",
+          "whyUnmet": "No patents have been filed and the AgroLink PH wordmark is not yet registered with IPOPHL."
+        },
+        {
+          "criterion": "Logistics and Fulfillment Scope",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The scope explicitly excludes physical logistics, storage, credit, and crop insurance, leaving physical delivery and settlement handling unaddressed."
+        },
+        {
+          "criterion": "Team Background and Qualifications",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The proposal mentions two full-time committed founders but provides no information regarding their identities, technical expertise, or agricultural background."
+        },
+        {
+          "criterion": "Financial Plan and Pricing Metrics",
+          "proposalField": "Objectives",
+          "whyUnmet": "The proposal aims to validate a per-transaction commission model but fails to provide specific commission rates, budget details, or financial projections."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal fails to establish intellectual property protection, founder qualifications, concrete financial projections, or physical fulfillment capabilities.",
+            "valence": "critical"
+          },
+          {
+            "text": "Excluding logistics and storage creates severe operational friction against traditional traders who provide immediate cash and farmgate collection.",
+            "valence": null
+          },
+          {
+            "text": "Consequently, the startup overstates its execution readiness for end-to-end buyer-cooperative transactions.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 27146,
+      "tokens": {
+        "promptTokens": 692,
+        "completionTokens": 344,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 0,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal fails to detail team qualifications, operational budgeting, and offline technical contingencies for rural health units. These missing details expose the project to high execution, financial sustainability, and connectivity-related operational risks. Consequently, the startup's readiness cannot be verified based on the provided text alone.",
+      "unmetCriteria": 3,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Team Composition and Expertise",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "Mentions that the team grew to three founders, but fails to provide any details on their qualifications, clinical experience, or technical capabilities."
+        },
+        {
+          "criterion": "Financial Plan and Budgeting",
+          "proposalField": "Methodology",
+          "whyUnmet": "Cites a PHP 5,000 monthly recurring revenue figure but excludes any financial projections, acceleration budget allocation, or cost structure."
+        },
+        {
+          "criterion": "Technical Reliability and Offline Capabilities",
+          "proposalField": "Solution Description",
+          "whyUnmet": "Does not detail how the platform manages internet connectivity failures or offline data synchronization in remote rural health units."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal fails to detail team qualifications, operational budgeting, and offline technical contingencies for rural health units.",
+            "valence": "critical"
+          },
+          {
+            "text": "These missing details expose the project to high execution, financial sustainability, and connectivity-related operational risks.",
+            "valence": "critical"
+          },
+          {
+            "text": "Consequently, the startup's readiness cannot be verified based on the provided text alone.",
+            "valence": null
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 24785,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 284,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 1,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal presents critical gaps in logistics coverage, buyer commitments, financial planning, and team qualifications. Without physical logistics support and with only one provisional buyer agreement, the project faces severe execution risks in achieving transaction targets. Consequently, the platform's commercial readiness is overstated and unproven.",
+      "unmetCriteria": 5,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Logistics and Storage Plan",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The proposal explicitly excludes physical logistics and storage, leaving produce transportation unaddressed."
+        },
+        {
+          "criterion": "Secured Buyer Demand",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The initiative has only one provisional buyer agreement despite targeting multiple institutional buyer segments."
+        },
+        {
+          "criterion": "Team Qualifications and Background",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The text only notes that two founders are committed full-time without describing their technical or agricultural background."
+        },
+        {
+          "criterion": "Financial Projections and Budget",
+          "proposalField": "Objectives",
+          "whyUnmet": "No explicit budget, cost breakdown, or financial projections are provided beyond testing a commission model."
+        },
+        {
+          "criterion": "Intellectual Property Protection",
+          "proposalField": "Intellectual Property Status",
+          "whyUnmet": "No patents are filed and the brand wordmark is not registered with IPOPHL."
+        }
+      ],
+      "criticalRisks": 4,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 3,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal presents critical gaps in logistics coverage, buyer commitments, financial planning, and team qualifications.",
+            "valence": "critical"
+          },
+          {
+            "text": "Without physical logistics support and with only one provisional buyer agreement, the project faces severe execution risks in achieving transaction targets.",
+            "valence": "critical"
+          },
+          {
+            "text": "Consequently, the platform's commercial readiness is overstated and unproven.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 25248,
+      "tokens": {
+        "promptTokens": 692,
+        "completionTokens": 364,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 1,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal lacks essential details regarding team qualifications, a defined pricing strategy for MediSync, a financial budget, and a risk mitigation strategy. These deficiencies create high risks to operational execution, deployment stability, and financial viability across rural facilities. Until these missing financial, risk, and team details are established, the platform's readiness for provincial rollout cannot be verified.",
+      "unmetCriteria": 4,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Detailed Team Capabilities and Roles",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The proposal notes that the team grew to 3 founders, but provides no information regarding their qualifications, specific roles, clinical knowledge, or technical expertise."
+        },
+        {
+          "criterion": "MediSync Pricing and Monetization Model",
+          "proposalField": "Competitive Advantage Analysis",
+          "whyUnmet": "The proposal details pricing strategies for competitors but fails to define MediSync's own pricing strategy, revenue model, or financial path to growth."
+        },
+        {
+          "criterion": "Financial Budget Allocation",
+          "proposalField": "Methodology",
+          "whyUnmet": "The methodology details a three-month deployment process but includes no financial budget, cost breakdown, or resource allocation plan."
+        },
+        {
+          "criterion": "Risk Assessment and Mitigation Strategy",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The proposal contains no section or detailed plan assessing potential technical, regulatory, or connectivity risks and their mitigations."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 3,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal lacks essential details regarding team qualifications, a defined pricing strategy for MediSync, a financial budget, and a risk mitigation strategy.",
+            "valence": "critical"
+          },
+          {
+            "text": "These deficiencies create high risks to operational execution, deployment stability, and financial viability across rural facilities.",
+            "valence": "critical"
+          },
+          {
+            "text": "Until these missing financial, risk, and team details are established, the platform's readiness for provincial rollout cannot be verified.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 21493,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 346,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 2,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "AgroLink PH excludes physical logistics, storage, and credit, leaving critical gaps compared to traditional traders who offer immediate cash on collection. The business model and commercial pipeline remain unproven, relying on an unvalidated commission structure and only one provisional buyer agreement. Additionally, the startup lacks trademark protection as the AgroLink PH wordmark is not registered with IPOPHL.",
+      "unmetCriteria": 4,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Intellectual Property Protection",
+          "proposalField": "Intellectual Property Status",
+          "whyUnmet": "The AgroLink PH wordmark has not been registered with IPOPHL and no patents have been filed."
+        },
+        {
+          "criterion": "Commercial Buyer Commitments",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The startup relies on a single provisional agreement with one buyer despite targeting institutional chains, processors, and government programmes."
+        },
+        {
+          "criterion": "Comprehensive Service Scope",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The proposal explicitly excludes physical logistics, storage, credit, and crop insurance, leaving core farmgate settlement and delivery challenges unaddressed."
+        },
+        {
+          "criterion": "Validated Monetization Structure",
+          "proposalField": "Objectives",
+          "whyUnmet": "The per-transaction commission model remains unvalidated against cooperative willingness to pay."
+        }
+      ],
+      "criticalRisks": 4,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 3,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "AgroLink PH excludes physical logistics, storage, and credit, leaving critical gaps compared to traditional traders who offer immediate cash on collection.",
+            "valence": "critical"
+          },
+          {
+            "text": "The business model and commercial pipeline remain unproven, relying on an unvalidated commission structure and only one provisional buyer agreement.",
+            "valence": "critical"
+          },
+          {
+            "text": "Additionally, the startup lacks trademark protection as the AgroLink PH wordmark is not registered with IPOPHL.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 28218,
+      "tokens": {
+        "promptTokens": 692,
+        "completionTokens": 500,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 2,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal fails to establish financial viability or regulatory compliance because it lacks a budget, an internal pricing model, and completed Data Privacy Act registration. Additionally, the text omits the credentials of the three founders and relies on a pending trademark application. These unresolved gaps introduce significant legal and operational risks that prevent the project from demonstrating readiness for expanded deployment.",
+      "unmetCriteria": 5,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Defined business pricing strategy and revenue model",
+          "proposalField": "Competitive Advantage Analysis",
+          "whyUnmet": "The pricing strategy field details competitor costs but omits MediSync Cebu's own pricing model and revenue structure."
+        },
+        {
+          "criterion": "Financial plan and budget allocation",
+          "proposalField": "Budget",
+          "whyUnmet": "The proposal includes no field or information regarding budget allocation, operational costs, or financial projections."
+        },
+        {
+          "criterion": "Regulatory and data privacy compliance",
+          "proposalField": "Objectives",
+          "whyUnmet": "Data Privacy Act compliance review and National Privacy Commission registration remain incomplete future objectives."
+        },
+        {
+          "criterion": "Secured intellectual property rights",
+          "proposalField": "Intellectual Property Status",
+          "whyUnmet": "No patents exist and the trademark application with IPOPHL remains pending."
+        },
+        {
+          "criterion": "Detailed team background and leadership structure",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The text only notes that the team grew to 3 founders without detailing their relevant clinical, technical, or operational expertise."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal fails to establish financial viability or regulatory compliance because it lacks a budget, an internal pricing model, and completed Data Privacy Act registration.",
+            "valence": "critical"
+          },
+          {
+            "text": "Additionally, the text omits the credentials of the three founders and relies on a pending trademark application.",
+            "valence": null
+          },
+          {
+            "text": "These unresolved gaps introduce significant legal and operational risks that prevent the project from demonstrating readiness for expanded deployment.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 28658,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 365,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 3,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "AgroLink PH excludes essential physical logistics, storage, credit, and crop insurance from its scope, creating major operational gaps relative to existing traders. Furthermore, the platform's brand lacks formal IP registration with IPOPHL, and its revenue strategy relies on an unvalidated commission model. These deficiencies create high critical risks regarding cooperative adoption, brand protection, and long-term financial viability.",
+      "unmetCriteria": 3,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Intellectual Property Protection",
+          "proposalField": "Intellectual Property Status",
+          "whyUnmet": "The proposal explicitly states that no patents are filed and the AgroLink PH wordmark has not yet been registered with IPOPHL."
+        },
+        {
+          "criterion": "End-to-End Fulfillment and Supply Chain Logistics",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The proposal explicitly excludes physical logistics, storage, credit, and crop insurance, leaving critical physical trade execution unaddressed."
+        },
+        {
+          "criterion": "Validated Revenue and Monetization Model",
+          "proposalField": "Objectives",
+          "whyUnmet": "The per-transaction commission model remains an unvalidated objective to be tested rather than an established monetization structure with defined rates."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 3,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "AgroLink PH excludes essential physical logistics, storage, credit, and crop insurance from its scope, creating major operational gaps relative to existing traders.",
+            "valence": "critical"
+          },
+          {
+            "text": "Furthermore, the platform's brand lacks formal IP registration with IPOPHL, and its revenue strategy relies on an unvalidated commission model.",
+            "valence": "critical"
+          },
+          {
+            "text": "These deficiencies create high critical risks regarding cooperative adoption, brand protection, and long-term financial viability.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 40232,
+      "tokens": {
+        "promptTokens": 692,
+        "completionTokens": 430,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 3,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "The proposal lacks critical details regarding team qualifications, financial budgeting, risk management, and MediSync's own pricing strategy. Scaling to 12 rural health units and 3 district hospitals on a PHP 5,000 monthly recurring revenue base creates significant execution and financial sustainability risks. Addressing these omitted operational and financial details is necessary before advancing the three-month acceleration plan.",
+      "unmetCriteria": 4,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Team Qualifications and Key Personnel",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The proposal mentions that the team grew to 3 founders in February 2026, but lacks a dedicated team section detailing their technical, clinical, or operational qualifications."
+        },
+        {
+          "criterion": "Financial Projections and Deployment Budget",
+          "proposalField": "Methodology",
+          "whyUnmet": "The methodology outlines a three-month acceleration plan but provides no financial projections, cost structure, or budget allocation beyond mentioning a historical PHP 5,000 monthly recurring revenue."
+        },
+        {
+          "criterion": "MediSync Pricing Strategy and Business Model",
+          "proposalField": "Competitive Advantage Analysis",
+          "whyUnmet": "The competitive advantage analysis details competitor pricing strategies for paper slips and HIS vendors, but fails to state MediSync's own pricing strategy or long-term business model."
+        },
+        {
+          "criterion": "Risk Assessment and Mitigation Plan",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The proposal defines functional scope boundaries but includes no risk management section to address potential adoption, operational, or technical implementation risks."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 2,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "The proposal lacks critical details regarding team qualifications, financial budgeting, risk management, and MediSync's own pricing strategy.",
+            "valence": "critical"
+          },
+          {
+            "text": "Scaling to 12 rural health units and 3 district hospitals on a PHP 5,000 monthly recurring revenue base creates significant execution and financial sustainability risks.",
+            "valence": "critical"
+          },
+          {
+            "text": "Addressing these omitted operational and financial details is necessary before advancing the three-month acceleration plan.",
+            "valence": null
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 36342,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 416,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 4,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "AgroLink PH",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "AgroLink PH lacks operational capability for physical fulfillment and holds no registered intellectual property protection for its brand. Furthermore, the initiative relies on a single provisional buyer agreement while aiming for 100 transactions across multiple institutional segments. Without resolving fulfillment logistics and securing binding buyer commitments, the platform cannot guarantee end-to-end execution for participating cooperatives.",
+      "unmetCriteria": 3,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Physical fulfillment and logistics readiness",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The proposal explicitly excludes physical logistics, storage, credit, and crop insurance, leaving the delivery mechanism unaddressed while competing against traditional traders who offer immediate cash on collection at the farm gate."
+        },
+        {
+          "criterion": "Intellectual property protection",
+          "proposalField": "Intellectual Property Status",
+          "whyUnmet": "No patents are filed and the AgroLink PH wordmark has not yet been registered with IPOPHL."
+        },
+        {
+          "criterion": "Secured buyer pipeline and commitments",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The startup has only established a provisional agreement with a single buyer while setting a goal of completing 100 verified transactions with institutional buyers."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 1,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "AgroLink PH lacks operational capability for physical fulfillment and holds no registered intellectual property protection for its brand.",
+            "valence": "critical"
+          },
+          {
+            "text": "Furthermore, the initiative relies on a single provisional buyer agreement while aiming for 100 transactions across multiple institutional segments.",
+            "valence": null
+          },
+          {
+            "text": "Without resolving fulfillment logistics and securing binding buyer commitments, the platform cannot guarantee end-to-end execution for participating cooperatives.",
+            "valence": null
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 35911,
+      "tokens": {
+        "promptTokens": 692,
+        "completionTokens": 330,
+        "recorded": true
+      }
+    },
+    {
+      "rep": 4,
+      "arm": "adversarial",
+      "adversarialSummary": true,
+      "startup": "MediSync Cebu",
+      "status": "ok",
+      "source": "schema",
+      "degradeCause": null,
+      "summary": "MediSync Cebu lacks a defined pricing model, budget plan, team details, and risk mitigation strategy necessary to prove operational readiness. These omissions introduce critical financial and execution risks that threaten the sustainability and deployment of the platform. Consequently, the proposal fails to substantiate its readiness for expanding across provincial healthcare facilities.",
+      "unmetCriteria": 4,
+      "unmetCriteriaDetail": [
+        {
+          "criterion": "Explicit pricing strategy for MediSync",
+          "proposalField": "Pricing Strategy",
+          "whyUnmet": "The text details pricing strategies for competitors but does not state MediSync's own pricing model or revenue generation mechanism."
+        },
+        {
+          "criterion": "Detailed team roles and qualifications",
+          "proposalField": "Historical Timeline",
+          "whyUnmet": "The proposal only mentions that the team grew to 3 founders without providing details on their qualifications, roles, or technical capacity."
+        },
+        {
+          "criterion": "Budget plan and financial projections",
+          "proposalField": "Methodology",
+          "whyUnmet": "The three-month acceleration plan lacks a budget breakdown, financial allocation, or revenue projections."
+        },
+        {
+          "criterion": "Risk mitigation strategy",
+          "proposalField": "Proposal Scope",
+          "whyUnmet": "The scope outlines included and excluded operational features but excludes any risk management or contingency planning."
+        }
+      ],
+      "criticalRisks": 3,
+      "tone": {
+        "positiveCount": 0,
+        "criticalCount": 3,
+        "ratio": 1,
+        "flagged": false,
+        "clauses": [
+          {
+            "text": "MediSync Cebu lacks a defined pricing model, budget plan, team details, and risk mitigation strategy necessary to prove operational readiness.",
+            "valence": "critical"
+          },
+          {
+            "text": "These omissions introduce critical financial and execution risks that threaten the sustainability and deployment of the platform.",
+            "valence": "critical"
+          },
+          {
+            "text": "Consequently, the proposal fails to substantiate its readiness for expanding across provincial healthcare facilities.",
+            "valence": "critical"
+          }
+        ]
+      },
+      "apiCalls": 1,
+      "latencyMs": 32258,
+      "tokens": {
+        "promptTokens": 726,
+        "completionTokens": 314,
+        "recorded": true
+      }
+    }
+  ]
+}

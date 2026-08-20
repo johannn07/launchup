@@ -921,6 +921,15 @@ design; the 2026-07-29 numbers above cannot answer it either way.
 
 ## `measure-summary-bias.js` — SO 4.2 / SO 4.4
 
+> ⚠️ **Two different metrics in this file are called "metric 3".** The grounding
+> harness's metric 3 is the **differentiation gap** — mid-stage mean minus
+> early-stage mean of assigned readiness *levels*, declared unresolvable
+> 2026-08-03. This harness's metric 3 is the **overcorrection guard** on
+> generated *summaries*. Different quantities, different harnesses, and
+> opposite-looking sign conventions. They are unrelated; do not pool or compare
+> them.
+
+
 A different probe family from the grounding harness, so it carries its own
 fingerprints rather than `lib/fingerprint.js`'s. Two arms —
 `adversarialSummary` off (the prompt that shipped, `LEGACY_SUMMARY_PROMPT`) and
@@ -1014,6 +1023,81 @@ real defect was differentiation.
   and the only two backend queries against `AiRecommendation` filter
   `recommendationKind` `'RNA'` / `'RNS'`. Detection is built and measured;
   alerting is not delivered.
+
+### Result, 2026-08-20 — metric 3 rebuilt and run, 10/10 calls
+
+`results/2026-08-20-differentiation-overlap.json`. `gemini-3.6-flash`,
+temperature 0, grounding on, `--only-arm=adversarial --reps=5`, **10 API
+requests, 10 succeeded, zero degradations.** The first full grid this harness
+has produced: 5 early / 5 mid, 25 cross pairs, 20 within pairs.
+
+The rule was **pre-registered on 2026-08-19** (`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`,
+committed a day before the first call): PASS iff `min(within-startup pair) >
+max(cross-startup pair)` — complete separation, no constant.
+
+| statistic | value |
+|---|---|
+| `crossOverlap` (early reps × mid reps) | 0.303 |
+| `withinOverlap` (same-startup rep pairs, pooled) | 0.612 |
+| `separation` | +0.309 |
+| cross pair range | 0 – 0.500 |
+| within pair range | 0.125 – 1.000 |
+| chance reference | 3.2e-13 |
+| **verdict** | **`FAIL - uniform`** (quotable) |
+
+**The pre-registered prediction was right in outcome and wrong in mechanism.**
+FAIL was predicted, but *because* cross-overlap would run high (0.35–0.65) with
+small separation (0.05–0.25). Neither held: cross-overlap came in **below** the
+predicted band and separation **above** it. The arm distinguishes the two
+startups more than predicted.
+
+**The failure is instability on one document, not uniform harshness.**
+Cross-overlap never exceeds 0.5 — the arm never cites more than half the same
+fields for both startups. Complete separation fails because one *within* pair
+sits at 0.125, below the cross maximum. Split by startup:
+
+| startup | within-overlap | min pair |
+|---|---|---|
+| AgroLink (early) | **0.800** | 0.500 |
+| MediSync (mid) | **0.424** | 0.125 |
+
+The arm cites the same four fields for AgroLink almost every time — reps 0, 1
+and 2 give **identical** field sets — and wanders on MediSync. So the verdict
+*label* is misleading in this instance: what failed is the noise floor, not the
+signal. **Pooling the within-startup floor across both documents hid that one is
+stable and the other is not**; a per-startup floor would have separated them.
+Recorded as an observation only — re-scoring this run under a per-startup rule
+is the post-hoc move the pre-registration forbids.
+
+**The instrument is not degenerate, which is the positive result.** The
+pre-registered "field identity is too coarse" failure mode required
+`crossOverlap > 0.5` **and** `separation < 0.1`; neither holds. Field overlap
+carries real signal, unlike the count columns it replaced — those stayed
+degenerate here too (`criticalGap` 0, favours neither; `unmetGap` −0.2, favours
+mid).
+
+**Instrument stability came in below prediction.** Predicted `withinOverlap` >
+0.7 at temperature 0; observed 0.612 pooled and **bimodal** (0.80 / 0.42). Above
+the 0.4 "unstable" line, but the model is markedly less deterministic on
+MediSync than temperature 0 implies.
+
+**No re-tuning.** The means separate clearly and a margin-based rule would have
+passed. That is exactly what the pre-registration forbids claiming. What this
+run legitimately provides is the **first observed distribution** of overlap
+values, which a *separately* pre-registered rule could be calibrated on and then
+scored on new data.
+
+**Two fingerprint-verified n gains.** `criteria|adversarial` is `82fc2961c7ff`,
+identical to both prior runs, so SO 4.2's criteria result gains these 10 calls:
+**3.9 mean unmet criteria, 3.2 mean critical risks** (against 4 and 3.75 at
+n=4). `tone|adversarial` is `e6304665e036`, identical to the validation run:
+**0/10 flagged, ratio 1.00 on all ten**, a third independent confirmation that
+`ratio < 0.75` does not fire on the arm that is behaving.
+`differentiation|adversarial` is `2ddb92a91be5` — new, as it must be, since the
+metric was rebuilt.
+
+**Also refuted again:** the "exactly 4 unmet criteria" claim these docs once
+carried. AgroLink 4,5,4,3,3; MediSync 3,4,5,4,4.
 
 ## Assertion classifier — 2026-08-07 repair and mutation log
 
