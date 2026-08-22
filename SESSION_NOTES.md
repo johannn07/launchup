@@ -476,12 +476,18 @@ classifier; the safe form was accepted, which is the better command anyway.)
   patch written as `"...the \`chumcheck\` purge..."` silently lost the word — bash ran
   `chumcheck` as a command and substituted its empty output. Quoted heredocs
   (`<<'EOF'`) are immune; that is why the other patches survived.
+- **A doc patch corrupted five line terminators, and nothing rendered differently.**
+  The newline substitution ran twice — text joined with CRLF, then every LF
+  expanded to CRLF again — giving CR+CRLF. Invisible in the editor and in
+  `git diff`; what surfaced it was a **diffstat far larger than the edit
+  justified**, then `file` reporting "CRLF, CR line terminators". It reached a
+  commit first. Treat an oversized diffstat as a signal, not noise.
 - `git worktree list` still shows `.claude/worktrees/xenodochial-colden-25e582` at a
   detached HEAD. It is harness state, merged into `master`, and was left alone.
 
 ## Open at end of 2026-08-22 (later)
 
-**Branch state.** `chore/deferred-cleanup-sweep` — **2 commits, local, nothing
+**Branch state.** `chore/deferred-cleanup-sweep` — **4 commits, local, nothing
 pushed**, on top of `master` at `b0d5fc8` (the demo-critical sweep landed via
 PR #29). Gates at the tip: `tsc --noEmit` exit 0, jest **266 passing / 0
 failing across 25 suites** — **the first fully green backend suite this project
