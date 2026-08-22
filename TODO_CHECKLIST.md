@@ -535,8 +535,12 @@ measurement.
 - [ ] ❓ **OPEN · `propertyOrdering` enforces sequence, not substance.**
   `unmet_criteria: []` is a valid response — `required` requires the key, not a
   non-empty array — and nothing cross-checks the summary against the criteria.
-  A model could emit empty findings then a glowing summary. The tone check is
-  the only guard against that, and it is the one that goes nowhere.
+  A model could emit empty findings then a glowing summary. The tone check is the
+  only guard against that.
+  ⚠️ **This item used to end "and it is the one that goes nowhere" — stale since
+  2026-08-18**, when `SummaryToneBadge` put the verdict in all four Manager
+  dialogs. The guard is now *visible*; what it still lacks is an **action**
+  (see the SO 4.4 row in the objectives table). Corrected 2026-08-20.
 
 - [x] ✅ **NOT A BUG · The literal-JSON-`null` silent degradation does not
   exist** — *diagnosis refuted 2026-08-20 by probe, no production change made.*
