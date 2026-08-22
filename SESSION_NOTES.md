@@ -24,6 +24,9 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **`--merge` exists only on `measure-grounding.js`.** `measure-summary-bias.js` records fingerprints but nothing acts on them, so the pooling guard is documentary there, not mechanical.
 - **A scripted edit that silently fails to apply looks exactly like success**, because the follow-up test run goes green either way. Assert the anchor matched (`assert s.count(old) == 1`) and, for mutations, that behaviour *changed* — a mutant whose anchor no longer exists reports KILLED for the wrong reason.
 - **Backticks inside a double-quoted bash string are command substitution.** `"the \`foo\` thing"` runs `foo` and substitutes its output, silently deleting the word. Use quoted heredocs (`<<'EOF'`) for any text containing backticks.
+- **A missing `populate` is invisible to every mocked test.** `em.findOne(Startup, {id})` loads a relation as an **id-only reference** — the SQL selects `c1.id` and nothing else — so `startup.capsuleProposal.aiAnalysisSummary` reads `undefined`. A mock that returns a fully-formed object passes regardless. This shipped a gate that silently never fired, past four green unit tests, and one live request caught it. **Any feature reading a relation off a `findOne` needs a live check, not a test.**
+- **`JSON.stringify(obj, replacerArray)` filters keys at EVERY level, including the root.** A guard comparing `{1: {...}, 2: {...}}` this way strips `1` and `2` and compares `{}` to `{}` — it passes for correct and corrupted data alike. Another instance of *a check that cannot fail is not a check*; use a recursive sorted-key canonicaliser, and prove the comparator rejects a deliberately wrong value before trusting it.
+- **Neon holds three startups, not two.** 1 AgroLink and 2 MediSync (both rated, both measurement ground truth), plus **5 "Tindahanap", PENDING and unrated** — created through the apply flow during the 2026-08-22 OCR session. Earlier notes saying "exactly two startups and both are rated" are stale. Startup 5's real summary scores `ratio 1.000` (not flagged), which makes it a usable balanced control.
 - **`node -e "..."` cannot be given `--flag=value` arguments** — node parses them as its own options and exits. Probing a harness that reads `process.argv` needs a real script file.
 
 ---
@@ -161,228 +164,67 @@ variance whose means coincide, not a constant. The conclusion survives; the
 
 ---
 
-## 2026-08-20 — metric 3, part 3: the run
+## Compressed — 2026-08-20 → 2026-08-22 (demo-critical sweep)
 
-`results/2026-08-20-differentiation-overlap.json`. `--only-arm=adversarial
---reps=5`, **10 API requests, 10/10 succeeded, zero degradations** — the first
-full grid this harness has produced (5 early / 5 mid, 25 cross pairs, 20 within).
-No 503s, unlike both prior runs.
+Compressed 2026-08-23 under the three-most-recent rule. Detail lives in
+`TODO_CHECKLIST.md` and `measurement/README.md`; durable gotchas are in
+**Standing operational notes** above.
 
-**Provenance is as clean as it gets here:** the rule was committed 2026-08-19
-08:04 +0800 and the first call went out 2026-08-20 ~15:10 Manila, so the
-pre-registration precedes the data by over a day, in git.
+**2026-08-20 — metric 3, part 3: the run** (`results/2026-08-20-differentiation-overlap.json`,
+10/10 calls, zero degradations, the first full grid this harness produced).
+Verdict **`FAIL - uniform`, quotable**: `crossOverlap` 0.303, `withinOverlap`
+0.612, `separation` +0.309, chance reference 3.2e-13. **Provenance is as clean
+as it gets** — the rule was committed 2026-08-19 08:04 +0800, the first call
+went out ~15:10 Manila the next day, in git. **The prediction was right in
+outcome and wrong in mechanism** (the third time on this project): FAIL was
+predicted *because* cross-overlap would be high; it came in **below** the band
+and separation **above** it. **What failed is the noise floor, not the signal**
+— cross-overlap never exceeds 0.5, and complete separation fails on one
+*within* pair at 0.125. Split by startup: **AgroLink 0.800, MediSync 0.424** —
+one document is stable, the other is not, and **pooling the within-startup
+floor across both hid that**. A per-startup rule would have passed, which is
+exactly why re-scoring this run under one is the forbidden move; it stays an
+observation. **The positive result: the instrument is not degenerate** — the
+pre-registered "field identity is too coarse" failure mode needed
+`crossOverlap > 0.5` *and* `separation < 0.1`, and neither holds. Free n from
+identical fingerprints: SO 4.2 gains 10 calls (**3.9** mean unmet criteria,
+**3.2** critical risks) and `tone|adversarial` reads **0/10 flagged, ratio 1.00
+on every call** — a third independent confirmation that `ratio < 0.75` does not
+fire on the arm that is behaving. **Documentation hazard found and noted:** two
+different metrics are called "metric 3" (the grounding harness's
+differentiation *gap*, and this harness's overcorrection *guard*), with
+opposite-looking sign conventions.
 
-### The verdict: `FAIL - uniform`, quotable
+**Same session — a recorded bug that did not exist.** The checklist's 🐞 *"a
+literal JSON `null` degrades with no `recordFailure`"* was **refuted by probe,
+no production change made**: it is 3 calls not 2, the corrective retry does
+run, and failures are recorded. The null branch of `analysisSummarySchema.nullable()`
+is **unreachable at runtime** — `.nullable()` is a compile-time accommodation
+that was read as a runtime permission. Pinned by two characterization tests.
+**The mutation lesson sharpened here:** the first mutation landed and reported
+SURVIVED because it was *semantically inert* (`'null'.substring(-1, 0)` is `''`,
+still falsy). So "assert the mutation landed" is necessary but **not
+sufficient — assert it changed behaviour.**
 
-| statistic | value |
-|---|---|
-| `crossOverlap` | 0.303 (range 0 – 0.500) |
-| `withinOverlap` | 0.612 (range 0.125 – 1.000) |
-| `separation` | +0.309 |
-| chance reference | 3.2e-13 |
-
-**The prediction was right in outcome and wrong in mechanism** — the third time
-on this project a pre-registered prediction has landed that way. FAIL was
-predicted *because* cross-overlap would be high (0.35–0.65) with small separation
-(0.05–0.25). Cross-overlap came in **below** the band, separation **above** it.
-
-**What failed is the noise floor, not the signal.** Cross-overlap never exceeds
-0.5 — the arm never cites more than half the same fields for both startups, which
-is the opposite of uniform harshness. Complete separation fails on one *within*
-pair at 0.125. Split by startup: **AgroLink 0.800, MediSync 0.424.** The arm
-cites the same four fields for AgroLink nearly every time (reps 0/1/2 produce
-**identical** field sets) and wanders on MediSync.
-
-**So the design flaw is mine, and it is worth carrying forward: pooling the
-within-startup floor across both documents hid that one document is stable and
-the other is not.** A per-startup floor would have separated them. It stays an
-observation — re-scoring this run under a per-startup rule is precisely the
-post-hoc move the pre-registration forbids, and the temptation was real, because
-the means separate cleanly (+0.309) and a margin rule would have passed.
-
-**The positive result: the instrument is not degenerate.** The pre-registered
-"field identity is too coarse" failure mode needed `crossOverlap > 0.5` **and**
-`separation < 0.1`; neither holds. Field overlap carries real signal — unlike the
-count columns it replaced, which stayed degenerate here too (`criticalGap` 0,
-`unmetGap` −0.2 favouring mid).
-
-**Stability came in under prediction:** 0.612 against a predicted >0.7, and
-bimodal rather than uniformly mid. The model is less deterministic on MediSync
-than temperature 0 implies — worth remembering before treating temp 0 as a
-guarantee of repeatability anywhere else in this project.
-
-### Free n, fingerprint-verified
-
-`criteria|adversarial` `82fc2961c7ff`, identical to both prior runs → SO 4.2
-gains 10 calls: **3.9** mean unmet criteria, **3.2** critical risks (against 4 /
-3.75 at n=4). `tone|adversarial` `e6304665e036`, identical to the validation run
-→ **0/10 flagged, ratio 1.00 on every call**, a third independent confirmation
-that `ratio < 0.75` does not fire on the arm that is behaving.
-`differentiation|adversarial` is new (`2ddb92a91be5`), as it must be.
-
-### A documentation hazard found while filing this
-
-**Two different metrics are called "metric 3"** and both are discussed in
-`measurement/README.md`: the grounding harness's differentiation *gap* over
-readiness levels (declared unresolvable 2026-08-03) and this harness's
-overcorrection *guard* over summaries. Different quantities, different harnesses,
-opposite-looking sign conventions. A disambiguation note now sits at the head of
-the `measure-summary-bias.js` section.
-
-**Quota:** 10 of 20 spent in the window that opened 15:00 Manila 2026-08-20;
-~10 remain.
-
----
-
-### Then: a recorded bug that does not exist
-
-The checklist's 🐞 *"a literal JSON `null` degrades with no `recordFailure`"*
-was **refuted by probe. No production change made.** Measured against the real
-service with a stubbed `generateContent`:
-
-| model returns | calls | source | failures recorded |
-|---|---|---|---|
-| bare `null` | **3** | `legacy` | `no_json`, `no_json` |
-| `{"result": null}` | **3** | `legacy` | `schema_invalid`, `schema_invalid` |
-
-All three claims in the item were wrong — it is 3 calls not 2, the corrective
-retry does run, and failures are recorded. **The null branch of
-`analysisSummarySchema.nullable()` is unreachable at runtime:**
-`extractJsonPayload` requires a brace or bracket *and* a matching closer, so a
-bare `null` never reaches `safeParse`, and a payload that does start with a brace
-cannot `JSON.parse` to `null`. **`.nullable()` is a compile-time accommodation** —
-`callAiExpectJson<T>` pairs `schema: z.ZodType<T>` with `fallback: T`, so
-`fallback: null` needs `T` to include null. It was read as a runtime permission.
-
-Pinned by two characterization tests, because the degradation *would* be real if
-`extractJsonPayload` were relaxed to accept bare scalars.
-
-**The mutation lesson has a sharper edge than recorded.** The first mutation —
-disabling the guard — landed in the file, and reported **SURVIVED**. It was
-*semantically inert*: `'null'.substring(-1, 0)` returns `''`, which is falsy and
-still trips `no_json`. Only mutating it to return `text` produced the real bug,
-and then the test KILLED it. **So "assert the mutation landed" (2026-08-09) is
-necessary but not sufficient — assert it changed behaviour.** A textually-applied
-mutation that alters nothing is a third way to get a green suite that means
-nothing.
-
-**Why this was worth the time rather than just fixing it:** three recorded
-diagnoses on this project have now turned out wrong on inspection — the assertion
-classifier's ("a third of the picture"), SO 4.4's predicate direction (stated
-backwards), and this one. Implementing the recorded fix would have added a
-`recordFailure` call to a path that already has two.
-
----
-
-## 2026-08-20 close-out — compressed 2026-08-22
-
-Branch state, quota and next steps from this block are superseded by the
-2026-08-22 sections below. `measure/non-saturating-differentiation` merged via
-PR #28 (`14b2a89`). The trail of retired next steps is kept:
-
-**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-19 retired "harden the verdict rule" — with overlap owning the verdict, the count rule was retired rather than hardened, and the margin was deliberately left unset. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
-
----
-
-## 2026-08-22 — the 🎯 demo-critical sweep, all eight cleared
-
-`fix/demo-critical-sweep`, 4 commits, **local, nothing pushed**.
-**21 files changed, 4 insertions, 7,188 deletions.**
-
-### The headline: four of the eight were dead code, not live breakage
-
-Verifying before planning was the whole value of the session. **Three separate
-features turned out to be stranded mid-build**, each with a real symptom
-recorded against it and none of them reachable:
-
-| Feature | Plumbing present | Trigger present |
-|---|---|---|
-| Readiness-level rubric submission | form action, 6 dimensions × 54 answers | **no `<form>` element anywhere** |
-| Elevate RNA panel | `useQuery` + fetch | **nothing reads `rnaData`** |
-| Assessment preview dialog | component, state, 2 mounts | **`openPreview()` never called** |
-
-The consistent shape is *plumbing wired without a trigger* — someone built the
-state, handlers, mounts and fetches, then never landed the button. It is worth
-recognising on sight, because each one reads like live breakage in a checklist.
-
-### The M item: route claims true, impact claim false
-
-`+page.server.ts` really did post to two non-existent endpoints and redirect to
-a non-existent route. But the item called it *"the mentor's core task and the
-gate for the entire coaching chain"*, and **the action was unreachable** — the
-page has no `<form>`, so nothing can POST to the route. The live rating path is
-`submitBaselineScores()` → `POST /readinesslevel/startup/:id/rate`, a real route
-whose service upserts `StartupReadinessLevel` rows.
-
-**This is the fourth refuted diagnosis on this project** (assertion classifier,
-SO 4.4's predicate direction, the literal-`null` bug, now this). The generating
-pattern is now clear enough to name: *the recorded symptom is real, and nobody
-checked whether the code carrying it can execute.* Reachability first, then
-correctness.
-
-A latent second defect, now moot: `throw redirect(302, …)` sat inside the `try`,
-and SvelteKit signals redirects **by throwing** — the empty `catch` would have
-swallowed the redirect too, so even a working version would have done nothing
-visible.
-
-### Two items the checklist under-recorded
-
-- **Elevate** — the item named the wrong prefix only. The *parameter name* was
-  also wrong (`startup_id` vs `@Query('startupId', ParseIntPipe)`), so it would
-  have 400'd even under the right prefix. Moot: nothing reads the result.
-- **Assessment preview** — `/assessments/:id/fields` **could not exist as
-  written**. An `Assessment` row *is* a single question, carrying `description`
-  and `answerType` directly; there is no collection of fields beneath one. The
-  data model was wrong, not just the URL. Cut on an explicit scope decision
-  rather than built out.
-
-### The `GEMINI_API_KEY` is fine, and the probe is reusable
-
-`AQ.` is a valid newer AI Studio format, not a Vertex/OAuth credential.
-Proven two ways rather than argued from the prefix:
-1. **A live `embedContent` probe returned 768 dims** — embeddings sit on the
-   separate 100/min quota, so this costs **zero** generation budget.
-2. **Generation proven separately**, because a key can be restricted per-API:
-   the 2026-08-20 results file records `apiRequests: 10` with `degraded: 0`.
-
-**Keep the embedding probe.** It is the cheapest live auth test in the project.
-
-### A verification lesson, in the same family as the mutation lessons
-
-Comparing `svelte-check` runs, `grep -o "Error:.*"` matched **nothing** — the
-real output is `Error<ANSI>:`, so both sides were empty lists and `diff`
-happily reported "identical". **Two commits were verified by a comparison that
-could not have failed.** The error *counts* did match (160/160), which is real
-evidence, but set-equality was never established until the runs were re-diffed
-with ANSI stripped.
-
-Same shape as 2026-08-20's *"assert the mutation changed behaviour, not just
-that it landed"*: **a check that cannot fail is not a check.** Before trusting a
-diff of two tool outputs, confirm the extractor actually extracts — a non-zero
-match count is the cheap guard.
-
-### New baseline, previously undocumented
-
-`pnpm check` was never recorded in these notes. On `master` it is **160 errors /
-16 warnings in 46 files**; at this branch tip **119 / 14 in 43 files**.
-**Deleting dead code cleared 26% of the frontend's type errors**, with zero new
-errors or warnings introduced (verified with ANSI stripped, both directions).
-The 41 removed came from the three Tab components, the preview dialog, and three
-`{access}` pass-throughs that were `string | undefined` against a `string` prop.
-
-### Small things worth not rediscovering
-
-- The three Tab components' hardcoded JWT is a **Django SimpleJWT** token from
-  the previous team's app, `exp` 2024-09-06 — decoded and confirmed expired
-  before deletion, so no rotation was needed. The literals remain in git history.
-- Removing a prop **cascades**: dropping `access` from `ApprovalDialog` orphaned
-  it in `PendingDialog` and `WaitlistedDialog` too. Follow the chain or
-  `svelte-check` grows unused-export warnings.
-- ✅ **`scripts/delete_db.sh:6` pointed at the deleted `chumcheck` dump.**
-  Resolved the same day — the whole `chumcheck` purge was pulled forward and all
-  three scripts deleted. See the 2026-08-22 (later) section.
-
-**Quota:** **zero generation calls spent.** The only API call was one embedding.
+**2026-08-22 — the 🎯 demo-critical sweep, all eight cleared**
+(`fix/demo-critical-sweep`, merged). **21 files, 4 insertions, 7,188
+deletions**, and **four of the eight were dead code rather than live
+breakage** — three separate features stranded mid-build, each with plumbing
+wired and no trigger (a form action with no `<form>`, a query with no panel, a
+dialog with no trigger). That produced the rule this project now applies first:
+**the recorded symptom is real, and nobody checked whether the code carrying it
+can execute — reachability first, then correctness.** Two items were
+under-recorded: Elevate's *parameter name* was also wrong, and
+`/assessments/:id/fields` **could not exist as written** (an `Assessment` row
+*is* a single question). **The `GEMINI_API_KEY` is fine** — `AQ.` is a valid AI
+Studio format, proven by a live `embedContent` probe returning 768 dims (zero
+generation quota) plus the 2026-08-20 run's `apiRequests: 10`; **keep that
+probe, it is the cheapest live auth test in the project.** Side effect:
+`svelte-check` fell **160/16 → 119/14**, so deleting dead code cleared 26% of
+the frontend's type errors. **Verification lesson:** `grep -o "Error:.*"`
+matched nothing (the real output is `Error<ANSI>:`), so two commits were
+"verified" by a comparison that could not have failed — **a check that cannot
+fail is not a check.**
 
 ---
 
@@ -569,7 +411,7 @@ No work is half-done. The three defects below are **logged and unstarted**, by
 choice: each needs a decision before code, and none was smuggled into a cleanup
 branch.
 
-### Next step proposed then — one branch, three linked problems (STILL OPEN, untouched since)
+### Next step proposed then — one branch, three linked problems (✅ ALL THREE DONE 2026-08-23, `fix/silent-controls`)
 
 Agreed 2026-08-22: merge this branch first, then do all three on a **dedicated
 branch**, not on top of cleanup work.
@@ -783,7 +625,7 @@ message is what makes that copy correct again.
 
 ---
 
-## Open at end of 2026-08-22 (3a / 3b session)
+## Open at end of 2026-08-22 (3a / 3b session) — superseded by the 2026-08-23 section below
 
 ### What this session did
 
@@ -852,3 +694,149 @@ Two commits are broader than the branch name suggests (`10a1365` seeding,
 guard, so its endpoints answer unauthenticated, and `Application.svelte` calls
 them with a bare `fetch` carrying no credentials — guarding it without fixing the
 caller repeats the PR #15 trap. See `TODO_CHECKLIST.md` §2.
+
+---
+
+## 2026-08-23 — the three linked controls, all silent, all now doing what their names say
+
+Branch `fix/silent-controls`, **3 commits, local, nothing pushed.** `master` is
+an ancestor, so it fast-forwards. Zero Gemini generation calls.
+
+The three problems proposed 2026-08-22 and untouched since. They share one
+shape — **a signal computed correctly and then ignored** — and each turned out
+to hide a second defect that only a live check could find.
+
+### 1. `AI_SCORE_NORMALIZATION_ENABLED` now gates the paths it names
+
+The scope check the item demanded changed the item. `generateInitiativesFromPrompt`
+and the RNA path do **not** normalize — but **`generateRoadblocksFromPrompt`
+carries the identical defect and was on no list.** Both now return the model's
+output untouched when the flag is off.
+
+**Absence of the fields, not raw-valued ones:** `rns.service.ts:433` reads
+`target_level_normalized ?? rawTarget`, so omitting them yields deviation 0.
+
+**The "do not do this silently" caveat resolved clean:** `backend/measurement/`
+references neither function, so no stored measurement result was produced
+through these paths. The test pinning the old behaviour was inverted in the
+same commit, and `generateRoadblocksFromPrompt` **had no unit test at all**.
+
+**Found and logged, not fixed:** `riskNumber_normalized` has **zero consumers
+anywhere in either app** — computed, appended, discarded. See `TODO_CHECKLIST` §4.
+
+### 2. A mentor can correct a baseline score
+
+The rated view carries a mentor-only **"Revise baseline scores"** button opening
+the same form seeded from stored levels, with Cancel. Chosen over an
+always-visible form so a normal visit has no stray-click surface.
+
+**`readiness()` (`+page.svelte:141`) was dead code** — defined, never consumed —
+and carried a real latent bug: its empty branch returned **lowercase** keys while
+its success branch returned **capitalised** ones. Deleted and replaced by
+`frontend/src/lib/readiness-baseline.ts`, which always returns all six keys
+because a partial record posts `undefined` into an upsert.
+
+**Live-verified on a throwaway startup**, guarded before and after on AgroLink's
+and MediSync's exact levels: six *distinct* values `T7 A2 M5 O8 R3 I6` (uniform
+values cannot detect dimension mis-mapping), button survives a reload, Revise
+seeds all six, and **Technology 7 → 4 updated row id 20 in place with the count
+still 6** — the upsert's update branch running from the app for the first time.
+Cancel discards.
+
+**The frontend has no test runner at all** — zero test deps, zero test files.
+Agreed approach: extract the pure rule, verify live, and log adding a runner
+rather than smuggle a dependency into a bugfix branch.
+
+### 3. SO 4.4 — the flag now has an action
+
+**Approving an application whose summary is flagged requires the Manager to
+confirm they reviewed it against its unmet criteria**, and the approval writes
+an `activity_logs` row with their identity, the verdict and its source.
+Unflagged approvals are unchanged and log nothing, so the log means "approved
+against a warning" rather than being an access log. No new entity, **no schema
+change** — which matters because `main.ts` runs `updateSchema()` every boot.
+
+**Why approval specifically, and why not a hard block.** The Manager's role in
+this system is the **admissions decision** — Applications module, unscoped
+`findAllForUser`, approve/waitlist with mentor and assessment assignment at the
+moment of approval. The summary is decision support for that one call. Blocking
+the decision authority on a heuristic calibrated at n=10 inverts the hierarchy
+and leaves no legitimate override, so the action attaches to the decision
+without removing it. Waitlisting is deliberately ungated.
+
+**Enforced in `approveApplicant`, not in the dialog.** The route is
+`JwtGuard`-only and takes a client-controlled body, so a disabled button is not
+a control. It reuses `attachSummaryVerdicts` so the gate cannot refuse an
+approval for a summary the badge showed as balanced.
+
+#### The defect that matters most this session
+
+**`findOne` had no `populate`, so the gate silently never fired — past four
+green unit tests.** The relation loaded as an id-only reference
+(`select "s0".*, "c1"."id"`), `aiAnalysisSummary` read `undefined`,
+`attachSummaryVerdicts` early-returned, and the very first live request
+**approved a flagged application**. No mock-level test could have caught it: the
+mock hands back a fully-formed `capsuleProposal`. Promoted to a standing note.
+
+**Second defect, pre-existing:** `approveStartup` swallowed non-ok responses
+while the dialog reported success regardless — a 409 would have rendered as
+*"Startup has been approved successfully"*. It now throws with the server's
+message and the dialog surfaces it. **Without this fix the gate would have been
+invisible even while working.**
+
+**Live-verified** on a throwaway pending application with a verifiably flagged
+summary (ratio 0.000), plus a balanced control (ratio 0.800):
+
+| step | result |
+|---|---|
+| flagged, no acknowledgement | **409**, status stays PENDING, **0** log rows |
+| flagged, acknowledged | approved, status QUALIFIED, **1** row naming `manager@launchup.local` |
+| balanced, no acknowledgement | approved unblocked, log count **unchanged** |
+| browser, mentor assigned, unticked | Approve **disabled** — mentor assigned first, so the checkbox is the only blocker |
+| browser, ticked | Approve enabled; full approval reaches the database |
+
+The 409 body is readable cross-origin, which is the path the new error handling
+reads.
+
+### A guard of mine was vacuous, and it passed twice
+
+The ground-truth guard used `JSON.stringify(obj, Object.keys(...).sort())`. A
+replacer **array** filters keys at every level, so the root's `1`/`2` were
+stripped and it compared `{}` to `{}` — **it would have passed while the
+measurement levels were being overwritten.** Caught before any write, fixed with
+a recursive canonicaliser, and then *proved* to reject a deliberately wrong
+value. Same family as 2026-08-22's `grep -o "Error:.*"`. Promoted to a standing
+note.
+
+### Gates at the tip
+
+Backend jest **308/308 across 28 suites** (301 at the previous tip), `tsc
+--noEmit` 0, `svelte-check` **119/14 — unchanged from baseline**, with neither
+new frontend file appearing in the output and the extractor proven non-vacuous
+(119 `Error:` matches). **No entity or migration is touched.**
+
+Mutations, all killed, each asserted to have landed *and* changed behaviour:
+disabling the tasks guard; inverting the roadblock guard; disabling the
+approval gate; logging every approval; removing the `populate`.
+
+### Open
+
+- **3c is still blocked only on the ten handwritten samples.** CER harness
+  design agreed, unwritten; SUS owned by the team and must exist *before* the
+  sample-writing sitting.
+- **RNA generation quality remains unmeasured** — every grounding figure is the
+  levels probe. Needs a harder probe, not more reps.
+- **Metric 3 beyond the FAIL** — a separately pre-registered per-startup floor,
+  scored on new data. Calibrating on the 2026-08-20 run is the forbidden move.
+- **The frontend has no test runner** (`TODO_CHECKLIST` §4).
+- Unchanged open decisions: production cookie policy; `readinesslevel`
+  unguarded (and its caller sends no credentials, so guarding it alone repeats
+  the PR #15 trap); admissions endpoints not restricted to Manager/Admin; RNS
+  correlation-key uniqueness; stale verdicts on artifact edit.
+
+### Not verified, and must not be claimed
+
+- **The failure toast itself was not observed.** The 409 and the readability of
+  its message were verified; the `toast.error` render was not.
+- The acknowledgement is **per-approval, not per-session** — a Manager who
+  reopens the dialog must tick again. Deliberate, but untested across a reload.
