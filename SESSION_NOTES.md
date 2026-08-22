@@ -19,7 +19,12 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **`pnpm lint` runs `eslint --fix`** and rewrites the whole tree over a CRLF/prettier conflict (checklist §4). Check `git status` before committing after anyone runs it.
 - **A fired scheduled task is not evidence it ran.** One fired, started its MCP servers, and never ran the command. Check for the artifact.
 - **Use Node, not PowerShell, for storage probes.** PS 5.1's `Invoke-WebRequest` reported a *successful* Supabase PUT as failed with no status code.
-- **`node inspect-prompt.js <startupId> [--dimension T]`** prints a real assembled prompt and stops before `sendToGemini` — zero quota.
+- **`node inspect-prompt.js <startupId> [--dimension T]`** prints a real assembled prompt and stops before `sendToGemini` — zero quota.
+- **`ai_generation_runs` is not a quota ledger for measurement runs.** The harness opens no row and touches no EntityManager, so the table under-reports badly (its newest rows are from 2026-07-31). Budget from `apiRequests` in the results files plus UI-driven generation.
+- **`--merge` exists only on `measure-grounding.js`.** `measure-summary-bias.js` records fingerprints but nothing acts on them, so the pooling guard is documentary there, not mechanical.
+- **A scripted edit that silently fails to apply looks exactly like success**, because the follow-up test run goes green either way. Assert the anchor matched (`assert s.count(old) == 1`) and, for mutations, that behaviour *changed* — a mutant whose anchor no longer exists reports KILLED for the wrong reason.
+- **Backticks inside a double-quoted bash string are command substitution.** `"the \`foo\` thing"` runs `foo` and substitutes its output, silently deleting the word. Use quoted heredocs (`<<'EOF'`) for any text containing backticks.
+- **`node -e "..."` cannot be given `--flag=value` arguments** — node parses them as its own options and exits. Probing a harness that reads `process.argv` needs a real script file.
 
 ---
 
@@ -61,371 +66,98 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 ---
 
-## 2026-08-18 — the adversarial summary, measured
-
-Branch `feat/adversarial-summary`. Spec and plan under `docs/superpowers/`; the run is `backend/measurement/results/2026-08-18-summary-bias.json`.
-
-### What shipped
-
-`generateStartupAnalysisSummary` now runs a field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`) behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, with the shipped prompt preserved verbatim as `LEGACY_SUMMARY_PROMPT` for the baseline arm. `src/ai/summary-tone.ts` is the SO 4.4 instrument, one copy imported by both the service and the harness. The verdict persists as an `analysis_summary` `AiRecommendation`.
-
-**SO 4.2 targets the readiness *summary*, not a score** — the objective text names the summary, and the branch delivers it there. **The readiness-scoring path is untouched**: `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` are unchanged, so checklist objective 4b stays 🟡. `reviewBiasScore` (`ai.service.ts:339`) is **mislabelled, not misplaced** — its only two call sites review an RNS *target level* (`rns.service.ts:373`) and a roadblock *risk number* (`roadblock.service.ts:224`), neither a readiness summary. Behaviour deliberately unchanged.
-
-### The run — partial, 10/12 calls
-
-`gemini-3.6-flash`, temp 0, grounding on, reps=3, 12 API requests spent. Two adversarial cells (rep1/MediSync, rep2/AgroLink) failed on **503 model overload, not quota**, and were deliberately not re-run: reported as partial, every mean over surviving rows, never padded. Validity gate passed — all 4 completed adversarial calls used `source=schema`, so no control output wears the adversarial label.
-
-| arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate | meanUnmetCriteria | meanCriticalRisks |
-|---|---|---|---|---|---|---|---|---|
-| baseline | 6 | 1 | 1.67 | 0.39 | 0 | 0 | 0 (structural) | 0 (structural) |
-| adversarial | 4 | 3 | 0 | 1.00 | 0 | 0 | 4 | 3.75 |
-
-`structural` = the baseline arm has no criteria field at all, so its zero is not a measurement.
-
-**1. The mechanism works.** More critical observations and real structured findings where the baseline structurally produces none, at 100% schema adherence. What was tested is the mechanism — field-ordered `responseSchema` + `propertyOrdering` — not wording, and Gemini honouring `propertyOrdering` is now supported by this run rather than assumed.
-
-**2. The SO 4.4 flag rule is measured WRONG, and the run supplies its replacement.** `flagged = criticalCount === 0` fired **0 times in 10 summaries, in both arms**. Every baseline summary scored exactly `criticalCount: 1` — the legacy prompt mandates *"3. Critical risks and primary recommendations"*, so every baseline summary ends with a risk sentence. **The rule cannot fire against the prompt it exists to police.** The baseline summaries are plainly lenient (*"demonstrates strong market viability"*) with one dutiful risk sentence appended, so the bias is positive framing with a token risk mention, not absent critical language — the instrument tested for the wrong property. Per-call `ratio` separates the arms with **no overlap**: baseline `0.33 0.33 0.33 0.33 0.50 0.50`, adversarial `1.00 ×4`. A threshold at **~0.75** flags all six baseline summaries and none of the adversarial ones. Spec §3 planned exactly this — ship uncalibrated, let the run supply the distribution, the order `RAG_MIN_SIMILARITY = 0.78` was set in. ~~**Not implemented.**~~ **Implemented 2026-08-18**, see below.
-
-**3. The differentiation guard did NOT pass.** Both arms `FAIL - uniform`, `criticalGap 0`. Specified pass/fail before the run, so reported failed. The adversarial arm is **saturated** — all four calls at `criticalCount: 3`, the maximum a three-sentence summary allows — so that column cannot discriminate; `unmetGap` is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means while the values differ in no consistent direction; and the **baseline arm also fails**, uniformly at 1. **This run cannot distinguish genuine overcorrection from instrument ceiling.** Resolving it needs a non-saturating metric, not more reps. The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as lenient but was floor-bound and blind, and the real defect was differentiation.
-
-### Open items the review surfaced
-
-- **The SO 4.4 verdict is unreachable by a Manager.** Nothing in `frontend/src` reads `confidenceStatus`, `positive-language-flagged` or `analysis_summary`, and both backend `AiRecommendation` queries filter `recommendationKind` `'RNA'`/`'RNS'`. The summary *text* is shown to Managers (`PendingDialog.svelte:86` and its Waitlisted/Qualified/Completed siblings); the verdict beside it is not. Decision taken: ship detection now, surface it as its own task. **An alert nobody sees is not an alert.**
-- **`propertyOrdering` enforces sequence, not substance.** `unmet_criteria: []` is a valid response — `required` requires the key, not a non-empty array — and nothing cross-checks the summary against the criteria. A model could emit empty findings then a glowing summary. The tone check is the only guard, and it is the one that goes nowhere.
-- **A literal JSON `null` degrades with no `recordFailure`.** `analysisSummarySchema.nullable()` means `null` *parses*, returns `null`, and falls back to legacy — 2 calls instead of 3, no failure metric. Its only trace is `notes.source === 'legacy'`, which is why `source` is load-bearing.
-- **`measurement/tests/demo-proposals.test.js` asserts on source text, not behaviour** — it regex-matches the `.ts` file rather than importing `toApplicationDto`, so a `title:` inside a comment satisfies it and a changed *value* is undetectable.
-- **Only the create path of `createStartupProposal` is tested.** Deleting the update branch's `recordSummaryProvenance` call leaves all three `startup.service.spec.ts` tests green — verified by mutation. Both paths do record in code; only one is covered. Mitigating: the update branch looks unreachable from its sole caller (`create()` always passes a brand-new `Startup`, whose `capsuleProposal` inverse side is necessarily undefined), and it predates this branch. Do not describe the spec as covering "both persistence paths".
-- **`TONE_CUES` is an unused export** (`summary-tone.ts:48`) — zero consumers, not even its own spec. Harmless; dead at HEAD.
-- **SO 5.3's premise is false in the code.** It describes the summary as generated "from URAT answers"; `UratQuestionAnswer` is CRUD-only and no AI call reads it — the summary is built from the capsule-proposal DTO. Out of scope, recorded so it is not discovered during a demo.
-- **`CLAUDE.md` is wrong about the model.** It says `GEMINI_MODEL` "still defaults to `gemini-2.5-flash-lite`" and warns that model is unsuitable for bias work. Both `.env` and `ai-config.service.ts:21` say **`gemini-3.6-flash`**, and the switch is already recorded above. Flagged for John rather than edited.
-
-### Fixes landed alongside
-
-`seed-demo-full.js` hardcoded `./dist/src/` for the capsule proposals while building a layout-agnostic resolver four lines earlier; `recordSummaryProvenance`'s comment and `console.error` claimed the proposal was "already committed" when `flush()` inside `em.transactional()` only issues SQL — the commit happens when `create()`'s callback returns. `.superpowers/sdd/.../task-3-report.md` was untracked (`.gitignore:30` lists `.superpowers/` as scratch).
-
----
-
-## 2026-08-18 (later) — the SO 4.4 flag rule, calibrated
-
-Branch `fix/so-4-4-flag-threshold` off `master` at `70a66c4`. One predicate, one file, TDD + mutation testing. **No Gemini quota spent** — `analyzeTone` is pure.
-
-`summary-tone.ts` ships `flagged = ratio < 0.75`, replacing `criticalCount === 0`. The calibration was read out of `results/2026-08-18-summary-bias.json` directly rather than from these notes: baseline `0.333 ×4, 0.500 ×2`, adversarial `1.000 ×4`, all ten `flagged: false`. 0.75 is the midpoint of the (0.50, 1.00) gap.
-
-**The checklist item's title stated the predicate backwards.** It said "replace with `ratio >= 0.75`", but a *high* ratio means *more* critical, so flagging the lenient baseline is `ratio < 0.75`. Read as naming the balanced condition it was right; read as the flag rule it inverts the objective. Corrected in the checklist.
-
-**Exactly 0.75 is balanced**, decided rather than measured — both arms sit far from it. This is the one place the module does not resolve ambiguity toward flagging: a 3-of-4-critical summary is not the leniency SO 4.4 polices, and flagging it would train the reviewing Manager to ignore the flag. Pinned by a test so a later "tightening" to `<=` has to re-open the trade-off.
-
-**The old rule is subsumed** — `criticalCount === 0` forces `ratio 0`, so the new rule flags a strict superset and can trade away no existing detection. That is why the `criticalCount === 0` branch was dropped rather than OR'd in.
-
-**Mutation testing changed the tests, not the code — and this is the transferable bit.** Five mutants; two survived a green suite. Both pointed at the same hole: the "measured shapes" test covered baseline's *modal* ratio (0.333, ×4) and not its *maximum* (0.500, ×2), so mutating the threshold to 0.5 passed while silently unflagging **two of the six** baseline summaries the change exists to catch. **Testing against the most frequent observed value felt like testing against the data; the value that constrains a threshold is the one nearest the boundary.** Added that case, re-ran, 5/5 killed, each asserted as landed per the 2026-08-09 lesson. The mutation script restores in a `finally`.
-
-**Four of six fingerprints invalidated, not one as first assumed** — `tone|*` *and* `differentiation|*`, because `summary-fingerprint.js:60-64` embeds `toneSrc` in differentiation too (it is computed from `analyzeTone`'s counts). `criteria|*` is untouched, so **SO 4.2's result — 4 unmet criteria, 3.75 critical risks — stays poolable**. Verified by hashing HEAD's file text against the working copy with every other input held to a placeholder, so the delta is attributable to this file alone.
-
-⚠️ **0.75 is calibrated, not validated.** It was set on the same 10 summaries it now scores, and re-scoring that file under it is the post-hoc move the fingerprint guard exists to forbid. Validation needs a **held-out** run.
-
-**Gates:** jest **249 passing / 1 failing** (baseline 247/1; +2 net tests, and the single failure is the documented pre-existing `AiService › passes valid task responses through unchanged` — confirmed by name, not by count). Measurement **210/210**. `tsc --noEmit` exit 0.
-
-### Then: the verdict reaches the Manager
-
-Same branch. `GET /startups/all` now carries a `summaryVerdict` per startup, and one `SummaryToneBadge` renders it in all four dialogs a Manager opens from `/applications`. `PendingTab.svelte` renders those dialogs too and was **not** wired — it is imported nowhere and §4 already lists it for deletion.
-
-**The specified design would have shipped an empty badge, and only a live probe showed it.** `ai_recommendations` holds RNA 6 / RNS 8 / Roadblock 3 and **zero** `analysis_summary` rows: the persistence path only runs for proposals created through `createStartupProposal`, and both demo proposals were written directly by `seed-demo-full.js`. A row-only badge would render nothing on the only two startups a demo opens — the same "alert nobody sees" one layer out. So the verdict is recorded-row-first with a live recompute fallback, and `source` is shown in the UI rather than smoothed over. A recorded row **wins over a disagreeing fresh reading**: it is attributable to a generation run and a fresh reading is not. Verified live — with a temporary row in place, AgroLink reported `recorded`/flagged while its text reads balanced at ratio 1.0.
-
-**Two things the unit tests structurally cannot see, both live-verified:**
-- **Serialization.** MikroORM builds `toJSON()` from *declared* properties, so the 9/9 green service tests — which assert on the in-memory entity — would have passed with the field never reaching the browser. Declared as `@Property({ persist: false })` and confirmed through `toObject`/`toJSON`/`JSON.stringify` and a real HTTP round-trip.
-- **Schema.** `main.ts` runs `updateSchema()` on every boot, so a persisted property would silently add a column to whatever DB is configured. `getUpdateSchemaSQL()` (dry run) returns **0** statements.
-
-**A false negative that nearly became a bug report.** The first serialization probe reported the field ABSENT. The cause was the probe, not the code: **`mikro-orm.config.ts` hardcodes `entities: ['./dist/**/*.entity.js']`**, so a build emitted anywhere else silently loads *stale* entities from `dist/`. Any out-of-dist probe must override `entities`, or it is measuring the last build. Same family as the known `seed-admin.js` hardcoded-`./dist/` breakage.
-
-**Login without the login form.** Browser automation still cannot drive the SvelteKit login form (open item 6), and typing passwords into forms is off the table anyway. `hooks.server.ts` verifies the `Access` cookie locally with `jose`, so a token from `POST /auth/signin` set as a cookie via `javascript_tool` produces a fully authenticated Manager session. This is the cheap way to browser-test any role. **Item 6 is NOT closed** — a human click-through is still owed.
-
-**Also worth knowing:** dark mode is **class-based** (`html.dark`, mode-watcher), so `prefers-color-scheme` does not drive it and a colour-scheme toggle in devtools proves nothing. Toggle the class. Both palettes verified (amber-100/900 light, amber-900/100 dark).
-
-**Gates:** jest **262 passing / 1 failing** (+6 service tests, +7 resolver tests; same single documented failure). `tsc --noEmit` exit 0. `svelte-check` **160 errors / 16 warnings / 46 files — byte-identical to the baseline measured with the changes stashed**, and none in the touched files. That baseline was not recorded anywhere before; it is large and pre-existing, so `pnpm check` can only be read as a delta here.
-
----
-
-### Then: the threshold validated on held-out generations
-
-`results/2026-08-18-threshold-validation.json`, `gemini-3.6-flash`, temp 0,
-reps=3. **Partial: 9/12 calls, 12 API requests** — three cells lost to 503 model
-overload (not quota), deliberately not re-run. Pre-registered in
-`docs/superpowers/specs/2026-08-18-threshold-validation-design.md` and committed
-**before** the first call.
-
-| arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate |
-|---|---|---|---|---|---|---|
-| baseline | 5 | 1 | 2 | 0.33 | **5** | **1.00** |
-| adversarial | 4 | 2.25 | 0 | 1.00 | **0** | **0.00** |
-
-**`ratio < 0.75` separates the arms perfectly on generations it has never seen.**
-Every baseline summary flagged, no adversarial summary did. And the original
-defect reproduced independently: every baseline summary again scored exactly
-`criticalCount: 1`, so **the old `criticalCount === 0` rule would have fired 0/9
-here too**.
-
-**What this does and does not establish.** Held out is the *generations*, not the
-documents — same two startups, same prompts. It rules out the weakest failure
-(resampling) and says nothing about other source material. **Baseline ratio was
-0.333 on all five calls — zero variance.** The margin to 0.75 is wide, but the
-distribution is degenerate: the legacy prompt reliably yields two positive
-sentences and one risk sentence. So this is robustness to resampling of a very
-stable structure, not evidence the threshold survives a different prompt. The
-2026-08-18 calibration run had *some* spread (0.333 and 0.500); this one had
-none, which is weaker in that one respect.
-
-**A pre-registered prediction was wrong, in the direction that matters.** I
-predicted the differentiation guard would fail again for both arms. Baseline did
-fail (`FAIL - uniform`). **Adversarial read `PASS`** — but on `nEarly=1` vs
-`nMid=3`, an unbalanced pool the project's own rule says not to quote from, so
-the PASS is an artifact, not a result. The stated *reason* for the prediction also
-failed: the adversarial arm was **not** saturated this time (`criticalCount`
-2, 2, 2, 3 against the previous run's uniform 3), so "saturated at the ceiling of
-a three-sentence summary" does not reproduce as a general property.
-
-**Correction to the pre-registration, made after the run.** It claimed `--merge`
-would refuse to pool tone across the fingerprint boundary. **`--merge` does not
-exist on this harness** — it is `measure-grounding.js` only. `measure-summary-bias.js`
-records fingerprints but nothing acts on them, so the guard here is documentary
-rather than mechanical. The four changed fingerprints were verified against the
-real stored values (`tone|baseline` `bbb846c48639` → `d193238ccc86`), and
-`criteria|*` is unchanged, so the SO 4.2 criteria result can still legitimately
-gain n.
-
-**Quota note that cost time.** `ai_generation_runs` is **not** a usable quota
-ledger for measurement runs — the harness header says this path "opens no
-`ai_generation_runs` row and touches no EntityManager", and the table's most
-recent rows are from 2026-07-31. Budget from `apiRequests` in results files plus
-UI-driven generation. Also: Neon went unreachable for ~40 minutes mid-session
-(TCP accepted, then `ECONNRESET`) and recovered on its own; the harness needs
-Neon reachable even for `--dry-run`.
-
----
-
-### Then: metric 3 diagnosed, not yet rebuilt
-
-No quota spent — the diagnosis came from re-scoring both stored runs.
-
-**The differentiation guard is itself the defect**, not merely saturating.
-`differentiationTable` decides `separates = (critGap !== 0) || (unmetGap !== 0)`
-— an exact-inequality test on a mean of 1–3 small integers. Three defects, worst
-last:
-
-1. **Saturation** (the recorded concern): `criticalCount` ceilings at 3 in a
-   three-sentence summary; adversarial early `[3,3]` vs mid `[3,3]` is the
-   ceiling, not agreement.
-2. **No noise floor:** the validation run's adversarial `PASS` came from
-   `criticalGap −0.33` — **one** early call against a 3-call mean.
-3. **No sign check:** that −0.33 means the arm criticised the *mid*-stage
-   proposal more than the early-stage one. **A PASS can be earned by
-   differentiating backwards.**
-
-**The finding that decides the redesign:** both columns are degenerate for
-different reasons. `criticalCount` is ceiling-bound; `unmetCriteria` is
-structurally unbounded (prompt says "list *every*", schema sets no `maxItems`)
-yet its **means coincide**: AgroLink `4,4` vs MediSync `3,5` on the calibration
-run, `4` vs `4,4,4` on the validation run. (⚠️ This block originally read
-"exactly 4 on all 8 successful adversarial calls" — **wrong**, corrected
-2026-08-19 from the results files. Six of eight are 4, with a 3 and a 5. The
-column is unsigned variance whose means coincide, not a constant; the conclusion
-survives, since variance with no direction still cannot separate arms.) **So no count-based metric can
-separate these two startups** — a better statistic over the same numbers cannot
-help. What may differ is *which* criteria are cited, and the harness stores
-`unmetCriteria` as a **count only**, discarding `criterion`/`proposalField`
-before the results file.
-
-Design agreed, implementation not started — see the metric 3 item in
-`TODO_CHECKLIST.md` for the three parts.
-
-### Branch state at close
-
-`fix/so-4-4-flag-threshold`, **7 commits, local, nothing pushed.** Assessed
-mergeable: `master` is an ancestor (fast-forwardable), `merge-tree` reports no
-conflicts, working tree clean, 16 files all intentional. Gates **re-run at the
-tip**, not carried over: jest **262/1**, measurement **210/210**, `tsc` 0,
-`svelte-check` **160/16/46 — identical to master's baseline**. The single jest
-failure is the documented `AiService › passes valid task responses through
-unchanged`, and the branch touches neither `ai.service.ts` nor its spec.
-
-Two notes for whoever merges: the branch is **wider than its name** (flag rule →
-`0b92c86`, Manager UI → `7507490`, measurement → `282294e`, if they want
-splitting), and **no migration is needed** — `summaryVerdict` is `persist: false`
-and produces 0 DDL statements.
-
----
-
-## 2026-08-19 — metric 3 rebuilt, parts 1 and 2
-
-Branch `measure/non-saturating-differentiation` off `master` at `67f6071`.
-**Zero Gemini quota** — every number below is re-scored from stored runs or from
-pure functions.
-
-### The count-based verdict was retired, not hardened
-
-The checklist prescribed hardening `separates` with direction, magnitude and a
-minimum n. Once field overlap owns the verdict that is the wrong move: hardening
-a rule over columns diagnosed as unable to separate these two startups makes a
-broken instrument stricter, not fixed. So `separates` and its PASS/FAIL are
-gone. The counts stay as descriptive columns, cells below `MIN_CELL_N = 2` carry
-`underpowered`, and each gap prints `criticalFavours` / `unmetFavours`
-(`early` / `mid` / `neither`) — defect 3 made legible rather than tested for.
-
-### `lib/field-overlap.js`
-
-`crossOverlap` (Jaccard over early-rep × mid-rep normalised proposal-field sets)
-read against `withinOverlap` (same-startup rep pairs, pooled) as an **intrinsic
-noise floor**; `separation = within − cross`. The old guard had no floor at all,
-which is how one call produced a PASS.
-
-**Two decisions that carry the metric's validity:**
-
-- **Jaccard of two empty sets is `null`, never `1`.** The baseline arm cites no
-  proposal fields anywhere — `legacySummaryOnly` has no criteria field to fill,
-  which `criteriaTable` already guards as `structuralZero`. Scoring `0/0` as
-  perfect agreement would have reported that arm as **maximally uniform**: a
-  damning-looking finding manufactured entirely from a missing schema field.
-- **Normalisation is load-bearing, not cosmetic.** `proposal_field` is a bare
-  `STRING` in the response schema (`ai.service.ts:178`), *not* an enum over the
-  DTO's fields — the observed values only look like a controlled vocabulary
-  because the prompt names the DTO. Without normalising, one field in two
-  spellings reads as two fields and every overlap number is low for a formatting
-  reason.
-
-### No PASS/FAIL is issued, by decision
-
-`separation` needs a margin; none has been observed, and setting one from the
-run it would score is the post-hoc move the fingerprint guard forbids. The
-verdict reads `n/a` with a reason (`underpowered`, `no scoreable field
-citations`, `margin not pre-registered`). Part 3 pre-registers it. **This was
-John's call** — the alternative on the table was shipping `0.15` as a pinned
-judgement.
-
-### What the stored runs would have said
-
-A *rule* correction on the same generations, never a new result. Overlap cannot
-be replayed: the criteria detail was never stored, which is the defect part 2
-fixes.
-
-| run | arm | was | now |
-|---|---|---|---|
-| calibration | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
-| calibration | adversarial | `FAIL - uniform` | `n/a - no scoreable field citations` |
-| validation | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
-| validation | **adversarial** | **`PASS`** | **`n/a - underpowered`** |
-
-The withdrawn PASS also now prints `criticalGap −0.33 (favours mid)` — the arm
-criticised the *mid*-stage proposal harder, and that direction is visible in the
-output instead of buried in an absolute test.
-
-### Fingerprints, verified rather than assumed
-
-Computed against both stored files: `criteria|*` **byte-identical to both**, so
-SO 4.2's result stays poolable; `tone|*` identical to the validation run and
-differing from the calibration run only by the pre-existing 0.75 threshold
-change; `differentiation|*` moved for both arms against both runs, which is
-correct — it gained `overlapSrc` and its definition changed.
-
-### The harness that produced every published SO 4.2/4.4 number had no tests
-
-`measure-summary-bias.js` and `lib/summary-fingerprint.js` had **zero** test
-coverage. The measurement suite's 210 tests all cover the *grounding* harness;
-the `differentiationGap` hits in `metrics.test.js` belong to
-`measure-grounding.js`, a different metric. 27 tests added (field-overlap 17,
-summary-differentiation 8, summary-fingerprint 2). **Still untested:**
-`toneTable`, `criteriaTable`, `validity`, `sourceBreakdown`, `callDescriptors`.
-
-### Mutation testing changed the tests, not the code — again
-
-9/9 killed. The one survivor was `favours` mutating `gap > 0` → `gap >= 0`,
-because no test covered a gap of **exactly 0** — the uniform-harshness case the
-metric exists to detect, which the mutant relabels as differentiating in the
-expected direction. It is also the modal reading in the real data: 7 of 8 gap
-readings across both runs are 0. Identical shape to the 2026-08-18 lesson.
-
-**A scripted edit silently failed to apply mid-session, and the suite went green
-anyway.** A Python replacement whose anchor contained `
-` reached the
-interpreter with the backslash collapsed, so it matched a real newline and found
-nothing; the follow-up test run printed 24/24 pass, indistinguishable from
-success. Only `assert s.count(old) == 1` caught it. **Every scripted edit here
-needs a landed-assertion** — the 2026-08-09 mutation lesson generalises beyond
-mutation.
-
-### Correction carried into the older blocks
-
-The 2026-08-18 diagnosis said `unmetCriteria` "came back exactly 4 on all 8
-successful adversarial calls". **Wrong** — it is 4,4 / 3,5 / 4 / 4,4,4. Six of
-eight are 4, with a 3 and a 5, so the column is unsigned variance whose means
-coincide rather than a constant. The conclusion holds (variance with no
-direction cannot separate arms), but "convergent model behaviour at temp 0" was
-overstated. Corrected in place in both documents.
-
-**Gates:** jest **262 passing / 1 failing** — the documented pre-existing
-`AiService › passes valid task responses through unchanged`, confirmed **by
-name**; this branch touches only `measurement/`. Measurement **237/237**
-(baseline 210, +27). `npx tsc --noEmit` exit 0.
-
-### Then: the margin pre-registered, and both prerequisites built
-
-`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`, committed
-**before** any generation it scores. Rule: **complete separation** —
-`min(within-startup pair) > max(cross-startup pair)`. **No constant**, which is
-the point: the same logic that made `ratio < 0.75` quotable, stated as a
-condition rather than encoded as a number. Strict `>`, so a **tie FAILS** — the
-rule does not resolve ambiguity toward PASS, because PASS is the claim being
-made.
-
-**The n bar needs both conditions, and writing the spec is what showed why.**
-`nEarly >= 3 && nMid >= 3` alone is satisfiable while **null pairs shrink the
-scoreable grid underneath it** — reachable whenever a call returns
-`unmet_criteria: []`, which the schema permits. The chance reference
-`1/C(nCross+nWithin, nWithin) <= 0.001` alone admits a lopsided 4×2 grid with a
-single mid-side within-pair. Each covers the other's hole. That test is also the
-only thing that kills the `MAX_CHANCE_REFERENCE` mutant.
-
-**The spec self-review found a defect in the spec I had just written.** The rule
-is defined on `min`/`max` of raw pair values, and `overlapStats` returned only
-means — so the rule I had pre-registered **could not have been evaluated from a
-stored run**, the identical defect that left both 2026-08-18 runs un-rescoreable
-for overlap. Fixed as prerequisite 1, and verified on a dry run: recomputing
-`min(within) > max(cross)` from the written JSON reproduces the recorded
-`separated`.
-
-**Prerequisite 2, `--only-arm`,** matching `measure-grounding.js`'s semantics
-(exact beats prefix, unmatched is a hard error, ambiguous is refused). Metric 3
-is scoreable on the **adversarial arm only** — the baseline cites no proposal
-fields, so all its pairs are `null` by construction — so a full run spent 6
-baseline calls that could not contribute. `--only-arm=adversarial --reps=5` = 10
-cells, verified from real `argv`, and results files now record `armsRun` so a
-filtered file is self-describing.
-
-**Three things the dry run caught that no unit test could.** It printed
-*"No PASS/FAIL is issued"* directly beneath a table reading `FAIL - uniform` —
-the guidance text had become false the moment the margin was pre-registered. The
-table had grown to 24 columns with the pair arrays truncated to `... 6 more
-items`, so it is now split into "Counts — DESCRIPTIVE ONLY" and "Field overlap —
-SCORED", with the raw arrays going to the results file rather than a console
-that mangles them. And `console.table` was the only place the descriptive/scored
-distinction was invisible.
-
-**Mutation testing 16/16, and the guard earned its keep a second time.** One
-mutant's anchor no longer existed — `verdictFor` had been rewritten to return an
-object — and **without the landed-assertion it would have reported as KILLED**.
-That is the 2026-08-09 lesson recurring within a single session: a mutation that
-cannot apply is indistinguishable from a decorative guard.
-
-**Also worth knowing:** `node -e "..."` cannot be given `--flag=value`
-arguments — node parses them as its own options and exits. Probing a harness
-whose config comes from `process.argv` needs a real script file.
-
-**Gates:** measurement **257/257** (baseline 210). `npx tsc --noEmit` exit 0.
-jest unchanged at **262/1** — this work touches only `measurement/`.
-
-**What remains for metric 3 is the run itself**, `--only-arm=adversarial
---reps=5`, one full quota window. Predicted FAIL, with the informative failure
-mode named in the spec.
-
-**Branch state:** local, nothing pushed.
+## Compressed — 2026-08-18 → 2026-08-19
+
+Compressed 2026-08-22 under the three-most-recent rule. Full detail lives in
+`TODO_CHECKLIST.md` §0 and `measurement/README.md`; the durable gotchas were
+promoted to **Standing operational notes** above.
+
+**2026-08-18 — SO 4.2 adversarial summary shipped and measured**
+(`feat/adversarial-summary`). `generateStartupAnalysisSummary` runs a
+field-ordered `responseSchema` (`unmet_criteria` → `critical_risks` → `summary`)
+behind `AI_ADVERSARIAL_SUMMARY_ENABLED`, with the shipped prompt preserved
+verbatim as `LEGACY_SUMMARY_PROMPT`. Run `results/2026-08-18-summary-bias.json`,
+**partial 10/12** (two adversarial cells lost to 503 overload, not quota,
+deliberately not re-run): baseline n=6 meanCritical 1, meanRatio 0.39;
+adversarial n=4 meanCritical 3, meanRatio 1.00, 4 unmet criteria, 3.75 critical
+risks against a baseline with **no criteria field at all** (`structural`, not a
+measurement). 100% schema adherence, so Gemini honouring `propertyOrdering` is
+now supported rather than assumed. **The scoring path was deliberately untouched**
+— `createBasePrompt`, `reviewBiasScore` and `normalizeAiScore` unchanged — which
+is why 4b stays 🟡. `reviewBiasScore` is *mislabelled, not misplaced*: its two
+call sites review an RNS target level and a roadblock risk number.
+
+**2026-08-18 (later) — the SO 4.4 flag rule replaced, then validated**
+(`fix/so-4-4-flag-threshold`, no quota for the rule itself; `analyzeTone` is
+pure). `flagged = criticalCount === 0` **fired 0/10 in both arms** — the legacy
+prompt mandates a risk sentence, so every baseline summary scored exactly
+`criticalCount: 1` and **the rule could not fire against the prompt it exists to
+police**. Replaced with `flagged = ratio < 0.75`, the midpoint of a gap with no
+overlap (baseline `0.333 ×4, 0.500 ×2`; adversarial `1.000 ×4`). The old rule is
+a strict subset, so no detection was traded away. **Validated on held-out
+generations the same day** (`results/2026-08-18-threshold-validation.json`, 9/12,
+3 lost to 503): **baseline 5/5 flagged, adversarial 0/4 — perfect separation**,
+and the old rule would again have fired 0/9. **Held out is the generations, not
+the documents** (same two startups, same prompts), and baseline ratio was 0.333
+with **zero variance**, so this is robustness to resampling of a very stable
+prompt structure — the informative next test is a different prompt or a third
+document, not more reps. Exactly 0.75 counts as balanced (strict `<`) by
+judgement, not measurement: flagging 3-of-4-critical would train Managers to
+ignore the flag.
+
+*Then the verdict reached the Manager.* `GET /startups/all` carries a
+`summaryVerdict`; one `SummaryToneBadge` renders it in all four Manager dialogs.
+**The specified row-only design would have shipped an empty badge** — Neon holds
+zero `analysis_summary` rows, because persistence only runs for proposals created
+through `createStartupProposal` and both demo proposals were written directly by
+`seed-demo-full.js`. So it resolves recorded-row-first with a live recompute
+fallback and shows `source`; a recorded row always beats a disagreeing fresh
+reading, being attributable to a generation run. `persist: false` produces 0 DDL
+statements, which matters because `main.ts` runs `updateSchema()` every boot.
+**What remains for SO 4.4 is an *action* on the flag, not its visibility.**
+
+*Mutation testing changed the tests, not the code* — 5/5 after the fix. Two
+mutants survived a green suite because the tests covered baseline's **modal**
+ratio (0.333) and not its **maximum** (0.500), so a threshold mutated to 0.5
+silently unflagged two of the six summaries the change exists to catch.
+**The value that constrains a threshold is the one nearest the boundary, not the
+most frequent** — a lesson that recurred verbatim on 2026-08-19.
+
+**2026-08-19 — metric 3 rebuilt, parts 1 and 2**
+(`measure/non-saturating-differentiation`, zero quota; everything re-scored from
+stored runs or pure functions). **The guard was itself the defect**, not merely
+saturating: `separates = (critGap !== 0) || (unmetGap !== 0)` is an exact
+inequality over a mean of 1–3 small integers, with no noise floor (one call
+produced a PASS) and **no sign check — a PASS could be earned by differentiating
+backwards**. Both count columns are degenerate for different reasons:
+`criticalCount` ceilings at 3 in a three-sentence summary, and `unmetCriteria` is
+structurally unbounded yet its means coincide (AgroLink `4,4` vs MediSync `3,5`;
+then `4` vs `4,4,4`). So the count verdict was **retired, not hardened** —
+hardening a rule over columns that cannot separate these startups only makes a
+broken instrument stricter. Replaced by `lib/field-overlap.js`: Jaccard overlap
+of normalised proposal-field sets, `crossOverlap` read against `withinOverlap` as
+an intrinsic noise floor. Two decisions carry its validity — **a Jaccard of two
+empty sets is `null`, never `1`** (else the baseline arm, which cites no fields
+at all, reports as maximally uniform on the strength of a missing schema field),
+and **normalisation is load-bearing** because `proposal_field` is a bare `STRING`
+in the schema, not an enum. The margin was **pre-registered before any generation
+it scores** (`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`):
+complete separation, `min(within) > max(cross)`, no constant, tie FAILS. **Issuing
+no PASS/FAIL until then was John's call**, over shipping `0.15` as a pinned
+judgement. Two zero-quota prerequisites shipped with it — `overlapStats`
+persisting per-pair values (without which the pre-registered rule could not have
+been evaluated from a stored run) and `--only-arm`. **The harness that produced
+every published SO 4.2/4.4 number had zero tests** before this; 27 were added,
+leaving `toneTable`, `criteriaTable`, `validity`, `sourceBreakdown` and
+`callDescriptors` still untested. Mutation 16/16, the survivor again being a
+boundary case no test covered (`gap > 0` → `gap >= 0`, relabelling the exactly-0
+uniform case the metric exists to detect).
+
+*Correction made here and carried into both documents:* the 2026-08-18 diagnosis
+claimed `unmetCriteria` came back "exactly 4 on all 8 successful adversarial
+calls". **Wrong** — six of eight are 4, with a 3 and a 5. The column is unsigned
+variance whose means coincide, not a constant. The conclusion survives; the
+"convergent model behaviour at temp 0" reading does not.
 
 ---
 
@@ -654,54 +386,139 @@ The 41 removed came from the three Tab components, the preview dialog, and three
 
 ---
 
-## Open at end of 2026-08-22
+## 2026-08-22 (later) — the deferred-cleanup sweep, and a red suite finally green
 
-**Branch state.** `fix/demo-critical-sweep` — **6 commits, local, nothing
-pushed**, on top of `master` at `14b2a89`. Gates at the tip: `tsc --noEmit`
-exit 0, jest **264 passing / 1 failing** (the documented pre-existing
-`AiService` failure — a *second* jest failure is a real regression),
-measurement **257/257**, `svelte-check` **119 / 14** against a master baseline
-of 160 / 16. The last two commits are documentation only, so the gates ran
-against the final code state (`9cb7621`).
+`chore/deferred-cleanup-sweep`, **local, nothing pushed**, on `master` at `b0d5fc8`.
+Four tasks, all confirmed in advance. **Zero API calls of any kind.**
 
-✅ **Click-through done by John 2026-08-22 — no bugs observed.** The claim under
-test was that *nothing visible changed*, since every deletion was unreachable
-code. Covered: `/applications` (Pending, Waitlisted, Qualified, plus the
-untouched Completed tab as a control, and the `ApprovalDialog` reached from two
-of them), the readiness-level page in both the mentor and founder branches, and
-the Elevate tab.
+### The headline: the recorded verification procedure could not have been run
 
-✅ **Merge-audited 2026-08-22 and assessed safe.** `master` is an ancestor so it
-**fast-forwards — conflicts impossible**. Only three `backend/src` files change:
-two endpoint deletions and one comment. **No schema impact** — the sole
-`entities/` change removes a comment and alters no enum member, which matters
-because `main.ts` runs `updateSchema()` on every boot. `backend/src/ai`,
-`rna`, `rns` and the whole measurement harness are untouched.
+The one ⚠️ left by the demo-critical sweep was *saving baseline scores*, with a
+"zero-risk way to close it" written down: re-save the identical stored values and
+expect the toast. **Tracing it first showed there is no button to click.**
 
-⚠️ **One behaviour is unverified: saving baseline scores.** The argument for
-deleting the readiness-level form action is that `submitBaselineScores()` is the
-real path; if that reasoning is wrong, **saving is what breaks, and nothing else
-would reveal it.** Skipping it is defensible — the write lands on
-`startups_readiness_level`, which *is* the measurement ground truth
-(`src/demo-readiness-levels.ts`), so a careless save invalidates the 2026-08-05
-grounding result. **Zero-risk way to close it:** re-save the identical stored
-values (AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`) and expect
-the *"Baseline scores saved"* toast; `node seed-demo-full.js` repairs the rows
-from that shared source if anything drifts.
+The live path is real end to end — a genuine `<Button onclick={submitBaselineScores}>`
+(`+page.svelte:421`), a real `POST /readinesslevel/startup/:startupId/rate` under
+`JwtGuard`, a `RateReadinessDto` matching the payload field for field, and a
+find-or-create upsert on `(startup, readinessType)`. So **the deletion reasoning that
+this item existed to check holds.**
 
-Also still unmerged from before: `docs/trim-notes-and-status-table` (pushed,
-needs a PR) and `backup/rag-corpus-preflight` (disposable, 13.7 MB of PDF blobs).
-**13 local branches have `[gone]` remotes** and are fully merged — a
-`clean_gone` sweep is still worth running.
+But the mentor form is gated `{:else if isRated()}`, and `isRated()` is true whenever
+the startup has *any* `startups_readiness_level` rows. Both demo startups have all
+six. **The Save button does not render for a rated startup**, so the procedure has no
+trigger.
 
-**Next step — in order.**
-1. **Merge it.** Tested and audited above; `git merge --ff-only
-   fix/demo-critical-sweep`. Optionally exercise the baseline-score save first
-   (see the ⚠️ above) — it is the one path the click-through could not confirm.
-2. **The triage says stop here.** With all 8 🎯 items cleared and §0 carrying no
-   open code work, the 2026-08-07 boundary is fully reached. Remaining work is
-   deferred by decision, not by omission. **Anything picked up after this is a
-   new decision, not a continuation of the plan.**
+**This is the fifth instance of the pattern named in the sweep** — *the recorded
+symptom or procedure is real in description, and nobody checked whether the code
+carrying it can execute.* The new part is that it now applies to a **verification
+step**, not a bug.
+
+⚠️ **The "zero-risk" procedure was the opposite of zero-risk, and only the gate
+hid it.** `baselineScores` initialises to all-`1` (`+page.svelte:58`) and is **never
+seeded from the loaded rows**. Had the form rendered for a rated startup, a Save
+without touching all six selects would have written `T1 M1 A1 O1 R1 I1` over the
+measurement ground truth. `isRated()` is the only thing between a stray click and the
+2026-08-05 grounding result. **Verifying the save needs an *unrated* startup** — a
+different exercise, and not one to run against AgroLink or MediSync.
+
+### The suite is green for the first time: 266 / 266, 25 suites
+
+The failure reproduced exactly as recorded, and **the recorded conclusion was right:
+the expectation was wrong, not the code.** `target_level_normalized: 5` and
+`target_level_z: 0` are what the mocked `normalizeScore` returns; the old assertion
+wrote `3` — the *raw* level — under a comment claiming it matched the normalized
+output.
+
+**The recorded *mechanism* was wrong, and that correction is the real find.** It
+blamed the test context setting `scoreNormalization: true`. **That flag never reaches
+this path:** `generateTasksFromPrompt` (`ai.service.ts:984-992`) normalizes
+unconditionally, and `ctx.config.scoreNormalization` is read *only* inside
+`reviewBiasScore`.
+
+**The cost is provenance, which is why it is not cosmetic.** `ai_generation_runs`
+exists so a run is attributable to an exact arm; a row stamped
+`scoreNormalization: false` still carries normalized `target_level` values here. A
+baseline-vs-enhanced comparison over task target levels would be comparing two
+identical arms while believing otherwise. **Same class as the `temperature`
+top-level bug** — a config flag that silently never applied.
+
+Pinned with a test rather than a doc line. **The mutation making the path honour the
+flag killed only that test**, confirming nothing else covered it. Fixing the flag is a
+production behaviour change on an arm under measurement, so it is logged in
+`TODO_CHECKLIST.md` §4 rather than smuggled into a test repair.
+
+**"A second failure is a real regression" is retired.** Any failure is now the signal
+— which is the whole point of fixing a one-test-red suite.
+
+### `chumcheck` purged — and one of the three had never worked
+
+All three `scripts/` files deleted, and the directory with them; no code referenced
+them, only docs. `delete_db.sh` was **never executable as written** — lines 4-5 were
+raw SQL sitting unquoted in a `#!/bin/bash` file, so the shell would have tried to run
+`drop` as a command. Only line 6 did anything, and it pointed at a dump deleted
+earlier the same day. **`reset_db.sh`/`.ps1` were the live hazard** — both valid, both
+a real `DROP DATABASE ... WITH (FORCE)` against a local `postgres` superuser.
+
+**Deleted rather than repointed, because there is no correct target:** Neon branches
+instead of drop-and-recreate, and `docker-compose.yml`'s `launchup_db` is unused.
+
+### Branch sweep: 23 → 4
+
+All 20 `[gone]` branches deleted after **verifying each is an ancestor of `master`**
+rather than trusting the earlier listing — 0 unmerged. Used `git branch -d`, not
+`-D`: with the merge already proven, the safe form does the same job and keeps its own
+guard. (The force-delete loop the skill prescribes was blocked by the permission
+classifier; the safe form was accepted, which is the better command anyway.)
+
+### Small things worth not rediscovering
+
+- **Backticks inside a double-quoted bash string are command substitution.** A doc
+  patch written as `"...the \`chumcheck\` purge..."` silently lost the word — bash ran
+  `chumcheck` as a command and substituted its empty output. Quoted heredocs
+  (`<<'EOF'`) are immune; that is why the other patches survived.
+- `git worktree list` still shows `.claude/worktrees/xenodochial-colden-25e582` at a
+  detached HEAD. It is harness state, merged into `master`, and was left alone.
+
+## Open at end of 2026-08-22 (later)
+
+**Branch state.** `chore/deferred-cleanup-sweep` — **2 commits, local, nothing
+pushed**, on top of `master` at `b0d5fc8` (the demo-critical sweep landed via
+PR #29). Gates at the tip: `tsc --noEmit` exit 0, jest **266 passing / 0
+failing across 25 suites** — **the first fully green backend suite this project
+has had**. `svelte-check` and the measurement suite were not re-run; nothing in
+this branch touches `frontend/src` or `measurement/`.
+
+✅ **The 2026-08-07 triage boundary stays reached.** Everything here is §1–§5
+housekeeping picked up as a **new decision** after the plan closed, not §0 work.
+Nothing in `backend/src` production code changed — the only backend edit is a
+spec file.
+
+⚠️ **The baseline-score save is still unverified, and now the reason is
+different.** It is not that nobody has clicked the button; **the button does not
+render for a rated startup**, so the procedure recorded on 2026-08-22 cannot be
+run at all. The deletion reasoning it was meant to check is separately confirmed
+sound by tracing (trigger → route → DTO → upsert all match). **Closing it properly
+needs an unrated startup**, and it must not be attempted on AgroLink or MediSync:
+`baselineScores` initialises to all-`1` and never seeds from stored rows, so a
+Save there would overwrite the measurement ground truth.
+
+**Branches: 23 → 4.** All 20 `[gone]` branches deleted after verifying each is an
+ancestor of `master` (0 unmerged). Remaining: `master`,
+`chore/deferred-cleanup-sweep`, `claude/xenodochial-colden-25e582` (harness
+worktree, merged, left alone), and **`backup/rag-corpus-preflight` — the only
+branch carrying commits not in `master`**, still described as disposable
+(13.7 MB of PDF blobs). It needs a decision, not a sweep.
+`docs/trim-notes-and-status-table` is resolved — it was already merged.
+
+**Next step.** No queued work. The live candidates, in the order they are worth
+picking up:
+1. **SO 4.4's missing action on the flag** — the one substantive §0 gap left.
+   Design question; brainstorm before code.
+2. **The 4c flag that does not gate task normalization** (new, `TODO_CHECKLIST`
+   §4) — small, but it changes generated output on the disabled arm, so it
+   needs a deliberate call about stored comparisons first.
+3. **Verify the baseline-score save on an unrated startup** — cheap, zero AI
+   quota, closes the last ⚠️ from the demo-critical sweep.
 
 **Not next, but not forgotten.** (unchanged from 2026-08-20 unless noted)
 - **SO 4.4's missing *action* on the flag** — still the one substantive §0 gap.
@@ -715,8 +532,6 @@ needs a PR) and `backup/rag-corpus-preflight` (disposable, 13.7 MB of PDF blobs)
 - **RNA *generation* quality is still unmeasured.** Every grounding figure is the
   levels probe; production's RNA path retrieves 12 rubric rows rather than 54.
   Needs a **harder probe, not more reps**.
-- **Pull forward the `chumcheck` purge** (new) — 3 files, and one of them now
-  references a file this session deleted.
 
 **Open decisions, not blocking:** unchanged from 2026-08-20 — production cookie
 policy; RNS correlation-key uniqueness and stale verdicts on artifact edit; tier

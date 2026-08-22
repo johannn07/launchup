@@ -42,7 +42,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 7 of 13 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
-| **Cleanup / tech debt (§4)** | In progress — 6 of 20 done; **all 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day (**backend suite now 266/266 green**); 14 deferred, one of them newly found (the 4c flag that does not gate task normalization) |
+| **Cleanup / tech debt (§4)** | In progress — **6 of 23 done, 17 open** (counted from the section 2026-08-22; the long-standing "of 19" was stale). **All 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day — **backend suite now 266/266 green**. Three items were *added* 2026-08-22: the 4c flag that does not gate task normalization, and two findings rescued from the compressed session notes |
 | **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
 
 ---
@@ -793,6 +793,13 @@ Each verified by reading **both** sides of the call.
 
 - [ ] 🧹 **DEBT · S · `GET /ocr/parse` reads an arbitrary server-side path**
   `ocr.controller.ts` passes a `file` query parameter straight to `parseImageFile` with no confinement to an upload directory. It is behind `JwtGuard` now, so any *authenticated* user can read files the server process can read. Its own comment calls it a "Quick test endpoint" — deleting it is probably right; otherwise resolve against a fixed root and reject escapes.
+
+- [ ] 🧹 **DEBT · S · `TONE_CUES` is an unused export** (`summary-tone.ts:48`)
+  Zero consumers, not even its own spec. Harmless, dead at HEAD. Rescued here 2026-08-22 from the 2026-08-18 notes, which were its only record.
+
+- [ ] 🧹 **DEBT · S · Only the create path of `createStartupProposal` is tested**
+  Deleting the update branch's `recordSummaryProvenance` call leaves all three `startup.service.spec.ts` tests green — verified by mutation. Both paths record in code; one is covered.
+  Mitigating: the update branch looks unreachable from its sole caller (`create()` always passes a brand-new `Startup`, whose `capsuleProposal` inverse side is necessarily undefined), and it predates the SO 4.2 work. **Do not describe the spec as covering "both persistence paths".** Rescued here 2026-08-22 from the 2026-08-18 notes.
 
 - [ ] 🧹 **DEBT · S · Delete `ReadinessCard.svelte`**
   Orphaned (verified). Note `ReadinessDashboard.svelte`, which it wraps, *is* used in three places — delete only the card.
