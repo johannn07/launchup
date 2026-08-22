@@ -42,7 +42,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 7 of 13 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
-| **Cleanup / tech debt (§4)** | In progress — **6 of 23 done, 17 open** (counted from the section 2026-08-22; the long-standing "of 19" was stale). **All 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day — **backend suite now 266/266 green**. Three items were *added* 2026-08-22: the 4c flag that does not gate task normalization, and two findings rescued from the compressed session notes |
+| **Cleanup / tech debt (§4)** | In progress — **6 of 24 done, 18 open** (counted from the section 2026-08-22; the long-standing "of 19" was stale). **All 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day — **backend suite now 266/266 green**. Four items were *added* 2026-08-22: the 4c flag that does not gate task normalization, the mentor-revision bug found by the live save probe, and two findings rescued from the compressed session notes |
 | **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
 
 ---
