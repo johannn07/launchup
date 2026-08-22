@@ -35,6 +35,7 @@ import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
+import { scoreFields } from 'src/ocr/field-confidence';
 
 // OcrService returns this sentinel instead of throwing when no engine resolves.
 // It is truthy, so it wins any `||` fallback unless matched explicitly.
@@ -422,16 +423,10 @@ export class StartupService {
       methodology: parsedPayload.methodology ?? '',
     };
 
-    const confidence = Object.fromEntries(
-      Object.entries(reviewFields).map(([key, value]) => {
-        const text = String(value ?? '').trim();
-        if (!text) {
-          return [key, 'failed'];
-        }
-
-        return [key, text.length < 40 ? 'low' : 'verified'];
-      }),
-    ) as Record<string, 'verified' | 'low' | 'failed'>;
+    // Scored against the transcription, not against length. The extraction
+    // prompt orders a 40-character minimum on every field, so the old length
+    // rule graded the model's compliance with that instruction.
+    const confidence = scoreFields(reviewFields, transcription);
 
     await this.em.persistAndFlush(
       this.em.create(OcrDocument, {

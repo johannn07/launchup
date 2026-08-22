@@ -324,3 +324,16 @@ describe('StartupService.parseCapsuleProposal — which transcription is stored'
     expect(sketchInputs).toEqual([tesseractText]);
   });
 });
+
+describe('StartupService.parseCapsuleProposal — field confidence', () => {
+  // The old rule was `text.length < 40`, so a short honest title scored `low`
+  // and 60 characters of invention scored `verified`. Both are backwards.
+  it('labels by support from the page, not by length', async () => {
+    const { service } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+
+    const result: any = await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(result.fieldConfidence.title).toBe('verified');
+    expect(result.fieldConfidence.scope).toBe('low');
+  });
+});
