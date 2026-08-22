@@ -657,13 +657,38 @@ The 41 removed came from the three Tab components, the preview dialog, and three
 
 ## Open at end of 2026-08-22
 
-**Branch state.** `fix/demo-critical-sweep` — **4 commits, local, nothing
-pushed**, on top of `master` at `14b2a89`. No AI-pipeline, schema, migration or
-measurement-harness code is touched; the backend changes are two endpoint
-deletions and one comment. Gates at the tip: `tsc --noEmit` exit 0, jest
-**264 passing / 1 failing** (the documented pre-existing `AiService` failure —
-a *second* jest failure is a real regression), measurement **257/257**,
-`svelte-check` **119 / 14** against a master baseline of 160 / 16.
+**Branch state.** `fix/demo-critical-sweep` — **6 commits, local, nothing
+pushed**, on top of `master` at `14b2a89`. Gates at the tip: `tsc --noEmit`
+exit 0, jest **264 passing / 1 failing** (the documented pre-existing
+`AiService` failure — a *second* jest failure is a real regression),
+measurement **257/257**, `svelte-check` **119 / 14** against a master baseline
+of 160 / 16. The last two commits are documentation only, so the gates ran
+against the final code state (`9cb7621`).
+
+✅ **Click-through done by John 2026-08-22 — no bugs observed.** The claim under
+test was that *nothing visible changed*, since every deletion was unreachable
+code. Covered: `/applications` (Pending, Waitlisted, Qualified, plus the
+untouched Completed tab as a control, and the `ApprovalDialog` reached from two
+of them), the readiness-level page in both the mentor and founder branches, and
+the Elevate tab.
+
+✅ **Merge-audited 2026-08-22 and assessed safe.** `master` is an ancestor so it
+**fast-forwards — conflicts impossible**. Only three `backend/src` files change:
+two endpoint deletions and one comment. **No schema impact** — the sole
+`entities/` change removes a comment and alters no enum member, which matters
+because `main.ts` runs `updateSchema()` on every boot. `backend/src/ai`,
+`rna`, `rns` and the whole measurement harness are untouched.
+
+⚠️ **One behaviour is unverified: saving baseline scores.** The argument for
+deleting the readiness-level form action is that `submitBaselineScores()` is the
+real path; if that reasoning is wrong, **saving is what breaks, and nothing else
+would reveal it.** Skipping it is defensible — the write lands on
+`startups_readiness_level`, which *is* the measurement ground truth
+(`src/demo-readiness-levels.ts`), so a careless save invalidates the 2026-08-05
+grounding result. **Zero-risk way to close it:** re-save the identical stored
+values (AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`) and expect
+the *"Baseline scores saved"* toast; `node seed-demo-full.js` repairs the rows
+from that shared source if anything drifts.
 
 Also still unmerged from before: `docs/trim-notes-and-status-table` (pushed,
 needs a PR) and `backup/rag-corpus-preflight` (disposable, 13.7 MB of PDF blobs).
@@ -671,14 +696,13 @@ needs a PR) and `backup/rag-corpus-preflight` (disposable, 13.7 MB of PDF blobs)
 `clean_gone` sweep is still worth running.
 
 **Next step — in order.**
-1. **John tests the branch, then decide the merge.** Unlike the last one, this
-   branch *is* click-through-able: the readiness-level rating page, the Elevate
-   tab, and the `/applications` Pending/Waitlisted/Qualified dialogs all lost
-   code. The claim to check is that **nothing visible changed** — every deletion
-   was unreachable. One manual login covers all three.
+1. **Merge it.** Tested and audited above; `git merge --ff-only
+   fix/demo-critical-sweep`. Optionally exercise the baseline-score save first
+   (see the ⚠️ above) — it is the one path the click-through could not confirm.
 2. **The triage says stop here.** With all 8 🎯 items cleared and §0 carrying no
    open code work, the 2026-08-07 boundary is fully reached. Remaining work is
-   deferred by decision, not by omission.
+   deferred by decision, not by omission. **Anything picked up after this is a
+   new decision, not a continuation of the plan.**
 
 **Not next, but not forgotten.** (unchanged from 2026-08-20 unless noted)
 - **SO 4.4's missing *action* on the flag** — still the one substantive §0 gap.

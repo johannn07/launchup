@@ -53,7 +53,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 **Why the boundary isn't simply "§0 only":** a panel judges §0 **through a live demo**, so anything that breaks the demo is a §0 risk wearing a §2 label — and several §1/§4 items are deletions that take minutes and remove an easy line of questioning.
 
-### 🎯 Demo-critical — ✅ **all 8 done 2026-08-22** (`fix/demo-critical-sweep`, 4 commits, local)
+### 🎯 Demo-critical — ✅ **all 8 done 2026-08-22** (`fix/demo-critical-sweep`, 6 commits, local, **click-through clean and merge-audited — fast-forwards, no schema impact**)
 
 | Item | § | Outcome |
 |---|---|---|
