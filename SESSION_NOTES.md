@@ -621,3 +621,74 @@ thresholds uncalibrated; `readiness_evaluations` mixed-scale rows; Neon TLS
 verification disabled; the owed manual auth click-through; VS Code's
 `git.postCommitCommand`; and §1's "guard the remaining unauthenticated modules"
 claim still needing confirmation rather than trust.
+
+---
+
+## 2026-08-22 (3a / 3b) — the better transcription was being thrown away
+
+Branch `fix/ocr-transcription-preference`, 4 commits, local. Gates at the tip:
+jest **278/278 across 26 suites**, `tsc --noEmit` 0, `svelte-check` **119/14 —
+unchanged from baseline**.
+
+### Two defects, both "a signal computed and then ignored"
+
+1. **`parseCapsuleProposal` stored Tesseract's transcription, not Gemini's.** The
+   guard read `raw_transcription && !parsedText` — the inverse of its own
+   comment. Tesseract is installed, so `parsedText` was always truthy and
+   Gemini's `raw_transcription` reached **no consumer anywhere in either app**.
+   The `OCR_PLACEHOLDER` sentinel is also truthy and beat it too.
+   `detectSketch` deliberately still reads Tesseract's output — its weights are
+   tuned to that, and clean prose would stop sketches ever being detected.
+   Pinned by a test that was green before the fix.
+2. **`fieldConfidence` was `text.length < 40`.** The extraction prompt orders a
+   40-character minimum on every field, so the rule graded compliance with that
+   instruction. Replaced by content-word overlap with the transcription
+   (`src/ocr/field-confidence.ts`). The frontend also defaulted a missing field
+   to `'verified'`, rendering green for something never scored.
+
+### Live verification — one Gemini call, and it separated cleanly
+
+Synthetic handwriting (Caveat font, 1600×1200 JPEG) through the **running**
+server against Neon. `extractedText` came back as Gemini's verbatim
+transcription, no placeholder. The document deliberately carried only title /
+startup / problem / target-market content.
+
+**Every field present on the page scored `verified` (4/4); every field the model
+inferred scored `low` (4/4)** — `scope`, `objectives`, `methodology`,
+`solution_description`. The `scope` prediction recorded before the run held.
+
+**Do not overclaim this: n=1, one document, and a font is not handwriting** —
+uniformly formed glyphs are far easier than a real hand. It shows the rule and
+the wiring work end to end; it does **not** calibrate `SUPPORT_THRESHOLD = 0.5`,
+which remains a guess until 3c runs on real samples.
+
+Also confirmed live: `visionLabels: []` and `sketchDetected: false` — 3b's Vision
+path is inert, as the corrected wording now says.
+
+### Corrections to claims made earlier the same day
+
+- **The entropy gate is NOT inert.** Measured: the same page as PNG scores
+  **3.33** and is rejected; as JPEG **5.89** and passes. It reads the tail of the
+  *compressed file*, so a blank-bottomed PNG fails. Camera photos survive on
+  sensor noise. The sample-prep protocol was corrected.
+- `@google-cloud/vision` absence verified by `import()` at runtime
+  (`ERR_MODULE_NOT_FOUND`), not by reading `package.json`.
+
+### Gotchas worth keeping
+
+- **A capsule-proposal vision call took 175 s.** Well beyond a default HTTP
+  client timeout; budget for it before blaming the pipeline.
+- Playwright MCP refuses `file:` URLs and only writes inside the repo root —
+  serve the scratchpad over `http://127.0.0.1` and clean `.playwright-mcp/` after
+  (it is **not** gitignored).
+- A probe script must sit **inside `backend/`** or `@mikro-orm/postgresql` will
+  not resolve.
+- One `ocr_documents` row (id 2, `ocr-sample.jpg`) is left on Neon as evidence.
+  It shows in the admin OCR Documents page — delete before a demo if untidy.
+
+### Still open
+
+- **3c is unblocked only by the samples.** Ten handwritten proposals plus
+  verbatim transcripts; the protocol is written and shared.
+- `SUPPORT_THRESHOLD` uncalibrated. `CLAUDE.md` has an uncommitted response-style
+  section.
