@@ -115,12 +115,12 @@ describe('AiService', () => {
     expect(generateContent).toHaveBeenCalledTimes(1);
   });
 
-  // Pins a known gap, and does not endorse it: generateTasksFromPrompt
-  // normalizes unconditionally, so AI_SCORE_NORMALIZATION_ENABLED does not
-  // reach this path. ctx.config.scoreNormalization is read only inside
-  // reviewBiasScore. An ai_generation_runs row recording the flag as false
-  // still carries normalized target_level values. See TODO_CHECKLIST 0 (4c).
-  it('normalizes even when scoreNormalization is disabled (flag does not gate this path)', async () => {
+  // The 4c flag has to reach this path, or an ai_generation_runs row stamped
+  // scoreNormalization: false still carries normalized values and the arm is
+  // mislabelled in the table built to make arms attributable.
+  // Absence of the fields, not raw-valued ones: rns.service.ts reads
+  // `target_level_normalized ?? rawTarget`, so omitting them yields deviation 0.
+  it('leaves the task untouched when scoreNormalization is disabled', async () => {
     generateContent.mockResolvedValue({
       text: '[{"target_level":3,"description":"Validate the product hypothesis"}]',
     });
@@ -134,8 +134,43 @@ describe('AiService', () => {
       {
         target_level: 3,
         description: 'Validate the product hypothesis',
-        target_level_normalized: 5,
-        target_level_z: 0,
+      },
+    ]);
+  });
+
+  // generateRoadblocksFromPrompt had no unit test at all; it carries the same
+  // unconditional normalization as the tasks path.
+  it('appends the normalized risk number when scoreNormalization is enabled', async () => {
+    generateContent.mockResolvedValue({
+      text: '[{"description":"No pilot customer","fix":"Sign a pilot","riskNumber":3}]',
+    });
+
+    await expect(service.generateRoadblocksFromPrompt(ctxWith(), 'prompt')).resolves.toEqual([
+      {
+        description: 'No pilot customer',
+        fix: 'Sign a pilot',
+        riskNumber: 3,
+        riskNumber_normalized: 5,
+        riskNumber_z: 0,
+      },
+    ]);
+  });
+
+  it('leaves the roadblock untouched when scoreNormalization is disabled', async () => {
+    generateContent.mockResolvedValue({
+      text: '[{"description":"No pilot customer","fix":"Sign a pilot","riskNumber":3}]',
+    });
+
+    const roadblocks = await service.generateRoadblocksFromPrompt(
+      ctxWith({ scoreNormalization: false }),
+      'prompt',
+    );
+
+    expect(roadblocks).toEqual([
+      {
+        description: 'No pilot customer',
+        fix: 'Sign a pilot',
+        riskNumber: 3,
       },
     ]);
   });

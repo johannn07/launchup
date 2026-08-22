@@ -993,6 +993,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
         'The previous answer was invalid. Return only a JSON array where every item has an integer target_level and a description string.',
     });
 
+    // Objective 4c: a run stamped scoreNormalization: false must carry no
+    // normalized values, or the arm is mislabelled in ai_generation_runs.
+    if (!ctx.config.scoreNormalization) return tasks as any;
+
     const normalized = await Promise.all(
       tasks.map(async (t) => {
         try {
@@ -1061,6 +1065,8 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       correctivePrompt:
         'The previous answer was invalid. Return only a JSON array where every item has description and fix as strings and riskNumber as an integer.',
     });
+
+    if (!ctx.config.scoreNormalization) return roadblocks as any;
 
     const normalized = await Promise.all(
       roadblocks.map(async (r) => {
