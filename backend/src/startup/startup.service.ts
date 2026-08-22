@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  ConflictException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -31,6 +32,7 @@ import {
 import { AiService, StartupAnalysisSummary } from '../ai/ai.service';
 import { analyzeTone } from '../ai/summary-tone';
 import { resolveSummaryVerdict } from '../ai/summary-verdict';
+import { ActivityLog } from '../entities/activity-log.entity';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
@@ -1006,8 +1008,19 @@ export class StartupService {
     // return scoresByCategory;
   }
 
-  async approveApplicant(startupId: number) {
-    const startup = await this.em.findOne(Startup, { id: startupId });
+  async approveApplicant(
+    startupId: number,
+    opts: { acknowledged?: boolean; actor?: string } = {},
+  ) {
+    // capsuleProposal is populated because the SO 4.4 gate below reads
+    // aiAnalysisSummary off it. Without this the relation loads as an id-only
+    // reference, the summary reads undefined, and the gate silently never
+    // fires — which is exactly what happened, with the unit tests green.
+    const startup = await this.em.findOne(
+      Startup,
+      { id: startupId },
+      { populate: ['capsuleProposal'] },
+    );
     if (!startup) {
       throw new NotFoundException(
         `Startup with ID ${startupId} does not exist.`,
@@ -1016,7 +1029,39 @@ export class StartupService {
 
     // TODO: email the startup on approval.
 
+    // SO 4.4 — a predominantly-positive summary is unreliable decision support,
+    // so approving on it takes a deliberate acknowledgement. Enforced here
+    // rather than in the dialog: the route is JwtGuard-only and takes a body a
+    // client controls, so a disabled button is not a control.
+    //
+    // The verdict comes from attachSummaryVerdicts, the same resolution the
+    // Manager's badge uses. Resolving it independently here would let the gate
+    // refuse an approval for a summary the badge called balanced.
+    await this.attachSummaryVerdicts([startup]);
+    const verdict = (startup as Startup & { summaryVerdict?: { status?: string; source?: string; runId?: number } })
+      .summaryVerdict;
+    const flagged = verdict?.status === 'positive-language-flagged';
+
+    if (flagged && !opts.acknowledged) {
+      throw new ConflictException(
+        'This analysis summary reads as predominantly positive. Review the application against its unmet criteria and confirm before approving.',
+      );
+    }
+
     startup.qualificationStatus = QualificationStatus.QUALIFIED;
+
+    // Only flagged approvals are logged. Logging every approval would turn the
+    // record of "approved against a warning" into an access log.
+    if (flagged) {
+      this.em.create(ActivityLog, {
+        action: 'Manager',
+        actor: opts.actor,
+        details:
+          `Approved startup ${startupId} despite a predominantly-positive analysis summary ` +
+          `(verdict ${verdict?.source}${verdict?.runId ? `, run ${verdict.runId}` : ''}).`,
+        createdAt: new Date(),
+      });
+    }
 
     await this.em.flush();
     return { message: `Startup with ID ${startupId} has been approved.` };

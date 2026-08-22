@@ -18,6 +18,8 @@ import { AiService } from 'src/ai/ai.service';
 import { AiRunService } from 'src/ai/ai-run.service';
 import { StartupService } from './startup.service';
 import { JwtGuard } from 'src/auth/guard';
+import { GetUser } from 'src/auth/decorator';
+import { ApproveApplicantDto } from './dto';
 import { Role } from 'src/entities/enums/role.enum';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadedFile } from '@nestjs/common';
@@ -158,8 +160,18 @@ export class StartupController {
   }
 
   @Post(':startupId/approve-applicant')
-  async approveApplicant(@Param('startupId') startupId: number) {
-    return await this.startupService.approveApplicant(startupId);
+  async approveApplicant(
+    @Param('startupId') startupId: number,
+    @Body() dto: ApproveApplicantDto,
+    @GetUser() user: { email?: string },
+  ) {
+    // GetUser takes no argument on purpose — the decorator ignores one
+    // (checklist 1), so asking it for 'email' would silently return the
+    // whole user object anyway.
+    return await this.startupService.approveApplicant(startupId, {
+      acknowledged: dto?.acknowledgedFlaggedSummary,
+      actor: user?.email,
+    });
   }
 
   @Patch(':startupId/waitlist-applicant')

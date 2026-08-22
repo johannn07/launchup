@@ -21,13 +21,24 @@
     fields?: { id: number; label: string; fieldType: number }[];
     assessmentType?: string;
   }[] = [];
-  export let onApprove: (startupId: number, mentorId: any) => Promise<void>;
-  export let assignAssessmentsToStartup: (
+  export let onApprove: (
     startupId: number,
-  ) => Promise<any>;
+    mentorId: any,
+    acknowledgedFlaggedSummary?: boolean
+  ) => Promise<void>;
+  export let assignAssessmentsToStartup: (startupId: number) => Promise<any>;
 
   let selectedMentor: string;
   let isLoading = false;
+
+  // SO 4.4 — a predominantly-positive summary is unreliable decision support,
+  // so approving on it takes a deliberate confirmation. The server enforces
+  // this too; the checkbox is the affordance, not the control.
+  let acknowledged = false;
+  $: flagged = startup?.summaryVerdict?.status === 'positive-language-flagged';
+  // Reset whenever the dialog reopens, so one acknowledgement cannot carry over
+  // to the next applicant.
+  $: if (!showDialog) acknowledged = false;
 
   // Local selection state for assessments
   let selectedAssessments = new Set<number>();
@@ -73,12 +84,17 @@
     isLoading = true;
     try {
       await assignAssessmentsToStartup(startup.id);
-      await onApprove(startup.id, selectedMentor);
+      await onApprove(startup.id, selectedMentor, acknowledged);
       toast.success('Startup has been approved successfully');
       toggleDialog();
     } catch (error) {
       console.error('Error during approval:', error);
-      toast.error('An error occurred during approval. Please try again.');
+      // Show what the server said — SO 4.4's refusal explains what to do next,
+      // and a generic message would hide it.
+      toast.error(
+        (error as Error)?.message ||
+          'An error occurred during approval. Please try again.'
+      );
     } finally {
       isLoading = false;
     }
@@ -123,6 +139,32 @@
           </div>
         </div>
 
+        {#if flagged}
+          <div
+            class="rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-100/40 dark:bg-amber-950"
+          >
+            <p class="text-sm font-semibold text-amber-900 dark:text-amber-100">
+              This analysis summary reads as predominantly positive
+            </p>
+            <p class="mt-1 text-xs text-amber-800 dark:text-amber-200">
+              It contains little critical observation, so it is weak evidence
+              for approval on its own.
+            </p>
+            <label
+              class="mt-3 flex cursor-pointer items-start gap-2 text-xs text-amber-900 dark:text-amber-100"
+            >
+              <input
+                type="checkbox"
+                bind:checked={acknowledged}
+                class="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+              />
+              <span>
+                I have reviewed this application against its unmet criteria.
+              </span>
+            </label>
+          </div>
+        {/if}
+
         <!-- Actions -->
         <div class="flex justify-end gap-3 pt-0">
           <Button
@@ -135,7 +177,9 @@
           </Button>
           <Button
             class="transition-transform duration-200 hover:scale-105"
-            disabled={!selectedMentor || isLoading}
+            disabled={!selectedMentor ||
+              isLoading ||
+              (flagged && !acknowledged)}
             onclick={handleApprove}
           >
             {isLoading ? 'Approving...' : 'Approve'}

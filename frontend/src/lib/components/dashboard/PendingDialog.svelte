@@ -27,7 +27,8 @@
   }> = [];
   export let approveStartup: (
     startupId: number,
-    mentorId: any
+    mentorId: any,
+    acknowledgedFlaggedSummary?: boolean
   ) => Promise<void>;
   export let assignAssessmentsToStartup: (
     startupId: number,
@@ -86,7 +87,9 @@
         {#if startup.capsuleProposal?.aiAnalysisSummary}
           <div class="mb-6 rounded-lg border border-border p-4">
             <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h3 class="text-lg font-semibold text-foreground">AI Analysis Summary</h3>
+              <h3 class="text-lg font-semibold text-foreground">
+                AI Analysis Summary
+              </h3>
               <SummaryToneBadge verdict={startup.summaryVerdict} />
             </div>
             <p class="leading-relaxed text-muted-foreground">
