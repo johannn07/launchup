@@ -40,7 +40,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; **metric 3 rebuilt and run (2026-08-19/20)** — the count-based verdict is retired, field-overlap scoring ships against a rule pre-registered a day before the run, and the run returned a quotable **FAIL** whose cause is noise-floor instability on one document rather than uniform harshness; 1a partial, 3b minimal (**descope wording corrected 2026-08-22** — the Vision label path is inert, not "instrumented"), **3a advanced 2026-08-22** (two defects fixed; accuracy still unmeasured and the confidence threshold uncalibrated), 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
-| **Broken functionality (§2)** | In progress — 7 of 13 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, 6 deferred |
+| **Broken functionality (§2)** | In progress — 8 of 14 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, plus a 4th 🎯 found the same day and fixed: **URAT and calculator steps rendered blank** because both question tables were empty and nothing seeded them. 6 deferred, and one new **P1 security** item (`readinesslevel` unguarded) found in the same diagnosis |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
 | **Cleanup / tech debt (§4)** | In progress — **6 of 24 done, 18 open** (counted from the section 2026-08-22; the long-standing "of 19" was stale). **All 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day — **backend suite now 266/266 green**. Four items were *added* 2026-08-22: the 4c flag that does not gate task normalization, the mentor-revision bug found by the live save probe, and two findings rescued from the compressed session notes |
 | **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
@@ -659,6 +659,33 @@ measurement.
 ---
 
 ## 2. Broken functionality
+
+- [x] 🎯 **DEMO · BUG · S · URAT and calculator steps rendered blank** — fixed 2026-08-22
+  `urat_questions` and `calculator_questions` held **0 rows** on Neon. The 18 URAT
+  and 35 calculator questions existed only inside `AppService.generateUratQuestions`
+  / `generateCalculatorQuestions`, whose sole callers were three `@Post` endpoints
+  in `app.controller.ts` that were **all commented out**. Nothing seeded them at
+  boot, so they vanished in the 2026-07-26 wipe and were never restored —
+  `seed-demo-full.js` covers the readiness grid and proposals, not these.
+  **Silent by construction:** both endpoints answered `200` with `[]`, so the
+  components rendered an empty list with nothing logged and nothing to catch.
+  Fixed by extracting the banks to `src/assessment-questions.ts` and seeding them
+  on boot via `src/seed-assessment-questions.ts`, guarded on emptiness so repeated
+  boots cannot duplicate them (the original loop had no guard — running it twice
+  gave 36 URAT questions). The superseded generators and dead endpoints were
+  deleted rather than left as a second copy to drift. Verified live: endpoints
+  return 18 and 35, and the flow renders 18 textareas in the browser.
+  **Limit:** the guard is emptiness, so it will not repair a *partial* deletion —
+  deliberate edits to question text are not clobbered, which is the trade wanted.
+
+- [ ] 🔒 **SEC · S · `readinesslevel` controller has no guard**
+  Found while diagnosing the above. `@Controller('readinesslevel')` carries no
+  class-level `@UseGuards`, so `/readinesslevel/urat-questions`,
+  `/calculator-questions` and `/readiness-levels` answer **unauthenticated**
+  (verified live with curl, no token). `Application.svelte` calls them with a bare
+  `fetch` and no credentials, so guarding it will break the application flow
+  unless the caller is fixed in the same commit — the same trap PR #15 hit with
+  two other dialogs. One of §1's "remaining unauthenticated modules".
 
 Each verified by reading **both** sides of the call.
 

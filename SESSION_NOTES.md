@@ -692,3 +692,42 @@ path is inert, as the corrected wording now says.
 - **3c is unblocked only by the samples.** Ten handwritten proposals plus
   verbatim transcripts; the protocol is written and shared.
 - `SUPPORT_THRESHOLD` uncalibrated.
+
+### Same session — URAT and calculator steps were blank
+
+Reported while testing the OCR upload, unrelated to the branch's other work.
+
+**Root cause:** `urat_questions` and `calculator_questions` held **0 rows**. The
+18 URAT and 35 calculator questions lived only inside
+`AppService.generateUratQuestions` / `generateCalculatorQuestions`, and their
+only callers were three `@Post` endpoints in `app.controller.ts` that were **all
+commented out**. Nothing ran them at boot, so the data died in the 2026-07-26
+wipe and was never restored. `readiness_levels` still had its 54 rows, which is
+why only these two steps were affected.
+
+**Why nobody caught it:** both endpoints answer **200 with `[]`**, not an error.
+`getData()` in `Application.svelte` does silently return `undefined` when a fetch
+is not `ok`, but that path never fired — the components simply rendered an empty
+list. Nothing to log, nothing to catch.
+
+**Fix:** banks extracted to `src/assessment-questions.ts`; `seedAssessmentQuestions`
+runs on boot, guarded on emptiness. The original loop had **no guard at all**, so
+a second run would have produced 36 URAT questions and every applicant would have
+seen each question twice — the guard is the point, and it has a test. The
+superseded generators and the dead endpoints were deleted rather than left as a
+second copy of the data to drift out of sync.
+
+**Verified live, at three layers:** endpoints return 18 and 35 (the calculator one
+returns 7 because the service groups by category — 5 × 7, not a shortfall); the DB
+holds 18 / 35; and the flow renders **18 textareas** in the browser. Idempotency
+proved itself incidentally — the dev watcher restarted three times during the edits
+and the counts stayed put.
+
+**Found in passing, logged not fixed:** `@Controller('readinesslevel')` has **no
+class-level guard**, so its endpoints answer unauthenticated (curl, no token).
+`Application.svelte` calls them with a bare `fetch` carrying no credentials, so
+guarding it without fixing the caller repeats the PR #15 trap exactly.
+
+**Gotcha:** `allowGlobalContext` is unset (false), so a boot-time
+`app.get(AppService)` would throw. Boot seeders must take `orm.em.fork()` — which
+is what every other seeder in `main.ts` already does.

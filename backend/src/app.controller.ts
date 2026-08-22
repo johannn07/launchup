@@ -71,16 +71,6 @@ export class AppController {
       objectives,
     };
   }
-  // @Post('/a')
-  // generateUratQuestions() {
-  //  this.appService.generateUratQuestions();
-  // }
-  //
-  // @Post('/b')
-  // generateCalculatorQuestions() {
-  //  this.appService.generateCalculatorQuestions();
-  // }
-  //
   // @Post('/c')
   // generateReadinessTypes() {
   //  this.appService.generateReadinessTypes();
