@@ -669,12 +669,15 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 10 },
   });
 
+  let summaryMetrics: { recordFailure: jest.Mock };
+
   beforeEach(() => {
     generateContent = jest.fn();
+    summaryMetrics = { recordFailure: jest.fn().mockResolvedValue(undefined) };
 
     service = new AiService(
       { get: jest.fn() } as unknown as ConfigService,
-      { recordFailure: jest.fn().mockResolvedValue(undefined) } as unknown as AiMetricsService,
+      summaryMetrics as unknown as AiMetricsService,
       { normalizeScore: jest.fn().mockResolvedValue({ scaled: 5, z: 0 }) } as any,
       {} as any,
       new AiConfigService(undefinedConfigService),
@@ -855,6 +858,48 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
 
   // The pinned legacy test next door covers the flag-off arm only, which left
   // spend attribution on the default arm asserted by nothing.
+  // `analysisSummarySchema.nullable()` reads like a runtime hole - a literal JSON
+  // null parsing successfully, returning null, and degrading to legacy with no
+  // failure metric. It is not one. extractJsonPayload requires a brace or bracket
+  // AND a matching closer, so a bare null never reaches safeParse; and a payload
+  // that does start with a brace can never JSON.parse to null. The null branch is
+  // unreachable at runtime, and .nullable() exists so `fallback: null` type-checks
+  // against callAiExpectJson's `schema: z.ZodType<T>` / `fallback: T` pairing.
+  //
+  // Pinned because the silent degradation WOULD become real if extractJsonPayload
+  // were ever relaxed to accept bare scalars.
+  it('records two failures and retries when the model returns a bare null', async () => {
+    generateContent
+      .mockResolvedValueOnce({ text: 'null' })
+      .mockResolvedValueOnce({ text: 'null' })
+      .mockResolvedValueOnce({ text: 'A legacy three sentence summary.' });
+
+    const result = await service.generateStartupAnalysisSummary(ctxWith(), dto);
+
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(result.source).toBe('legacy');
+    expect(summaryMetrics.recordFailure.mock.calls.map((c) => c[0].type)).toEqual([
+      'no_json',
+      'no_json',
+    ]);
+  });
+
+  it('records two failures and retries when the model returns a braced null', async () => {
+    generateContent
+      .mockResolvedValueOnce({ text: '{"result": null}' })
+      .mockResolvedValueOnce({ text: '{"result": null}' })
+      .mockResolvedValueOnce({ text: 'A legacy three sentence summary.' });
+
+    const result = await service.generateStartupAnalysisSummary(ctxWith(), dto);
+
+    expect(generateContent).toHaveBeenCalledTimes(3);
+    expect(result.source).toBe('legacy');
+    expect(summaryMetrics.recordFailure.mock.calls.map((c) => c[0].type)).toEqual([
+      'schema_invalid',
+      'schema_invalid',
+    ]);
+  });
+
   describe('token accumulation on the adversarial arm', () => {
     const trackedCtx = (): AiRunContext =>
       ({

@@ -38,7 +38,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; 1a partial, 3b minimal, 3c and 4a are research tasks |
+| **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; **metric 3 rebuilt and run (2026-08-19/20)** — the count-based verdict is retired, field-overlap scoring ships against a rule pre-registered a day before the run, and the run returned a quotable **FAIL** whose cause is noise-floor instability on one document rather than uniform harshness; 1a partial, 3b minimal, 3c and 4a are research tasks |
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
@@ -343,12 +343,19 @@ measurement.
   **Still open:** no Manager *action* is attached to the flag. (The threshold
   behind it was validated on a held-out run 2026-08-18 — see the item above.)
 
-- [ ] 🔴 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3).**
-  *Diagnosed 2026-08-18 across both runs; design agreed, not yet implemented.*
-  Originally logged as "the guard did not pass". **The guard itself is the
-  defect** — `differentiationTable` (`measure-summary-bias.js:509`) decides
-  `separates = (critGap !== 0) || (unmetGap !== 0)`, an exact-inequality test on
-  a mean of 1–3 small integers. **Three defects, in ascending order of severity:**
+- [x] 🟢 **OBJECTIVE · M · Rebuild the differentiation guard (metric 3)** —
+  *rebuilt 2026-08-19, run 2026-08-20* (`measure/non-saturating-differentiation`).
+  **All three parts done.** Result: **`FAIL - uniform`, quotable**, on the first
+  full grid this harness has produced (5×5, 10/10 calls, zero degradations) —
+  see the run below and `measurement/README.md`.
+  ⚠️ **Two different metrics are called "metric 3" in this project.** The
+  *grounding* harness's metric 3 is the differentiation **gap** over readiness
+  levels (declared unresolvable 2026-08-03, §0 above). This one is the
+  overcorrection **guard** over generated summaries. Unrelated; never pooled.
+  Originally logged as "the guard did not pass". **The guard itself was the
+  defect** — `differentiationTable` decided `separates = (critGap !== 0) ||
+  (unmetGap !== 0)`, an exact-inequality test on a mean of 1–3 small integers.
+  **Three defects, in ascending order of severity:**
   1. **Saturation** (the originally recorded concern). `criticalCount` ceilings
      at 3 in a three-sentence summary. Calibration run: adversarial early `[3,3]`
      vs mid `[3,3]` — that is the ceiling, not agreement.
@@ -357,33 +364,170 @@ measurement.
      mean. A single call flips the verdict.
   3. **No sign check — the worst of the three.** That −0.33 means the arm
      criticised the *mid*-stage proposal **more** than the early-stage one, the
-     opposite of the guard's own rationale. **A PASS can be earned by
+     opposite of the guard's own rationale. **A PASS could be earned by
      differentiating in the wrong direction.**
 
   **The deeper finding: both columns are degenerate, for different reasons.**
   `criticalCount` is ceiling-bound. `unmetCriteria` is *structurally* unbounded
   — the prompt says "list **every** unmet criterion", the schema sets no
-  `maxItems` — yet it returned **exactly 4 on all 8 successful adversarial calls
-  across both runs**. Not a cap; convergent model behaviour at temp 0. **So no
-  count-based metric can separate these two startups**, and a cleverer statistic
-  over the same numbers will not help. What differs, if anything, is *which*
-  criteria are cited — and the harness stores `unmetCriteria` as a **count
-  only**, discarding the `criterion` / `proposalField` text before it reaches
-  the results file.
+  `maxItems` — yet its **means coincide**: AgroLink `4,4` vs MediSync `3,5` on
+  the calibration run, `4` vs `4,4,4` on the validation run. ⚠️ **These docs
+  previously said "exactly 4 on all 8 successful adversarial calls"; that is
+  wrong** — corrected 2026-08-19 by reading the two results files. Six of the
+  eight are 4, with a 3 and a 5. The column is not degenerate-constant, it is
+  **unsigned variance whose means happen to coincide**, which weakens the
+  "convergent model behaviour" reading without changing the conclusion: variance
+  with no direction still cannot separate arms. What differs, if anything, is
+  *which* criteria are cited — and the harness stored `unmetCriteria` as a
+  **count only**, discarding the `criterion` / `proposalField` text before it
+  reached the results file.
 
-  **Agreed design, three parts** (branch `measure/non-saturating-differentiation`,
-  to be cut off `fix/so-4-4-flag-threshold`):
-  1. **Harden the verdict rule** — require direction (early > mid), a minimum
-     magnitude, and a minimum n per cell so a 1-vs-3 split reports `n/a` rather
-     than PASS. Zero quota. Re-scoring the two existing runs under this is
-     legitimate as a *rule* correction — report it as "what the old runs would
-     have said", never as a new result.
-  2. **Persist the criteria detail** the harness currently discards, then measure
-     differentiation as **overlap between the two startups' cited proposal
-     fields**. Uniform harshness means saying the *same things* about both, which
-     is what the objective actually claims to test, and it cannot saturate the
-     way a three-sentence count does. Zero quota to build.
-  3. **Pre-register and run fresh** — ~8–12 calls, needs a full quota window.
+  **Part 1 — done. The count-based verdict was retired, not hardened.** Once
+  overlap owns the verdict, hardening a count rule would only make a broken
+  instrument stricter. `separates` and the count-derived PASS/FAIL are gone;
+  the count columns remain, descriptive only. Cells below `MIN_CELL_N = 2`
+  report `underpowered` and can feed no verdict, and each gap now carries a
+  `criticalFavours` / `unmetFavours` label (`early` / `mid` / `neither`) so a
+  backwards gap is legible without mental arithmetic.
+
+  **Part 2 — done. `lib/field-overlap.js`** stores `unmetCriteriaDetail`
+  (criterion, proposalField, whyUnmet — `whyUnmet` kept as the hand-check audit
+  trail) and scores **Jaccard overlap of normalised proposal-field sets**:
+  `crossOverlap` (early reps × mid reps) against `withinOverlap` (same-startup
+  rep pairs, pooled) as an **intrinsic noise floor**, with
+  `separation = within − cross`. Normalisation is load-bearing, not cosmetic:
+  `proposal_field` is a bare `STRING` in the response schema
+  (`ai.service.ts:178`), not an enum, so `historicalTimeline` and
+  `historical_timeline` would otherwise count as two fields.
+  **Two decisions worth keeping:** a Jaccard of two *empty* sets returns `null`,
+  never `1` — the baseline arm cites no fields at all (no criteria field in its
+  schema), so scoring `0/0` as perfect agreement would report that arm as
+  maximally uniform on the strength of a missing schema field; and unscoreable
+  pairs are **dropped** from the means rather than averaged in as 0.
+
+  **The margin is now pre-registered** —
+  `docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`, committed
+  before any generation it scores. The rule is **complete separation**:
+  `min(within-startup pair) > max(cross-startup pair)`, so the two pair
+  distributions must not overlap. **No constant** — the same logic that made
+  `ratio < 0.75` quotable. Strict `>`, so a **tie FAILS**; `null` pairs are
+  excluded; `min`/`max` are over raw pair values, not means.
+  **The n bar requires both** `nEarly >= 3 && nMid >= 3` **and** a chance
+  reference `1 / C(nCross + nWithin, nWithin) <= 0.001`. Neither alone suffices:
+  the chance bar alone admits a lopsided 4×2 grid carrying one mid-side
+  within-pair, and the reps bar alone can be satisfied while **null pairs shrink
+  the scoreable grid underneath it** — reachable whenever a call returns
+  `unmet_criteria: []`, which the schema permits (see the open item below).
+  Below the bar the comparison is still reported, as `PASS - not quotable` /
+  `FAIL - not quotable`.
+  ⚠️ **The chance reference is optimistic and is not a p-value** — it assumes the
+  pair values are exchangeable and independent, and they share reps.
+
+  **Both zero-quota prerequisites are done (2026-08-19).**
+  1. **`overlapStats` persists the per-pair values.** It returned only means, so
+     the pre-registered rule could not have been evaluated from a stored run —
+     the same defect that left both 2026-08-18 runs un-rescoreable. Verified on a
+     dry run: recomputing `min(within) > max(cross)` from the written JSON
+     reproduces the recorded `separated`.
+  2. **`--only-arm` on `measure-summary-bias.js`**, matching
+     `measure-grounding.js`'s semantics (exact beats prefix; an entry matching
+     nothing is a hard error, an ambiguous prefix is refused). Metric 3 is
+     scoreable on the **adversarial arm only** — the baseline cites no proposal
+     fields, so all its pairs are `null` by construction — and a full run spent 6
+     baseline calls that could not contribute. `--only-arm=adversarial --reps=5`
+     resolves to 10 cells, verified from real `argv`. Results files record
+     `armsRun`, so a filtered file is self-describing rather than looking like a
+     run whose other arms all failed.
+
+  **What the two stored runs would have said** under the corrected rule (a
+  *rule* correction on the same generations — never quotable as a new result;
+  overlap cannot be replayed because the detail was never stored):
+
+  | run | arm | was | now |
+  |---|---|---|---|
+  | calibration | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+  | calibration | adversarial | `FAIL - uniform` | `n/a - no scoreable field citations` |
+  | validation | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+  | validation | **adversarial** | **`PASS`** | **`n/a - underpowered`** |
+
+  The validation run's PASS is withdrawn on `nEarly=1`, and its `criticalGap
+  −0.33` now prints `favours mid` — the backwards direction is visible in the
+  output rather than hidden inside an absolute test.
+
+  **Fingerprints:** `differentiation|*` gains `overlapSrc` and moved for **both
+  arms against both runs** (correct — the metric's definition changed).
+  `criteria|*` is **byte-identical to both stored runs**, so SO 4.2's result
+  (4 unmet criteria, 3.75 critical risks) keeps its poolability; `tone|*` is
+  identical to the validation run and differs from the calibration run only by
+  the pre-existing 0.75 threshold change. Verified by computing current
+  fingerprints against both files, not assumed.
+
+  ⚠️ **`measure-summary-bias.js` and `lib/summary-fingerprint.js` had NO tests
+  before this** — the measurement suite's 210 tests all cover the *grounding*
+  harness, so the harness that produced every published SO 4.2 and SO 4.4 number
+  was itself unexercised. 27 tests added here (`field-overlap` 17,
+  `summary-differentiation` 8, `summary-fingerprint` 2), which covers the
+  rebuilt metric and the fingerprint contract but **not** `toneTable`,
+  `criteriaTable`, `validity`, `sourceBreakdown` or `callDescriptors`. Those
+  remain untested.
+
+  **Mutation testing: 16/16 killed, and it changed the tests, not the code.** The
+  first survivor was `favours` mutating `gap > 0` → `gap >= 0`, uncovered because
+  no test exercised a gap of **exactly 0** — the *uniform harshness* case the metric
+  exists to detect, which the mutant relabels as differentiating in the expected
+  direction. It is also the modal reading in the real data (7 of 8 gap readings
+  across both runs are 0). Same shape as the 2026-08-18 lesson: the constraining
+  value is the one on the boundary, not the most frequent.
+
+  **3. Run — done 2026-08-20** (`results/2026-08-20-differentiation-overlap.json`,
+  10 API requests, **10/10 succeeded**, zero degradations, first full grid:
+  5 early / 5 mid, 25 cross pairs, 20 within).
+
+  | statistic | value |
+  |---|---|
+  | `crossOverlap` | 0.303 (range 0 – 0.500) |
+  | `withinOverlap` | 0.612 (range 0.125 – 1.000) |
+  | `separation` | +0.309 |
+  | chance reference | 3.2e-13 |
+  | **verdict** | **`FAIL - uniform`**, quotable |
+
+  **The prediction was right in outcome, wrong in mechanism.** FAIL was
+  predicted *because* cross-overlap would be high (0.35–0.65) and separation
+  small (0.05–0.25). Cross-overlap came in **below** that band and separation
+  **above** it — the arm differentiates more than predicted.
+
+  **What failed is the noise floor, not the signal.** Cross-overlap never exceeds
+  0.5, so the arm never cites more than half the same fields for both startups.
+  Complete separation fails on a single *within* pair at 0.125. Split by startup:
+  **AgroLink 0.800, MediSync 0.424** — the arm cites the same four fields for
+  AgroLink nearly every time (reps 0/1/2 **identical**) and wanders on MediSync.
+  So the `- uniform` label misdescribes this instance. **Pooling the within-startup
+  floor across both documents hid that one is stable and the other is not.** A
+  per-startup floor would have separated them — recorded as an observation only,
+  since re-scoring this run under it is the post-hoc move the pre-registration
+  forbids.
+
+  **The positive result: the instrument is not degenerate.** The pre-registered
+  "field identity is too coarse" failure mode required `crossOverlap > 0.5` **and**
+  `separation < 0.1`; neither holds. Field overlap carries real signal, unlike the
+  count columns it replaced — which stayed degenerate here too (`criticalGap` 0
+  favours neither, `unmetGap` −0.2 favours mid).
+
+  **Stability came in below prediction:** `withinOverlap` 0.612 against a predicted
+  >0.7, and **bimodal** rather than uniformly mid. The model is less deterministic
+  on MediSync than temperature 0 implies.
+
+  **Two fingerprint-verified n gains.** `criteria|adversarial` `82fc2961c7ff`,
+  identical to both prior runs → SO 4.2 gains 10 calls (**3.9** mean unmet
+  criteria, **3.2** critical risks, against 4 / 3.75 at n=4).
+  `tone|adversarial` `e6304665e036`, identical to the validation run → **0/10
+  flagged, ratio 1.00 on all ten**, a third confirmation that `ratio < 0.75` does
+  not fire on the arm that is behaving.
+
+  **Next, if metric 3 is pursued further:** a *separately* pre-registered rule
+  with a **per-startup** noise floor, scored on new data. This run supplies the
+  first observed overlap distribution to design it against — but calibrating on
+  this run and reporting the fit as a result is exactly the forbidden move.
 
   The precedent that motivated the guard stands: `gemini-2.5-flash-lite` read as
   lenient but was floor-bound and blind, and the real defect was differentiation.
@@ -394,11 +538,37 @@ measurement.
   A model could emit empty findings then a glowing summary. The tone check is
   the only guard against that, and it is the one that goes nowhere.
 
-- [ ] 🐞 **BUG · S · A literal JSON `null` degrades with no `recordFailure`.**
-  `analysisSummarySchema.nullable()` means `null` *parses successfully*, returns
-  `null`, and falls back to legacy — costing 2 calls instead of 3 and emitting
-  no failure metric. Its only trace is `notes.source === 'legacy'`, which is
-  why `source` is load-bearing.
+- [x] ✅ **NOT A BUG · The literal-JSON-`null` silent degradation does not
+  exist** — *diagnosis refuted 2026-08-20 by probe, no production change made.*
+  This item claimed `analysisSummarySchema.nullable()` let a literal `null`
+  parse successfully, return `null`, and degrade to legacy "costing 2 calls
+  instead of 3 and emitting no failure metric", with `notes.source === 'legacy'`
+  as its only trace. **Measured, all three claims are false:**
+
+  | model returns | calls | source | failures recorded |
+  |---|---|---|---|
+  | bare `null` | **3** | `legacy` | `no_json`, `no_json` |
+  | `{"result": null}` | **3** | `legacy` | `schema_invalid`, `schema_invalid` |
+
+  **The null branch is unreachable at runtime.** `extractJsonPayload` requires a
+  `{` or `[` **and** a matching closer, so a bare `null` never reaches
+  `safeParse`; and a payload that *does* start with a brace can never
+  `JSON.parse` to `null`. **`.nullable()` is a compile-time accommodation, not a
+  runtime permission** — `callAiExpectJson<T>` pairs `schema: z.ZodType<T>` with
+  `fallback: T`, so passing `fallback: null` requires `T` to include `null`. It
+  was read as the latter.
+  **Consequence for a claim elsewhere:** "its only trace is `notes.source`" is
+  wrong — two `recordFailure` rows accompany every degradation. `source` is
+  still load-bearing, but for the *validity gate* (schema vs rate-limit
+  degradation), which is a different and valid reason.
+  **Pinned by two tests** in `ai.service.spec.ts`, because the silent
+  degradation *would* become real if `extractJsonPayload` were relaxed to accept
+  bare scalars. Mutation-verified: making that change kills the bare-null test.
+  ⚠️ **The first mutation attempted was semantically inert** — disabling the
+  guard makes `'null'.substring(-1, 0)` return `''`, still falsy, still
+  `no_json`. It landed textually and changed nothing, and reported SURVIVED.
+  **Asserting a mutation landed in the file is necessary but not sufficient;
+  confirm it changed behaviour.**
 
 - [ ] 🧹 **DEBT · S · `measurement/tests/demo-proposals.test.js` asserts on
   source text, not behaviour.** It regex-matches the `.ts` file rather than

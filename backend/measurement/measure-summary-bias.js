@@ -73,6 +73,14 @@
  */
 const path = require('path');
 const fs = require('fs');
+const {
+  fieldSet,
+  overlapStats,
+  completeSeparation,
+  chanceReference,
+  MIN_QUOTABLE_REPS,
+  MAX_CHANCE_REFERENCE,
+} = require(path.join(__dirname, 'lib/field-overlap.js'));
 
 const BACKEND = path.resolve(__dirname, '..');
 // dotenv 17 prints a ROTATING "tip" line to stdout on every config() call, which
@@ -95,7 +103,7 @@ const flagValue = (name) => {
 };
 
 const KNOWN_EXACT_FLAGS = new Set(['--dry-run', '--fingerprint']);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--degrade=', '--max-api-calls='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--degrade=', '--max-api-calls=', '--only-arm='];
 
 const RESULTS_DIR = path.join(__dirname, 'results');
 
@@ -105,6 +113,65 @@ const RESULTS_DIR = path.join(__dirname, 'results');
  * Called only from the `require.main` block, never at module load: when this
  * file is `require()`d by node --test, process.argv belongs to the test runner.
  */
+/**
+ * Resolves --only-arm into the arms to run. Case-insensitive prefix match over
+ * comma-separated names, mirroring measure-grounding.js's selectCells so the two
+ * harnesses behave the same way.
+ *
+ * Metric 3 is scoreable on the ADVERSARIAL arm only - the baseline cites no
+ * proposal fields, so every one of its overlap pairs is null by construction -
+ * and a full run spends 6 baseline calls that cannot contribute to it.
+ *
+ * An entry matching nothing is an error, never a silent drop, and an ambiguous
+ * prefix is refused rather than expanded. Both failures cost calls against a
+ * 20/day cap, in opposite directions.
+ */
+function selectArms(filter, arms = ARMS) {
+  if (filter == null) return { arms, errors: [] };
+
+  const entries = String(filter)
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+
+  const matchesFor = (e) => {
+    const lower = e.toLowerCase();
+    // Exact wins, so one arm's name being another's prefix never makes it
+    // unselectable.
+    const exact = arms.filter((a) => a.name.toLowerCase() === lower);
+    if (exact.length) return exact;
+    return arms.filter((a) => a.name.toLowerCase().startsWith(lower));
+  };
+
+  const available = arms.map((a) => a.name).join(', ');
+  const unmatched = entries.filter((e) => matchesFor(e).length === 0);
+  if (unmatched.length) {
+    return {
+      arms: [],
+      errors: [
+        `--only-arm=${filter} matched no arm: ${unmatched.map((u) => `"${u}"`).join(', ')}. ` +
+          `Available: ${available}.`,
+      ],
+    };
+  }
+
+  const ambiguous = entries.filter((e) => matchesFor(e).length > 1);
+  if (ambiguous.length) {
+    return {
+      arms: [],
+      errors: [
+        `--only-arm=${filter} is ambiguous: ${ambiguous.map((a) => `"${a}"`).join(', ')}. ` +
+          `Available: ${available}.`,
+      ],
+    };
+  }
+
+  const chosen = new Set(entries.flatMap((e) => matchesFor(e).map((a) => a.name)));
+  // Declaration order, not the order they were typed - arm order is the run
+  // order and must not depend on how the flag was written.
+  return { arms: arms.filter((a) => chosen.has(a.name)), errors: [] };
+}
+
 function validateArgs(argv) {
   const errors = [];
 
@@ -117,7 +184,8 @@ function validateArgs(argv) {
     if (KNOWN_VALUE_FLAG_PREFIXES.some((p) => arg.startsWith(p))) continue;
     errors.push(
       `Unrecognized flag "${arg}". Known flags: --dry-run, --fingerprint, ` +
-        `--out=<file>, --reps=N, --degrade=N (--dry-run only), --max-api-calls=N.`,
+        `--out=<file>, --reps=N, --degrade=N (--dry-run only), --max-api-calls=N, `+
+        `--only-arm=<names>.`,
     );
   }
 
@@ -149,6 +217,8 @@ function validateArgs(argv) {
     }
   }
 
+  errors.push(...selectArms(flagValue('only-arm')).errors);
+
   return errors;
 }
 
@@ -168,12 +238,22 @@ const ARMS = [
   { name: 'adversarial', adversarialSummary: true },
 ];
 
+/**
+ * The arms this invocation actually runs. A bad --only-arm resolves to [] and is
+ * reported by validateArgs before main does anything, so it never reaches a
+ * network call.
+ */
+const SELECTED_ARMS = selectArms(flagValue('only-arm')).arms;
+
 /** Early-stage vs mid-stage. Metric 3 is the gap between these two. */
 const EARLY = 'AgroLink PH';
 const MID = 'MediSync Cebu';
 
 /** A degraded cell costs three requests, not one. See the header. */
 const CALLS_PER_DEGRADED_CELL = 3;
+
+/** Below this a cell mean is not readable, so it can feed no verdict. */
+const MIN_CELL_N = 2;
 
 const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 const round = (n, d = 2) => (Number.isFinite(n) ? Number(n.toFixed(d)) : null);
@@ -316,7 +396,7 @@ function ctxFor(baseConfig, arm) {
 async function runArms(aiService, baseConfig, opts) {
   const {
     reps = REPS,
-    arms = ARMS,
+    arms = SELECTED_ARMS,
     startups,
     dtos,
     analyzeTone,
@@ -379,7 +459,10 @@ async function runArms(aiService, baseConfig, opts) {
           // a finding; only the prompt cause is.
           degradeCause: degraded ? (rateLimited ? 'rate-limit' : 'schema') : null,
           summary: analysis.summary,
+          // Count unchanged: the criteria|* fingerprint hashes this metric, so
+          // SO 4.2's result stays poolable across the metric-3 rebuild.
           unmetCriteria: analysis.unmetCriteria.length,
+          unmetCriteriaDetail: criteriaDetail(analysis),
           criticalRisks: analysis.criticalRisks.length,
           tone: analyzeTone(analysis.summary),
           apiCalls: apiCalls - before,
@@ -496,15 +579,43 @@ function criteriaTable(rows, arms) {
 }
 
 /**
+ * The criteria detail metric 3 consumes. The harness previously kept only
+ * `.length`, so the criterion and proposal_field text never reached a results
+ * file - which is why neither stored run can be re-scored for field overlap.
+ *
+ * `whyUnmet` is kept on purpose: it is the audit trail for a hand-check, and
+ * hand-checks have caught instrument errors twice on this project.
+ */
+function criteriaDetail(analysis) {
+  return (analysis?.unmetCriteria ?? []).map((c) => ({
+    criterion: c.criterion,
+    proposalField: c.proposalField,
+    whyUnmet: c.whyUnmet,
+  }));
+}
+
+/**
  * Metric 3, the overcorrection guard. An arm that criticises the early-stage and
  * the mid-stage proposal equally has not counterbalanced leniency, it has
  * replaced it with uniform harshness - bias with the sign flipped.
  *
- * Two signals, because they fail differently:
- *   criticalCount  - coarse. The summary is three sentences, so it saturates at
- *                    3 and can read as "no separation" purely from the ceiling.
- *   unmetCriteria  - unbounded, and the adversarial arm's actual output. The
- *                    baseline arm has none, so this column is adversarial-only.
+ * REBUILT. The previous rule was `separates = (critGap !== 0) || (unmetGap !== 0)`,
+ * an exact-inequality test on a mean of 1-3 small integers, and it had three
+ * defects: `criticalCount` saturates at 3 in a three-sentence summary; there was
+ * no noise floor, so ONE call against a 3-call mean produced a PASS; and there
+ * was no sign check, so an arm criticising the MID-stage proposal harder - the
+ * opposite of the rationale - earned the same PASS.
+ *
+ * Both count columns are now DESCRIPTIVE ONLY. They are kept because they are
+ * cheap and legible, but they own no verdict: across the two 2026-08-18 runs
+ * `unmetCriteria` read 4,4 / 3,5 / 4 / 4,4,4 - coinciding means over values
+ * differing in no consistent direction - so no statistic over those integers can
+ * separate these two startups. Field overlap is the statistic that can, because
+ * uniform harshness means citing the SAME proposal fields about both.
+ *
+ * No PASS/FAIL is returned at all. `separation` needs a margin, that margin has
+ * never been observed, and setting it from the run it would score is the
+ * post-hoc move the fingerprint guard exists to forbid. Part 3 pre-registers it.
  */
 function differentiationTable(rows, arms) {
   const usable = analyzableRows(rows);
@@ -512,26 +623,96 @@ function differentiationTable(rows, arms) {
     const mine = usable.filter((r) => r.arm === arm.name);
     const early = mine.filter((r) => r.startup === EARLY);
     const mid = mine.filter((r) => r.startup === MID);
+
     const earlyCrit = mean(early.map((r) => r.tone.criticalCount));
     const midCrit = mean(mid.map((r) => r.tone.criticalCount));
     const earlyUnmet = mean(early.map((r) => r.unmetCriteria));
     const midUnmet = mean(mid.map((r) => r.unmetCriteria));
     const critGap = earlyCrit - midCrit;
     const unmetGap = earlyUnmet - midUnmet;
-    const separates = (Number.isFinite(critGap) && critGap !== 0) || (Number.isFinite(unmetGap) && unmetGap !== 0);
+
+    const overlap = overlapStats(
+      early.map((r) => fieldSet(r.unmetCriteriaDetail)),
+      mid.map((r) => fieldSet(r.unmetCriteriaDetail)),
+    );
+
+    // A mean over one call is not readable. reps=3 is the ceiling and this
+    // harness loses cells to 503 routinely, so requiring 3 would be brittle.
+    const underpowered = early.length < MIN_CELL_N || mid.length < MIN_CELL_N;
+
     return {
       arm: arm.name,
       nEarly: early.length,
       nMid: mid.length,
+      underpowered,
       earlyCritical: round(earlyCrit),
       midCritical: round(midCrit),
       criticalGap: round(critGap),
+      criticalFavours: favours(critGap),
       earlyUnmet: round(earlyUnmet),
       midUnmet: round(midUnmet),
       unmetGap: round(unmetGap),
-      verdict: early.length && mid.length ? (separates ? 'PASS' : 'FAIL - uniform') : 'n/a',
+      unmetFavours: favours(unmetGap),
+      // 3dp, not the default 2: these ratios are the raw material for part 3's
+      // pre-registered margin, and small-set Jaccard lands on thirds and sevenths.
+      crossOverlap: round(overlap.crossOverlap, 3),
+      nCrossPairs: overlap.nCrossPairs,
+      withinOverlap: round(overlap.withinOverlap, 3),
+      nWithinPairs: overlap.nWithinPairs,
+      separation: round(overlap.separation, 3),
+      // Raw pair values, not just their means: the pre-registered rule is
+      // min/max over these, so they must survive into the results file.
+      crossPairValues: overlap.crossPairValues.map((v) => round(v, 3)),
+      withinPairValues: overlap.withinPairValues.map((v) => round(v, 3)),
+      chanceReference: chanceReference(overlap.nCrossPairs, overlap.nWithinPairs),
+      ...verdictFor({ nEarly: early.length, nMid: mid.length, underpowered, overlap }),
     };
   });
+}
+
+/**
+ * Which startup a signed gap favours. The guard's rationale expects the
+ * early-stage proposal to be criticised MORE, so `early` is the expected
+ * direction - printed as a word because a reader scanning `-0.33` cannot see
+ * that it points the wrong way.
+ */
+function favours(gap) {
+  if (!Number.isFinite(gap)) return null;
+  if (gap > 0) return 'early';
+  if (gap < 0) return 'mid';
+  return 'neither';
+}
+
+/**
+ * The pre-registered rule (docs/superpowers/specs/2026-08-19-differentiation-margin-design.md).
+ *
+ * Two n/a gates come first and are about readability, not the rule: a mean over
+ * one call says nothing, and an arm citing no fields cannot be scored at all.
+ * Past those, complete separation decides PASS/FAIL and the n bar decides only
+ * whether the answer is QUOTABLE - a comparison below the bar is still reported,
+ * because declining to overclaim is not the same as having no result.
+ */
+function verdictFor({ nEarly, nMid, underpowered, overlap }) {
+  if (underpowered) return { verdict: 'n/a - underpowered', separated: null, quotable: false };
+
+  const separated = completeSeparation(overlap.crossPairValues, overlap.withinPairValues);
+  if (separated === null) {
+    return { verdict: 'n/a - no scoreable field citations', separated: null, quotable: false };
+  }
+
+  const chance = chanceReference(overlap.nCrossPairs, overlap.nWithinPairs);
+  const quotable =
+    nEarly >= MIN_QUOTABLE_REPS &&
+    nMid >= MIN_QUOTABLE_REPS &&
+    chance !== null &&
+    chance <= MAX_CHANCE_REFERENCE;
+
+  const outcome = separated ? 'PASS' : 'FAIL - uniform';
+  return {
+    verdict: quotable ? outcome : `${separated ? 'PASS' : 'FAIL'} - not quotable`,
+    separated,
+    quotable,
+  };
 }
 
 /**
@@ -555,7 +736,7 @@ function validity(rows, arms) {
   };
 }
 
-function summarize(rows, arms = ARMS) {
+function summarize(rows, arms = SELECTED_ARMS) {
   const ok = rows.filter(isOk).length;
   return {
     planned: rows.length,
@@ -572,7 +753,7 @@ function summarize(rows, arms = ARMS) {
 // Reports
 // --------------------------------------------------------------------------
 
-function printReports(rows, { apiCalls, arms = ARMS } = {}) {
+function printReports(rows, { apiCalls, arms = SELECTED_ARMS } = {}) {
   const s = summarize(rows, arms);
 
   const banner = `${s.succeeded}/${s.planned} calls succeeded`;
@@ -618,11 +799,50 @@ function printReports(rows, { apiCalls, arms = ARMS } = {}) {
   console.table(s.criteria);
 
   console.log(`\n--- Metric 3: DIFFERENTIATION guard - ${EARLY} (early) vs ${MID} (mid) ---`);
-  console.log('(PASS/FAIL, not a nice-to-have: an arm that criticises both equally has overcorrected');
-  console.log(' into uniform harshness. criticalCount saturates at 3 on a three-sentence summary, so');
-  console.log(' unmetGap is the sharper signal where the arm produces criteria at all.)\n');
-  console.table(s.differentiation);
-  console.log('n=3 per cell separates nothing statistically - a nonzero gap is a sign, not significance.');
+  console.log('(An arm that criticises both equally has overcorrected into uniform harshness -');
+  console.log(' bias with the sign flipped. The verdict is COMPLETE SEPARATION, pre-registered');
+  console.log(' 2026-08-19: every within-startup pair must beat every cross-startup pair.)\n');
+
+  console.log('Counts - DESCRIPTIVE ONLY, they own no verdict:');
+  console.table(
+    s.differentiation.map((d) => ({
+      arm: d.arm,
+      nEarly: d.nEarly,
+      nMid: d.nMid,
+      earlyCritical: d.earlyCritical,
+      midCritical: d.midCritical,
+      criticalGap: d.criticalGap,
+      criticalFavours: d.criticalFavours,
+      earlyUnmet: d.earlyUnmet,
+      midUnmet: d.midUnmet,
+      unmetGap: d.unmetGap,
+      unmetFavours: d.unmetFavours,
+    })),
+  );
+
+  console.log('\nField overlap - SCORED. separation = withinOverlap - crossOverlap:');
+  // The raw pair arrays are deliberately not printed - they are what the rule
+  // is evaluated on, so they go to the results file where they can be re-read,
+  // not to a console.table that truncates them to "... 6 more items".
+  console.table(
+    s.differentiation.map((d) => ({
+      arm: d.arm,
+      crossOverlap: d.crossOverlap,
+      withinOverlap: d.withinOverlap,
+      separation: d.separation,
+      nCrossPairs: d.nCrossPairs,
+      nWithinPairs: d.nWithinPairs,
+      chance: d.chanceReference === null ? null : Number(d.chanceReference.toPrecision(2)),
+      separated: d.separated,
+      quotable: d.quotable,
+      verdict: d.verdict,
+    })),
+  );
+  console.log(`Quotable requires n>=${MIN_QUOTABLE_REPS} per startup AND chance <= ${MAX_CHANCE_REFERENCE}.`);
+  console.log('Below that the comparison is reported and explicitly NOT quotable.');
+  console.log(`Cells below n=${MIN_CELL_N} read n/a - one call against a multi-call mean is not a gap.`);
+  console.log('The chance reference assumes exchangeable independent pairs; pairs share reps,');
+  console.log('so it is OPTIMISTIC and is not a p-value.');
 
   printSummaries(rows);
   return s;
@@ -677,6 +897,13 @@ function toneSource() {
     .replace(/\r\n/g, '\n');
 }
 
+/** Metric 3's scorer. Line endings normalised for the same reason toneSource does it. */
+function overlapSource() {
+  return fs
+    .readFileSync(path.join(__dirname, 'lib/field-overlap.js'), 'utf8')
+    .replace(/\r\n/g, '\n');
+}
+
 function currentFingerprints() {
   const b = loadBackend();
   const startups = Object.fromEntries(
@@ -696,8 +923,9 @@ function currentFingerprints() {
       legacyPrompt: b.LEGACY_SUMMARY_PROMPT.toString(),
       adversarialPrompt: b.ADVERSARIAL_SUMMARY_PROMPT.toString(),
       tone: toneSource(),
+      overlap: overlapSource(),
     },
-    arms: ARMS,
+    arms: SELECTED_ARMS,
   });
 }
 
@@ -709,6 +937,9 @@ function writeResults(file, { rows, apiCalls, plannedCalls, baseConfig, mode }) 
     temperature: baseConfig.temperature,
     grounding: baseConfig.grounding,
     reps: REPS,
+    // Records the --only-arm selection, so a filtered file is self-describing
+    // rather than looking like a run whose other arms all failed.
+    armsRun: SELECTED_ARMS.map((a) => a.name),
     plannedCalls,
     succeededCalls: rows.filter(isOk).length,
     apiRequests: apiCalls,
@@ -900,7 +1131,7 @@ async function main() {
 
     console.log(`model=${baseConfig.model} temperature=${baseConfig.temperature} grounding=${baseConfig.grounding}`);
 
-    const stub = DRY_RUN ? makeStub({ degradeCount: DEGRADE, reps: REPS, arms: ARMS, startups }) : null;
+    const stub = DRY_RUN ? makeStub({ degradeCount: DEGRADE, reps: REPS, arms: SELECTED_ARMS, startups }) : null;
     if (stub) {
       console.log(
         `--dry-run: stubbing generateContent only. degrade plan (${DEGRADE}): ` +
@@ -909,14 +1140,14 @@ async function main() {
     }
 
     console.log('\nCall order (rep OUTERMOST - a quota stop must leave a balanced pool):');
-    callDescriptors({ reps: REPS, arms: ARMS, startups }).forEach((d, i) =>
+    callDescriptors({ reps: REPS, arms: SELECTED_ARMS, startups }).forEach((d, i) =>
       console.log(`  ${String(i + 1).padStart(2)}. rep ${d.rep} / ${d.arm} / ${d.startup}`),
     );
     console.log('');
 
     const { rows, apiCalls, plannedCalls } = await runArms(aiService, baseConfig, {
       reps: REPS,
-      arms: ARMS,
+      arms: SELECTED_ARMS,
       startups,
       dtos,
       analyzeTone: b.analyzeTone,
@@ -954,9 +1185,12 @@ if (require.main === module) {
 
 module.exports = {
   ARMS,
+  selectArms,
+  SELECTED_ARMS,
   EARLY,
   MID,
   CALLS_PER_DEGRADED_CELL,
+  MIN_CELL_N,
   callDescriptors,
   validateArgs,
   is429,
@@ -966,6 +1200,7 @@ module.exports = {
   sourceBreakdown,
   toneTable,
   criteriaTable,
+  criteriaDetail,
   differentiationTable,
   validity,
   summarize,
@@ -976,5 +1211,6 @@ module.exports = {
   makeStub,
   currentFingerprints,
   toneSource,
+  overlapSource,
   mean,
 };

@@ -23,7 +23,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 ---
 
-## Compressed history — 2026-07-26 → 2026-08-06
+## Compressed history — 2026-07-26 → 2026-08-09
 
 **AI pipeline config and run provenance (2026-07-26, PR #7).** `AiConfigService` resolves `{model, temperature, grounding, rag, biasReview, scoreNormalization}` from env, with a Manager/Admin-gated `X-Ai-Pipeline-Config` override; every generation opens an `ai_generation_runs` row and every artifact carries a `generation_run_id`, so runs are attributable to an exact arm. Score normalization was decoupled from bias review (two of four arms were previously unreachable). **Real bug fixed:** `temperature`/`maxOutputTokens` were passed at the top level of the `@google/genai` call, where the SDK silently drops them — every call had run at the API default, never at the configured `0`, so baseline results gathered before this are not sampling-comparable with results after.
 
@@ -57,65 +57,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 **Supplied-level fabrication probe (2026-08-06).** Closed the gap that every grounding number to date was the *levels* probe, where the model infers the level; production does the opposite — mentors set levels and the RNA path consumes them. Needed a manipulation, because the 2026-08-05 ground-truth correction had removed the trigger without touching the vulnerability: `--level-condition=truth|inflated` inflates O/R/I to 3 while T/M/A stay at truth as a within-call control. **Result (n=2, 16/16 calls): only corpus+inflated fabricates — `deviation-deterministic` 2/12 (17%), baseline 0/12 under *both* conditions.** The wrong supplied level alone produces nothing. Both flagged clauses weld a fabricated artifact to a true document fact (*"Currently at RRL 3, with legal counsel engaged and a trademark application pending with IPOPHL"*). **Organizational is the level-isolating cell** — ORL 3 reaches the model under both conditions, so identical rubric text with only the supplied level differing flips *"Needs: advance to ORL 3 by engaging the first non-founder contributor"* into an assertion that one exists; that rules out "the corpus added new text" as the explanation, and it was recorded in the spec before the run. Reading `flaggedClauses` by hand found two more genuine fabrications sitting in `unclassified`, so **17% was a floor**. **Three design defects, all in the spec rather than the implementation** (the tests were written from the same mistaken model): the classifier admitted bare copulas, `absentTokens` had `contractor` but not `contributor` — the word ORL 3's own rubric uses, so Organizational would have read 0 for the wrong reason — and inflating to 4 would have skipped the very row the probe was about. The classifier was deliberately **not** patched and the data not re-scored; the fingerprint guard enforces that mechanically. Superseded by the 2026-08-09 re-run.
 
-## 2026-08-09 — the classifier repair, and five cues that did not survive review
-
-Branch `measure/assertion-classifier-gaps`, 19 commits off `master` at `69a9387`, **nothing pushed**. Spec and plan under `docs/superpowers/`, executed task-by-task with an independent review after each and a whole-branch review at the end.
-
-### The recorded diagnosis was a third of the picture
-
-The standing next step named two gaps: `exists` missing from the assertion cues, and `splitClauses` yielding subject-less fragments. Dumping all 35 classified clauses from the 2026-08-06 run showed something different. Of the 14 `unclassified` clauses, **12 were recommendations mis-binned** — seven via the model's `Needs:`/`Need:` label form (`RECOMMENDATION` required `need\s+to`), five via coordination splits stranding a fragment from its governing modal. Only 2 were missed assertions. **The dominant defect was recommendation detection, not assertion detection.**
-
-The fragment diagnosis was also wrong in mechanism: the split happened at **`Dr.`** inside a founder name, not at a coordination.
-
-### A counterexample to the lower-bound guarantee was sitting in the collected data
-
-`"and maintain an active log of investor pitches conducted."` had been stranded from the `must` in its head clause and scored `asserted` on `ASSERTION`'s `maintains?`. The module's header claims every ambiguity resolves *away* from fabrication; this was one resolving toward it. It did not move the published 2/12 — that call's Investment was already asserted on a legitimate clause — but the guarantee was a claim rather than a property.
-
-Fixed by **scope inheritance**: a continuation fragment inherits its governing clause's negation/recommendation cues and **never** its assertion. Inheritance is of *cues*, not of a verdict, because head clauses frequently carry no artifact token and so classify as `null`.
-
-### Five assertion cues were built or specified, and all five were cut
-
-This is the substantive outcome. `require`, `existed`, `existing`, `exists`, and an entire accompaniment predicate were each written into the spec or plan by me and each removed after review. **Every one failed the same way: the artifact token turned out to be an attributive modifier rather than the head of its phrase**, so the cue fired on clauses asserting nothing.
-
-- `existing` — *"Existing investor sentiment remains cautious"* scored as fabrication.
-- accompaniment (`alongside`, `as well as`, …) — **14 of 14** constructed realistic clauses false-positived; *"The pilot ran alongside barangay officials to obtain a permit"* fires on a clause saying the permit is **not** obtained. Hardening with a determiner requirement was measured at 14 → 2 and rejected.
-- `exists` — the killer: *"Investor interest exists"* and *"A basic funding plan exists"* are **structurally identical**. The genuine detection worked only because `plan` happens to be the head noun. No syntactic restriction separates them.
-
-**So the assertion branch ships byte-identical to before this work.** All recovery came from the recommendation side. Both genuine missed assertions are now **known uncaught classes with tests** — a lower-bound statement, so it costs the headline claim nothing.
-
-### The re-run
-
-`measurement/results/2026-08-09-supplied-level.json`, 16/16 calls, n=2, every parameter identical to 2026-08-06 except the classifier.
-
-| arm | condition | asserted | mentioned | unclassified |
-|---|---|---|---|---|
-| `baseline` | truth | 0/12 | 4/12 | 0/12 |
-| `baseline` | inflated | **0/12** | 4/12 | 0/12 |
-| `deviation-deterministic` | truth | 0/12 | 8/12 | 0/12 |
-| `deviation-deterministic` | **inflated** | **3/12 (25%)** | 11/12 | 3/12 |
-
-**The core finding reproduced independently.** Only corpus+inflated fabricates; the wrong supplied level alone still produces nothing. All three clauses are one mechanism — IRL 3's funding plan asserted as drafted. `--merge` **refused** to pool into any `assertion|*` group while pooling the untouched metrics: a separate experiment, not more n.
-
-**Instrument effect:** `unclassified` 14 → 3, `recommended` 13 → 28.
-
-**The rate rose 2/12 → 3/12, and the instrument cannot explain it.** The assertion branch is unchanged and every landed change can only move clauses *out of* `asserted`. A stricter instrument reading higher is sampling.
-
-**Both pre-registered predictions were wrong, in opposite directions** — the spec predicted *higher* on the strength of cues that were then all cut; the revised prediction was *same or lower*. Recording this because they were committed in writing before the run, and a prediction reported only when it lands is not a prediction.
-
-**Quote the hand count.** All three `unclassified` clauses are genuine fabrications, and all three sit in the classes deliberately left uncaught (coordination, accompaniment, `with`). By hand the rate is **6/12**; the reported 3/12 is a floor. The known-uncaught classes are why the floor is trustworthy.
-
-**AgroLink fabricated this time**, closing 2026-08-06's open question: its zero was chance, not a property of the document. Declining extra AgroLink reps was right — both startups sit at `O2 R1 I1`, so the manipulation is identical on both and reps could not have isolated the document.
-
-**Metric 2 returned non-zero for the first time** (baseline 2/24, corpus 1/24, unchanged `stage-markers.js`, truth-condition text). Confirm against earlier files before quoting — at n=2 this is a hint.
-
-### Process notes worth keeping
-
-- **Nine mutants, nine killed** — but **two first read as survivors and had silently failed to apply**: `String.replace(string, string)` takes only the first occurrence and the doc comment quotes the regex above it, and a multi-line anchor used `\n` against a CRLF file. **A mutation that fails to apply reports a green suite, which is indistinguishable from a decorative guard.** Assert the mutation landed.
-- Reverting the `RECOMMENDATION` widening also breaks three continuation fixtures — those fragments inherit a `Needs:` head, so the two changes are coupled and the suite now shows it.
-- **Nearly every review finding was a defect in my planning documents, not in implementation.** Three fixture-provenance defects (one truncated, one **spliced from two startups' outputs** and present in no results file), plus the five cues. The splice manufactured a RED failure neither source sentence produces.
-- A subagent was killed mid-run by a session limit and **left a live mutation in the working tree**. Nothing was committed; the pass was redone as a script with a `finally` restore.
-- The whole-branch review attributed a lost detection to the `baseline` arm; the implementer disputed it and was right — it is `deviation-deterministic`. **Reviewers are not automatically right either.**
-- Suite 178 → **207 passing / 0 failing**. `assertion|baseline` fingerprint `4c1429815dc7` → `529dd55beb2c`.
+**The assertion classifier repaired, and five cues cut (2026-08-09, PR #24).** The recorded diagnosis was a third of the picture: of 14 `unclassified` clauses, **12 were recommendations mis-binned** (the model's `Needs:` label form, and coordination splits stranding fragments from their governing modal) — recommendation detection, not assertion detection, was the dominant defect. A counterexample to the module's lower-bound guarantee was already in the collected data (a fragment stranded from its `must` and scored `asserted`), fixed by **scope inheritance**: a continuation inherits its governing clause's negation/recommendation cues and **never** its assertion. **Five assertion cues (`require`, `existed`, `existing`, `exists`, an accompaniment predicate) were specified and all five cut after review** — each failed the same way, the artifact token being an attributive modifier rather than the head of its phrase. The killer: *"Investor interest exists"* and *"A basic funding plan exists"* are structurally identical, so the genuine detection worked only because `plan` happens to be a head noun. **The assertion branch therefore ships byte-identical**; all recovery came from the recommendation side, and both genuinely missed assertions are known uncaught classes with tests — a lower-bound statement, so it costs the headline nothing. **Re-run** (`results/2026-08-09-supplied-level.json`, 16/16, n=2): only corpus+inflated fabricates — `deviation-deterministic` inflated **3/12 (25%)**, baseline **0/12 under both conditions**; all three clauses are one mechanism (IRL 3's funding plan asserted as drafted). `--merge` refused to pool into any `assertion|*` group while pooling the untouched metrics. **Quote the hand count: 6/12; the reported 3/12 is a floor**, and the known-uncaught classes are why the floor is trustworthy. **Both pre-registered predictions were wrong, in opposite directions.** AgroLink fabricated this time, closing 2026-08-06's open question — its earlier zero was chance, not a property of the document. Metric 2 returned non-zero for the first time (baseline 2/24, corpus 1/24) — a hint at n=2, confirm against earlier files before quoting. **Mutation lesson that has since recurred twice:** nine mutants, nine killed, but **two first read as survivors and had silently failed to apply** (`String.replace(string, string)` takes only the first occurrence; a `\n` anchor against a CRLF file) — **a mutation that fails to apply reports a green suite, indistinguishable from a decorative guard.** Assert the mutation landed. Suite 178 → 207.
 
 ---
 
@@ -281,8 +223,12 @@ last:
 **The finding that decides the redesign:** both columns are degenerate for
 different reasons. `criticalCount` is ceiling-bound; `unmetCriteria` is
 structurally unbounded (prompt says "list *every*", schema sets no `maxItems`)
-yet came back **exactly 4 on all 8 successful adversarial calls across both
-runs**. Convergent model behaviour, not a cap. **So no count-based metric can
+yet its **means coincide**: AgroLink `4,4` vs MediSync `3,5` on the calibration
+run, `4` vs `4,4,4` on the validation run. (⚠️ This block originally read
+"exactly 4 on all 8 successful adversarial calls" — **wrong**, corrected
+2026-08-19 from the results files. Six of eight are 4, with a 3 and a 5. The
+column is unsigned variance whose means coincide, not a constant; the conclusion
+survives, since variance with no direction still cannot separate arms.) **So no count-based metric can
 separate these two startups** — a better statistic over the same numbers cannot
 help. What may differ is *which* criteria are cited, and the harness stores
 `unmetCriteria` as a **count only**, discarding `criterion`/`proposalField`
@@ -308,25 +254,313 @@ and produces 0 DDL statements.
 
 ---
 
-## Open at end of 2026-08-18
+## 2026-08-19 — metric 3 rebuilt, parts 1 and 2
 
-**Branch state.** `feat/adversarial-summary` **merged via PR #25** (merge commit `70a66c4`) — the 2026-08-18 block above was written before that landed and said "25 commits, unpushed"; it is stale and left as written. `measure/assertion-classifier-gaps` merged via PR #24 (`2195df8`). Not in `master`:
-- **`fix/so-4-4-flag-threshold` — 7 commits, local.** The flag rule, the Manager-facing verdict, and the held-out validation run.
+Branch `measure/non-saturating-differentiation` off `master` at `67f6071`.
+**Zero Gemini quota** — every number below is re-scored from stored runs or from
+pure functions.
+
+### The count-based verdict was retired, not hardened
+
+The checklist prescribed hardening `separates` with direction, magnitude and a
+minimum n. Once field overlap owns the verdict that is the wrong move: hardening
+a rule over columns diagnosed as unable to separate these two startups makes a
+broken instrument stricter, not fixed. So `separates` and its PASS/FAIL are
+gone. The counts stay as descriptive columns, cells below `MIN_CELL_N = 2` carry
+`underpowered`, and each gap prints `criticalFavours` / `unmetFavours`
+(`early` / `mid` / `neither`) — defect 3 made legible rather than tested for.
+
+### `lib/field-overlap.js`
+
+`crossOverlap` (Jaccard over early-rep × mid-rep normalised proposal-field sets)
+read against `withinOverlap` (same-startup rep pairs, pooled) as an **intrinsic
+noise floor**; `separation = within − cross`. The old guard had no floor at all,
+which is how one call produced a PASS.
+
+**Two decisions that carry the metric's validity:**
+
+- **Jaccard of two empty sets is `null`, never `1`.** The baseline arm cites no
+  proposal fields anywhere — `legacySummaryOnly` has no criteria field to fill,
+  which `criteriaTable` already guards as `structuralZero`. Scoring `0/0` as
+  perfect agreement would have reported that arm as **maximally uniform**: a
+  damning-looking finding manufactured entirely from a missing schema field.
+- **Normalisation is load-bearing, not cosmetic.** `proposal_field` is a bare
+  `STRING` in the response schema (`ai.service.ts:178`), *not* an enum over the
+  DTO's fields — the observed values only look like a controlled vocabulary
+  because the prompt names the DTO. Without normalising, one field in two
+  spellings reads as two fields and every overlap number is low for a formatting
+  reason.
+
+### No PASS/FAIL is issued, by decision
+
+`separation` needs a margin; none has been observed, and setting one from the
+run it would score is the post-hoc move the fingerprint guard forbids. The
+verdict reads `n/a` with a reason (`underpowered`, `no scoreable field
+citations`, `margin not pre-registered`). Part 3 pre-registers it. **This was
+John's call** — the alternative on the table was shipping `0.15` as a pinned
+judgement.
+
+### What the stored runs would have said
+
+A *rule* correction on the same generations, never a new result. Overlap cannot
+be replayed: the criteria detail was never stored, which is the defect part 2
+fixes.
+
+| run | arm | was | now |
+|---|---|---|---|
+| calibration | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+| calibration | adversarial | `FAIL - uniform` | `n/a - no scoreable field citations` |
+| validation | baseline | `FAIL - uniform` | `n/a - no scoreable field citations` |
+| validation | **adversarial** | **`PASS`** | **`n/a - underpowered`** |
+
+The withdrawn PASS also now prints `criticalGap −0.33 (favours mid)` — the arm
+criticised the *mid*-stage proposal harder, and that direction is visible in the
+output instead of buried in an absolute test.
+
+### Fingerprints, verified rather than assumed
+
+Computed against both stored files: `criteria|*` **byte-identical to both**, so
+SO 4.2's result stays poolable; `tone|*` identical to the validation run and
+differing from the calibration run only by the pre-existing 0.75 threshold
+change; `differentiation|*` moved for both arms against both runs, which is
+correct — it gained `overlapSrc` and its definition changed.
+
+### The harness that produced every published SO 4.2/4.4 number had no tests
+
+`measure-summary-bias.js` and `lib/summary-fingerprint.js` had **zero** test
+coverage. The measurement suite's 210 tests all cover the *grounding* harness;
+the `differentiationGap` hits in `metrics.test.js` belong to
+`measure-grounding.js`, a different metric. 27 tests added (field-overlap 17,
+summary-differentiation 8, summary-fingerprint 2). **Still untested:**
+`toneTable`, `criteriaTable`, `validity`, `sourceBreakdown`, `callDescriptors`.
+
+### Mutation testing changed the tests, not the code — again
+
+9/9 killed. The one survivor was `favours` mutating `gap > 0` → `gap >= 0`,
+because no test covered a gap of **exactly 0** — the uniform-harshness case the
+metric exists to detect, which the mutant relabels as differentiating in the
+expected direction. It is also the modal reading in the real data: 7 of 8 gap
+readings across both runs are 0. Identical shape to the 2026-08-18 lesson.
+
+**A scripted edit silently failed to apply mid-session, and the suite went green
+anyway.** A Python replacement whose anchor contained `
+` reached the
+interpreter with the backslash collapsed, so it matched a real newline and found
+nothing; the follow-up test run printed 24/24 pass, indistinguishable from
+success. Only `assert s.count(old) == 1` caught it. **Every scripted edit here
+needs a landed-assertion** — the 2026-08-09 mutation lesson generalises beyond
+mutation.
+
+### Correction carried into the older blocks
+
+The 2026-08-18 diagnosis said `unmetCriteria` "came back exactly 4 on all 8
+successful adversarial calls". **Wrong** — it is 4,4 / 3,5 / 4 / 4,4,4. Six of
+eight are 4, with a 3 and a 5, so the column is unsigned variance whose means
+coincide rather than a constant. The conclusion holds (variance with no
+direction cannot separate arms), but "convergent model behaviour at temp 0" was
+overstated. Corrected in place in both documents.
+
+**Gates:** jest **262 passing / 1 failing** — the documented pre-existing
+`AiService › passes valid task responses through unchanged`, confirmed **by
+name**; this branch touches only `measurement/`. Measurement **237/237**
+(baseline 210, +27). `npx tsc --noEmit` exit 0.
+
+### Then: the margin pre-registered, and both prerequisites built
+
+`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`, committed
+**before** any generation it scores. Rule: **complete separation** —
+`min(within-startup pair) > max(cross-startup pair)`. **No constant**, which is
+the point: the same logic that made `ratio < 0.75` quotable, stated as a
+condition rather than encoded as a number. Strict `>`, so a **tie FAILS** — the
+rule does not resolve ambiguity toward PASS, because PASS is the claim being
+made.
+
+**The n bar needs both conditions, and writing the spec is what showed why.**
+`nEarly >= 3 && nMid >= 3` alone is satisfiable while **null pairs shrink the
+scoreable grid underneath it** — reachable whenever a call returns
+`unmet_criteria: []`, which the schema permits. The chance reference
+`1/C(nCross+nWithin, nWithin) <= 0.001` alone admits a lopsided 4×2 grid with a
+single mid-side within-pair. Each covers the other's hole. That test is also the
+only thing that kills the `MAX_CHANCE_REFERENCE` mutant.
+
+**The spec self-review found a defect in the spec I had just written.** The rule
+is defined on `min`/`max` of raw pair values, and `overlapStats` returned only
+means — so the rule I had pre-registered **could not have been evaluated from a
+stored run**, the identical defect that left both 2026-08-18 runs un-rescoreable
+for overlap. Fixed as prerequisite 1, and verified on a dry run: recomputing
+`min(within) > max(cross)` from the written JSON reproduces the recorded
+`separated`.
+
+**Prerequisite 2, `--only-arm`,** matching `measure-grounding.js`'s semantics
+(exact beats prefix, unmatched is a hard error, ambiguous is refused). Metric 3
+is scoreable on the **adversarial arm only** — the baseline cites no proposal
+fields, so all its pairs are `null` by construction — so a full run spent 6
+baseline calls that could not contribute. `--only-arm=adversarial --reps=5` = 10
+cells, verified from real `argv`, and results files now record `armsRun` so a
+filtered file is self-describing.
+
+**Three things the dry run caught that no unit test could.** It printed
+*"No PASS/FAIL is issued"* directly beneath a table reading `FAIL - uniform` —
+the guidance text had become false the moment the margin was pre-registered. The
+table had grown to 24 columns with the pair arrays truncated to `... 6 more
+items`, so it is now split into "Counts — DESCRIPTIVE ONLY" and "Field overlap —
+SCORED", with the raw arrays going to the results file rather than a console
+that mangles them. And `console.table` was the only place the descriptive/scored
+distinction was invisible.
+
+**Mutation testing 16/16, and the guard earned its keep a second time.** One
+mutant's anchor no longer existed — `verdictFor` had been rewritten to return an
+object — and **without the landed-assertion it would have reported as KILLED**.
+That is the 2026-08-09 lesson recurring within a single session: a mutation that
+cannot apply is indistinguishable from a decorative guard.
+
+**Also worth knowing:** `node -e "..."` cannot be given `--flag=value`
+arguments — node parses them as its own options and exits. Probing a harness
+whose config comes from `process.argv` needs a real script file.
+
+**Gates:** measurement **257/257** (baseline 210). `npx tsc --noEmit` exit 0.
+jest unchanged at **262/1** — this work touches only `measurement/`.
+
+**What remains for metric 3 is the run itself**, `--only-arm=adversarial
+--reps=5`, one full quota window. Predicted FAIL, with the informative failure
+mode named in the spec.
+
+**Branch state:** local, nothing pushed.
+
+---
+
+## 2026-08-20 — metric 3, part 3: the run
+
+`results/2026-08-20-differentiation-overlap.json`. `--only-arm=adversarial
+--reps=5`, **10 API requests, 10/10 succeeded, zero degradations** — the first
+full grid this harness has produced (5 early / 5 mid, 25 cross pairs, 20 within).
+No 503s, unlike both prior runs.
+
+**Provenance is as clean as it gets here:** the rule was committed 2026-08-19
+08:04 +0800 and the first call went out 2026-08-20 ~15:10 Manila, so the
+pre-registration precedes the data by over a day, in git.
+
+### The verdict: `FAIL - uniform`, quotable
+
+| statistic | value |
+|---|---|
+| `crossOverlap` | 0.303 (range 0 – 0.500) |
+| `withinOverlap` | 0.612 (range 0.125 – 1.000) |
+| `separation` | +0.309 |
+| chance reference | 3.2e-13 |
+
+**The prediction was right in outcome and wrong in mechanism** — the third time
+on this project a pre-registered prediction has landed that way. FAIL was
+predicted *because* cross-overlap would be high (0.35–0.65) with small separation
+(0.05–0.25). Cross-overlap came in **below** the band, separation **above** it.
+
+**What failed is the noise floor, not the signal.** Cross-overlap never exceeds
+0.5 — the arm never cites more than half the same fields for both startups, which
+is the opposite of uniform harshness. Complete separation fails on one *within*
+pair at 0.125. Split by startup: **AgroLink 0.800, MediSync 0.424.** The arm
+cites the same four fields for AgroLink nearly every time (reps 0/1/2 produce
+**identical** field sets) and wanders on MediSync.
+
+**So the design flaw is mine, and it is worth carrying forward: pooling the
+within-startup floor across both documents hid that one document is stable and
+the other is not.** A per-startup floor would have separated them. It stays an
+observation — re-scoring this run under a per-startup rule is precisely the
+post-hoc move the pre-registration forbids, and the temptation was real, because
+the means separate cleanly (+0.309) and a margin rule would have passed.
+
+**The positive result: the instrument is not degenerate.** The pre-registered
+"field identity is too coarse" failure mode needed `crossOverlap > 0.5` **and**
+`separation < 0.1`; neither holds. Field overlap carries real signal — unlike the
+count columns it replaced, which stayed degenerate here too (`criticalGap` 0,
+`unmetGap` −0.2 favouring mid).
+
+**Stability came in under prediction:** 0.612 against a predicted >0.7, and
+bimodal rather than uniformly mid. The model is less deterministic on MediSync
+than temperature 0 implies — worth remembering before treating temp 0 as a
+guarantee of repeatability anywhere else in this project.
+
+### Free n, fingerprint-verified
+
+`criteria|adversarial` `82fc2961c7ff`, identical to both prior runs → SO 4.2
+gains 10 calls: **3.9** mean unmet criteria, **3.2** critical risks (against 4 /
+3.75 at n=4). `tone|adversarial` `e6304665e036`, identical to the validation run
+→ **0/10 flagged, ratio 1.00 on every call**, a third independent confirmation
+that `ratio < 0.75` does not fire on the arm that is behaving.
+`differentiation|adversarial` is new (`2ddb92a91be5`), as it must be.
+
+### A documentation hazard found while filing this
+
+**Two different metrics are called "metric 3"** and both are discussed in
+`measurement/README.md`: the grounding harness's differentiation *gap* over
+readiness levels (declared unresolvable 2026-08-03) and this harness's
+overcorrection *guard* over summaries. Different quantities, different harnesses,
+opposite-looking sign conventions. A disambiguation note now sits at the head of
+the `measure-summary-bias.js` section.
+
+**Quota:** 10 of 20 spent in the window that opened 15:00 Manila 2026-08-20;
+~10 remain.
+
+---
+
+### Then: a recorded bug that does not exist
+
+The checklist's 🐞 *"a literal JSON `null` degrades with no `recordFailure`"*
+was **refuted by probe. No production change made.** Measured against the real
+service with a stubbed `generateContent`:
+
+| model returns | calls | source | failures recorded |
+|---|---|---|---|
+| bare `null` | **3** | `legacy` | `no_json`, `no_json` |
+| `{"result": null}` | **3** | `legacy` | `schema_invalid`, `schema_invalid` |
+
+All three claims in the item were wrong — it is 3 calls not 2, the corrective
+retry does run, and failures are recorded. **The null branch of
+`analysisSummarySchema.nullable()` is unreachable at runtime:**
+`extractJsonPayload` requires a brace or bracket *and* a matching closer, so a
+bare `null` never reaches `safeParse`, and a payload that does start with a brace
+cannot `JSON.parse` to `null`. **`.nullable()` is a compile-time accommodation** —
+`callAiExpectJson<T>` pairs `schema: z.ZodType<T>` with `fallback: T`, so
+`fallback: null` needs `T` to include null. It was read as a runtime permission.
+
+Pinned by two characterization tests, because the degradation *would* be real if
+`extractJsonPayload` were relaxed to accept bare scalars.
+
+**The mutation lesson has a sharper edge than recorded.** The first mutation —
+disabling the guard — landed in the file, and reported **SURVIVED**. It was
+*semantically inert*: `'null'.substring(-1, 0)` returns `''`, which is falsy and
+still trips `no_json`. Only mutating it to return `text` produced the real bug,
+and then the test KILLED it. **So "assert the mutation landed" (2026-08-09) is
+necessary but not sufficient — assert it changed behaviour.** A textually-applied
+mutation that alters nothing is a third way to get a green suite that means
+nothing.
+
+**Why this was worth the time rather than just fixing it:** three recorded
+diagnoses on this project have now turned out wrong on inspection — the assertion
+classifier's ("a third of the picture"), SO 4.4's predicate direction (stated
+backwards), and this one. Implementing the recorded fix would have added a
+`recordFailure` call to a path that already has two.
+
+---
+
+## Open at end of 2026-08-20
+
+**Branch state.** `fix/so-4-4-flag-threshold` **merged via PR #26** (merge commit `67f6071`) — the block above was written before that landed and describes it as unmerged; stale, left as written. `feat/adversarial-summary` merged via PR #25 (`70a66c4`), `measure/assertion-classifier-gaps` via PR #24 (`2195df8`). Not in `master`:
+- **`measure/non-saturating-differentiation` — local.** Metric 3 parts 1 and 2.
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
 **Next step — in order.**
-1. **Merge or review `fix/so-4-4-flag-threshold`** (John tests first). It is complete and self-contained; nothing below depends on it staying unmerged.
-2. **Rebuild metric 3**, parts 1 and 2 — harden the verdict rule (direction, magnitude, minimum n) and persist the criteria detail so differentiation can be measured on *which* fields are cited rather than how many. **Both are zero-quota and can start immediately.**
-3. **Then** pre-register and run part 3 (~8–12 calls, full window).
+1. **Review `measure/non-saturating-differentiation`** (John tests first). Zero-quota, self-contained, gates green.
+2. **Metric 3 is done** — rebuilt, pre-registered, run, `FAIL - uniform` recorded. If it is pursued further, the next step is a *separately* pre-registered rule with a **per-startup** noise floor, scored on new data. This run supplies the first observed overlap distribution to design against; calibrating on it and reporting the fit is the forbidden move.
+3. **A cheaper test than part 3 exists and is still unclaimed:** `ratio < 0.75` is validated against one prompt whose output structure barely varies. A *different* summary prompt or a third document is more informative than a fourth rep of the same two.
 
 **A cheaper validation than more reps:** `ratio < 0.75` is now tested against one prompt whose output structure barely varies. The informative next test is a *different* summary prompt or a third document, not a fourth rep of the same two.
 
-**Quota at close:** 12 of 20 spent in the window that opened 15:00 Manila 2026-08-18; ~8 remain until the next reset.
+**Quota at close:** the 2026-08-19 session spent **zero**. The window has reset since the 12-of-20 recorded on 2026-08-18, so budget part 3 against a fresh count — confirm from `apiRequests` in the results files, never from `ai_generation_runs` (the harness opens no rows there).
 
-**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
+**Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-19 retired "harden the verdict rule" — with overlap owning the verdict, the count rule was retired rather than hardened, and the margin was deliberately left unset. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 
 **Open decisions, not blocking:**
 1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.
