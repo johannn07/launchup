@@ -683,12 +683,12 @@ path is inert, as the corrected wording now says.
   (it is **not** gitignored).
 - A probe script must sit **inside `backend/`** or `@mikro-orm/postgresql` will
   not resolve.
-- One `ocr_documents` row (id 2, `ocr-sample.jpg`) is left on Neon as evidence.
-  It shows in the admin OCR Documents page — delete before a demo if untidy.
+- The probe's `ocr_documents` row was **deleted after the run** (id 2,
+  `ocr-sample.jpg`); only the pre-existing `capsule-page.png` from 2026-07-27
+  remains. Nothing references that table — no inbound foreign keys.
 
 ### Still open
 
 - **3c is unblocked only by the samples.** Ten handwritten proposals plus
   verbatim transcripts; the protocol is written and shared.
-- `SUPPORT_THRESHOLD` uncalibrated. `CLAUDE.md` has an uncommitted response-style
-  section.
+- `SUPPORT_THRESHOLD` uncalibrated.

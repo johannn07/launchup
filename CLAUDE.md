@@ -51,6 +51,18 @@ Do not include a `Co-Authored-By` line in commit messages.
 - If a comment or doc line doesn't add information a reader wouldn't already have,
   cut it.
 
+## Response style
+Same rule as the docs above — short sentences, no padding. Four failures worth
+not repeating:
+- Lead with what the user can act on. Evidence and findings come after it.
+- Never phrase a question as though something exists when it doesn't ("should we
+  commit the images?" when no images exist). Say what exists, what doesn't, and
+  who has to create it.
+- When work splits into independent pieces, say which ones can start now. Don't
+  bundle unblocked work behind one approval that waits on the blocked part.
+- Use bold sparingly. Heavy bolding and nested parentheticals read as impressive,
+  not clear.
+
 ## Documentation maintenance
 - Keep `SESSION_NOTES.md` and `TODO_CHECKLIST.md` concise — no restated context, no
   verbose process narration.
