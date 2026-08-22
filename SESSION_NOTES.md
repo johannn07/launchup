@@ -530,7 +530,7 @@ without pre-seeding turns a stray click into six overwritten levels.
 - `git worktree list` still shows `.claude/worktrees/xenodochial-colden-25e582` at a
   detached HEAD. It is harness state, merged into `master`, and was left alone.
 
-## Open at end of 2026-08-22 (later)
+## Close-out — 2026-08-22 (deferred-cleanup sweep) — SUPERSEDED, see the end of this file
 
 ### What this session did
 
@@ -549,7 +549,7 @@ live on a purpose-made startup. Full detail in the session section above.
   demo-critical sweep.
 - **Three new defects were found, none of which was on any list** — see below.
 
-### Branch state — ready to merge
+### Branch state then — merged as PR #30
 
 `chore/deferred-cleanup-sweep`, **local, nothing pushed**, on top of `master` at
 `b0d5fc8`. `master` is an ancestor, so it **fast-forwards**.
@@ -563,13 +563,13 @@ Gates at the tip: jest **266/266 across 25 suites**, measurement **257/257**,
 which matters because `main.ts` runs `updateSchema()` on every boot. The rest is
 three deleted shell scripts and four markdown files.
 
-### In progress — nothing
+### In progress at that point — nothing
 
 No work is half-done. The three defects below are **logged and unstarted**, by
 choice: each needs a decision before code, and none was smuggled into a cleanup
 branch.
 
-### Next step — one branch, three linked problems
+### Next step proposed then — one branch, three linked problems (STILL OPEN, untouched since)
 
 Agreed 2026-08-22: merge this branch first, then do all three on a **dedicated
 branch**, not on top of cleanup work.
@@ -780,3 +780,75 @@ its fix is test-proven.
 check failed… Re-upload a clearer image or switch to a PDF." For a 503 that is
 advice to re-photograph a perfectly good page. Failing loudly with a service
 message is what makes that copy correct again.
+
+---
+
+## Open at end of 2026-08-22 (3a / 3b session)
+
+### What this session did
+
+Objectives **3a and 3b closed**, plus two bugs found by using the app rather than
+by reading it. Detail in the three sections above; outcomes only here.
+
+- **3a — two defects fixed.** Production stored *Tesseract's* transcription, not
+  Gemini's, and `fieldConfidence` was `text.length < 40`. Both live-verified.
+- **3b — descope wording corrected.** `visionLabels` is always `[]` because
+  `@google-cloud/vision` is not installed (verified by `import()` at runtime, not
+  by reading `package.json`). The descope decision itself stands.
+- **URAT and calculator steps rendered blank** — both question tables held 0 rows
+  and nothing had ever seeded them. Now seeded on boot, guarded, tested.
+- **A Gemini 503 became confident garbage** — and exposed that the confidence
+  rule shipped hours earlier was *circular* on the fallback path. Three fixes.
+- **`CLAUDE.md` gained a response-style section** after the session's own
+  communication failures.
+- **3c's sample-prep protocol written and shared** (artifact), including a
+  ready-to-copy proposal and its predicted per-field result.
+
+**Two claims made this session were wrong and were corrected in place:** the
+entropy gate is *not* inert (PNG 3.33 fails, JPEG 5.89 passes — it bites
+digitally-clean images), and "3c is blocked only on the samples" was true of the
+CER half only, not SUS.
+
+### Branch state — ready, NOT merged
+
+`fix/ocr-transcription-preference`, **8 commits, local, nothing pushed.**
+`master` is an ancestor, so it fast-forwards.
+
+Gates, run fresh at the tip: jest **301/301 across 28 suites**, measurement
+**257/257**, `tsc --noEmit` 0, `svelte-check` **119/14 — unchanged from
+baseline**. **No entity or migration is touched**, which matters because
+`main.ts` runs `updateSchema()` on every boot: merging cannot alter the schema.
+
+Two commits are broader than the branch name suggests (`10a1365` seeding,
+`237cbcc` resilience) — accurate history, misleading label.
+
+### In progress — nothing half-done
+
+### What is NOT verified, and must not be claimed
+
+- **The 503 retry and the fail-loud path are test-proven only.** A real 503
+  cannot be forced without editing `.env`. The circular-evidence bug was
+  *diagnosed* from live data; its fix is not re-observed in the app.
+- **`SUPPORT_THRESHOLD = 0.5` is a guess.** 3c replaces it.
+- **3a's accuracy is unmeasured** — hence 🟡, not 🟢.
+- The healthy-path re-check after the fixes is the **user's observation**, not a
+  measurement taken here.
+
+### Next step
+
+1. **Merge this branch** (fast-forward, no schema impact).
+2. **The substantive work available now is the three linked problems** proposed
+   on 2026-08-22 and still untouched — see the superseded close-out above: SO
+   4.4's missing *action* on the flag, `AI_SCORE_NORMALIZATION_ENABLED` not
+   gating task normalization, and a mentor being unable to correct a baseline
+   score. **3c cannot start without the ten handwritten samples**, so this is the
+   §0 work that is not externally blocked.
+3. **3c when the samples exist.** CER harness design is agreed but unwritten; the
+   protocol is shared. SUS is being built by the team, not here — and the
+   instrument must exist *before* the sample-writing session, because that
+   sitting is the only natural chance to catch respondents straight after use.
+
+**New this session, logged not fixed:** `@Controller('readinesslevel')` has no
+guard, so its endpoints answer unauthenticated, and `Application.svelte` calls
+them with a bare `fetch` carrying no credentials — guarding it without fixing the
+caller repeats the PR #15 trap. See `TODO_CHECKLIST.md` §2.
