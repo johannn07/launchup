@@ -42,7 +42,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 7 of 13 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
-| **Cleanup / tech debt (§4)** | In progress — 4 of 19 done; **all 3 🎯 items done 2026-08-22**, 15 deferred |
+| **Cleanup / tech debt (§4)** | In progress — 5 of 19 done; **all 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge pulled forward the same day; 14 deferred |
 | **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
 
 ---
@@ -68,7 +68,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 **The headline: 4 insertions, 7,188 deletions across 21 files, and *four of the eight* were dead code rather than live breakage.** Three separate features turned out to be stranded mid-build — a form action with no `<form>`, a query with no panel, a dialog with no trigger. The consistent shape is plumbing wired without a trigger.
 **Side effect worth knowing:** `svelte-check` fell from **160 errors / 16 warnings to 119 / 14** — deleting dead code cleared 26% of the frontend's type errors, with zero new errors or warnings introduced.
-⚠️ **`scripts/delete_db.sh:6` now references the deleted `chumcheck_2025-03-04_025337.sql`.** That script already targets a database this project does not use; it is covered by the deferred *Purge `chumcheck` references* item in §4, which is now a 3-file deletion worth pulling forward.
+✅ **The `chumcheck` purge this sweep exposed was pulled forward and done 2026-08-22** — all three `scripts/` files deleted. See §4.
 
 ### Judgement call — not automatic
 
@@ -829,10 +829,13 @@ Each verified by reading **both** sides of the call.
 - [x] ✅ 🧹 **DEBT · S · Remove committed scratch files** — *done 2026-08-22*
   All five removed from tracking. `fix-page.cjs` was a one-off codemod against the readiness-level page (already applied); `temp_fix.txt` a hand-written patch note; `chumcheck_2025-03-04_025337.sql` a 564 KB dump of the *previous* project's database.
   The two root zips were already gone; `*.zip` is now in `.gitignore` so they cannot return.
-  ⚠️ **`scripts/delete_db.sh:6` now references the deleted dump.** That script drops and recreates a `chumcheck` database this project does not use — see the deferred *Purge `chumcheck` references* item, now a 3-file deletion worth pulling forward.
+  ✅ **Follow-on closed:** `delete_db.sh:6` was left pointing at the deleted dump; the whole `chumcheck` purge below was pulled forward and done the same day.
 
-- [ ] 🧹 **DEBT · S · Purge `chumcheck` references**
-  `scripts/reset_db.sh`, `reset_db.ps1`, `delete_db.sh` all target a database named `chumcheck` with user `postgres`, while the project uses Neon. Running any of them does nothing to your dev database — or worse, drops an unrelated one.
+- [x] ✅ 🧹 **DEBT · S · Purge `chumcheck` references** — *done 2026-08-22*
+  All three deleted, and `scripts/` with them; the `CLAUDE.md` line describing them is gone too. No code referenced them — only these docs.
+  **`delete_db.sh` had never worked.** Lines 4-5 were raw SQL (`drop database chumcheck with (force);`) sitting unquoted in a `#!/bin/bash` file, so the shell would have tried to run `drop` as a command. Only line 6 was executable, and it pointed at a dump deleted earlier the same day.
+  **The other two were the live hazard** — `reset_db.sh`/`.ps1` are valid and would really `DROP DATABASE chumcheck WITH (FORCE)` against a local `postgres` superuser.
+  **Deleted rather than repointed, because there is no correct target:** the project runs on Neon, where you branch rather than drop-and-recreate, and `docker-compose.yml`'s `launchup_db` is itself unused.
 
 - [ ] 🧹 **DEBT · M · Resolve migrations vs. `updateSchema()`**
   `main.ts:292` calls `updateSchema()` on every boot while 93 migration files sit in `src/migrations/`. The migrations are inert, schema drift is invisible, and auto-sync on boot is unsafe against production.

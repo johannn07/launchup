@@ -11,7 +11,6 @@ The repo is **two independent apps**, not a monorepo with shared tooling — the
 - `backend/` — NestJS (TypeScript) API, MikroORM + PostgreSQL
 - `frontend/` — SvelteKit 2 (Svelte 5) + TailwindCSS
 - `docker-compose.yml` — local Postgres only (`launchup_db` on port 5432)
-- `scripts/` — raw `psql` scripts to drop/recreate a local DB (reference a `chumcheck` DB name, not `launchup_db` — check before running)
 
 ## Common commands
 

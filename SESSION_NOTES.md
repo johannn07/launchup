@@ -646,10 +646,9 @@ The 41 removed came from the three Tab components, the preview dialog, and three
 - Removing a prop **cascades**: dropping `access` from `ApprovalDialog` orphaned
   it in `PendingDialog` and `WaitlistedDialog` too. Follow the chain or
   `svelte-check` grows unused-export warnings.
-- ⚠️ **`scripts/delete_db.sh:6` now references the deleted `chumcheck` dump.**
-  That script drops and recreates a database this project does not use. The
-  deferred *Purge `chumcheck` references* item is now a 3-file deletion and is
-  worth pulling forward.
+- ✅ **`scripts/delete_db.sh:6` pointed at the deleted `chumcheck` dump.**
+  Resolved the same day — the whole `chumcheck` purge was pulled forward and all
+  three scripts deleted. See the 2026-08-22 (later) section.
 
 **Quota:** **zero generation calls spent.** The only API call was one embedding.
 

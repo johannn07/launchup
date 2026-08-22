@@ -766,8 +766,7 @@ This is the most serious category. Full per-controller audit is in §5.4.
 - `backend/src/overview/overview.controller.ts` — an empty `@Controller('overview')` with zero routes, though the module is imported in `app.module.ts:69`.
 - `/dashboard` (14 lines) — scaffolding. (`frontend/fix-page.cjs` deleted 2026-08-22.)
 - ✅ ~~Committed scratch files~~ — **all five removed from tracking 2026-08-22**: `admin/assessments/+page.svelte.backup`, `admin/assessments/temp_fix.txt`, `backend/test-login.js` (0 bytes), `frontend/fix-page.cjs`, and `chumcheck_2025-03-04_025337.sql` (564 KB, a dump of the *previous* project's database). `*.zip` is now gitignored so the root archive dumps cannot return.
-  ⚠️ **`scripts/delete_db.sh:6` still references the deleted dump.** That script drops and recreates a `chumcheck` database this project does not use — folded into the deferred *Purge `chumcheck` references* item, now a 3-file deletion.
-- `scripts/reset_db.{sh,ps1}` and `scripts/delete_db.sh` target a **`chumcheck`** database with user `postgres`, while `docker-compose.yml` creates `launchup_db` / `launchup_user` — so running them does nothing to your dev DB, or drops an unrelated one. This project appears to be a rename/fork of an earlier one.
+- ✅ ~~`scripts/` targeted a `chumcheck` database~~ — **all three files deleted 2026-08-22**, and the directory with them. They named a `chumcheck` DB with user `postgres` while the project runs on Neon, so running one did nothing to your dev DB or dropped an unrelated one. `delete_db.sh` had never worked at all (raw SQL in a bash file). The `chumcheck` name is the clearest sign this repo is a rename/fork of an earlier project.
 - `backend.zip` (116 MB) and `frontend.zip` (84 MB) sit in the repo root — untracked, but not gitignored either.
 
 ### 7.6 Verified *not* broken
