@@ -12,6 +12,11 @@
   import ReadinessDashboard from '$lib/components/dashboard/ReadinessDashboard.svelte';
   import axiosInstance from '$lib/axios';
   import { toast } from 'svelte-sonner';
+  import {
+    READINESS_TYPES,
+    baselineFromStoredLevels,
+    unratedBaseline
+  } from '$lib/readiness-baseline';
 
   const { data } = $props();
   const { access, startupId, role } = data;
@@ -46,24 +51,22 @@
     useQueriesState($readinessLevelQueries)
   );
 
-  const readinessTypeOptions = [
-    'Technology',
-    'Acceptance',
-    'Market',
-    'Organizational',
-    'Regulatory',
-    'Investment'
-  ] as const;
+  const readinessTypeOptions = READINESS_TYPES;
 
-  let baselineScores = $state<Record<(typeof readinessTypeOptions)[number], number>>({
-    Technology: 1,
-    Acceptance: 1,
-    Market: 1,
-    Organizational: 1,
-    Regulatory: 1,
-    Investment: 1
-  });
+  let baselineScores = $state(unratedBaseline());
   let savingBaselineScores = $state(false);
+  let revising = $state(false);
+
+  // Seed from the stored rows before showing the form. Without this the six
+  // selects sit at 1 and a Save overwrites every real level.
+  const startRevision = () => {
+    baselineScores = baselineFromStoredLevels($readinessLevelQueries[3].data);
+    revising = true;
+  };
+
+  const cancelRevision = () => {
+    revising = false;
+  };
 
   const isRated = $derived(() => {
     const q = $readinessLevelQueries[2];
@@ -139,46 +142,6 @@
     };
   });
 
-  const readiness = $derived(() => {
-    const query = $readinessLevelQueries[3];
-
-    if (!query.isSuccess || !query.data || query.data.length === 0) {
-      return {
-        technology: 1,
-        organizational: 1,
-        acceptance: 1,
-        market: 1,
-        regulatory: 1,
-        investment: 1
-      };
-    }
-
-    const getLatestLevel = (type: string) => {
-      const entriesForType = query.data.filter(
-        (r: any) => r.readinessLevel.readinessType === type
-      );
-
-      if (entriesForType.length === 0) {
-        return 1;
-      }
-
-      const latestEntry = entriesForType.reduce((latest: any, current: any) =>
-        current.id > latest.id ? current : latest
-      );
-
-      return latestEntry?.readinessLevel.level ?? 1;
-    };
-
-    return {
-      Technology: getLatestLevel('Technology'),
-      Organizational: getLatestLevel('Organizational'),
-      Acceptance: getLatestLevel('Acceptance'),
-      Market: getLatestLevel('Market'),
-      Regulatory: getLatestLevel('Regulatory'),
-      Investment: getLatestLevel('Investment')
-    };
-  });
-
   let current = $state(0);
 
   const next = () => {
@@ -223,6 +186,7 @@
       );
 
       toast.success('Baseline scores saved');
+      revising = false;
       await Promise.all([
         $readinessLevelQueries[2].refetch(),
         $readinessLevelQueries[3].refetch(),
@@ -237,7 +201,6 @@
       savingBaselineScores = false;
     }
   };
-
 </script>
 
 <svelte:head>
@@ -255,14 +218,12 @@
     {@render error()}
   {:else if isRated()}
     {@render rated()}
+  {:else if isMentor(role)}
+    {@render mentor()}
   {:else}
-    {#if isMentor(role)}
-      {@render mentor()}
-    {:else}
-      <div class="mt-10 text-center text-2xl font-bold">
-        <p>Looks like you haven't been rated yet...</p>
-      </div>
-    {/if}
+    <div class="mt-10 text-center text-2xl font-bold">
+      <p>Looks like you haven't been rated yet...</p>
+    </div>
   {/if}
 </div>
 
@@ -285,6 +246,17 @@
 
 {#snippet rated()}
   <div class="flex h-full flex-col gap-3">
+    {#if isMentor(role)}
+      {#if revising}
+        {@render mentor(true)}
+      {:else}
+        <div class="flex justify-end">
+          <Button variant="outline" onclick={startRevision}>
+            Revise baseline scores
+          </Button>
+        </div>
+      {/if}
+    {/if}
     <Can role={['Mentor', 'Manager as Mentor']} userRole={role}>
       <div class="flex justify-between">
         <div class="flex h-fit justify-between rounded-lg bg-background"></div>
@@ -383,13 +355,23 @@
   </div>
 {/snippet}
 
-{#snippet mentor()}
-  <div class="mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-2xl border bg-background p-6 shadow-sm">
+{#snippet mentor(isRevision = false)}
+  <div
+    class="mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-2xl border bg-background p-6 shadow-sm"
+  >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">Mentor action</p>
-      <h2 class="mt-2 text-2xl font-bold">Assign baseline scores</h2>
+      <p
+        class="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground"
+      >
+        Mentor action
+      </p>
+      <h2 class="mt-2 text-2xl font-bold">
+        {isRevision ? 'Revise baseline scores' : 'Assign baseline scores'}
+      </h2>
       <p class="mt-1 text-sm text-muted-foreground">
-        Set one baseline level per readiness dimension. These values unlock the weighted readiness dashboard and RNA generation.
+        {isRevision
+          ? 'These are the levels currently on record. Saving overwrites them for every dimension.'
+          : 'Set one baseline level per readiness dimension. These values unlock the weighted readiness dashboard and RNA generation.'}
       </p>
     </div>
 
@@ -417,7 +399,16 @@
       {/each}
     </div>
 
-    <div class="flex justify-end">
+    <div class="flex justify-end gap-2">
+      {#if isRevision}
+        <Button
+          variant="outline"
+          onclick={cancelRevision}
+          disabled={savingBaselineScores}
+        >
+          Cancel
+        </Button>
+      {/if}
       <Button onclick={submitBaselineScores} disabled={savingBaselineScores}>
         {#if savingBaselineScores}
           Saving...
