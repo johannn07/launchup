@@ -731,3 +731,52 @@ guarding it without fixing the caller repeats the PR #15 trap exactly.
 **Gotcha:** `allowGlobalContext` is unset (false), so a boot-time
 `app.get(AppService)` would throw. Boot seeders must take `orm.em.fork()` — which
 is what every other seeder in `main.ts` already does.
+
+### Same session — a 503 turned into confident garbage, and the confidence rule was circular
+
+A live upload hit **503 UNAVAILABLE** (model busy — *not* 429/quota; the two are
+different codes and must never share a code path). What followed exposed a flaw
+in the confidence rule shipped hours earlier.
+
+**The chain:** vision 503s → `catch` swallows it → Tesseract mangles the
+handwriting → `if (!aiPayload && parsedText)` fires a **second** Gemini call on
+the mangling → the model extracts fields from it → **two fields render as green
+"Verified" badges**. Measured on the stored row: `solution_description` scored a
+support ratio of **1.00**, `startup_description` **0.83**.
+
+**Why:** the rule compares a field against the transcription. On the vision path
+both derive independently from the image, so an unsupported field genuinely
+fails to match — that is why `scope` was caught on the clean run. On the fallback
+path the model is *handed* the text and asked to extract from it, so the
+comparison is output-versus-its-own-input and overlap is guaranteed. **The same
+circularity applies to the PDF path**, which was never on the vision path at all.
+
+**Fixes (three, all TDD):**
+1. `classifyField`/`scoreFields` take a **required** `EvidenceSource`
+   (`vision` | `derived`); `derived` caps everything at `low`. Required rather
+   than defaulted — a default of `vision` would let a forgotten argument restore
+   the bug silently. The compiler immediately caught the one existing call site,
+   which is the argument for making it required.
+2. `src/ai/retry-transient.ts` — 3 attempts, 2s/4s backoff, **never** retries a
+   429. Ported from `measure-grounding.js`, which has had this since 2026-08-03:
+   **the measurement harness was more robust than the application it measures.**
+   Delays are deliberately shorter than the harness's 15s/30s because a capsule
+   extraction already runs to ~200s.
+3. A service failure now raises `ServiceUnavailableException` and writes **no**
+   `ocr_documents` row; the controller passes `HttpException` through instead of
+   rewrapping as a 500. Non-service errors keep the Tesseract fallback, now
+   scored as `derived`.
+
+**Verified:** 300/300 across 28 suites, `tsc --noEmit` 0. The classifier is pinned
+by a regression test carrying the SDK's **verbatim** error string — a regex that
+matches a paraphrase but not the real message would be worthless.
+
+**Not verified live:** forcing a 503 on demand isn't possible without editing
+`.env`, so the retry and the fail-loud path are proven by tests only. The
+circular-evidence fix was *diagnosed* from live data (the stored row) even though
+its fix is test-proven.
+
+**Gotcha worth keeping:** the frontend's failure copy says "The image quality
+check failed… Re-upload a clearer image or switch to a PDF." For a 503 that is
+advice to re-photograph a perfectly good page. Failing loudly with a service
+message is what makes that copy correct again.

@@ -17,13 +17,13 @@ Luzon and Visayas.`;
 
 describe('classifyField', () => {
   it('reports a field with no text as failed', () => {
-    expect(classifyField('', PAGE)).toBe('failed');
-    expect(classifyField('   ', PAGE)).toBe('failed');
+    expect(classifyField('', PAGE, 'vision')).toBe('failed');
+    expect(classifyField('   ', PAGE, 'vision')).toBe('failed');
   });
 
   it('verifies a field whose wording comes off the page', () => {
     const target = 'Small-to-medium agricultural cooperatives and cold-chain trucking services in Luzon and Visayas';
-    expect(classifyField(target, PAGE)).toBe('verified');
+    expect(classifyField(target, PAGE, 'vision')).toBe('verified');
   });
 
   // The bug this whole rule exists to catch. `scope` has no section in either
@@ -33,16 +33,16 @@ describe('classifyField', () => {
     const invented =
       'The engagement encompasses discovery workshops, stakeholder alignment sessions and a phased quality assurance programme across all deliverables';
     expect(invented.length).toBeGreaterThan(40);
-    expect(classifyField(invented, PAGE)).toBe('low');
+    expect(classifyField(invented, PAGE, 'vision')).toBe('low');
   });
 
   it('does not verify anything when there is no transcription to check against', () => {
     const target = 'Small-to-medium agricultural cooperatives and cold-chain trucking services in Luzon';
-    expect(classifyField(target, '')).toBe('low');
+    expect(classifyField(target, '', 'vision')).toBe('low');
   });
 
   it('does not verify a field made only of function words', () => {
-    expect(classifyField('the of and to', PAGE)).toBe('low');
+    expect(classifyField('the of and to', PAGE, 'vision')).toBe('low');
   });
 });
 
@@ -65,8 +65,42 @@ describe('scoreFields', () => {
         methodology: '',
       },
       PAGE,
+      'vision',
     );
 
     expect(result).toEqual({ title: 'verified', scope: 'low', methodology: 'failed' });
+  });
+});
+
+describe('classifyField — circular evidence', () => {
+  // When Gemini Vision is down, production feeds Tesseract's text to the model
+  // and asks it to extract fields FROM that text. Checking those fields against
+  // the same text checks the output against its own input, so overlap is
+  // guaranteed. Observed live 2026-08-22: a garbage field scored ratio 1.0.
+  const garbage = "Tinda % an otfline - sy Acdend cexvdit %9 in urder Rue $eesnds sendy sms eMinde s o0 due dovtes";
+
+  it('scores a verbatim copy as fully supported, which is why source matters', () => {
+    expect(supportRatio(garbage, garbage)).toBe(1);
+  });
+
+  it('refuses to verify a field derived from the text it is checked against', () => {
+    expect(classifyField(garbage, garbage, 'derived')).toBe('low');
+  });
+
+  it('still verifies when the transcription is independent evidence', () => {
+    expect(classifyField(garbage, garbage, 'vision')).toBe('verified');
+  });
+
+  it('still reports an empty derived field as failed', () => {
+    expect(classifyField('', garbage, 'derived')).toBe('failed');
+  });
+
+  it('caps every derived field at low, however well it matches', () => {
+    const result = scoreFields(
+      { title: garbage, scope: garbage, methodology: '' },
+      garbage,
+      'derived',
+    );
+    expect(result).toEqual({ title: 'low', scope: 'low', methodology: 'failed' });
   });
 });

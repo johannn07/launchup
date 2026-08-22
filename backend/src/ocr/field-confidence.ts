@@ -62,25 +62,46 @@ export function supportRatio(fieldText: string, transcription: string): number |
 export const SUPPORT_THRESHOLD = 0.5;
 
 /**
+ * Where the transcription came from, which decides whether it is evidence at all.
+ *
+ * `vision`  — Gemini read the image and returned `raw_transcription` alongside
+ *             the fields. Both derive from the page, so a field the page does
+ *             not support genuinely fails to match. This is real evidence.
+ * `derived` — the fields were extracted *from* this very text (the Tesseract
+ *             fallback path). Checking them against it compares the output to
+ *             its own input, so overlap is guaranteed and means nothing.
+ *
+ * Required rather than defaulted: defaulting to `vision` would let a forgotten
+ * argument silently restore the bug this parameter exists to prevent.
+ */
+export type EvidenceSource = 'vision' | 'derived';
+
+/**
  * Three states, and the split is only ever between "we checked it" and "we
  * couldn't". `failed` keeps its existing meaning — nothing was extracted — so
  * an unsupported field reads `low`, not `failed`: the text exists, the evidence
  * for it doesn't.
  *
  * Everything unverifiable also lands on `low`, because the alternative is
- * claiming `verified` on something never checked, which is the failure this
- * whole rule replaces. A PDF has no transcription; so does a page whose OCR
- * failed. Neither earns a green badge.
+ * claiming `verified` on something never checked. A PDF has no transcription; a
+ * page whose OCR failed has none; and a `derived` transcription is not
+ * independent of the fields it would be scoring. None earns a green badge.
  *
  * @param fieldText     one extracted field's value
  * @param transcription raw_transcription, or '' when unavailable
+ * @param source        whether that transcription is independent of the fields
  */
 export function classifyField(
   fieldText: string,
   transcription: string,
+  source: EvidenceSource,
 ): FieldConfidence {
   if (!String(fieldText ?? '').trim()) return 'failed';
   if (!String(transcription ?? '').trim()) return 'low';
+
+  // Observed live 2026-08-22: a garbage field scored 1.0 against the garbage it
+  // was extracted from, and rendered as a green "Verified" badge.
+  if (source === 'derived') return 'low';
 
   const ratio = supportRatio(fieldText, transcription);
   if (ratio === null) return 'low';
@@ -92,11 +113,12 @@ export function classifyField(
 export function scoreFields(
   fields: Record<string, string>,
   transcription: string,
+  source: EvidenceSource,
 ): Record<string, FieldConfidence> {
   return Object.fromEntries(
     Object.entries(fields).map(([key, value]) => [
       key,
-      classifyField(String(value ?? ''), transcription),
+      classifyField(String(value ?? ''), transcription, source),
     ]),
   );
 }

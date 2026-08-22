@@ -660,6 +660,29 @@ measurement.
 
 ## 2. Broken functionality
 
+- [x] 🎯 **DEMO · BUG · S · A Gemini 503 degraded into confident garbage** — fixed 2026-08-22
+  Observed live. Gemini Vision returned **503 UNAVAILABLE** (the model busy — *not*
+  429/quota); the `catch` swallowed it, Tesseract mangled the handwriting, a second
+  call extracted fields from the mangling, and **two of those fields rendered as
+  green "Verified" badges**. Measured: `solution_description` scored a support
+  ratio of **1.00** against the garbage it was extracted from.
+  **Three fixes, all tested.** (1) `field-confidence.ts` now takes a required
+  `EvidenceSource`; on the `derived` path — fields extracted *from* the text they
+  are scored against — nothing may exceed `low`, because the comparison is
+  circular. Required, not defaulted: a default of `vision` would let a forgotten
+  argument silently restore the bug. This also covers the **PDF path**, which was
+  circular for the same reason. (2) `ai/retry-transient.ts` retries a 503 (3
+  attempts, 2s/4s — the harness's 15s/30s would be felt on a ~200s upload) and
+  **never** retries a 429; ported from `measure-grounding.js`, which has had it
+  since 2026-08-03. The harness was more robust than the app it measures. (3) A
+  service failure now raises `ServiceUnavailableException` instead of degrading,
+  the controller passes `HttpException` through rather than rewrapping it as a
+  500, and **no `ocr_documents` row is written** — the old frontend copy told the
+  user "the image quality check failed… re-upload a clearer image", which for a
+  503 is advice to re-photograph a perfectly good page.
+  Classifier pinned by a regression test holding the SDK's **verbatim** error.
+
+
 - [x] 🎯 **DEMO · BUG · S · URAT and calculator steps rendered blank** — fixed 2026-08-22
   `urat_questions` and `calculator_questions` held **0 rows** on Neon. The 18 URAT
   and 35 calculator questions existed only inside `AppService.generateUratQuestions`

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Startup } from 'src/entities/startup.entity';
@@ -36,6 +37,7 @@ import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
 import { scoreFields } from 'src/ocr/field-confidence';
+import { isQuotaError, isServiceFailure } from '../ai/retry-transient';
 
 // OcrService returns this sentinel instead of throwing when no engine resolves.
 // It is truthy, so it wins any `||` fallback unless matched explicitly.
@@ -281,6 +283,8 @@ export class StartupService {
     let parsedText = '';
     let tesseractAvgConfidence: number | undefined;
     let aiPayload: string | null | undefined = null;
+    // Only the vision path yields a transcription independent of the fields.
+    let visionSucceeded = false;
 
     if (file.mimetype.startsWith('image/')) {
       // Primary path: Gemini Vision beats Tesseract by a wide margin on handwriting.
@@ -290,7 +294,19 @@ export class StartupService {
           file.buffer,
           file.mimetype,
         );
+        visionSucceeded = true;
       } catch (err) {
+        // Degrading to Tesseract when the service is simply unreachable produced
+        // verified-looking garbage on 2026-08-22: Tesseract mangles handwriting,
+        // a second call extracts fields from the mangling, and those fields then
+        // match it perfectly. Better to say so and let the user retry.
+        if (isServiceFailure(err)) {
+          throw new ServiceUnavailableException(
+            isQuotaError(err)
+              ? 'The AI service has reached its daily quota. Please try again after it resets.'
+              : 'The AI service is busy right now. Please try uploading again in a moment.',
+          );
+        }
         console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
       }
 
@@ -426,7 +442,11 @@ export class StartupService {
     // Scored against the transcription, not against length. The extraction
     // prompt orders a 40-character minimum on every field, so the old length
     // rule graded the model's compliance with that instruction.
-    const confidence = scoreFields(reviewFields, transcription);
+    const confidence = scoreFields(
+      reviewFields,
+      transcription,
+      visionSucceeded ? 'vision' : 'derived',
+    );
 
     await this.em.persistAndFlush(
       this.em.create(OcrDocument, {

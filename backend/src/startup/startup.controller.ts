@@ -131,8 +131,13 @@ export class StartupController {
     } catch (error) {
       const { Logger } = require('@nestjs/common');
       new Logger('StartupController').error('Failed to process capsule proposal: ' + (error.stack || error));
-      const { InternalServerErrorException } = require('@nestjs/common');
-      
+      const { InternalServerErrorException, HttpException } = require('@nestjs/common');
+
+      // The service raises ServiceUnavailableException with a message written
+      // for the uploader. Rewrapping it as a 500 would keep the text but lose
+      // the status, and "try again in a moment" is not a server error.
+      if (error instanceof HttpException) throw error;
+
       let errorMessage = error.message || 'Failed to process capsule proposal';
       if (errorMessage.includes('429 Too Many Requests') || errorMessage.includes('quota')) {
         errorMessage = 'AI quota exceeded. The server is receiving too many requests. Please wait a minute and try again.';
