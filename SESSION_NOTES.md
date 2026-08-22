@@ -499,21 +499,44 @@ housekeeping picked up as a **new decision** after the plan closed, not §0 work
 Nothing in `backend/src` production code changed — the only backend edit is a
 spec file.
 
-⚠️ **The baseline-score save is still unverified, and now the reason is
-different.** It is not that nobody has clicked the button; **the button does not
-render for a rated startup**, so the procedure recorded on 2026-08-22 cannot be
-run at all. The deletion reasoning it was meant to check is separately confirmed
-sound by tracing (trigger → route → DTO → upsert all match). **Closing it properly
-needs an unrated startup**, and it must not be attempted on AgroLink or MediSync:
-`baselineScores` initialises to all-`1` and never seeds from stored rows, so a
-Save there would overwrite the measurement ground truth.
+✅ **The baseline-score save is verified end to end (2026-08-22, live).** Six
+POSTs to `/readinesslevel/startup/4/rate`, all **201**, and all six rows landed
+with the exact values set in the UI. **Six *distinct* values were used**
+(T7 A2 M5 O8 R3 I6) precisely because the form's display order is Technology,
+**Acceptance, Market**, … while the enum order is T, M, A — uniform values would
+have hidden a positional mis-mapping. There was none. The page then flipped to
+the rated view on its own, showing *"regulatory … currently at 33%"* = 3/9.
+**The last ⚠️ from the demo-critical sweep is closed:** deleting the unreachable
+form action was correct, and the live path it deferred to works.
 
-**Branches: 23 → 4.** All 20 `[gone]` branches deleted after verifying each is an
+**It required creating a startup, which is the finding.** Neon holds exactly two
+startups and both are rated, so **the mentor form was unreachable anywhere on
+this database.** A throwaway `ZZ Save-Path Probe` was created, used, and removed
+in a guarded transaction that refused to commit unless startups 1 and 2 still
+held 12 rows. AgroLink `T2 M3 A3 O2 R1 I1` and MediSync `T6 M5 A5 O2 R1 I1`
+confirmed unchanged before and after.
+
+🐞 **New bug, found only because the probe existed: a mentor cannot correct a
+baseline score.** The first save flips `isRated()` and the form never renders
+again — verified by reloading: 0 selects, no Save button. So
+`rateStartupReadinessLevel`'s **update branch is unreachable from the UI**; only
+create can run. Logged in `TODO_CHECKLIST.md` §4. Fixing it requires seeding the
+form from stored levels first, since `baselineScores` starts at all-`1`.
+
+⚠️ **`GET /readiness/:startupId` writing on every read reproduced incidentally**
+— two page views left **two** `readiness_evaluations` rows and 12 dependent
+`readiness_gaps`. The §2 item is real, and cleanup has to follow the FK chain.
+
+**Branches: 23 → 3.** All 20 `[gone]` branches deleted after verifying each is an
 ancestor of `master` (0 unmerged). Remaining: `master`,
-`chore/deferred-cleanup-sweep`, `claude/xenodochial-colden-25e582` (harness
-worktree, merged, left alone), and **`backup/rag-corpus-preflight` — the only
-branch carrying commits not in `master`**, still described as disposable
-(13.7 MB of PDF blobs). It needs a decision, not a sweep.
+`chore/deferred-cleanup-sweep`, and `claude/xenodochial-colden-25e582` (harness
+worktree, merged, left alone). **`backup/rag-corpus-preflight` was deleted
+2026-08-22** after checking what would be lost: it is a **2026-07-28 snapshot far
+*behind* master**, and its unique content is almost entirely files deliberately
+deleted since (the `chumcheck` dump, the scratch files, the three orphaned Tab
+components, `recommendation.entity.ts`). Its only irreplaceable-looking material
+was three capstone PDFs — **verified byte-identical by SHA-256 to the copies in
+`Downloads\capstone`** before deleting, not assumed from filenames or sizes.
 `docs/trim-notes-and-status-table` is resolved — it was already merged.
 
 **Next step.** No queued work. The live candidates, in the order they are worth
@@ -523,8 +546,9 @@ picking up:
 2. **The 4c flag that does not gate task normalization** (new, `TODO_CHECKLIST`
    §4) — small, but it changes generated output on the disabled arm, so it
    needs a deliberate call about stored comparisons first.
-3. **Verify the baseline-score save on an unrated startup** — cheap, zero AI
-   quota, closes the last ⚠️ from the demo-critical sweep.
+3. **Let a mentor revise a baseline score** (new) — the save works, but the
+   form disappears after the first one, so a wrong score is uncorrectable
+   in-app. Needs a design call, and pre-seeding the form either way.
 
 **Not next, but not forgotten.** (unchanged from 2026-08-20 unless noted)
 - **SO 4.4's missing *action* on the flag** — still the one substantive §0 gap.

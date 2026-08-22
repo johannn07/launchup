@@ -794,6 +794,12 @@ Each verified by reading **both** sides of the call.
 - [ ] 🧹 **DEBT · S · `GET /ocr/parse` reads an arbitrary server-side path**
   `ocr.controller.ts` passes a `file` query parameter straight to `parseImageFile` with no confinement to an upload directory. It is behind `JwtGuard` now, so any *authenticated* user can read files the server process can read. Its own comment calls it a "Quick test endpoint" — deleting it is probably right; otherwise resolve against a fixed root and reject escapes.
 
+- [ ] 🐞 **BUG · M · A mentor cannot correct a baseline score once set** — *found 2026-08-22, live*
+  The readiness-level page renders the mentor form only when `!isRated()`, and `isRated()` is true as soon as the startup has **any** `startups_readiness_level` row. The first save therefore hides the form permanently — verified live: after saving, a reload shows 0 selects and no Save button.
+  **Consequence in the service:** `rateStartupReadinessLevel` is a find-or-create upsert, and its **update branch is unreachable from this UI**. Only the create branch can ever run from the app. A typo in a baseline score can currently be fixed only by direct SQL.
+  **This is also why the demo startups are unverifiable through the UI** — both are rated, so neither can exercise the save path. Any future check needs a fresh startup.
+  **Fix (design decision needed):** either render the form pre-seeded from stored levels for an already-rated startup, or add an explicit "revise baseline" affordance. Pre-seeding is required either way — `baselineScores` currently initialises to all-`1` and never reads the stored rows, so exposing the form without seeding it would let a stray Save overwrite six real levels with `1`s.
+
 - [ ] 🧹 **DEBT · S · `TONE_CUES` is an unused export** (`summary-tone.ts:48`)
   Zero consumers, not even its own spec. Harmless, dead at HEAD. Rescued here 2026-08-22 from the 2026-08-18 notes, which were its only record.
 
