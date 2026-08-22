@@ -3,6 +3,7 @@ import { Startup } from 'src/entities/startup.entity';
 import { StartupApplicationDto } from './dto';
 import { AiRunContext } from '../ai/ai-run.service';
 import { StartupAnalysisSummary } from '../ai/ai.service';
+import { OcrDocument } from 'src/entities/ocr-document.entity';
 
 /**
  * First spec for src/startup/. Scoped to the summary path only — the service is
@@ -227,5 +228,162 @@ describe('StartupService analysis summary persistence', () => {
       expect.objectContaining({ confidenceStatus: 'balanced' }),
     );
     expect(notesOf(aiService).tone.criticalCount).toBe(1);
+  });
+});
+
+/**
+ * Objective 3a. `parseCapsuleProposal` computes two transcriptions — Tesseract's
+ * and Gemini Vision's `raw_transcription` — and stores one of them on the
+ * OcrDocument. Which one it stores is the thing under test.
+ */
+function buildOcr(opts: { tesseractText: string; visionJson: string; visionError?: string }) {
+  const ocrDocs: any[] = [];
+  const sketchInputs: string[] = [];
+
+  const em = {
+    create: jest.fn((entity: unknown, data: Record<string, unknown>) => {
+      const row = { ...data };
+      if (entity === OcrDocument) ocrDocs.push(row);
+      return row;
+    }),
+    persistAndFlush: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const ocrService = {
+    checkLegibility: jest
+      .fn()
+      .mockResolvedValue({ isLegible: true, reason: null, width: 1600, height: 1200 }),
+    parseBuffer: jest.fn().mockResolvedValue({ text: opts.tesseractText, avgConfidence: 42 }),
+    detectSketch: jest.fn((text: string) => {
+      sketchInputs.push(text);
+      return { sketchDetected: false, sketchConfidence: 0 };
+    }),
+    detectWithVision: jest.fn().mockResolvedValue({ labels: [] }),
+  };
+
+  const aiService = {
+    getCapsuleProposalInfoFromImage: opts.visionError
+      ? jest.fn().mockRejectedValue(new Error(opts.visionError))
+      : jest.fn().mockResolvedValue(opts.visionJson),
+    getCapsuleProposalInfo: jest.fn().mockResolvedValue(opts.visionJson),
+  };
+
+  const service = new StartupService(em as any, aiService as any, {} as any, ocrService as any);
+  return { service, ocrDocs, sketchInputs };
+}
+
+const imageFile = {
+  mimetype: 'image/jpeg',
+  originalname: 'proposal.jpg',
+  buffer: Buffer.from('not-a-real-jpeg'),
+} as any;
+
+const VISION_JSON = JSON.stringify({
+  title: 'AgriTrace',
+  startup_description: 'x'.repeat(60),
+  problem_statement: 'x'.repeat(60),
+  target_market: 'x'.repeat(60),
+  solution_description: 'x'.repeat(60),
+  objectives: 'x'.repeat(60),
+  scope: 'x'.repeat(60),
+  methodology: 'x'.repeat(60),
+  raw_transcription: 'AgriTrace: An IoT-Enabled Cold Chain Monitoring System',
+});
+
+describe('StartupService.parseCapsuleProposal — which transcription is stored', () => {
+  it("stores Gemini's transcription even when Tesseract also returned text", async () => {
+    const { service, ocrDocs } = buildOcr({
+      tesseractText: 'Agr1Tr4ce l0T-Enab|ed C0|d Cha1n M0n1t0r1ng',
+      visionJson: VISION_JSON,
+    });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(ocrDocs[0].extractedText).toBe(
+      'AgriTrace: An IoT-Enabled Cold Chain Monitoring System',
+    );
+  });
+
+  it('never stores the OCR placeholder string as extracted text', async () => {
+    const { service, ocrDocs } = buildOcr({
+      tesseractText: 'OCR_PLACEHOLDER: parsed proposal.jpg - integrate real OCR engine',
+      visionJson: VISION_JSON,
+    });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(ocrDocs[0].extractedText).not.toMatch(/OCR_PLACEHOLDER/);
+  });
+
+  // Green before the fix, by design: it pins the behaviour the fix must not
+  // break. detectSketch's weights are tuned to Tesseract's output, so feeding it
+  // Gemini's clean prose would silently stop sketches from ever being detected.
+  it('still scores sketch detection on Tesseract output, not the clean transcription', async () => {
+    const tesseractText = '~~~ /\/ ||| ->';
+    const { service, sketchInputs } = buildOcr({ tesseractText, visionJson: VISION_JSON });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(sketchInputs).toEqual([tesseractText]);
+  });
+});
+
+describe('StartupService.parseCapsuleProposal — field confidence', () => {
+  // The old rule was `text.length < 40`, so a short honest title scored `low`
+  // and 60 characters of invention scored `verified`. Both are backwards.
+  it('labels by support from the page, not by length', async () => {
+    const { service } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+
+    const result: any = await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(result.fieldConfidence.title).toBe('verified');
+    expect(result.fieldConfidence.scope).toBe('low');
+  });
+});
+
+describe('StartupService.parseCapsuleProposal — when Gemini Vision is unavailable', () => {
+  const BUSY =
+    'got status: 503 Service Unavailable. {"error":{"code":503,"status":"UNAVAILABLE"}}';
+  const QUOTA = 'got status: 429 Too Many Requests. {"error":{"status":"RESOURCE_EXHAUSTED"}}';
+
+  // Observed live 2026-08-22: a 503 was swallowed, Tesseract produced garbage,
+  // a second call extracted fields FROM that garbage, and two of them rendered
+  // as green "Verified" badges. Degrading silently is worse than failing.
+  it('fails loudly on a 503 rather than storing Tesseract garbage', async () => {
+    const { service, ocrDocs } = buildOcr({
+      tesseractText: "_h'». PA0E il eo RL Genernl wforvakon",
+      visionJson: VISION_JSON,
+      visionError: BUSY,
+    });
+
+    await expect(service.parseCapsuleProposal(imageFile, ctx)).rejects.toThrow(
+      /busy|unavailable/i,
+    );
+    expect(ocrDocs).toHaveLength(0);
+  });
+
+  it('fails loudly on a quota error too', async () => {
+    const { service } = buildOcr({
+      tesseractText: 'noise',
+      visionJson: VISION_JSON,
+      visionError: QUOTA,
+    });
+
+    await expect(service.parseCapsuleProposal(imageFile, ctx)).rejects.toThrow();
+  });
+
+  it('still falls back to Tesseract for a non-service failure', async () => {
+    const { service, ocrDocs } = buildOcr({
+      tesseractText: 'legible typed text about a startup',
+      visionJson: VISION_JSON,
+      visionError: 'Unexpected token < in JSON at position 0',
+    });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    // The fallback survives, but nothing it produces may claim `verified` —
+    // the fields are extracted from the same text they are scored against.
+    expect(ocrDocs).toHaveLength(1);
+    expect(Object.values(ocrDocs[0].fieldConfidence)).not.toContain(1);
   });
 });

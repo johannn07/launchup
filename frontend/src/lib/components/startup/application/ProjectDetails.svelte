@@ -137,15 +137,17 @@
     };
   }
 
+  // Absent means unchecked, not confirmed. Defaulting to 'verified' rendered a
+  // green badge for a field the backend never scored.
   function getConfidenceLabel(fieldKey: keyof typeof information.fieldConfidence | string) {
-    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'verified';
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'low';
     if (confidence === 'failed') return 'Failed';
     if (confidence === 'low') return 'Low';
     return 'Verified';
   }
 
   function getConfidenceTone(fieldKey: keyof typeof information.fieldConfidence | string) {
-    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'verified';
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'low';
     if (confidence === 'failed') return 'border-rose-200 bg-rose-50 text-rose-700';
     if (confidence === 'low') return 'border-amber-200 bg-amber-50 text-amber-700';
     return 'border-emerald-200 bg-emerald-50 text-emerald-700';

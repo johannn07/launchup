@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
+import { withRetry } from './retry-transient';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
@@ -824,8 +825,12 @@ export class AiService {
     mimeType: string,
   ) {
     const base64Image = imageBuffer.toString('base64');
-    const res = await this.ai.models.generateContent({
-      model: ctx.config.model,
+    // A 503 here used to degrade straight to Tesseract, which on handwriting
+    // means garbage. Retried briefly first; a 429 is never retried.
+    const res = await withRetry(
+      () =>
+        this.ai.models.generateContent({
+          model: ctx.config.model,
       // No maxOutputTokens: raw_transcription carries the full document text on
       // top of the 8 extracted fields, so any cap risks truncating the JSON.
       config: {
@@ -869,7 +874,14 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
           ],
         },
       ],
-    });
+        }),
+      {
+        onRetry: (attempt, e) =>
+          console.warn(
+            `Gemini Vision busy, retry ${attempt}: ${String((e as Error)?.message ?? e).slice(0, 120)}`,
+          ),
+      },
+    );
 
     this.accumulateTokenUsage(ctx, res?.usageMetadata);
 

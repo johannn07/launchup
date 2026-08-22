@@ -530,7 +530,7 @@ without pre-seeding turns a stray click into six overwritten levels.
 - `git worktree list` still shows `.claude/worktrees/xenodochial-colden-25e582` at a
   detached HEAD. It is harness state, merged into `master`, and was left alone.
 
-## Open at end of 2026-08-22 (later)
+## Close-out — 2026-08-22 (deferred-cleanup sweep) — SUPERSEDED, see the end of this file
 
 ### What this session did
 
@@ -549,7 +549,7 @@ live on a purpose-made startup. Full detail in the session section above.
   demo-critical sweep.
 - **Three new defects were found, none of which was on any list** — see below.
 
-### Branch state — ready to merge
+### Branch state then — merged as PR #30
 
 `chore/deferred-cleanup-sweep`, **local, nothing pushed**, on top of `master` at
 `b0d5fc8`. `master` is an ancestor, so it **fast-forwards**.
@@ -563,13 +563,13 @@ Gates at the tip: jest **266/266 across 25 suites**, measurement **257/257**,
 which matters because `main.ts` runs `updateSchema()` on every boot. The rest is
 three deleted shell scripts and four markdown files.
 
-### In progress — nothing
+### In progress at that point — nothing
 
 No work is half-done. The three defects below are **logged and unstarted**, by
 choice: each needs a decision before code, and none was smuggled into a cleanup
 branch.
 
-### Next step — one branch, three linked problems
+### Next step proposed then — one branch, three linked problems (STILL OPEN, untouched since)
 
 Agreed 2026-08-22: merge this branch first, then do all three on a **dedicated
 branch**, not on top of cleanup work.
@@ -621,3 +621,234 @@ thresholds uncalibrated; `readiness_evaluations` mixed-scale rows; Neon TLS
 verification disabled; the owed manual auth click-through; VS Code's
 `git.postCommitCommand`; and §1's "guard the remaining unauthenticated modules"
 claim still needing confirmation rather than trust.
+
+---
+
+## 2026-08-22 (3a / 3b) — the better transcription was being thrown away
+
+Branch `fix/ocr-transcription-preference`, 4 commits, local. Gates at the tip:
+jest **278/278 across 26 suites**, `tsc --noEmit` 0, `svelte-check` **119/14 —
+unchanged from baseline**.
+
+### Two defects, both "a signal computed and then ignored"
+
+1. **`parseCapsuleProposal` stored Tesseract's transcription, not Gemini's.** The
+   guard read `raw_transcription && !parsedText` — the inverse of its own
+   comment. Tesseract is installed, so `parsedText` was always truthy and
+   Gemini's `raw_transcription` reached **no consumer anywhere in either app**.
+   The `OCR_PLACEHOLDER` sentinel is also truthy and beat it too.
+   `detectSketch` deliberately still reads Tesseract's output — its weights are
+   tuned to that, and clean prose would stop sketches ever being detected.
+   Pinned by a test that was green before the fix.
+2. **`fieldConfidence` was `text.length < 40`.** The extraction prompt orders a
+   40-character minimum on every field, so the rule graded compliance with that
+   instruction. Replaced by content-word overlap with the transcription
+   (`src/ocr/field-confidence.ts`). The frontend also defaulted a missing field
+   to `'verified'`, rendering green for something never scored.
+
+### Live verification — one Gemini call, and it separated cleanly
+
+Synthetic handwriting (Caveat font, 1600×1200 JPEG) through the **running**
+server against Neon. `extractedText` came back as Gemini's verbatim
+transcription, no placeholder. The document deliberately carried only title /
+startup / problem / target-market content.
+
+**Every field present on the page scored `verified` (4/4); every field the model
+inferred scored `low` (4/4)** — `scope`, `objectives`, `methodology`,
+`solution_description`. The `scope` prediction recorded before the run held.
+
+**Do not overclaim this: n=1, one document, and a font is not handwriting** —
+uniformly formed glyphs are far easier than a real hand. It shows the rule and
+the wiring work end to end; it does **not** calibrate `SUPPORT_THRESHOLD = 0.5`,
+which remains a guess until 3c runs on real samples.
+
+Also confirmed live: `visionLabels: []` and `sketchDetected: false` — 3b's Vision
+path is inert, as the corrected wording now says.
+
+### Corrections to claims made earlier the same day
+
+- **The entropy gate is NOT inert.** Measured: the same page as PNG scores
+  **3.33** and is rejected; as JPEG **5.89** and passes. It reads the tail of the
+  *compressed file*, so a blank-bottomed PNG fails. Camera photos survive on
+  sensor noise. The sample-prep protocol was corrected.
+- `@google-cloud/vision` absence verified by `import()` at runtime
+  (`ERR_MODULE_NOT_FOUND`), not by reading `package.json`.
+
+### Gotchas worth keeping
+
+- **A capsule-proposal vision call took 175 s.** Well beyond a default HTTP
+  client timeout; budget for it before blaming the pipeline.
+- Playwright MCP refuses `file:` URLs and only writes inside the repo root —
+  serve the scratchpad over `http://127.0.0.1` and clean `.playwright-mcp/` after
+  (it is **not** gitignored).
+- A probe script must sit **inside `backend/`** or `@mikro-orm/postgresql` will
+  not resolve.
+- The probe's `ocr_documents` row was **deleted after the run** (id 2,
+  `ocr-sample.jpg`); only the pre-existing `capsule-page.png` from 2026-07-27
+  remains. Nothing references that table — no inbound foreign keys.
+
+### Still open
+
+- **3c is unblocked only by the samples.** Ten handwritten proposals plus
+  verbatim transcripts; the protocol is written and shared.
+- `SUPPORT_THRESHOLD` uncalibrated.
+
+### Same session — URAT and calculator steps were blank
+
+Reported while testing the OCR upload, unrelated to the branch's other work.
+
+**Root cause:** `urat_questions` and `calculator_questions` held **0 rows**. The
+18 URAT and 35 calculator questions lived only inside
+`AppService.generateUratQuestions` / `generateCalculatorQuestions`, and their
+only callers were three `@Post` endpoints in `app.controller.ts` that were **all
+commented out**. Nothing ran them at boot, so the data died in the 2026-07-26
+wipe and was never restored. `readiness_levels` still had its 54 rows, which is
+why only these two steps were affected.
+
+**Why nobody caught it:** both endpoints answer **200 with `[]`**, not an error.
+`getData()` in `Application.svelte` does silently return `undefined` when a fetch
+is not `ok`, but that path never fired — the components simply rendered an empty
+list. Nothing to log, nothing to catch.
+
+**Fix:** banks extracted to `src/assessment-questions.ts`; `seedAssessmentQuestions`
+runs on boot, guarded on emptiness. The original loop had **no guard at all**, so
+a second run would have produced 36 URAT questions and every applicant would have
+seen each question twice — the guard is the point, and it has a test. The
+superseded generators and the dead endpoints were deleted rather than left as a
+second copy of the data to drift out of sync.
+
+**Verified live, at three layers:** endpoints return 18 and 35 (the calculator one
+returns 7 because the service groups by category — 5 × 7, not a shortfall); the DB
+holds 18 / 35; and the flow renders **18 textareas** in the browser. Idempotency
+proved itself incidentally — the dev watcher restarted three times during the edits
+and the counts stayed put.
+
+**Found in passing, logged not fixed:** `@Controller('readinesslevel')` has **no
+class-level guard**, so its endpoints answer unauthenticated (curl, no token).
+`Application.svelte` calls them with a bare `fetch` carrying no credentials, so
+guarding it without fixing the caller repeats the PR #15 trap exactly.
+
+**Gotcha:** `allowGlobalContext` is unset (false), so a boot-time
+`app.get(AppService)` would throw. Boot seeders must take `orm.em.fork()` — which
+is what every other seeder in `main.ts` already does.
+
+### Same session — a 503 turned into confident garbage, and the confidence rule was circular
+
+A live upload hit **503 UNAVAILABLE** (model busy — *not* 429/quota; the two are
+different codes and must never share a code path). What followed exposed a flaw
+in the confidence rule shipped hours earlier.
+
+**The chain:** vision 503s → `catch` swallows it → Tesseract mangles the
+handwriting → `if (!aiPayload && parsedText)` fires a **second** Gemini call on
+the mangling → the model extracts fields from it → **two fields render as green
+"Verified" badges**. Measured on the stored row: `solution_description` scored a
+support ratio of **1.00**, `startup_description` **0.83**.
+
+**Why:** the rule compares a field against the transcription. On the vision path
+both derive independently from the image, so an unsupported field genuinely
+fails to match — that is why `scope` was caught on the clean run. On the fallback
+path the model is *handed* the text and asked to extract from it, so the
+comparison is output-versus-its-own-input and overlap is guaranteed. **The same
+circularity applies to the PDF path**, which was never on the vision path at all.
+
+**Fixes (three, all TDD):**
+1. `classifyField`/`scoreFields` take a **required** `EvidenceSource`
+   (`vision` | `derived`); `derived` caps everything at `low`. Required rather
+   than defaulted — a default of `vision` would let a forgotten argument restore
+   the bug silently. The compiler immediately caught the one existing call site,
+   which is the argument for making it required.
+2. `src/ai/retry-transient.ts` — 3 attempts, 2s/4s backoff, **never** retries a
+   429. Ported from `measure-grounding.js`, which has had this since 2026-08-03:
+   **the measurement harness was more robust than the application it measures.**
+   Delays are deliberately shorter than the harness's 15s/30s because a capsule
+   extraction already runs to ~200s.
+3. A service failure now raises `ServiceUnavailableException` and writes **no**
+   `ocr_documents` row; the controller passes `HttpException` through instead of
+   rewrapping as a 500. Non-service errors keep the Tesseract fallback, now
+   scored as `derived`.
+
+**Verified:** 300/300 across 28 suites, `tsc --noEmit` 0. The classifier is pinned
+by a regression test carrying the SDK's **verbatim** error string — a regex that
+matches a paraphrase but not the real message would be worthless.
+
+**Not verified live:** forcing a 503 on demand isn't possible without editing
+`.env`, so the retry and the fail-loud path are proven by tests only. The
+circular-evidence fix was *diagnosed* from live data (the stored row) even though
+its fix is test-proven.
+
+**Gotcha worth keeping:** the frontend's failure copy says "The image quality
+check failed… Re-upload a clearer image or switch to a PDF." For a 503 that is
+advice to re-photograph a perfectly good page. Failing loudly with a service
+message is what makes that copy correct again.
+
+---
+
+## Open at end of 2026-08-22 (3a / 3b session)
+
+### What this session did
+
+Objectives **3a and 3b closed**, plus two bugs found by using the app rather than
+by reading it. Detail in the three sections above; outcomes only here.
+
+- **3a — two defects fixed.** Production stored *Tesseract's* transcription, not
+  Gemini's, and `fieldConfidence` was `text.length < 40`. Both live-verified.
+- **3b — descope wording corrected.** `visionLabels` is always `[]` because
+  `@google-cloud/vision` is not installed (verified by `import()` at runtime, not
+  by reading `package.json`). The descope decision itself stands.
+- **URAT and calculator steps rendered blank** — both question tables held 0 rows
+  and nothing had ever seeded them. Now seeded on boot, guarded, tested.
+- **A Gemini 503 became confident garbage** — and exposed that the confidence
+  rule shipped hours earlier was *circular* on the fallback path. Three fixes.
+- **`CLAUDE.md` gained a response-style section** after the session's own
+  communication failures.
+- **3c's sample-prep protocol written and shared** (artifact), including a
+  ready-to-copy proposal and its predicted per-field result.
+
+**Two claims made this session were wrong and were corrected in place:** the
+entropy gate is *not* inert (PNG 3.33 fails, JPEG 5.89 passes — it bites
+digitally-clean images), and "3c is blocked only on the samples" was true of the
+CER half only, not SUS.
+
+### Branch state — ready, NOT merged
+
+`fix/ocr-transcription-preference`, **8 commits, local, nothing pushed.**
+`master` is an ancestor, so it fast-forwards.
+
+Gates, run fresh at the tip: jest **301/301 across 28 suites**, measurement
+**257/257**, `tsc --noEmit` 0, `svelte-check` **119/14 — unchanged from
+baseline**. **No entity or migration is touched**, which matters because
+`main.ts` runs `updateSchema()` on every boot: merging cannot alter the schema.
+
+Two commits are broader than the branch name suggests (`10a1365` seeding,
+`237cbcc` resilience) — accurate history, misleading label.
+
+### In progress — nothing half-done
+
+### What is NOT verified, and must not be claimed
+
+- **The 503 retry and the fail-loud path are test-proven only.** A real 503
+  cannot be forced without editing `.env`. The circular-evidence bug was
+  *diagnosed* from live data; its fix is not re-observed in the app.
+- **`SUPPORT_THRESHOLD = 0.5` is a guess.** 3c replaces it.
+- **3a's accuracy is unmeasured** — hence 🟡, not 🟢.
+- The healthy-path re-check after the fixes is the **user's observation**, not a
+  measurement taken here.
+
+### Next step
+
+1. **Merge this branch** (fast-forward, no schema impact).
+2. **The substantive work available now is the three linked problems** proposed
+   on 2026-08-22 and still untouched — see the superseded close-out above: SO
+   4.4's missing *action* on the flag, `AI_SCORE_NORMALIZATION_ENABLED` not
+   gating task normalization, and a mentor being unable to correct a baseline
+   score. **3c cannot start without the ten handwritten samples**, so this is the
+   §0 work that is not externally blocked.
+3. **3c when the samples exist.** CER harness design is agreed but unwritten; the
+   protocol is shared. SUS is being built by the team, not here — and the
+   instrument must exist *before* the sample-writing session, because that
+   sitting is the only natural chance to catch respondents straight after use.
+
+**New this session, logged not fixed:** `@Controller('readinesslevel')` has no
+guard, so its endpoints answer unauthenticated, and `Application.svelte` calls
+them with a bare `fetch` carrying no credentials — guarding it without fixing the
+caller repeats the PR #15 trap. See `TODO_CHECKLIST.md` §2.

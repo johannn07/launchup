@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { EntityManager } from '@mikro-orm/core';
 import { Startup } from 'src/entities/startup.entity';
@@ -35,6 +36,12 @@ import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
+import { scoreFields } from 'src/ocr/field-confidence';
+import { isQuotaError, isServiceFailure } from '../ai/retry-transient';
+
+// OcrService returns this sentinel instead of throwing when no engine resolves.
+// It is truthy, so it wins any `||` fallback unless matched explicitly.
+const OCR_PLACEHOLDER_PREFIX = /^OCR_PLACEHOLDER:/;
 
 @Injectable()
 export class StartupService {
@@ -276,6 +283,8 @@ export class StartupService {
     let parsedText = '';
     let tesseractAvgConfidence: number | undefined;
     let aiPayload: string | null | undefined = null;
+    // Only the vision path yields a transcription independent of the fields.
+    let visionSucceeded = false;
 
     if (file.mimetype.startsWith('image/')) {
       // Primary path: Gemini Vision beats Tesseract by a wide margin on handwriting.
@@ -285,8 +294,19 @@ export class StartupService {
           file.buffer,
           file.mimetype,
         );
-        console.log('[OCR] Gemini Vision direct extraction result:', aiPayload?.substring(0, 200));
+        visionSucceeded = true;
       } catch (err) {
+        // Degrading to Tesseract when the service is simply unreachable produced
+        // verified-looking garbage on 2026-08-22: Tesseract mangles handwriting,
+        // a second call extracts fields from the mangling, and those fields then
+        // match it perfectly. Better to say so and let the user retry.
+        if (isServiceFailure(err)) {
+          throw new ServiceUnavailableException(
+            isQuotaError(err)
+              ? 'The AI service has reached its daily quota. Please try again after it resets.'
+              : 'The AI service is busy right now. Please try uploading again in a moment.',
+          );
+        }
         console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
       }
 
@@ -400,10 +420,13 @@ export class StartupService {
       }
     }
 
-    // Gemini's transcription is more accurate than Tesseract's, so prefer it.
-    if (parsedPayload.raw_transcription && !parsedText) {
-      parsedText = parsedPayload.raw_transcription;
-    }
+    // Gemini reads handwriting far better than Tesseract, so its transcription
+    // wins whenever there is one. `parsedText` deliberately stays Tesseract's:
+    // detectSketch already scored it above and its weights are tuned to that
+    // output, not to clean prose. PDFs have no raw_transcription and fall back.
+    const transcription: string =
+      parsedPayload.raw_transcription ||
+      (OCR_PLACEHOLDER_PREFIX.test(parsedText) ? '' : parsedText);
 
     const reviewFields = {
       title: parsedPayload.title ?? '',
@@ -416,21 +439,19 @@ export class StartupService {
       methodology: parsedPayload.methodology ?? '',
     };
 
-    const confidence = Object.fromEntries(
-      Object.entries(reviewFields).map(([key, value]) => {
-        const text = String(value ?? '').trim();
-        if (!text) {
-          return [key, 'failed'];
-        }
-
-        return [key, text.length < 40 ? 'low' : 'verified'];
-      }),
-    ) as Record<string, 'verified' | 'low' | 'failed'>;
+    // Scored against the transcription, not against length. The extraction
+    // prompt orders a 40-character minimum on every field, so the old length
+    // rule graded the model's compliance with that instruction.
+    const confidence = scoreFields(
+      reviewFields,
+      transcription,
+      visionSucceeded ? 'vision' : 'derived',
+    );
 
     await this.em.persistAndFlush(
       this.em.create(OcrDocument, {
         originalFilename: file.originalname,
-        extractedText: parsedText,
+        extractedText: transcription,
         processingStatus: 'processed',
         fieldConfidence: Object.fromEntries(
           Object.entries(confidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),

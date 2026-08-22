@@ -16,6 +16,7 @@ import { WeightProfile } from './entities/weight-profile.entity';
 import { SEED_WEIGHT_PROFILES } from './readiness/readiness.weights';
 import { Sector } from './entities/enums/sector.enum';
 import { DEMO_READINESS_LEVELS, SEEDED_LEVEL_REMARK } from './demo-readiness-levels';
+import { seedAssessmentQuestions } from './seed-assessment-questions';
 
 async function ensureUser(
   em: EntityManager,
@@ -363,6 +364,15 @@ async function bootstrap() {
   await orm.getSchemaGenerator().updateSchema();
   await seedWeightProfiles(orm);
   await seedLocalDemoData(orm);
+
+  // The URAT and calculator banks. Empty on every DB made after the 2026-07-26
+  // wipe, which rendered both application steps blank with no error.
+  const seeded = await seedAssessmentQuestions(orm.em.fork());
+  if (seeded.urat || seeded.calculator) {
+    console.log(
+      `Seeded assessment questions: ${seeded.urat} URAT, ${seeded.calculator} calculator`,
+    );
+  }
   await backfillRagEmbeddings(app);
 
   const port = process.env.PORT || 3000;
