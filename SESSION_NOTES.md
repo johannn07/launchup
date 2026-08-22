@@ -19,11 +19,11 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **`pnpm lint` runs `eslint --fix`** and rewrites the whole tree over a CRLF/prettier conflict (checklist §4). Check `git status` before committing after anyone runs it.
 - **A fired scheduled task is not evidence it ran.** One fired, started its MCP servers, and never ran the command. Check for the artifact.
 - **Use Node, not PowerShell, for storage probes.** PS 5.1's `Invoke-WebRequest` reported a *successful* Supabase PUT as failed with no status code.
-- **`node inspect-prompt.js <startupId> [--dimension T]`** prints a real assembled prompt and stops before `sendToGemini` — zero quota.
-- **`ai_generation_runs` is not a quota ledger for measurement runs.** The harness opens no row and touches no EntityManager, so the table under-reports badly (its newest rows are from 2026-07-31). Budget from `apiRequests` in the results files plus UI-driven generation.
-- **`--merge` exists only on `measure-grounding.js`.** `measure-summary-bias.js` records fingerprints but nothing acts on them, so the pooling guard is documentary there, not mechanical.
-- **A scripted edit that silently fails to apply looks exactly like success**, because the follow-up test run goes green either way. Assert the anchor matched (`assert s.count(old) == 1`) and, for mutations, that behaviour *changed* — a mutant whose anchor no longer exists reports KILLED for the wrong reason.
-- **Backticks inside a double-quoted bash string are command substitution.** `"the \`foo\` thing"` runs `foo` and substitutes its output, silently deleting the word. Use quoted heredocs (`<<'EOF'`) for any text containing backticks.
+- **`node inspect-prompt.js <startupId> [--dimension T]`** prints a real assembled prompt and stops before `sendToGemini` — zero quota.
+- **`ai_generation_runs` is not a quota ledger for measurement runs.** The harness opens no row and touches no EntityManager, so the table under-reports badly (its newest rows are from 2026-07-31). Budget from `apiRequests` in the results files plus UI-driven generation.
+- **`--merge` exists only on `measure-grounding.js`.** `measure-summary-bias.js` records fingerprints but nothing acts on them, so the pooling guard is documentary there, not mechanical.
+- **A scripted edit that silently fails to apply looks exactly like success**, because the follow-up test run goes green either way. Assert the anchor matched (`assert s.count(old) == 1`) and, for mutations, that behaviour *changed* — a mutant whose anchor no longer exists reports KILLED for the wrong reason.
+- **Backticks inside a double-quoted bash string are command substitution.** `"the \`foo\` thing"` runs `foo` and substitutes its output, silently deleting the word. Use quoted heredocs (`<<'EOF'`) for any text containing backticks.
 - **`node -e "..."` cannot be given `--flag=value` arguments** — node parses them as its own options and exits. Probing a harness that reads `process.argv` needs a real script file.
 
 ---
