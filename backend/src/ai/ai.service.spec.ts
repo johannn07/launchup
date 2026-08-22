@@ -93,7 +93,12 @@ describe('AiService', () => {
     expect(generateContent).toHaveBeenCalledTimes(2);
   });
 
-  it('passes valid task responses through unchanged', async () => {
+  // "unchanged" is about the model's own fields: target_level and description
+  // survive verbatim. The two normalization fields are appended, and their
+  // values come from the normalizeScore mock ({ scaled: 5, z: 0 }), not from
+  // target_level. The old expectation asserted `target_level_normalized: 3`,
+  // which is the raw level rather than the normalized one, and omitted `_z`.
+  it('passes valid task responses through, appending the normalized score', async () => {
     generateContent.mockResolvedValue({
       text: '[{"target_level":3,"description":"Validate the product hypothesis"}]',
     });
@@ -102,11 +107,37 @@ describe('AiService', () => {
       {
         target_level: 3,
         description: 'Validate the product hypothesis',
-        target_level_normalized: 3,   // ← added to match the normalized output
+        target_level_normalized: 5,
+        target_level_z: 0,
       },
     ]);
 
     expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  // Pins a known gap, and does not endorse it: generateTasksFromPrompt
+  // normalizes unconditionally, so AI_SCORE_NORMALIZATION_ENABLED does not
+  // reach this path. ctx.config.scoreNormalization is read only inside
+  // reviewBiasScore. An ai_generation_runs row recording the flag as false
+  // still carries normalized target_level values. See TODO_CHECKLIST 0 (4c).
+  it('normalizes even when scoreNormalization is disabled (flag does not gate this path)', async () => {
+    generateContent.mockResolvedValue({
+      text: '[{"target_level":3,"description":"Validate the product hypothesis"}]',
+    });
+
+    const tasks = await service.generateTasksFromPrompt(
+      ctxWith({ scoreNormalization: false }),
+      'prompt',
+    );
+
+    expect(tasks).toEqual([
+      {
+        target_level: 3,
+        description: 'Validate the product hypothesis',
+        target_level_normalized: 5,
+        target_level_z: 0,
+      },
+    ]);
   });
 
   it('passes sampling parameters inside config, not at the top level', async () => {

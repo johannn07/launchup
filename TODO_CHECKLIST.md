@@ -42,7 +42,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
 | **Broken functionality (§2)** | In progress — 7 of 13 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
-| **Cleanup / tech debt (§4)** | In progress — 5 of 19 done; **all 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge pulled forward the same day; 14 deferred |
+| **Cleanup / tech debt (§4)** | In progress — 6 of 20 done; **all 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day (**backend suite now 266/266 green**); 14 deferred, one of them newly found (the 4c flag that does not gate task normalization) |
 | **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
 
 ---
@@ -805,9 +805,18 @@ Each verified by reading **both** sides of the call.
   No `.gitattributes` and `core.autocrlf=true`, so files check out CRLF while prettier (defaulting to `"lf"`) flags **every line of every file** as `Delete ␍` — 727 errors repo-wide, almost all this one rule. Real findings are buried, and `pnpm lint` runs `eslint --fix`, so a casual run rewrites the entire `src/` tree.
   **Fix:** `.gitattributes` with `* text=auto eol=lf`, or `"endOfLine": "auto"` in `.prettierrc`. Consider splitting `lint` (check) from `lint:fix`.
 
-- [ ] 🐞 **BUG · S · A unit test fails on `master` — the suite is red before anyone starts**
-  As of 2026-08-05: **216 passing / 1 failing**. The `ReadinessService › returns a weighted score…` failure was resolved by the 2b work; `AiService › passes valid task responses through unchanged` remains — the test's own context sets `scoreNormalization: true` and mocks `normalizeScore` to return `{ scaled: 5, z: 0 }`, so the service correctly emits `target_level_normalized: 5` plus `target_level_z: 0` while the assertion still expects `3` and no `_z`. **The expectation is wrong, not the code.**
-  **A second failure is a real regression.** Fix this one so the suite is a usable signal.
+- [x] ✅ 🐞 **BUG · S · A unit test fails on `master`** — *fixed 2026-08-22*
+  **The backend suite is green for the first time: 266 passing / 0 failing, 25 suites.** "A second failure is a real regression" is retired — *any* failure is now the signal.
+  The conclusion recorded here was right: the expectation was wrong, not the code. `target_level_normalized: 5` and `target_level_z: 0` are what the mocked `normalizeScore` returns; the old assertion wrote `3`, which is the **raw** level, under a comment claiming it matched the normalized output.
+  ⚠️ **The mechanism recorded here was wrong, and the correction is a real finding.** It attributed the behaviour to the test context setting `scoreNormalization: true`. **That flag never reaches this path** — `generateTasksFromPrompt` (`ai.service.ts:984-992`) normalizes unconditionally, and `ctx.config.scoreNormalization` is read *only* inside `reviewBiasScore` (`:349, :361, :367, :391, :413`). Setting it `false` changes nothing here.
+  **Provenance cost, and it is the reason this is not merely cosmetic:** an `ai_generation_runs` row recording `scoreNormalization: false` still carries normalized `target_level` values on this path — the 4c arm mislabelled inside the table built to make arms attributable. Pinned by a test rather than a doc line; the mutation that makes the path honour the flag kills **only** that test, so nothing else covered it.
+  **Deliberately not fixed here:** making the path honour the flag is a production behaviour change affecting an arm under measurement, so it is logged separately rather than smuggled into a test repair.
+
+- [ ] 🐞 **BUG · S · `AI_SCORE_NORMALIZATION_ENABLED` does not gate task normalization** — *found 2026-08-22*
+  `generateTasksFromPrompt` (`ai.service.ts:984-992`) calls `baselineService.normalizeScore` unconditionally and appends `target_level_normalized` / `target_level_z`. `ctx.config.scoreNormalization` is read only in `reviewBiasScore`, so the 4c flag has no effect on the RNS task path.
+  **Why it matters:** `ai_generation_runs` exists so a run is attributable to an exact arm. A row stamped `scoreNormalization: false` still carries normalized values here, so a baseline-vs-enhanced comparison over task target levels is comparing two identical arms while believing otherwise. Same class of defect as the `temperature` top-level bug — a config flag that silently never applied.
+  **Fix:** honour the flag as `reviewBiasScore` does (`return t` untouched when disabled). **Do not do this silently** — it changes generated output on the disabled arm, so any stored comparison that assumed the flag worked needs re-reading, and the current behaviour is pinned by `ai.service.spec.ts`'s *"normalizes even when scoreNormalization is disabled"* test, which must be inverted in the same commit.
+  **Scope check before fixing:** confirm whether `generateInitiativesFromPrompt` and the RNA path do the same thing — only the tasks path was traced.
 
 - [ ] 🧹 **DEBT · S · Removing an uploaded file orphans the object in the bucket**
   `FileUploadField.svelte`'s "Remove file" only rewrites `answerValue`. `UploadService.deleteFile()` works, but the only route calling it is **commented out** (`upload.controller.ts`, the `@Delete(':key(*)')` block), so removed attachments stay in storage forever with nothing pointing at them.
