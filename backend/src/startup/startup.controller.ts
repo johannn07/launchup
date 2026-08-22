@@ -63,12 +63,6 @@ export class StartupController {
     return await this.startupService.getAllStartups();
   }
 
-  @Get('/debug-evals')
-  async debugEvals() {
-    const conn = this.startupService['em'].getConnection();
-    return await conn.execute(`SELECT id, startup_id, composite_score, tier_label FROM readiness_evaluations`);
-  }
-
   // Deprecated, kept for backward compatibility.
   @Get('/ranking-by-urat')
   async getStartupsByUrat() {

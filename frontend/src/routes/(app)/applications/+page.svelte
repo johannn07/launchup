@@ -384,7 +384,6 @@
       assessments={assessments || []}
       {approveStartup}
       {assignAssessmentsToStartup}
-      {access}
     />
   {:else if selectedTab === 'waitlisted'}
     <WaitlistedDialog
@@ -395,7 +394,6 @@
       assessments={assessments || []}
       {approveStartup}
       {assignAssessmentsToStartup}
-      {access}
     />
   {:else if selectedTab === 'qualified'}
     <QualifiedDialog
@@ -409,7 +407,6 @@
       {startupAssessments}
       {assignAssessmentsToStartup}
       refetchStartupAssessments={fetchStartupAssessments}
-      {access}
     />
   {:else if selectedTab === 'completed'}
     <CompletedDialog

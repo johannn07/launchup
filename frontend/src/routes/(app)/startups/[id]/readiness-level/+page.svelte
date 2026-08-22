@@ -238,7 +238,6 @@
     }
   };
 
-  let form: HTMLFormElement;
 </script>
 
 <svelte:head>

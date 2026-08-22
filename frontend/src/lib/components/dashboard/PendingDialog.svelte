@@ -33,7 +33,6 @@
     startupId: number,
     assessmentTypeIds: number[]
   ) => Promise<any>;
-  export let access: string;
 
   let showWaitlistDialog = false;
   let showApprovalDialog = false;
@@ -289,6 +288,5 @@
     assessments={flatAssessments}
     onApprove={approveStartup}
     {assignAssessmentsToStartup}
-    {access}
   />
 {/if}

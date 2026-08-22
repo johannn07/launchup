@@ -16,7 +16,6 @@
   }> = [];
   export let approveStartup: (startupId: number, mentorId: any) => Promise<void>;
   export let assignAssessmentsToStartup: (startupId: number, assessmentTypeIds: number[]) => Promise<any>;
-  export let access: string;
 
   const memberCount = getStartupMemberCount(startup);
 
@@ -225,6 +224,5 @@
     assessments={flatAssessments}
     onApprove={approveStartup}
     {assignAssessmentsToStartup}
-    {access}
   />
 {/if}

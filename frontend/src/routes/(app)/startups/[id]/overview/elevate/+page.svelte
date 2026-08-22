@@ -12,7 +12,7 @@
   import axios from 'axios';
   import { toast } from 'svelte-sonner';
   import * as Table from '$lib/components/ui/table';
-  import { getData, getReadinessLevels } from '$lib/utils';
+  import { getReadinessLevels } from '$lib/utils';
   import { Textarea } from '$lib/components/ui/textarea';
   export let data: PageData;
 
@@ -65,10 +65,6 @@
       cacheTime: 0,
       refetchOnWindowFocus: false
     }
-  );
-
-  const rnaData = useQuery('rnaDataElevate', async () =>
-    getData(`/startup-rna/?startup_id=${data.startupId}`, data.access!)
   );
 
   const readinessLevel = useQuery(

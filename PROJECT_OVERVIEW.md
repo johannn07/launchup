@@ -691,26 +691,26 @@ Established by diffing **every** frontend API call against a complete backend ro
 
 ### 7.1 Frontend calls endpoints that don't exist
 
-Eleven distinct broken calls, in three clusters.
+Eleven distinct broken calls, in three clusters. **Five were resolved 2026-08-22 — every one by deletion, because the calling code turned out to be unreachable or its result unread.** Resolved rows are kept and marked ✅ rather than removed, so the audit trail survives.
 
 **Cluster A — routes that were never built**
 
 | Frontend call | File | Reality |
 |---|---|---|
-| `POST /readiness-level-criterion-answers/bulk-create/` | `(app)/startups/[id]/readiness-level/+page.server.ts:64` | **No such route anywhere in the backend.** Wrapped in a `try` whose `catch` is empty (`:104`), so it fails silently. On "success" it redirects to `/mentor/startups/qualified/:id`, also not a route. This is the mentor's core task and the gate for the whole coaching chain. |
-| `POST /startup-readiness-levels/bulk-create/` | same file, `:78` | Same — no such route. |
+| ✅ ~~`POST /readiness-level-criterion-answers/bulk-create/`~~ | ~~`…/readiness-level/+page.server.ts:64`~~ | **Resolved 2026-08-22 — action deleted.** The route claims were right; **"the mentor's core task and the gate for the whole coaching chain" was wrong.** The action was *unreachable* — `+page.svelte` has no `<form>`, so nothing could POST to the route. Mentor rating goes through `submitBaselineScores()` → `POST /readinesslevel/startup/:id/rate`, which upserts `StartupReadinessLevel` rows. |
+| ✅ ~~`POST /startup-readiness-levels/bulk-create/`~~ | ~~same file, `:78`~~ | Same — deleted with the action. |
 | `GET /analytics/startups/` | `(app)/analytics/+page.svelte:16`, `(app)/cohorts/+page.svelte:16` | **No analytics controller exists in the backend at all.** |
 | `GET /analytics/elevate-logs/` | same files, `:31` | Same. |
 | `GET /cohorts` | same files, `:46` | **No cohorts controller and no cohort entity** — the concept doesn't exist server-side. |
-| `GET /assessments/:id/fields` | `lib/components/dashboard/sub/AssessmentPreviewDialog.svelte:30` | No `fields` route in the assessment module. **This component is mounted** (QualifiedDialog → `/applications`; ApprovalDialog → Pending/Waitlisted dialogs), so it breaks a Manager-facing screen. |
+| ✅ ~~`GET /assessments/:id/fields`~~ | ~~`…/sub/AssessmentPreviewDialog.svelte:30`~~ | **Resolved 2026-08-22 — component cut.** The route could not exist as written: an `Assessment` row *is* a single question, carrying `description` and `answerType` directly, so nothing sits beneath it. **"This component is mounted … so it breaks a Manager-facing screen" was wrong** — `openPreview()` is never called in either parent, so the dialog never rendered at all. Mounted ≠ openable. |
 
 **Cluster B — wrong prefix, verb, or payload shape**
 
 | Frontend call | File | Reality |
 |---|---|---|
 | `DELETE /startups/remove-member/:memberId/` | `(app)/startups/[id]/overview/members/+page.svelte:155` | Backend is `@Post('remove-member')` reading `userId` **and** `startupId` from the body (`startup.controller.ts:97-103`). Wrong method *and* wrong shape — removing a team member always fails. |
-| `GET /startup-rna/?startup_id=` | `(app)/startups/[id]/overview/elevate/+page.svelte:71` | The prefix is `/rna`, and the query param is `startupId`. The RNA panel on the Elevate tab never populates. |
-| `GET /readinesslevel/:id/calculator-final-scores/` | `lib/components/admin/RatedTab.svelte` | Real route is `/startups/:id/calculator-final-scores`. (Component is orphaned anyway — see §7.5.) |
+| ✅ ~~`GET /startup-rna/?startup_id=`~~ | ~~`…/overview/elevate/+page.svelte:71`~~ | **Resolved 2026-08-22 — query deleted.** This file had the diagnosis right where `TODO_CHECKLIST.md` did not: both the prefix *and* the param name were wrong. But there is **no RNA panel to populate** — `rnaData` is never read, so the query fetched on every page load and discarded the result. |
+| ✅ ~~`GET /readinesslevel/:id/calculator-final-scores/`~~ | ~~`lib/components/admin/RatedTab.svelte`~~ | **Resolved 2026-08-22 — `RatedTab.svelte` deleted** along with the other two orphaned Tab components. |
 | `/assessment/types`, `/assessment/types/:id`, `/assessment/types/:id/fields`, `/assessment/fields`, `/assessment/fields/:id` | `lib/components/admin/assessment/ManageAssessmentTypes.svelte:39,56,64,75,85,108,114,126` | Prefix is `assessments` (plural) and **no `fields` routes exist**. All 8 calls in the component are broken — though the component is imported nowhere (§7.5). |
 
 **Cluster C — handler exists but is disabled**
@@ -738,7 +738,7 @@ This is the most serious category. Full per-controller audit is in §5.4.
 - **No ownership checks anywhere (IDOR).** `GET /startups/:id` and siblings only check that you're logged in — row-level filtering exists solely in `getStartups()`, the *list* endpoint (`startup.service.ts:43-82`). Any founder can read any other startup's full record by changing the id in the URL.
 - **`AdminGuard` is only applied in the admin module.** Approve / waitlist / appoint-mentors / change-mentor / mark-complete are `JwtGuard`-only (`startup.controller.ts:30`), so any authenticated founder can approve their own application and assign themselves a mentor. The UI hides these; the API doesn't.
 - **Hardcoded secret fallback.** `JWT_SECRET` falls back to the literal `'launchup-dev-secret'` in `auth.module.ts:18` and `jwt.strategy.ts:19`. If the env var is missing in a deployed environment, every token is signed with a string committed to a public repo — and the `||` makes it fail silently.
-- **Debug endpoints ship enabled:** `GET /startups/debug-evals` and `GET /admin/tiers/check-evals` run hand-written SQL via `em.getConnection().execute()` (`startup.controller.ts:62`, `admin.controller.ts:157`). Neither is called from the frontend.
+- ✅ ~~**Debug endpoints ship enabled**~~ — **both deleted 2026-08-22.** `GET /startups/debug-evals` and `GET /admin/tiers/check-evals` ran hand-written SQL through `em.getConnection().execute()`, reaching into a private member by bracket access; the first was reachable by any logged-in user and dumped every startup's composite score and tier. No caller existed in `frontend/src`, `backend/src` or `backend/measurement`.
 - **Unverified JWT decode on the admin login.** `(auth-admin)/admin-login/+page.server.ts:41-49` base64-decodes the token payload to check `role` without verifying the signature. Server-side and separately guarded, so not directly exploitable — but it reads badly.
 
 ### 7.4 Data model
@@ -755,7 +755,7 @@ This is the most serious category. Full per-controller audit is in §5.4.
 
 **Orphaned components — imported nowhere** (verified by grepping every `.svelte`/`.ts` for each name):
 - `lib/components/admin/assessment/ManageAssessmentTypes.svelte` — and all 8 of its API calls are broken (§7.1).
-- `lib/components/admin/PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — `PendingTab:105-107` has a commented-out call to `/startups/:id/rate-applicant/` with the note *"NEED TO IMPLEMENT BACKEND FIRST"*, so applicant rating was designed but never built. A `rated` tab still exists in `/applications` with no way to reach that state.
+- ✅ ~~`lib/components/admin/PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte`~~ — **all three deleted 2026-08-22.** `PendingTab:105-107` had a commented-out call to `/startups/:id/rate-applicant/` noted *"NEED TO IMPLEMENT BACKEND FIRST"*, so applicant rating was designed and never built; the 2026-08-07 §3 decision resolved that as *cut cleanly*. Each also carried a hardcoded **Django SimpleJWT** token from the previous team's app, verified expired 2024-09-06 before deletion (the literals remain in git history). **Still true:** a `rated` tab exists in `/applications` with no way to reach that state.
 - `lib/components/dashboard/ReadinessCard.svelte` — note the `ReadinessDashboard` it wraps *is* used in three places.
 
 **Built but hidden from nav** (`lib/access.ts`):
@@ -764,8 +764,9 @@ This is the most serious category. Full per-controller audit is in §5.4.
 
 **Leftovers:**
 - `backend/src/overview/overview.controller.ts` — an empty `@Controller('overview')` with zero routes, though the module is imported in `app.module.ts:69`.
-- `/dashboard` (14 lines) and `frontend/fix-page.cjs` — scaffolding.
-- Committed scratch files, all tracked in git: `admin/assessments/+page.svelte.backup`, `admin/assessments/temp_fix.txt`, `backend/test-login.js` (0 bytes), `chumcheck_2025-03-04_025337.sql` (561 KB).
+- `/dashboard` (14 lines) — scaffolding. (`frontend/fix-page.cjs` deleted 2026-08-22.)
+- ✅ ~~Committed scratch files~~ — **all five removed from tracking 2026-08-22**: `admin/assessments/+page.svelte.backup`, `admin/assessments/temp_fix.txt`, `backend/test-login.js` (0 bytes), `frontend/fix-page.cjs`, and `chumcheck_2025-03-04_025337.sql` (564 KB, a dump of the *previous* project's database). `*.zip` is now gitignored so the root archive dumps cannot return.
+  ⚠️ **`scripts/delete_db.sh:6` still references the deleted dump.** That script drops and recreates a `chumcheck` database this project does not use — folded into the deferred *Purge `chumcheck` references* item, now a 3-file deletion.
 - `scripts/reset_db.{sh,ps1}` and `scripts/delete_db.sh` target a **`chumcheck`** database with user `postgres`, while `docker-compose.yml` creates `launchup_db` / `launchup_user` — so running them does nothing to your dev DB, or drops an unrelated one. This project appears to be a rename/fork of an earlier one.
 - `backend.zip` (116 MB) and `frontend.zip` (84 MB) sit in the repo root — untracked, but not gitignored either.
 

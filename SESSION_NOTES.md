@@ -542,82 +542,186 @@ backwards), and this one. Implementing the recorded fix would have added a
 
 ---
 
-## Open at end of 2026-08-20
+## 2026-08-20 close-out — compressed 2026-08-22
 
-**Branch state.** `fix/so-4-4-flag-threshold` **merged via PR #26** (merge commit `67f6071`) — the block above was written before that landed and describes it as unmerged; stale, left as written. `feat/adversarial-summary` merged via PR #25 (`70a66c4`), `measure/assertion-classifier-gaps` via PR #24 (`2195df8`). Not in `master`:
-- **`measure/non-saturating-differentiation` — 8 commits, local, nothing pushed.**
-  All three metric-3 parts, the pre-registration, the run, and the SO 4.2
-  literal-`null` refutation. **Merge-audited 2026-08-20 and assessed safe:**
-  `master` is an ancestor so it fast-forwards (conflicts impossible);
-  **no production runtime code changes at all** — the only `backend/src/` file is
-  `ai.service.spec.ts`, and every `measurement/` mention inside `src/` is a
-  comment, never an import, so the app cannot load anything this branch touches;
-  no frontend, no schema, no migration. `ai.service.ts` verified **byte-identical
-  to master** after being mutated twice during testing. Caveat: the branch is
-  **wider than its name** — `38ea9e0` (the null refutation) is separable if a
-  tidier history is wanted.
-- `docs/trim-notes-and-status-table` — pushed, needs a PR.
-- `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
-
-**13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
-
-**Next step — in order.**
-1. **Decide the merge** on `measure/non-saturating-differentiation`. Audited and
-   assessed safe (above); John's call, nothing pushed. There is unusually little
-   to click through — no UI, route or DB is touched — so the meaningful check is
-   the gates plus, optionally, a zero-quota
-   `--dry-run --only-arm=adversarial --reps=5`.
-2. **Then the 🎯 demo-critical list** (`TODO_CHECKLIST.md`, Capstone triage) —
-   8 items, all still open, ~1 day, mostly deletions. **§0 has essentially no
-   open code work left**, so the triage's own order (§0 → 🎯 → stop) puts this
-   next. Start with the only **M**, *"readiness-level rubric submission posts to
-   two endpoints that don't exist"* — it is the one that could expand, and it
-   carries a *"verify first, may collapse to a deletion"* note. Given **three
-   recorded diagnoses have now been refuted on inspection** (assertion
-   classifier, SO 4.4's predicate direction, the literal-`null` bug), verifying
-   the largest item before planning around it is the cheap move.
-
-**Not next, but not forgotten.**
-- **SO 4.4's missing *action* on the flag** — the one substantive §0 gap left.
-  The badge is visible; nothing happens when it fires. A design question (what
-  should a Manager be able to *do*?) more than a coding one, so it wants a
-  brainstorm first.
-- **Metric 3 beyond the FAIL** — a *separately* pre-registered rule with a
-  **per-startup** noise floor, scored on new data. The 2026-08-20 run supplies
-  the first observed overlap distribution to design against; calibrating on that
-  run and reporting the fit is the forbidden move.
-- **A cheaper validation than more reps:** `ratio < 0.75` is tested against one
-  prompt whose output structure barely varies. A *different* summary prompt or a
-  third document beats a fourth rep of the same two.
-- **The 🧹 `demo-proposals.test.js` source-text assertion is lower value than it
-  reads.** The demo DTOs are hashed into `common` in `currentFingerprints`, so a
-  changed *value* already invalidates every fingerprint on every metric. The weak
-  test does not leave that risk uncovered — the fingerprint does. Tidiness, not
-  integrity.
-
-**Quota at close:** **10 of 20 spent** in the window that opened 15:00 Manila
-2026-08-20 (the metric-3 part 3 run, 10/10 succeeded); ~10 remain. The 2026-08-19
-session spent zero. Confirm from `apiRequests` in the results files, never from
-`ai_generation_runs` — the harness opens no rows there.
+Branch state, quota and next steps from this block are superseded by the
+2026-08-22 sections below. `measure/non-saturating-differentiation` merged via
+PR #28 (`14b2a89`). The trail of retired next steps is kept:
 
 **Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-19 retired "harden the verdict rule" — with overlap owning the verdict, the count rule was retired rather than hardened, and the margin was deliberately left unset. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 
-**Open decisions, not blocking:**
-1. **Production cookie policy** (`sameSite: 'strict'` breaks cross-site once deployed) — checklist §1.
-2. **RNS correlation-key uniqueness** and **stale verdicts on artifact edit** — the two 1c design decisions above.
-3. **Tier thresholds uncalibrated** against ÷9 scores; `tier_configs` empty on Neon.
-4. **`readiness_evaluations` holds mixed-scale rows** — 16 legacy ÷5 rows beside ÷9 rows, now also pre-correction composites. Database cleanup, not code.
-5. **`mikro-orm.config.ts` disables TLS verification against Neon** (`rejectUnauthorized: false`); Neon uses a public CA, so this is probably just tightenable.
-6. **One manual login + click-through of the auth-guard work is still owed** — browser automation could not drive the SvelteKit login form.
-7. **Check VS Code's `git.postCommitCommand`.** Two branches reached GitHub with no `git push` issued in-session; a `push`/`sync` setting would quietly defeat the local-first rule.
-8. **One checklist claim still needs confirming rather than trusting.** §1's "Guard the remaining unauthenticated modules" names exactly the six controllers the P0 fix above says it guarded and live-verified — left open with a warning rather than ticked. *(The suite baseline half of this item was closed 2026-08-18: re-run, 247/1 and 210/210.)*
+---
 
-**Still unmeasured:** RNA *generation* quality. Every grounding figure is the levels probe; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. Needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
+## 2026-08-22 — the 🎯 demo-critical sweep, all eight cleared
 
-**Suite baselines (re-run at the branch tip, 2026-08-20):** jest **264 passing /
-1 failing** — the documented pre-existing `AiService › passes valid task
-responses through unchanged`; a *second* jest failure is a real regression.
-Measurement **257/257**. `npx tsc --noEmit -p tsconfig.json` exit 0, and it is
-the only gate covering `startup.service.ts` — no spec imports it, so ts-jest
-never type-checks it. *(On `master` these read 262/1 and 210/210; the deltas are
-this branch's +2 jest and +47 measurement tests.)*
+`fix/demo-critical-sweep`, 4 commits, **local, nothing pushed**.
+**21 files changed, 4 insertions, 7,188 deletions.**
+
+### The headline: four of the eight were dead code, not live breakage
+
+Verifying before planning was the whole value of the session. **Three separate
+features turned out to be stranded mid-build**, each with a real symptom
+recorded against it and none of them reachable:
+
+| Feature | Plumbing present | Trigger present |
+|---|---|---|
+| Readiness-level rubric submission | form action, 6 dimensions × 54 answers | **no `<form>` element anywhere** |
+| Elevate RNA panel | `useQuery` + fetch | **nothing reads `rnaData`** |
+| Assessment preview dialog | component, state, 2 mounts | **`openPreview()` never called** |
+
+The consistent shape is *plumbing wired without a trigger* — someone built the
+state, handlers, mounts and fetches, then never landed the button. It is worth
+recognising on sight, because each one reads like live breakage in a checklist.
+
+### The M item: route claims true, impact claim false
+
+`+page.server.ts` really did post to two non-existent endpoints and redirect to
+a non-existent route. But the item called it *"the mentor's core task and the
+gate for the entire coaching chain"*, and **the action was unreachable** — the
+page has no `<form>`, so nothing can POST to the route. The live rating path is
+`submitBaselineScores()` → `POST /readinesslevel/startup/:id/rate`, a real route
+whose service upserts `StartupReadinessLevel` rows.
+
+**This is the fourth refuted diagnosis on this project** (assertion classifier,
+SO 4.4's predicate direction, the literal-`null` bug, now this). The generating
+pattern is now clear enough to name: *the recorded symptom is real, and nobody
+checked whether the code carrying it can execute.* Reachability first, then
+correctness.
+
+A latent second defect, now moot: `throw redirect(302, …)` sat inside the `try`,
+and SvelteKit signals redirects **by throwing** — the empty `catch` would have
+swallowed the redirect too, so even a working version would have done nothing
+visible.
+
+### Two items the checklist under-recorded
+
+- **Elevate** — the item named the wrong prefix only. The *parameter name* was
+  also wrong (`startup_id` vs `@Query('startupId', ParseIntPipe)`), so it would
+  have 400'd even under the right prefix. Moot: nothing reads the result.
+- **Assessment preview** — `/assessments/:id/fields` **could not exist as
+  written**. An `Assessment` row *is* a single question, carrying `description`
+  and `answerType` directly; there is no collection of fields beneath one. The
+  data model was wrong, not just the URL. Cut on an explicit scope decision
+  rather than built out.
+
+### The `GEMINI_API_KEY` is fine, and the probe is reusable
+
+`AQ.` is a valid newer AI Studio format, not a Vertex/OAuth credential.
+Proven two ways rather than argued from the prefix:
+1. **A live `embedContent` probe returned 768 dims** — embeddings sit on the
+   separate 100/min quota, so this costs **zero** generation budget.
+2. **Generation proven separately**, because a key can be restricted per-API:
+   the 2026-08-20 results file records `apiRequests: 10` with `degraded: 0`.
+
+**Keep the embedding probe.** It is the cheapest live auth test in the project.
+
+### A verification lesson, in the same family as the mutation lessons
+
+Comparing `svelte-check` runs, `grep -o "Error:.*"` matched **nothing** — the
+real output is `Error<ANSI>:`, so both sides were empty lists and `diff`
+happily reported "identical". **Two commits were verified by a comparison that
+could not have failed.** The error *counts* did match (160/160), which is real
+evidence, but set-equality was never established until the runs were re-diffed
+with ANSI stripped.
+
+Same shape as 2026-08-20's *"assert the mutation changed behaviour, not just
+that it landed"*: **a check that cannot fail is not a check.** Before trusting a
+diff of two tool outputs, confirm the extractor actually extracts — a non-zero
+match count is the cheap guard.
+
+### New baseline, previously undocumented
+
+`pnpm check` was never recorded in these notes. On `master` it is **160 errors /
+16 warnings in 46 files**; at this branch tip **119 / 14 in 43 files**.
+**Deleting dead code cleared 26% of the frontend's type errors**, with zero new
+errors or warnings introduced (verified with ANSI stripped, both directions).
+The 41 removed came from the three Tab components, the preview dialog, and three
+`{access}` pass-throughs that were `string | undefined` against a `string` prop.
+
+### Small things worth not rediscovering
+
+- The three Tab components' hardcoded JWT is a **Django SimpleJWT** token from
+  the previous team's app, `exp` 2024-09-06 — decoded and confirmed expired
+  before deletion, so no rotation was needed. The literals remain in git history.
+- Removing a prop **cascades**: dropping `access` from `ApprovalDialog` orphaned
+  it in `PendingDialog` and `WaitlistedDialog` too. Follow the chain or
+  `svelte-check` grows unused-export warnings.
+- ⚠️ **`scripts/delete_db.sh:6` now references the deleted `chumcheck` dump.**
+  That script drops and recreates a database this project does not use. The
+  deferred *Purge `chumcheck` references* item is now a 3-file deletion and is
+  worth pulling forward.
+
+**Quota:** **zero generation calls spent.** The only API call was one embedding.
+
+---
+
+## Open at end of 2026-08-22
+
+**Branch state.** `fix/demo-critical-sweep` — **6 commits, local, nothing
+pushed**, on top of `master` at `14b2a89`. Gates at the tip: `tsc --noEmit`
+exit 0, jest **264 passing / 1 failing** (the documented pre-existing
+`AiService` failure — a *second* jest failure is a real regression),
+measurement **257/257**, `svelte-check` **119 / 14** against a master baseline
+of 160 / 16. The last two commits are documentation only, so the gates ran
+against the final code state (`9cb7621`).
+
+✅ **Click-through done by John 2026-08-22 — no bugs observed.** The claim under
+test was that *nothing visible changed*, since every deletion was unreachable
+code. Covered: `/applications` (Pending, Waitlisted, Qualified, plus the
+untouched Completed tab as a control, and the `ApprovalDialog` reached from two
+of them), the readiness-level page in both the mentor and founder branches, and
+the Elevate tab.
+
+✅ **Merge-audited 2026-08-22 and assessed safe.** `master` is an ancestor so it
+**fast-forwards — conflicts impossible**. Only three `backend/src` files change:
+two endpoint deletions and one comment. **No schema impact** — the sole
+`entities/` change removes a comment and alters no enum member, which matters
+because `main.ts` runs `updateSchema()` on every boot. `backend/src/ai`,
+`rna`, `rns` and the whole measurement harness are untouched.
+
+⚠️ **One behaviour is unverified: saving baseline scores.** The argument for
+deleting the readiness-level form action is that `submitBaselineScores()` is the
+real path; if that reasoning is wrong, **saving is what breaks, and nothing else
+would reveal it.** Skipping it is defensible — the write lands on
+`startups_readiness_level`, which *is* the measurement ground truth
+(`src/demo-readiness-levels.ts`), so a careless save invalidates the 2026-08-05
+grounding result. **Zero-risk way to close it:** re-save the identical stored
+values (AgroLink `T2 M3 A3 O2 R1 I1`, MediSync `T6 M5 A5 O2 R1 I1`) and expect
+the *"Baseline scores saved"* toast; `node seed-demo-full.js` repairs the rows
+from that shared source if anything drifts.
+
+Also still unmerged from before: `docs/trim-notes-and-status-table` (pushed,
+needs a PR) and `backup/rag-corpus-preflight` (disposable, 13.7 MB of PDF blobs).
+**13 local branches have `[gone]` remotes** and are fully merged — a
+`clean_gone` sweep is still worth running.
+
+**Next step — in order.**
+1. **Merge it.** Tested and audited above; `git merge --ff-only
+   fix/demo-critical-sweep`. Optionally exercise the baseline-score save first
+   (see the ⚠️ above) — it is the one path the click-through could not confirm.
+2. **The triage says stop here.** With all 8 🎯 items cleared and §0 carrying no
+   open code work, the 2026-08-07 boundary is fully reached. Remaining work is
+   deferred by decision, not by omission. **Anything picked up after this is a
+   new decision, not a continuation of the plan.**
+
+**Not next, but not forgotten.** (unchanged from 2026-08-20 unless noted)
+- **SO 4.4's missing *action* on the flag** — still the one substantive §0 gap.
+  The badge is visible; nothing happens when it fires. A design question, so it
+  wants a brainstorm first.
+- **Metric 3 beyond the FAIL** — a *separately* pre-registered rule with a
+  **per-startup** noise floor, scored on new data. Calibrating on the 2026-08-20
+  run and reporting the fit is the forbidden move.
+- **A cheaper validation than more reps:** a *different* summary prompt or a
+  third document beats a fourth rep of the same two.
+- **RNA *generation* quality is still unmeasured.** Every grounding figure is the
+  levels probe; production's RNA path retrieves 12 rubric rows rather than 54.
+  Needs a **harder probe, not more reps**.
+- **Pull forward the `chumcheck` purge** (new) — 3 files, and one of them now
+  references a file this session deleted.
+
+**Open decisions, not blocking:** unchanged from 2026-08-20 — production cookie
+policy; RNS correlation-key uniqueness and stale verdicts on artifact edit; tier
+thresholds uncalibrated; `readiness_evaluations` mixed-scale rows; Neon TLS
+verification disabled; the owed manual auth click-through; VS Code's
+`git.postCommitCommand`; and §1's "guard the remaining unauthenticated modules"
+claim still needing confirmation rather than trust.

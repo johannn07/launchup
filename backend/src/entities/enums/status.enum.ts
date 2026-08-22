@@ -1,4 +1,3 @@
-// basin pwede sa RNS, Initiatives nga status (mau)
 export enum Status {
   New = 'New',
   Scheduled = 'Scheduled',

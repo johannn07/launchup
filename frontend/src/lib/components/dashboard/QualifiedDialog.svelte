@@ -8,7 +8,6 @@
   import * as Card from '$lib/components/ui/card/index.js';
   import { getBadgeColorObject, getStartupMemberCount } from '$lib/utils';
   import { toast } from 'svelte-sonner';
-  import AssessmentPreviewDialog from './sub/AssessmentPreviewDialog.svelte';
   import { Edit2 } from 'lucide-svelte';
 
   export let startup: any;
@@ -49,19 +48,12 @@
   export let refetchStartupAssessments:
     | ((startupId: number) => Promise<void>)
     | undefined = undefined;
-  export let access: string;
 
   let showConfirmCompleteModal = false;
   let selectedMentorId: string;
 
   let showEditAssessments = false;
   let selectedAssessments = new Set<number>();
-  let previewOpen = false;
-  let previewAssessment: {
-    id: number;
-    name: string;
-    fields?: { id: number; label: string; fieldType: number }[];
-  } | null = null;
   let isLoadingAssessments = false;
 
   const memberCount = getStartupMemberCount(startup);
@@ -165,19 +157,6 @@
     }
 
     selectedAssessments = next;
-  }
-
-  function openPreview(asmt: {
-    id: number;
-    name: string;
-    fields?: { id: number; label: string; fieldType: number }[];
-  }) {
-    previewAssessment = asmt;
-    previewOpen = true;
-  }
-
-  function closePreview() {
-    previewOpen = false;
   }
 
   function cancelEditAssessments() {
@@ -531,13 +510,6 @@
           toggleDialog={() =>
             (showConfirmCompleteModal = !showConfirmCompleteModal)}
           onConfirm={handleMarkAsComplete}
-        />
-
-        <AssessmentPreviewDialog
-          open={previewOpen}
-          onOpenChange={closePreview}
-          assessment={previewAssessment}
-          {access}
         />
       </div>
     </Dialog.Content>

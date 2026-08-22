@@ -4,7 +4,6 @@
   import * as Card from '$lib/components/ui/card/index.js';
   import * as Select from '$lib/components/ui/select';
   import { toast } from 'svelte-sonner';
-  import AssessmentPreviewDialog from './AssessmentPreviewDialog.svelte';
 
   export let startup: any;
   export let showDialog: boolean = false;
@@ -26,19 +25,12 @@
   export let assignAssessmentsToStartup: (
     startupId: number,
   ) => Promise<any>;
-  export let access: string;
 
   let selectedMentor: string;
   let isLoading = false;
 
   // Local selection state for assessments
   let selectedAssessments = new Set<number>();
-  let previewOpen = false;
-  let previewAssessment: {
-    id: number;
-    name: string;
-    fields?: { id: number; label: string; fieldType: number }[];
-  } | null = null;
 
   // Group assessments by type
   $: groupedAssessments = assessments.reduce(
@@ -69,19 +61,6 @@
     }
 
     selectedAssessments = next;
-  }
-
-  function openPreview(asmt: {
-    id: number;
-    name: string;
-    fields?: { id: number; label: string; fieldType: number }[];
-  }) {
-    previewAssessment = asmt;
-    previewOpen = true;
-  }
-
-  function closePreview() {
-    previewOpen = false;
   }
 
   async function handleApprove() {
@@ -166,13 +145,6 @@
         {#if !selectedMentor}
           <p class="mt-4 text-sm text-red-500">Please assign a mentor.</p>
         {/if}
-
-        <AssessmentPreviewDialog
-          open={previewOpen}
-          onOpenChange={closePreview}
-          assessment={previewAssessment}
-          {access}
-        />
       </div></Dialog.Content
     >
   </Dialog.Root>

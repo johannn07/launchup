@@ -39,11 +39,11 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | Objective | Status |
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **delivered 2026-08-18** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, and the verdict now reaches the reviewing Manager; what remains is an *action* on the flag; **metric 3 rebuilt and run (2026-08-19/20)** — the count-based verdict is retired, field-overlap scoring ships against a rule pre-registered a day before the run, and the run returned a quotable **FAIL** whose cause is noise-floor instability on one document rather than uniform harshness; 1a partial, 3b minimal, 3c and 4a are research tasks |
-| **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); 1 🎯 item, 5 P1 deferred |
-| **Broken functionality (§2)** | In progress — 4 of 13 fixed; 3 🎯 items, 6 deferred |
+| **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
+| **Broken functionality (§2)** | In progress — 7 of 13 fixed; **all 3 🎯 items done 2026-08-22 — every one collapsed to a deletion**, 6 deferred |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
-| **Cleanup / tech debt (§4)** | Not started — 1 of 19 done; 3 🎯 items, 15 deferred |
-| **Infrastructure decisions (§5)** | In progress — storage and model settled; 1 🎯 item, 3 deferred |
+| **Cleanup / tech debt (§4)** | In progress — 4 of 19 done; **all 3 🎯 items done 2026-08-22**, 15 deferred |
+| **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
 
 ---
 
@@ -53,18 +53,22 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 
 **Why the boundary isn't simply "§0 only":** a panel judges §0 **through a live demo**, so anything that breaks the demo is a §0 risk wearing a §2 label — and several §1/§4 items are deletions that take minutes and remove an easy line of questioning.
 
-### 🎯 Demo-critical — do these even if nothing else does (~1 day, mostly deletions)
+### 🎯 Demo-critical — ✅ **all 8 done 2026-08-22** (`fix/demo-critical-sweep`, 6 commits, local, **click-through clean and merge-audited — fast-forwards, no schema impact**)
 
-| Item | § | Effort |
+| Item | § | Outcome |
 |---|---|---|
-| Readiness-level rubric submission posts to endpoints that don't exist | 2 | M — **verify first**, may collapse to a deletion |
-| Verify the `GEMINI_API_KEY` format | 5 | S — cheapest catastrophic-risk removal on the list |
-| Elevate page queries a non-existent `/startup-rna/` | 2 | S |
-| Assessment preview dialog calls a non-existent `/fields` route | 2 | S |
-| Delete the raw-SQL debug endpoints | 1 | S — deletion |
-| Remove committed scratch files | 4 | S — deletion |
-| Delete the three orphaned Tab components (and their expired JWT literal) | 4 | S — deletion, closes two items |
-| Remove the Cebuano comment in `status.enum.ts` | 4 | trivial |
+| Readiness-level rubric submission posts to endpoints that don't exist | 2 | ✅ **deleted** — the action was unreachable; the live rating path works |
+| Verify the `GEMINI_API_KEY` format | 5 | ✅ **no change needed** — `AQ.` is a valid AI Studio format, auth proven live |
+| Elevate page queries a non-existent `/startup-rna/` | 2 | ✅ **deleted** — the query was never read; no RNA panel exists |
+| Assessment preview dialog calls a non-existent `/fields` route | 2 | ✅ **cut** — dialog unreachable, and `/fields` could not exist as written |
+| Delete the raw-SQL debug endpoints | 1 | ✅ deleted, both |
+| Remove committed scratch files | 4 | ✅ 5 tracked files removed; `*.zip` now ignored |
+| Delete the three orphaned Tab components (and their expired JWT literal) | 4 | ✅ deleted — JWT verified expired 2024-09-06 |
+| Remove the Cebuano comment in `status.enum.ts` | 4 | ✅ done |
+
+**The headline: 4 insertions, 7,188 deletions across 21 files, and *four of the eight* were dead code rather than live breakage.** Three separate features turned out to be stranded mid-build — a form action with no `<form>`, a query with no panel, a dialog with no trigger. The consistent shape is plumbing wired without a trigger.
+**Side effect worth knowing:** `svelte-check` fell from **160 errors / 16 warnings to 119 / 14** — deleting dead code cleared 26% of the frontend's type errors, with zero new errors or warnings introduced.
+⚠️ **`scripts/delete_db.sh:6` now references the deleted `chumcheck_2025-03-04_025337.sql`.** That script already targets a database this project does not use; it is covered by the deferred *Purge `chumcheck` references* item in §4, which is now a 3-file deletion worth pulling forward.
 
 ### Judgement call — not automatic
 
@@ -638,9 +642,9 @@ measurement.
 - [ ] 🔒 **SEC · S · Guard the remaining unauthenticated modules**
   ⚠️ **Probably already done** — the P0 guard fix above names exactly these six controllers (`readiness`, `progress`, `elevate`, `ocr`, `ai/baseline`, `ai/ai-metrics`) and was live-verified 2026-07-27. Confirm and close rather than re-doing.
 
-- [ ] 🎯 🔒 **SEC · S · Delete the raw-SQL debug endpoints**
-  `startup.controller.ts:62` (`GET /startups/debug-evals`) and `admin.controller.ts:157` (`GET /admin/tiers/check-evals`) both execute hand-written SQL via `em.getConnection().execute()`. The first is reachable by any logged-in user and dumps every startup's score.
-  **Fix:** delete both. Neither is called from the frontend (verified).
+- [x] ✅ 🔒 **SEC · S · Delete the raw-SQL debug endpoints** — *done 2026-08-22*
+  `GET /startups/debug-evals` (`startup.controller.ts:66`) and `GET /admin/tiers/check-evals` (`admin.controller.ts:130`) both ran the same hand-written SQL through `em.getConnection().execute()`, reaching into a private member by bracket access. The first was reachable by any logged-in user and dumped every startup's composite score and tier label.
+  Both deleted. Re-verified before removal: no caller in `frontend/src`, `backend/src` or `backend/measurement`.
 
 - [ ] 🔒 **SEC · S · Align cookie lifetime with token lifetime**
   Cookie `maxAge` = **5 hours** (`(auth)/login/+page.server.ts:54`, mirrored in `(auth-admin)/admin-login/+page.server.ts:57`) vs JWT `expiresIn: '24h'` (`auth.module.ts:19`). The token stays valid for 19 hours after the browser stops sending it, so a leaked token outlives the visible session. See the matching bug in §2.
@@ -660,18 +664,21 @@ Each verified by reading **both** sides of the call.
 
 > **Deferred (2026-08-07)** except the three 🎯 items. The deferred ones are real breakage on paths a capstone demo does not have to touch — but they are breakage, so they keep their full diagnosis.
 
-- [ ] 🎯 🐞 **BUG · M · Readiness-level rubric submission posts to two endpoints that don't exist** — *highest-value item in this section*
-  `(app)/startups/[id]/readiness-level/+page.server.ts:64` posts to `/readiness-level-criterion-answers/bulk-create/` and `:78` to `/startup-readiness-levels/bulk-create/`. **Neither route exists.** The block sits in a `try` whose `catch` is empty (`:104`), so it fails silently, and on "success" it redirects to `/mentor/startups/qualified/:id` — also not a route.
-  **Why it matters:** this is the mentor's core task and the gate for the entire coaching chain (`allow-rnas` depends on `StartupReadinessLevel` rows existing).
-  **Fix:** confirm whether the working path is really `POST /readinesslevel/startup/:startupId/rate`, then rewrite or delete this action. Remove the empty `catch` either way.
+- [x] ✅ 🐞 **BUG · M→S · Readiness-level rubric submission posted to two endpoints that don't exist** — *deleted 2026-08-22. The route claims were true; the impact claim was false.*
+  **Confirmed:** `+page.server.ts:64`/`:78` posted to `/readiness-level-criterion-answers/bulk-create/` and `/startup-readiness-levels/bulk-create/`, neither of which exists among the 21 controller prefixes, and redirected to `/mentor/startups/qualified/:id` with no `mentor/` route directory present.
+  **Refuted:** this item called it *"the mentor's core task and the gate for the entire coaching chain"*. **The action was unreachable.** SvelteKit fires a form action only on a POST to the route; `+page.svelte` is 431 lines and contains **no `<form>` element at all**, nothing POSTs to the page route, and the two phantom URLs appear nowhere else in `src/`. The mentor's rating flow has been going through `submitBaselineScores()` (`+page.svelte:204`) → `POST /readinesslevel/startup/:id/rate`, a real route whose service upserts `StartupReadinessLevel` rows (`readinesslevel.service.ts:227-240`).
+  **Fourth refuted diagnosis on this project** (after the assertion classifier, SO 4.4's predicate direction, and the literal-`null` bug). The pattern producing them: the recorded symptom is real, and the *reachability* of the code carrying it was never checked.
+  Also removed the orphaned `let form: HTMLFormElement` at `+page.svelte:241` — the vestige of the deleted `<form>`, declared and never bound.
+  **A latent second defect, now moot:** `throw redirect(302, …)` sat *inside* the `try`, and SvelteKit signals redirects by throwing — so the empty `catch` would have swallowed the redirect too. Even a fully working version would have silently done nothing visible.
 
 - [ ] 🐞 **BUG · S · Removing a team member uses the wrong verb and payload shape**
   `.../overview/members/+page.svelte:155` calls `axiosInstance.delete('/startups/remove-member/:memberId/')` with `{startupId}` in the body; the backend is `@Post('remove-member')` reading `userId` **and** `startupId` from the body (`startup.controller.ts:97-103`). Removing a member always fails.
   **Fix:** `axiosInstance.post('/startups/remove-member', { userId: memberId, startupId })`.
 
-- [ ] 🎯 🐞 **BUG · S · Assessment preview dialog calls a non-existent `/fields` route**
-  `dashboard/sub/AssessmentPreviewDialog.svelte:30` fetches `/assessments/:id/fields`; no such route exists. The component *is* mounted (`QualifiedDialog` → `/applications`, `ApprovalDialog` → `Pending`/`Waitlisted`), so a Manager opening an applicant's assessment preview gets an empty or erroring dialog.
-  **Fix:** point at `GET /assessments/:id`, or add the endpoint if per-field data is genuinely needed.
+- [x] ✅ 🐞 **BUG · S · Assessment preview dialog called a non-existent `/fields` route** — *cut 2026-08-22, on an explicit scope decision*
+  **The route could not exist as written.** An `Assessment` row **is** a single question — it carries `description` and `answerType` directly (`assessment.service.ts:126-146`) — so there is no collection of fields beneath one. The dialog's data model was wrong, not just its URL.
+  **This item said "the component *is* mounted … so a Manager gets an empty or erroring dialog." Mounted ≠ openable.** `openPreview()` is defined in *both* `QualifiedDialog:170` and `ApprovalDialog:74` and **never called from markup, never passed as a prop**, so `previewOpen` was permanently `false` and the dialog never rendered. A Manager saw nothing at all.
+  Cut the component, both mounts, and the dead `openPreview`/`closePreview`/`previewOpen`/`previewAssessment` state. That orphaned the `access` prop in both dialogs, which cascaded into `PendingDialog` and `WaitlistedDialog`, so the prop and its three pass-throughs went too.
 
 - [ ] 🐞 **BUG · S · Re-uploading a capsule proposal during edit hits a commented-out endpoint**
   `(app)/startups/+page.server.ts:63` calls `PATCH /startups/:id/with-capsule-proposal`; the handler is commented out at `startup.controller.ts:231`. Editing *and* attaching a new proposal PDF silently fails; editing without a file works (different branch), so this is easy to miss.
@@ -681,9 +688,9 @@ Each verified by reading **both** sides of the call.
   `(app)/admin/assessments/+page.server.ts:47` does `POST /assessments/types`; the backend only declares `@Get('types')`. Note `AssessmentType` is a **TypeScript enum**, not a table, so creating a type at runtime isn't possible without a schema change — this may be a ❓SCOPE item in disguise.
   **Fix:** decide whether types are fixed (remove the UI) or dynamic (new table + endpoints — that's L, not S).
 
-- [ ] 🎯 🐞 **BUG · S · Elevate page queries a non-existent `/startup-rna/` endpoint**
-  `.../overview/elevate/+page.svelte:71` calls `getData('/startup-rna/?startup_id=…')`; the real prefix is `/rna`. The RNA panel on the Elevate tab never populates.
-  **Fix:** `/rna?startupId=…` to match `@Get()` + `@Query('startupId')`.
+- [x] ✅ 🐞 **BUG · S · Elevate page queried a non-existent `/startup-rna/` endpoint** — *deleted 2026-08-22*
+  **This item under-recorded the defect and over-recorded the impact.** The prefix was wrong *and* so was the parameter name — `startup_id` against `@Query('startupId', ParseIntPipe)`, which would have 400'd even under the right prefix.
+  **Repointing it would have been pointless: `rnaData` is never read.** `useQuery('rnaDataElevate', …)` appears on exactly one line in the file and the key is used nowhere else, so there is **no RNA panel on the Elevate tab** to populate — the query fired a request on every page load and discarded the result. Deleted it and the now-unused `getData` import.
 
 - [ ] 🐞 **BUG · S · Approve-applicant is two non-transactional calls**
   `(app)/applications/+page.svelte:80-113` fires `approve-applicant`, then `appoint-mentors`, with no rollback. If the second fails, the startup is `QUALIFIED` with no mentor — a state no screen is designed to show, and the Manager gets no error.
@@ -776,12 +783,13 @@ Each verified by reading **both** sides of the call.
 
 > **Deferred (2026-08-07)** except the three 🎯 items, which are deletions a reviewer would notice. Everything else here is invisible to a panel and survives the capstone unchanged.
 
-- [ ] 🎯 🧹 **DEBT · S · Three components carry a hardcoded, expired JWT from the previous team's app**
+- [x] ✅ 🧹 **DEBT · S · Three components carried a hardcoded, expired JWT from the previous team's app** — *resolved 2026-08-22 by deleting the three files*
   `admin/PendingTab.svelte:19`, `AcceptedTab.svelte:19`, `RatedTab.svelte` each declare `const access = 'eyJ...'` and send it as `Authorization: Bearer`. Decoded, it is a **Django SimpleJWT** token (`token_type`, `jti`, `user_id`) that **expired 2024-09-06** — a payload shape this backend has never issued.
-  **Why it matters:** it looks like working auth and is not, which is how the "the frontend already sends Bearer tokens" assumption survived. *These three are also unimported, so deleting them resolves both items.*
+  **Why it mattered:** it looked like working auth and was not, which is how the "the frontend already sends Bearer tokens" assumption survived. Independently re-verified before deletion — `exp` decodes to 2024-09-06 on all three. ⚠️ The literals remain in git history.
 
-- [ ] 🎯 🧹 **DEBT · S · Delete three orphaned admin Tab components**
-  `PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — none imported anywhere (verified). `RatedTab.svelte` also calls `/readinesslevel/:id/calculator-final-scores/`, which doesn't exist. *Coupled to the "rate applicant" scope decision — resolve that first.*
+- [x] ✅ 🧹 **DEBT · S · Delete three orphaned admin Tab components** — *done 2026-08-22*
+  `PendingTab.svelte`, `AcceptedTab.svelte`, `RatedTab.svelte` — re-verified unimported, and no `index.ts` exports them. The coupling note is resolved: the "rate applicant" scope call was settled by the 2026-08-07 §3 decision (*cut cleanly*), and the 2026-08-18 SO 4.4 work had already recorded `PendingTab` as deliberately unwired.
+  **The hardcoded JWT each carried is verified expired** — `exp` decodes to 2024-09-06, so deleting them needed no credential rotation. ⚠️ The literals remain in git history.
 
 - [ ] 🧹 **DEBT · S · `GET /ocr/parse` reads an arbitrary server-side path**
   `ocr.controller.ts` passes a `file` query parameter straight to `parseImageFile` with no confinement to an upload directory. It is behind `JwtGuard` now, so any *authenticated* user can read files the server process can read. Its own comment calls it a "Quick test endpoint" — deleting it is probably right; otherwise resolve against a fixed root and reject escapes.
@@ -814,13 +822,14 @@ Each verified by reading **both** sides of the call.
   **Fix:** delete the entities and add a migration to drop the tables. *If the `assignedBy`/`isActive` audit trail is wanted, that's a ❓SCOPE item instead.*
 
 - [ ] 🧹 **DEBT · S · Consolidate duplicate enums** — *deferred, except one line*
-  🎯 **The Cebuano comment in `Status` (`// basin pwede sa RNS…`) goes before submission** — that part is trivial and demo-critical; the consolidation itself is deferred.
+  ✅ **The Cebuano comment in `Status` was removed 2026-08-22.** The enum consolidation itself is still deferred.
   `RnsStatus` (integer-backed) and `Status` (string-backed) define the same seven states.
   *(The `recommendations` table half of this item is fully resolved — the entity and its service are deleted, and the table does not exist on Neon at all, verified 2026-08-04. No pending action.)*
 
-- [ ] 🎯 🧹 **DEBT · S · Remove committed scratch files**
-  Tracked: `backend/test-login.js` (0 bytes), `frontend/fix-page.cjs`, `.../admin/assessments/+page.svelte.backup`, `.../admin/assessments/temp_fix.txt`, `chumcheck_2025-03-04_025337.sql` (561 KB). Untracked but in the repo root: `backend.zip` (116 MB), `frontend.zip` (84 MB) — gitignore or delete.
-  **Why it matters:** `.backup` and `temp_fix.txt` files next to the code they patch are the first thing a reviewer notices.
+- [x] ✅ 🧹 **DEBT · S · Remove committed scratch files** — *done 2026-08-22*
+  All five removed from tracking. `fix-page.cjs` was a one-off codemod against the readiness-level page (already applied); `temp_fix.txt` a hand-written patch note; `chumcheck_2025-03-04_025337.sql` a 564 KB dump of the *previous* project's database.
+  The two root zips were already gone; `*.zip` is now in `.gitignore` so they cannot return.
+  ⚠️ **`scripts/delete_db.sh:6` now references the deleted dump.** That script drops and recreates a `chumcheck` database this project does not use — see the deferred *Purge `chumcheck` references* item, now a 3-file deletion worth pulling forward.
 
 - [ ] 🧹 **DEBT · S · Purge `chumcheck` references**
   `scripts/reset_db.sh`, `reset_db.ps1`, `delete_db.sh` all target a database named `chumcheck` with user `postgres`, while the project uses Neon. Running any of them does nothing to your dev database — or worse, drops an unrelated one.
@@ -914,8 +923,11 @@ Neither the SRS nor the SDD names a storage vendor, a model version, or Docker �
   **The decision:** if caps are wanted, choose a value **per call site** from the actual prompt shape and add a test per site that a realistic full-length response is not truncated. Do not reintroduce a blanket number. Note Gemini bills *thinking* tokens against `maxOutputTokens`, so a cap sized to the visible JSON can truncate before any answer is emitted.
   **Related under-count:** `ai_generation_runs.completion_tokens` sums only `candidatesTokenCount`, so recorded output spend is a floor. Fold in `thoughtsTokenCount` before using these columns for cost analysis (see §4).
 
-- [ ] 🎯 ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format**
-  The configured key starts with `AQ.Ab8RN6…`; AI Studio keys normally begin with `AIzaSy`. Confirm it is a valid AI Studio key and not a Vertex/OAuth credential, which `@google/genai` would need different auth for — a bad key makes every AI feature fail at demo time.
+- [x] ✅ ❓ **SCOPE · S · Verify the `GEMINI_API_KEY` format** — *verified 2026-08-22, no change needed*
+  The `AQ.` prefix is a **valid newer AI Studio key format**, not the Vertex/OAuth credential this item feared. Proven two ways rather than argued from the prefix:
+  1. **Live auth probe at zero generation cost** — an `embedContent` call through the same `@google/genai` client returned a 768-dim vector. Embeddings draw on the separate 100/min quota, so this spends none of the 20/day generation budget.
+  2. **The generation API is separately proven**, because an API key can be restricted per-API: `results/2026-08-20-differentiation-overlap.json` records `apiRequests: 10` with `degraded: 0`, `degradedByRateLimit: 0`, `degradedBySchema: 0`.
+  Key length 53. **Re-use the embedding probe** whenever this needs rechecking — it is the cheapest live auth test in the project.
 
 - [ ] ❓ **SCOPE · S · Drop Docker, give each developer a Neon branch**
   `docker-compose.yml` only ever provided local Postgres, and `backend/.env` points at Neon. **Neither the SRS nor the SDD mentions Docker** — there is no requirement to satisfy, nothing in the remaining work is containerization-shaped, and Vercel/Render don't build from a compose file.
