@@ -545,20 +545,60 @@ backwards), and this one. Implementing the recorded fix would have added a
 ## Open at end of 2026-08-20
 
 **Branch state.** `fix/so-4-4-flag-threshold` **merged via PR #26** (merge commit `67f6071`) — the block above was written before that landed and describes it as unmerged; stale, left as written. `feat/adversarial-summary` merged via PR #25 (`70a66c4`), `measure/assertion-classifier-gaps` via PR #24 (`2195df8`). Not in `master`:
-- **`measure/non-saturating-differentiation` — local.** Metric 3 parts 1 and 2.
+- **`measure/non-saturating-differentiation` — 8 commits, local, nothing pushed.**
+  All three metric-3 parts, the pre-registration, the run, and the SO 4.2
+  literal-`null` refutation. **Merge-audited 2026-08-20 and assessed safe:**
+  `master` is an ancestor so it fast-forwards (conflicts impossible);
+  **no production runtime code changes at all** — the only `backend/src/` file is
+  `ai.service.spec.ts`, and every `measurement/` mention inside `src/` is a
+  comment, never an import, so the app cannot load anything this branch touches;
+  no frontend, no schema, no migration. `ai.service.ts` verified **byte-identical
+  to master** after being mutated twice during testing. Caveat: the branch is
+  **wider than its name** — `38ea9e0` (the null refutation) is separable if a
+  tidier history is wanted.
 - `docs/trim-notes-and-status-table` — pushed, needs a PR.
 - `backup/rag-corpus-preflight` — disposable, holds 13.7 MB of PDF blobs; safe to delete.
 
 **13 local branches have `[gone]` remotes** and are fully merged — worth a `clean_gone` sweep.
 
 **Next step — in order.**
-1. **Review `measure/non-saturating-differentiation`** (John tests first). Zero-quota, self-contained, gates green.
-2. **Metric 3 is done** — rebuilt, pre-registered, run, `FAIL - uniform` recorded. If it is pursued further, the next step is a *separately* pre-registered rule with a **per-startup** noise floor, scored on new data. This run supplies the first observed overlap distribution to design against; calibrating on it and reporting the fit is the forbidden move.
-3. **A cheaper test than part 3 exists and is still unclaimed:** `ratio < 0.75` is validated against one prompt whose output structure barely varies. A *different* summary prompt or a third document is more informative than a fourth rep of the same two.
+1. **Decide the merge** on `measure/non-saturating-differentiation`. Audited and
+   assessed safe (above); John's call, nothing pushed. There is unusually little
+   to click through — no UI, route or DB is touched — so the meaningful check is
+   the gates plus, optionally, a zero-quota
+   `--dry-run --only-arm=adversarial --reps=5`.
+2. **Then the 🎯 demo-critical list** (`TODO_CHECKLIST.md`, Capstone triage) —
+   8 items, all still open, ~1 day, mostly deletions. **§0 has essentially no
+   open code work left**, so the triage's own order (§0 → 🎯 → stop) puts this
+   next. Start with the only **M**, *"readiness-level rubric submission posts to
+   two endpoints that don't exist"* — it is the one that could expand, and it
+   carries a *"verify first, may collapse to a deletion"* note. Given **three
+   recorded diagnoses have now been refuted on inspection** (assertion
+   classifier, SO 4.4's predicate direction, the literal-`null` bug), verifying
+   the largest item before planning around it is the cheap move.
 
-**A cheaper validation than more reps:** `ratio < 0.75` is now tested against one prompt whose output structure barely varies. The informative next test is a *different* summary prompt or a third document, not a fourth rep of the same two.
+**Not next, but not forgotten.**
+- **SO 4.4's missing *action* on the flag** — the one substantive §0 gap left.
+  The badge is visible; nothing happens when it fires. A design question (what
+  should a Manager be able to *do*?) more than a coding one, so it wants a
+  brainstorm first.
+- **Metric 3 beyond the FAIL** — a *separately* pre-registered rule with a
+  **per-startup** noise floor, scored on new data. The 2026-08-20 run supplies
+  the first observed overlap distribution to design against; calibrating on that
+  run and reporting the fit is the forbidden move.
+- **A cheaper validation than more reps:** `ratio < 0.75` is tested against one
+  prompt whose output structure barely varies. A *different* summary prompt or a
+  third document beats a fourth rep of the same two.
+- **The 🧹 `demo-proposals.test.js` source-text assertion is lower value than it
+  reads.** The demo DTOs are hashed into `common` in `currentFingerprints`, so a
+  changed *value* already invalidates every fingerprint on every metric. The weak
+  test does not leave that risk uncovered — the fingerprint does. Tidiness, not
+  integrity.
 
-**Quota at close:** the 2026-08-19 session spent **zero**. The window has reset since the 12-of-20 recorded on 2026-08-18, so budget part 3 against a fresh count — confirm from `apiRequests` in the results files, never from `ai_generation_runs` (the harness opens no rows there).
+**Quota at close:** **10 of 20 spent** in the window that opened 15:00 Manila
+2026-08-20 (the metric-3 part 3 run, 10/10 succeeded); ~10 remain. The 2026-08-19
+session spent zero. Confirm from `apiRequests` in the results files, never from
+`ai_generation_runs` — the harness opens no rows there.
 
 **Superseded next steps, kept so the trail is legible.** 2026-08-09 retired "add `exists` to the assertion cues" — both halves were wrong; the gaps were mostly *recommendation* detection, and AgroLink's zero was chance. 2026-08-18 retired "the live next step is 4b" — SO 4.2 is delivered and measured on the summary path. 2026-08-19 retired "harden the verdict rule" — with overlap owning the verdict, the count rule was retired rather than hardened, and the margin was deliberately left unset. 2026-08-18 (later) retired the threshold swap itself (correcting its stated predicate direction) and the Manager-surfacing task — the badge ships, so what is left is an action on the flag, not its visibility.
 
@@ -574,4 +614,10 @@ backwards), and this one. Implementing the recorded fix would have added a
 
 **Still unmeasured:** RNA *generation* quality. Every grounding figure is the levels probe; production's RNA path retrieves 12 rubric rows rather than 54, and metric 2 has never produced a signal on any arm. Needs a **harder probe, not more reps** — longer documents, plausible distractors, partially-supported fields.
 
-**Suite baselines (re-run 2026-08-18):** jest **247 passing / 1 failing** — the documented pre-existing `AiService › passes valid task responses through unchanged`; a *second* jest failure is a real regression. Measurement **210/210** (some docs said 207). `npx tsc --noEmit -p tsconfig.json` exit 0, and it is the only gate covering `startup.service.ts` — no spec imports it, so ts-jest never type-checks it.
+**Suite baselines (re-run at the branch tip, 2026-08-20):** jest **264 passing /
+1 failing** — the documented pre-existing `AiService › passes valid task
+responses through unchanged`; a *second* jest failure is a real regression.
+Measurement **257/257**. `npx tsc --noEmit -p tsconfig.json` exit 0, and it is
+the only gate covering `startup.service.ts` — no spec imports it, so ts-jest
+never type-checks it. *(On `master` these read 262/1 and 210/210; the deltas are
+this branch's +2 jest and +47 measurement tests.)*
