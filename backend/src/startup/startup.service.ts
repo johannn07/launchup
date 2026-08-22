@@ -36,6 +36,10 @@ import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
 
+// OcrService returns this sentinel instead of throwing when no engine resolves.
+// It is truthy, so it wins any `||` fallback unless matched explicitly.
+const OCR_PLACEHOLDER_PREFIX = /^OCR_PLACEHOLDER:/;
+
 @Injectable()
 export class StartupService {
   constructor(
@@ -285,7 +289,6 @@ export class StartupService {
           file.buffer,
           file.mimetype,
         );
-        console.log('[OCR] Gemini Vision direct extraction result:', aiPayload?.substring(0, 200));
       } catch (err) {
         console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
       }
@@ -400,10 +403,13 @@ export class StartupService {
       }
     }
 
-    // Gemini's transcription is more accurate than Tesseract's, so prefer it.
-    if (parsedPayload.raw_transcription && !parsedText) {
-      parsedText = parsedPayload.raw_transcription;
-    }
+    // Gemini reads handwriting far better than Tesseract, so its transcription
+    // wins whenever there is one. `parsedText` deliberately stays Tesseract's:
+    // detectSketch already scored it above and its weights are tuned to that
+    // output, not to clean prose. PDFs have no raw_transcription and fall back.
+    const transcription: string =
+      parsedPayload.raw_transcription ||
+      (OCR_PLACEHOLDER_PREFIX.test(parsedText) ? '' : parsedText);
 
     const reviewFields = {
       title: parsedPayload.title ?? '',
@@ -430,7 +436,7 @@ export class StartupService {
     await this.em.persistAndFlush(
       this.em.create(OcrDocument, {
         originalFilename: file.originalname,
-        extractedText: parsedText,
+        extractedText: transcription,
         processingStatus: 'processed',
         fieldConfidence: Object.fromEntries(
           Object.entries(confidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
