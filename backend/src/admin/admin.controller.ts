@@ -127,13 +127,6 @@ export class AdminController {
   }
 
   // --- Tier config ---
-  @Get('tiers/check-evals')
-  async checkEvals() {
-    const conn = this.adminService['em'].getConnection();
-    const res = await conn.execute(`SELECT id, startup_id, composite_score, tier_label FROM readiness_evaluations`);
-    return res;
-  }
-
   @Get('tiers')
   async getTierConfigs() {
     return this.adminService.getTierConfigs();
