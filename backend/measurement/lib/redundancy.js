@@ -120,12 +120,22 @@ const ORIGIN_OR_SCOPE_PREP =
  * near the token. Both are avoidable sensitivity losses in the safe
  * direction (spared, not falsely fired), but unjustified next to the sibling
  * check's anchoring. Re-verified against all six original pilot
- * false-positive clauses after anchoring: all six remain spared — clause 4
- * ("further penetrate the target market") still matches via `penetrate the`
- * directly abutting the token; clauses 1/2/3/6 are still caught by
- * ORIGIN_OR_SCOPE_PREP (from/beyond/across abut the token independently);
- * clause 5 is still caught because `execute` was never in ACQUISITION_VERB.
- * Anchoring did not let any of the six back through.
+ * false-positive clauses after anchoring: all six remain spared, but only
+ * clauses 1 and 3 ("transition from paper prototype" / "beyond paper
+ * prototypes") actually exercise this gate — each classifies `recommended`
+ * first, then ORIGIN_OR_SCOPE_PREP's `from`/`beyond` downgrades it to
+ * `scoped`. The other four never reach this gate at all, so its checks are
+ * moot for them: clause 2 ("Move from paper prototypes...") classifies
+ * `unclassified` — "Move" is in neither RECOMMENDATION/IMPERATIVE nor
+ * ASSERTION — so klass is never `recommended`. Clauses 4, 5, and 6 name only
+ * "target market", which `notArtifacts` strips from Market's
+ * `artifactTokens` (lib/satisfactions.js); classifyClause's own token gate
+ * (assertions.js, the `tokens.some(...)` check) returns `null` before klass
+ * is computed at all, so PROGRESSION_VERB, ORIGIN_OR_SCOPE_PREP, and
+ * ACQUISITION_VERB alike never run on them — clause 4's `penetrate the` and
+ * clause 5's `execute` never factor in. Anchoring did not let any of the six
+ * back through, but for four of the six that is because they were never in
+ * this gate's path to begin with.
  */
 const PROGRESSION_VERB =
   /\b(?:transition(?:s|ed|ing)?|mov(?:e|es|ed|ing)|expand(?:s|ed|ing)?|scal(?:e|es|ed|ing)|penetrat(?:e|es|ed|ing)|grow(?:s|ing)?|grew|grown|further)\s+(?:the|a|an|its|their|our|this|that)?\s*$/i;

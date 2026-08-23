@@ -128,21 +128,24 @@ test('fires: a progression verb earlier in the clause that does not govern the t
   }
 });
 
-// classifyClause returns null the instant no token is present at all —
-// that only proves token-absence short-circuiting, never that the bin logic
-// (negation/recommendation/assertion/unclassified) actually runs. This
-// clause carries a real satisfied token but trips none of the three cues.
-// None of the six pilot clauses above needs requirement 2 (the notArtifacts
-// narrowing) to be excluded — each is already caught by requirement 1's
-// progression-verb or origin/scope-preposition check. This clause is
-// constructed to isolate requirement 2's own, independent contribution: an
-// acquisition verb ("develop") genuinely precedes "target market" with no
-// origin/scope preposition from requirement 1's list intervening — "for" is
-// not among them — so requirement 1 alone would call this redundant. Only
-// narrowing "target market" out of scoring (requirement 2) spares it.
-// Confirmed by mutation: with `scoringTokens` in scoreRedundantNeeds pointed
-// back at spec.satisfiedTokens, this test goes red while requirement 1 stays
-// untouched — see task-7b-report.md.
+// CORRECTED (task 8, 2026-08-23): this test's original comment claimed
+// requirement 1 (ORIGIN_OR_SCOPE_PREP) would NOT catch this clause on its
+// own — "'for' is not among them" — and that only requirement 2 (notArtifacts
+// narrowing "target market" out of Market's artifactTokens) spares it. Both
+// claims are false. `for` WAS added to ORIGIN_OR_SCOPE_PREP (see
+// lib/redundancy.js's comment on that list), and "develop offerings for the
+// target market" is the same "for TOKEN" shape as the fixture directly above
+// this one. Verified by mutation: pointing `scoringTokens` in
+// scoreRedundantNeeds back at spec.satisfiedTokens (so "target market" is
+// scored) does NOT turn this test red — ORIGIN_OR_SCOPE_PREP's `for` clause
+// downgrades the clause to `scoped` under requirement 1 alone, independent of
+// requirement 2. This test does not isolate requirement 2's contribution; it
+// is redundant with "spares: an acquisition verb governing a DIFFERENT
+// object..." above. It is kept because it still correctly documents that
+// requirement 2 ALSO spares this clause (classifyClause's own token gate
+// returns null before klass is computed, same mechanism as clauses 4/5/6 in
+// "spares: the six observed false-positive clauses") — just not independently
+// of requirement 1, as originally claimed.
 test('spares: an acquisition verb governing "target market" as pure scope, with no blocking preposition present', () => {
   const { observations } = scoreRedundantNeeds(
     { Market: 'Needs: develop offerings for the target market.' },
@@ -159,4 +162,30 @@ test('a mentioned token that is neither recommendation, negation, nor assertion 
   const tech = observations.find((o) => o.dimension === 'Technology');
   assert.equal(tech.clauses.some((c) => c.klass === 'unclassified'), true);
   assert.equal(tech.redundant, false);
+});
+
+// Task 8 finding: mutation-testing "remove the acquisition requirement" (drop
+// ACQUISITION_VERB.test(before) from isAcquisitionRequest's condition) killed
+// no existing test — every fixture that mutation should flip is ALSO caught
+// by ORIGIN_OR_SCOPE_PREP, PROGRESSION_VERB, or classifyClause's own token/bin
+// gates, so ACQUISITION_VERB's own contribution had no dedicated coverage.
+// This clause isolates it: "a" before the token is neither a progression verb
+// nor an origin/scope preposition, so only ACQUISITION_VERB's absence (no
+// identify/define/secure/etc. governs the token) spares it today. Confirmed
+// by mutation: dropping the ACQUISITION_VERB check turns this test red while
+// leaving every other redundancy.test.js case green.
+test('spares: a recommended clause with no acquisition verb governing the token at all', () => {
+  const { observations } = scoreRedundantNeeds(
+    { Market: 'Needs: a target customer profile compiled by the sales team.' },
+    MEDI,
+  );
+  const market = observations.find((o) => o.dimension === 'Market');
+  assert.equal(market.redundant, false);
+});
+
+test('metric 6 does not disturb CLASSIFIER_SOURCE — every stored metric-5 fingerprint depends on it', () => {
+  const { CLASSIFIER_SOURCE } = require(path.resolve(__dirname, '../lib/assertions.js'));
+  const crypto = require('crypto');
+  const hash = crypto.createHash('sha256').update(JSON.stringify(CLASSIFIER_SOURCE)).digest('hex');
+  assert.equal(hash, 'effcf9eeedca256ddbf787ca7829aa47cfa1c8a28d2dad3a70eda34a96b7435b');
 });
