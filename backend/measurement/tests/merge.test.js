@@ -162,6 +162,93 @@ test('the two conditions never pool with each other', () => {
   assert.ok(refusals.some((r) => r.startsWith('assertion-inflated|baseline')));
 });
 
+/** A run file carrying an assertion fingerprint and, optionally, a redundancy one. */
+function writeRedundancyRun(name, { assertionFp, redundancyFp, truth }) {
+  const file = path.join(TMP, name);
+  const fingerprints = { 'assertion|baseline': assertionFp };
+  if (redundancyFp !== undefined) fingerprints['redundancy|baseline'] = redundancyFp;
+  fs.writeFileSync(file, JSON.stringify({
+    generatedAt: '2026-08-23T00:00:00Z',
+    genModel: 'gemini-3.6-flash',
+    embedModel: 'gemini-embedding-2',
+    corpusRows: 54,
+    floor: 0.78,
+    fingerprints,
+    results: {
+      baseline: {
+        quotaHit: false,
+        startups: { 'AgroLink PH': { retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [], assertionTruthCalls: truth } },
+      },
+    },
+  }, null, 2));
+  return file;
+}
+
+// Mirrors 'the two conditions never pool with each other': the assertion
+// fingerprint is unchanged across both files (the classifier didn't move) but
+// the redundancy fingerprint differs (the satisfaction spec changed) - only
+// the redundancy key may refuse, and assertion, which shares the same
+// underlying assertionTruthCalls storage field, must still pool.
+test('--merge refuses to pool redundancy across a changed satisfaction spec', () => {
+  const a = writeRedundancyRun('redundancy-refuse-a.json', {
+    assertionFp: 'A1', redundancyFp: 'RD1', truth: [{ byDim: { Investment: 'x' } }],
+  });
+  const b = writeRedundancyRun('redundancy-refuse-b.json', {
+    assertionFp: 'A1', redundancyFp: 'RD2', truth: [{ byDim: { Investment: 'y' } }],
+  });
+  const { merged, refusals } = H.mergeRuns([a, b], H.ARMS);
+  assert.ok(
+    refusals.some((r) => r.startsWith('redundancy|baseline')),
+    `expected a redundancy refusal, got ${JSON.stringify(refusals)}`,
+  );
+  assert.equal(
+    merged.baseline.startups['AgroLink PH'].assertionTruthCalls.length, 2,
+    'assertion must still pool despite the redundancy mismatch on the shared field',
+  );
+});
+
+// The double-push regression: `assertion` and `redundancy` both map to
+// assertionTruthCalls in FIELD, and mergeRuns' loop iterates per metric key,
+// not per field. Without deduplication by field, a single file whose assertion
+// AND redundancy fingerprints both match would get assertionTruthCalls pushed
+// twice, silently doubling n on every pooled truth-condition result.
+test('a shared storage field is pushed once, not once per metric key that references it', () => {
+  const a = writeRedundancyRun('redundancy-shared-a.json', {
+    assertionFp: 'A1', redundancyFp: 'RD1', truth: [{ byDim: { Investment: 'x' } }],
+  });
+  const { merged } = H.mergeRuns([a], H.ARMS);
+  assert.equal(
+    merged.baseline.startups['AgroLink PH'].assertionTruthCalls.length, 1,
+    'assertion and redundancy share a field - one metric key contributing must not double it',
+  );
+});
+
+// Review finding 1: a refusal logged in `refusals` was never enforced at
+// report time - the pooled field still got scored and printed as a real
+// number. This is the exact scenario 'refuses to pool redundancy across a
+// changed satisfaction spec' constructs: assertion matches, redundancy
+// doesn't, and both read the same pooled assertionTruthCalls. Metric 6's row
+// must come back 'refused' (its own key was refused) while metric 5's row -
+// a DIFFERENT metric key, matching fingerprint - must still show a number.
+test('a refused fingerprint key produces a refused report row without suppressing a sharing metric that matched', () => {
+  const a = writeRedundancyRun('redundancy-report-a.json', {
+    assertionFp: 'A1', redundancyFp: 'RD1', truth: [{ byDim: { Investment: 'x' } }],
+  });
+  const b = writeRedundancyRun('redundancy-report-b.json', {
+    assertionFp: 'A1', redundancyFp: 'RD2', truth: [{ byDim: { Investment: 'y' } }],
+  });
+  const { merged } = H.mergeRuns([a, b], H.ARMS);
+  const s = H.summarizeResults(merged);
+
+  const metric6Truth = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.equal(metric6Truth.redundantN, 'refused', 'redundancy|baseline was refused - its row must say so, not print a number');
+  assert.equal(metric6Truth.redundantRate, 'refused');
+
+  const metric5Truth = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.notEqual(metric5Truth.asserted, 'refused', 'assertion|baseline matched - it must not be suppressed by redundancy\'s refusal');
+  assert.equal(metric5Truth.asserted, '0/2');
+});
+
 test('a legacy file sorted first does not block two compatible files from pooling', () => {
   // Regression: `--merge results/*.json` is the documented workflow, the shell
   // sorts by name, and the one real legacy file's date sorts first. If the

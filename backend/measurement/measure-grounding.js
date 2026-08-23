@@ -140,7 +140,15 @@ function selectProbes(filter) {
   return { probes: ALL_PROBES.filter((p) => entries.includes(p)), errors: [] };
 }
 
-const ALL_LEVEL_CONDITIONS = ['truth', 'inflated'];
+const ALL_LEVEL_CONDITIONS = ['truth', 'inflated', 'deflated'];
+
+// `both` is FROZEN at its pre-2026-08-23 meaning. Widening it would silently
+// change what an already-recorded command produces — the --merge failure mode
+// in a different costume. `all` is the new name for everything.
+const CONDITION_ALIASES = {
+  both: ['truth', 'inflated'],
+  all: ['truth', 'inflated', 'deflated'],
+};
 
 /**
  * Organizational, Regulatory and Investment are the three dimensions with
@@ -166,30 +174,97 @@ function inflatedLevels(levels) {
   return { ...levels, ...INFLATED_OVERRIDE };
 }
 
-/** The one place a condition maps to supplied levels — live run and --dry-run. */
-const levelsForCondition = (startup, condition) =>
-  condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+/**
+ * The mirror of INFLATED_OVERRIDE, and the split is forced by the data rather
+ * than chosen. Both startups sit at O2 R1 I1, which has no deflation room;
+ * MediSync's T6 M5 A5 has plenty and its document evidences the level-1/2
+ * criteria plainly. O/R/I stay at truth so every call carries its own
+ * unmanipulated control, exactly as T/M/A do under `inflated`.
+ */
+const DEFLATED_OVERRIDE = { Technology: 1, Market: 1, Acceptance: 1 };
 
-/** The one place a condition maps to its storage field — scoring and audit trail. */
-const conditionField = (condition) =>
-  condition === 'inflated' ? 'assertionInflatedCalls' : 'assertionTruthCalls';
+/** Returns a NEW object, for the reason inflatedLevels does. */
+function deflatedLevels(levels) {
+  return { ...levels, ...DEFLATED_OVERRIDE };
+}
+
+/** The one place a condition maps to supplied levels — live run and --dry-run.
+ *  A total map, not a ternary: an unknown condition used to fall through to
+ *  truth levels, which would have sent an unmanipulated prompt under a
+ *  manipulated label. */
+const CONDITION_LEVELS = {
+  truth: (startup) => startup.levels,
+  inflated: (startup) => inflatedLevels(startup.levels),
+  deflated: (startup) => deflatedLevels(startup.levels),
+};
+
+function levelsForCondition(startup, condition) {
+  const build = CONDITION_LEVELS[condition];
+  if (!build) throw new Error(`levelsForCondition: unknown condition "${condition}"`);
+  return build(startup);
+}
+
+/** The one place a condition maps to its storage field — scoring and audit trail.
+ *  Total for the same reason: the old `else` sent every non-truth condition into
+ *  the inflated pool, which would have silently mixed two manipulations. */
+const CONDITION_FIELD = {
+  truth: 'assertionTruthCalls',
+  inflated: 'assertionInflatedCalls',
+  deflated: 'assertionDeflatedCalls',
+};
+
+function conditionField(condition) {
+  const field = CONDITION_FIELD[condition];
+  if (!field) throw new Error(`conditionField: unknown condition "${condition}"`);
+  return field;
+}
 
 /**
- * Exact names only, like selectProbes: two fixed values, so a prefix match buys
- * nothing and could silently select the wrong one. Defaults to `truth`, which
- * reproduces the harness's behaviour before this flag existed.
+ * The one place a condition maps to metric 5's fingerprint key prefix — what
+ * `refusedKeys` is checked against, so a stale HARD_ABSENCES or classifier
+ * edit on one condition suppresses only that condition's row, not the others.
+ */
+const ASSERTION_METRIC = {
+  truth: 'assertion',
+  inflated: 'assertion-inflated',
+  deflated: 'assertion-deflated',
+};
+
+/** Metric 6's mirror of ASSERTION_METRIC. */
+const REDUNDANCY_METRIC = {
+  truth: 'redundancy',
+  inflated: 'redundancy-inflated',
+  deflated: 'redundancy-deflated',
+};
+
+/**
+ * Exact names, comma lists, or an alias. Prefix matching is still refused — it
+ * buys nothing over three fixed values and could silently select the wrong one.
+ * An unrecognised entry hard-errors before any network call, like selectProbes:
+ * silently running fewer conditions than asked for looks identical to a clean run.
  */
 function selectLevelConditions(filter) {
   if (filter == null) return { conditions: ['truth'], errors: [] };
   const raw = String(filter).trim().toLowerCase();
-  if (raw === 'both') return { conditions: ALL_LEVEL_CONDITIONS.slice(), errors: [] };
-  if (ALL_LEVEL_CONDITIONS.includes(raw)) return { conditions: [raw], errors: [] };
-  return {
-    conditions: [],
-    errors: [
-      `--level-condition=${filter} is not a condition. Available: ${ALL_LEVEL_CONDITIONS.join(', ')}, both.`,
-    ],
-  };
+  const available = `Available: ${ALL_LEVEL_CONDITIONS.join(', ')}, both, all.`;
+  if (CONDITION_ALIASES[raw]) return { conditions: CONDITION_ALIASES[raw].slice(), errors: [] };
+
+  const entries = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (entries.length === 0) {
+    return { conditions: [], errors: [`--level-condition=${filter} named no condition. ${available}`] };
+  }
+  const unknown = entries.filter((e) => !ALL_LEVEL_CONDITIONS.includes(e));
+  if (unknown.length) {
+    return {
+      conditions: [],
+      errors: [
+        `--level-condition=${filter} is not a condition: ${unknown.map((u) => `"${u}"`).join(', ')}. ${available}`,
+      ],
+    };
+  }
+  // Canonical order, not argument order, so two spellings of the same request
+  // produce the same run shape.
+  return { conditions: ALL_LEVEL_CONDITIONS.filter((c) => entries.includes(c)), errors: [] };
 }
 
 /**
@@ -219,7 +294,7 @@ function validateArgs(argv, mergeFiles) {
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
             '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
             '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, ' +
-            '--level-condition=<truth|inflated|both>, --merge <files...>.',
+            '--level-condition=<truth|inflated|deflated|both|all|comma-list>, --merge <files...>.',
         );
       }
     } else {
@@ -293,6 +368,8 @@ const { levelPlacement, stageAppropriateness, differentiationGap } = require(
   path.join(__dirname, 'lib/metrics.js'),
 );
 const { isStageInappropriate } = require(path.join(__dirname, 'lib/stage-markers.js'));
+const { scoreRedundantNeeds } = require(path.join(__dirname, 'lib/redundancy.js'));
+const { SATISFACTIONS, verifySatisfactions } = require(path.join(__dirname, 'lib/satisfactions.js'));
 
 // Documents are measure-differentiation.js's verbatim early/mid pair; levels
 // mirror src/demo-readiness-levels.ts, the rows seedDemoStartups writes.
@@ -906,6 +983,9 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   // documents. The README and the metric-5 comment both say that is asserted at
   // run time; before this line only audit-ground-truth.js asserted it.
   verifyAbsences(Object.fromEntries(Object.entries(STARTUPS).map(([n, s]) => [n, s.doc])));
+  // Metric 6's lower bound rests on SATISFACTIONS' evidence phrases being verbatim
+  // in the documents too — same reasoning as verifyAbsences above, same gate.
+  verifySatisfactions(Object.fromEntries(Object.entries(STARTUPS).map(([n, s]) => [n, s.doc])));
 
   const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
   const filtered = arms.length !== ARMS.length || startupNames.length !== Object.keys(STARTUPS).length;
@@ -968,7 +1048,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
       results[arm.name].startups[startupName] = {
         retrieved: truthRetrieved,
         rnaCalls: [], levelCalls: [], hallucCalls: [],
-        assertionTruthCalls: [], assertionInflatedCalls: [],
+        assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
       };
     }
   }
@@ -994,16 +1074,11 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
                   byDim[x.readiness_level_type] = x.rna;
                 }
               }
-              // One call, two records: metrics 1-2 read rnaCalls, metric 5 reads
-              // its own per-condition field. Separate fields keep mergeRuns'
-              // 1:1 metric->field invariant, which double-pushes if two metric
-              // keys share a field and silently doubles n.
-              if (condition === 'truth') {
-                cell.rnaCalls.push({ byDim });
-                cell.assertionTruthCalls.push({ byDim });
-              } else {
-                cell.assertionInflatedCalls.push({ byDim });
-              }
+              // rnaCalls is the truth-only pool metrics 1-2 read. The
+              // per-condition pool is chosen by the total map so a new condition
+              // cannot land in another condition's field.
+              if (condition === 'truth') cell.rnaCalls.push({ byDim });
+              cell[conditionField(condition)].push({ byDim });
             }
           } catch (e) {
             if (is429(e)) {
@@ -1110,11 +1185,16 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
  * a zero row mean different things and the tables must not conflate them.
  */
 function summarizeResults(results) {
+  // Only mergeRuns' output carries this - a live run's `results` has no such
+  // property, so refusedKeys is empty and nothing is ever suppressed there.
+  const refusedKeys = results.refusedKeys instanceof Set ? results.refusedKeys : new Set();
+
   const metric1 = [];
   const metric2 = [];
   const metric3 = [];
   const metric4 = [];
   const metric5 = [];
+  const metric6 = [];
 
   for (const arm of ARMS) {
     const armResult = results[arm.name] || { startups: {} };
@@ -1201,6 +1281,11 @@ function summarizeResults(results) {
     // verbosity, and the corpus arm writes longer RNAs.
     for (const condition of ALL_LEVEL_CONDITIONS) {
       const field = conditionField(condition);
+      // A pooled field's own union rule (see mergeRuns) can admit data whose
+      // comparability THIS metric's own fingerprint key refused, on another
+      // sharing key's authority. `refused` overrides the row rather than
+      // computing a number over a pool this metric never agreed to.
+      const refused = refusedKeys.has(`${ASSERTION_METRIC[condition]}|${arm.name}`);
       let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
       for (const [, cell] of Object.entries(armResult.startups)) {
         for (const c of cell[field] || []) {
@@ -1215,18 +1300,60 @@ function summarizeResults(results) {
       metric5.push({
         arm: arm.name,
         condition,
-        asserted: `${asserted}/${obs}`,
-        'asserted %': obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
-        mentioned: `${mentioned}/${obs}`,
+        asserted: refused ? 'refused' : `${asserted}/${obs}`,
+        'asserted %': refused ? 'refused' : obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
+        mentioned: refused ? 'refused' : `${mentioned}/${obs}`,
         // x/obs, never a bare 0: at obs=0 a bare 0 reads as "the classifier
         // handled everything cleanly" for an arm that was never run — in the
         // one column the design calls the honesty column.
-        unclassified: obs ? `${unclassified}/${obs}` : 'n/a',
+        unclassified: refused ? 'refused' : obs ? `${unclassified}/${obs}` : 'n/a',
+      });
+    }
+
+    // --- Metric 6: redundant-need rate (recommending an artifact the document
+    // already evidences) ---
+    //
+    // Keyed by condition rather than folded together: `truth` is what users
+    // receive and `deflated` is the positive control, and averaging the two
+    // would report neither.
+    for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = conditionField(condition);
+      // Same enforcement as metric 5's loop above, against metric 6's own key
+      // family - the two can disagree on the very same pooled field.
+      const refused = refusedKeys.has(`${REDUNDANCY_METRIC[condition]}|${arm.name}`);
+      let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0;
+      for (const [startupName, cell] of Object.entries(armResult.startups)) {
+        const spec = SATISFACTIONS[startupName];
+        if (!spec) continue;
+        for (const call of cell[field] ?? []) {
+          for (const obs of scoreRedundantNeeds(call.byDim, spec).observations) {
+            n += 1;
+            if (obs.redundant) redundant += 1;
+            if (obs.denied) denied += 1;
+            if (obs.mentioned) mentioned += 1;
+            if (obs.unclassified) unclassified += 1;
+          }
+        }
+      }
+      metric6.push({
+        arm: arm.name,
+        condition,
+        redundantN: refused ? 'refused' : n,
+        // null, never 0, at n=0 - 0/0 is undefined and reading it as a clean
+        // score is the mistake lib/field-overlap.js's jaccard avoids. `refused`
+        // outranks both: this pool's comparability was never established.
+        redundantRate: refused ? 'refused' : n ? redundant / n : null,
+        // mentioned/unclassified mirror metric 5's honesty column: a large
+        // `unclassified` means the classifier cannot read this output and
+        // `redundantRate` should not be quoted.
+        mentioned: refused ? 'refused' : mentioned,
+        unclassified: refused ? 'refused' : unclassified,
+        deniedCount: refused ? 'refused' : denied,
       });
     }
   }
 
-  return { metric1, metric2, metric3, metric4, metric5 };
+  return { metric1, metric2, metric3, metric4, metric5, metric6 };
 }
 
 function printReports(results) {
@@ -1256,6 +1383,14 @@ function printReports(results) {
   console.log(' `asserted` is a lower bound and `mentioned` an upper one. A large `unclassified`');
   console.log(' means the classifier cannot read this output and the rate should not be quoted.)\n');
   console.table(s.metric5);
+
+  console.log('\n--- Metric 6: redundant-need rate (recommending an artifact already evidenced) ---');
+  console.log('(share of dimensions whose RNA recommends acquiring something the document shows the');
+  console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.');
+  console.log(' `mentioned` is an upper bound and `unclassified` the honesty column, same read rule as');
+  console.log(' metric 5: a large `unclassified` means the classifier cannot read this output and the');
+  console.log(' rate should not be quoted. `deniedCount` is secondary and never folds into the headline.)\n');
+  console.table(s.metric6);
 }
 
 // --------------------------------------------------------------------------
@@ -1274,6 +1409,7 @@ const { fingerprintMap } = require(path.join(__dirname, 'lib/fingerprint.js'));
 const { MARKERS } = require(path.join(__dirname, 'lib/stage-markers.js'));
 const { scoreAssertedAbsences, CLASSIFIER_SOURCE } = require(path.join(__dirname, 'lib/assertions.js'));
 const { HARD_ABSENCES, verifyAbsences } = require(path.join(__dirname, 'lib/hard-absences.js'));
+const { REDUNDANCY_SOURCE } = require(path.join(__dirname, 'lib/redundancy.js'));
 
 function currentFingerprints() {
   return fingerprintMap({
@@ -1300,12 +1436,16 @@ function currentFingerprints() {
       // Not scoreAssertedAbsences.toString(): it contains neither the cue
       // regexes nor the helpers it calls. See CLASSIFIER_SOURCE.
       assertion: CLASSIFIER_SOURCE,
+      // Same reasoning: REDUNDANCY_SOURCE already folds in CLASSIFIER_SOURCE.
+      redundancy: REDUNDANCY_SOURCE,
     },
     arms: ARMS,
     levelsRubricScope: 'full-ladder',
     rnaRubricScope: 'current-and-next',
     absences: HARD_ABSENCES,
     inflatedLevels: INFLATED_OVERRIDE,
+    satisfactions: SATISFACTIONS,
+    deflatedLevels: DEFLATED_OVERRIDE,
   });
 }
 
@@ -1330,6 +1470,33 @@ function flaggedClauses(results) {
     }
   }
   return out;
+}
+
+/**
+ * Every generated dimension, flat. The text is already persisted nested under
+ * `results` (e.g., `results.baseline.startups['startup'].rnaCalls[].byDim`,
+ * `results.baseline.startups['startup'].assertionTruthCalls[].byDim`, etc.);
+ * this function provides a flat accessor for scoring scripts.
+ *
+ * `rep` is absent from the per-call records, so it is emitted as the call's
+ * index within its condition pool. Enough to distinguish reps within one file;
+ * not a claim about which day a call came from.
+ */
+function rnaTexts(results) {
+  const rows = [];
+  for (const [arm, armData] of Object.entries(results)) {
+    for (const [startup, cell] of Object.entries(armData.startups ?? {})) {
+      for (const condition of ALL_LEVEL_CONDITIONS) {
+        const calls = cell[conditionField(condition)] ?? [];
+        calls.forEach((call, rep) => {
+          for (const [dimension, text] of Object.entries(call.byDim ?? {})) {
+            rows.push({ arm, startup, condition, rep, dimension, text });
+          }
+        });
+      }
+    }
+  }
+  return rows;
 }
 
 function writeResults(file, results) {
@@ -1389,12 +1556,24 @@ function mergeRuns(files, arms) {
 
   const contributions = {};
   const refusals = [];
+  // Raw `${metric}|${arm}` keys that were refused for at least one file - the
+  // report-time enforcement of what `refusals` above only logs to the console.
+  // Tracked per metric key, not per field: two metric keys can share a field
+  // (pooling is a union, see fieldsPushed below) while still needing SEPARATE
+  // refused/not-refused verdicts, because each metric's own report row reads
+  // that field under its own scoring rules (metric 5 vs metric 6) and only one
+  // of the two may have actually gone stale.
+  const refusedKeys = new Set();
   const FIELD = {
     levels: 'levelCalls',
     rna: 'rnaCalls',
     fabrication: 'hallucCalls',
     assertion: 'assertionTruthCalls',
     'assertion-inflated': 'assertionInflatedCalls',
+    'assertion-deflated': 'assertionDeflatedCalls',
+    redundancy: 'assertionTruthCalls',
+    'redundancy-inflated': 'assertionInflatedCalls',
+    'redundancy-deflated': 'assertionDeflatedCalls',
   };
 
   for (const { file, data } of days) {
@@ -1402,6 +1581,21 @@ function mergeRuns(files, arms) {
       const src = data.results[arm.name];
       if (!src) continue;
       merged[arm.name].quotaHit = merged[arm.name].quotaHit || src.quotaHit;
+
+      // redundancy shares assertionTruthCalls with assertion - it rescores the
+      // same stored truth-condition calls rather than making its own (same for
+      // the -inflated/-deflated pairs). This loop iterates per metric KEY, so
+      // without this guard a shared field gets pushed once per metric key that
+      // references it, doubling n.
+      //
+      // This is a UNION, not a priority rule: a refused key `continue`s before
+      // reaching this guard, so the field is pushed as soon as ANY key sharing
+      // it matches - whichever key happens to come first in FIELD only decides
+      // which key gets credited in `contributions`, not whether the push
+      // happens. Reordering FIELD cannot change what gets pooled. A refusal on
+      // one sharing key does not block a match on another (see refusedKeys
+      // below for how that refusal still surfaces at report time instead).
+      const fieldsPushed = new Set();
 
       for (const [metric, field] of Object.entries(FIELD)) {
         const key = `${metric}|${arm.name}`;
@@ -1419,8 +1613,14 @@ function mergeRuns(files, arms) {
         // hadn't accumulated anywhere yet.
         if (mine === undefined || ref === undefined || mine !== ref) {
           refusals.push(`${key} (${path.basename(file)}: ${mine ?? 'pre-fingerprint'} vs ${ref ?? 'pre-fingerprint'})`);
+          refusedKeys.add(key);
           continue;
         }
+
+        contributions[key] = (contributions[key] || []).concat(path.basename(file));
+
+        if (fieldsPushed.has(field)) continue;
+        fieldsPushed.add(field);
 
         for (const [startupName, cell] of Object.entries(src.startups)) {
           const dst =
@@ -1428,16 +1628,21 @@ function mergeRuns(files, arms) {
             (merged[arm.name].startups[startupName] = {
               retrieved: cell.retrieved,
               rnaCalls: [], levelCalls: [], hallucCalls: [],
-              assertionTruthCalls: [], assertionInflatedCalls: [],
+              assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
             });
           // Defensive: a file carrying an assertion fingerprint but no assertion
           // array (hand-edited, or written by a partial run) must not throw.
           dst[field].push(...(cell[field] || []));
         }
-        contributions[key] = (contributions[key] || []).concat(path.basename(file));
       }
     }
   }
+
+  // Threaded onto the merged object (not just returned alongside it) so
+  // summarizeResults/printReports, which only ever see `merged`, can enforce
+  // it without a signature change. A live (non-merge) run's `results` simply
+  // has no `.refusedKeys`, so nothing there is ever marked refused.
+  merged.refusedKeys = refusedKeys;
 
   return { merged, contributions, refusals };
 }
@@ -1569,16 +1774,22 @@ module.exports = {
   isAbsentAnswer,
   mean,
   summarizeResults,
+  printReports,
   mergeRuns,
   currentFingerprints,
   flaggedClauses,
+  rnaTexts,
   validateArgs,
   selectCells,
   selectProbes,
   ALL_LEVEL_CONDITIONS,
   INFLATED_OVERRIDE,
   inflatedLevels,
+  DEFLATED_OVERRIDE,
+  deflatedLevels,
   selectLevelConditions,
+  levelsForCondition,
+  conditionField,
   isRetryableServerError,
   is429,
   withRetry,

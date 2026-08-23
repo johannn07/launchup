@@ -3,8 +3,8 @@ const assert = require('node:assert');
 const path = require('path');
 
 const {
-  selectLevelConditions, inflatedLevels, INFLATED_OVERRIDE, STARTUPS, validateArgs,
-  runGenerationArms, ARMS, buildRnaCell,
+  selectLevelConditions, inflatedLevels, deflatedLevels, INFLATED_OVERRIDE, DEFLATED_OVERRIDE, STARTUPS, validateArgs,
+  runGenerationArms, ARMS, buildRnaCell, levelsForCondition, conditionField,
 } = require(path.resolve(__dirname, '../measure-grounding.js'));
 
 test('no filter runs the truth condition only, preserving current behaviour', () => {
@@ -178,4 +178,69 @@ test('the fabrication probe gets the truth rubric block under an inflated-only r
   });
   assert.equal(results['deviation-deterministic'].startups['AgroLink PH'].retrieved.length, 12);
   assert.match(r.prompts[0], /Verified Readiness Rubrics \(authoritative\)/);
+});
+
+test('levelsForCondition rejects an unknown condition instead of silently returning truth', () => {
+  const startup = { levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 } };
+  assert.throws(() => levelsForCondition(startup, 'nonsense'), /unknown condition/i);
+});
+
+test('conditionField rejects an unknown condition instead of silently returning the inflated pool', () => {
+  assert.throws(() => conditionField('nonsense'), /unknown condition/i);
+});
+
+test('the known conditions still map exactly as before', () => {
+  const startup = { levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 } };
+  assert.deepEqual(levelsForCondition(startup, 'truth'), startup.levels);
+  assert.equal(levelsForCondition(startup, 'inflated').Organizational, 3);
+  assert.equal(levelsForCondition(startup, 'inflated').Technology, 6);
+  assert.equal(conditionField('truth'), 'assertionTruthCalls');
+  assert.equal(conditionField('inflated'), 'assertionInflatedCalls');
+});
+
+const LEVELS = { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 };
+
+test('deflated pushes T/M/A to 1 and leaves O/R/I at truth as the within-call control', () => {
+  const out = deflatedLevels(LEVELS);
+  assert.deepEqual(
+    { Technology: out.Technology, Market: out.Market, Acceptance: out.Acceptance },
+    { Technology: 1, Market: 1, Acceptance: 1 },
+  );
+  assert.deepEqual(
+    { Organizational: out.Organizational, Regulatory: out.Regulatory, Investment: out.Investment },
+    { Organizational: 2, Regulatory: 1, Investment: 1 },
+  );
+});
+
+test('deflatedLevels returns a new object — STARTUPS.levels is hashed into every fingerprint', () => {
+  const before = { ...LEVELS };
+  deflatedLevels(LEVELS);
+  assert.deepEqual(LEVELS, before);
+});
+
+test('deflated is disjoint from inflated, so no dimension is manipulated in both', () => {
+  const overlap = Object.keys(DEFLATED_OVERRIDE).filter((k) => k in INFLATED_OVERRIDE);
+  assert.deepEqual(overlap, []);
+});
+
+test('both keeps its pre-2026-08-23 meaning and is NOT widened', () => {
+  assert.deepEqual(selectLevelConditions('both').conditions, ['truth', 'inflated']);
+});
+
+test('all selects three', () => {
+  assert.deepEqual(selectLevelConditions('all').conditions, ['truth', 'inflated', 'deflated']);
+});
+
+test('a comma list selects exactly what it names, in canonical order', () => {
+  assert.deepEqual(selectLevelConditions('deflated,truth').conditions, ['truth', 'deflated']);
+});
+
+test('an unrecognised entry hard-errors rather than being dropped', () => {
+  const { conditions, errors } = selectLevelConditions('truth,inflted');
+  assert.deepEqual(conditions, []);
+  assert.match(errors[0], /"inflted"/);
+});
+
+test('no filter still defaults to truth alone', () => {
+  assert.deepEqual(selectLevelConditions(null).conditions, ['truth']);
 });

@@ -44,6 +44,8 @@ const hash = (material) =>
  * @param {string} [spec.rnaRubricScope]     'current-and-next' | 'none'
  * @param {object} [spec.absences]       HARD_ABSENCES - the assertion probe's hard-coded absence list
  * @param {object} [spec.inflatedLevels] INFLATED_OVERRIDE - the assertion probe's inflated-condition levels
+ * @param {object} [spec.satisfactions]  SATISFACTIONS - the redundancy probe's satisfied-token spec, keyed by (startup, dimension)
+ * @param {object} [spec.deflatedLevels] DEFLATED_OVERRIDE - the redundancy probe's deflated-condition levels
  */
 function fingerprintMap(spec) {
   const {
@@ -56,6 +58,8 @@ function fingerprintMap(spec) {
     rnaRubricScope = 'current-and-next',
     absences,
     inflatedLevels,
+    satisfactions,
+    deflatedLevels,
   } = spec;
 
   // Content hash, not the row count mergeRuns' envKey already checks — editing
@@ -129,6 +133,32 @@ function fingerprintMap(spec) {
       };
       out[`assertion|${arm.name}`] = hash(assertionMaterial);
       out[`assertion-inflated|${arm.name}`] = hash({ ...assertionMaterial, inflatedLevels });
+      // Completes metric 5's grid: it reports all three ALL_LEVEL_CONDITIONS
+      // rows, so all three need a comparability key or the deflated row prints
+      // over a pool nothing ever checked.
+      out[`assertion-deflated|${arm.name}`] = hash({ ...assertionMaterial, deflatedLevels });
+    }
+
+    // Additive only, same reasoning as the assertion block above.
+    if (sources.redundancy) {
+      const redundancyMaterial = {
+        src: sources.rna,
+        readinessLevelBlockSrc: sources.readinessLevelBlock,
+        renderRubricBlockSrc: sources.renderRubricBlock,
+        common,
+        scope: rnaScope,
+        rubricMode: arm.rubricMode,
+        corpusHash: corpusHashForArm,
+        // Scoring is comparability: re-scoring stored text against an edited
+        // token list is a different measurement, not more of the same one.
+        redundancySrc: sources.redundancy,
+        satisfactions,
+      };
+      out[`redundancy|${arm.name}`] = hash(redundancyMaterial);
+      // Mirrors assertion-deflated above: metric 6 also reports all three
+      // conditions, so the inflated row needs its own key too.
+      out[`redundancy-inflated|${arm.name}`] = hash({ ...redundancyMaterial, inflatedLevels });
+      out[`redundancy-deflated|${arm.name}`] = hash({ ...redundancyMaterial, deflatedLevels });
     }
   }
   return out;

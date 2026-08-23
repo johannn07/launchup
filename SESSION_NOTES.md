@@ -28,6 +28,10 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **`JSON.stringify(obj, replacerArray)` filters keys at EVERY level, including the root.** A guard comparing `{1: {...}, 2: {...}}` this way strips `1` and `2` and compares `{}` to `{}` — it passes for correct and corrupted data alike. Another instance of *a check that cannot fail is not a check*; use a recursive sorted-key canonicaliser, and prove the comparator rejects a deliberately wrong value before trusting it.
 - **Neon holds three startups, not two.** 1 AgroLink and 2 MediSync (both rated, both measurement ground truth), plus **5 "Tindahanap", PENDING and unrated** — created through the apply flow during the 2026-08-22 OCR session. Earlier notes saying "exactly two startups and both are rated" are stale. Startup 5's real summary scores `ratio 1.000` (not flagged), which makes it a usable balanced control.
 - **`node -e "..."` cannot be given `--flag=value` arguments** — node parses them as its own options and exits. Probing a harness that reads `process.argv` needs a real script file.
+- **A doc patch can corrupt line terminators invisibly.** A newline substitution ran twice on the same text — joined with CRLF, then every LF expanded to CRLF again — giving CR+CRLF, invisible in the editor and in `git diff`. Surfaced only by a diffstat far larger than the edit justified, then `file` reporting "CRLF, CR line terminators." Treat an oversized diffstat as a signal, not noise.
+- **Playwright MCP refuses `file:` URLs and writes only inside the repo root.** Serve a scratch page over `http://127.0.0.1` instead, and clean `.playwright-mcp/` afterward — it is not gitignored.
+- **`allowGlobalContext` is unset (false), so a boot-time `app.get(...)` throws.** Boot seeders must take `orm.em.fork()` — every seeder in `main.ts` already does this.
+- **A capsule-proposal vision call took 175 s.** Budget client/HTTP timeouts well beyond a default before blaming the pipeline.
 
 ---
 
@@ -228,472 +232,150 @@ fail is not a check.**
 
 ---
 
-## 2026-08-22 (later) — the deferred-cleanup sweep, and a red suite finally green
-
-`chore/deferred-cleanup-sweep`, **local, nothing pushed**, on `master` at `b0d5fc8`.
-Four tasks, all confirmed in advance. **Zero API calls of any kind.**
-
-### The headline: the recorded verification procedure could not have been run
-
-The one ⚠️ left by the demo-critical sweep was *saving baseline scores*, with a
-"zero-risk way to close it" written down: re-save the identical stored values and
-expect the toast. **Tracing it first showed there is no button to click.**
-
-The live path is real end to end — a genuine `<Button onclick={submitBaselineScores}>`
-(`+page.svelte:421`), a real `POST /readinesslevel/startup/:startupId/rate` under
-`JwtGuard`, a `RateReadinessDto` matching the payload field for field, and a
-find-or-create upsert on `(startup, readinessType)`. So **the deletion reasoning that
-this item existed to check holds.**
-
-But the mentor form is gated `{:else if isRated()}`, and `isRated()` is true whenever
-the startup has *any* `startups_readiness_level` rows. Both demo startups have all
-six. **The Save button does not render for a rated startup**, so the procedure has no
-trigger.
-
-**This is the fifth instance of the pattern named in the sweep** — *the recorded
-symptom or procedure is real in description, and nobody checked whether the code
-carrying it can execute.* The new part is that it now applies to a **verification
-step**, not a bug.
-
-⚠️ **The "zero-risk" procedure was the opposite of zero-risk, and only the gate
-hid it.** `baselineScores` initialises to all-`1` (`+page.svelte:58`) and is **never
-seeded from the loaded rows**. Had the form rendered for a rated startup, a Save
-without touching all six selects would have written `T1 M1 A1 O1 R1 I1` over the
-measurement ground truth. `isRated()` is the only thing between a stray click and the
-2026-08-05 grounding result. **Verifying the save needs an *unrated* startup** — a
-different exercise, and not one to run against AgroLink or MediSync.
-
-### The suite is green for the first time: 266 / 266, 25 suites
-
-The failure reproduced exactly as recorded, and **the recorded conclusion was right:
-the expectation was wrong, not the code.** `target_level_normalized: 5` and
-`target_level_z: 0` are what the mocked `normalizeScore` returns; the old assertion
-wrote `3` — the *raw* level — under a comment claiming it matched the normalized
-output.
-
-**The recorded *mechanism* was wrong, and that correction is the real find.** It
-blamed the test context setting `scoreNormalization: true`. **That flag never reaches
-this path:** `generateTasksFromPrompt` (`ai.service.ts:984-992`) normalizes
-unconditionally, and `ctx.config.scoreNormalization` is read *only* inside
-`reviewBiasScore`.
-
-**The cost is provenance, which is why it is not cosmetic.** `ai_generation_runs`
-exists so a run is attributable to an exact arm; a row stamped
-`scoreNormalization: false` still carries normalized `target_level` values here. A
-baseline-vs-enhanced comparison over task target levels would be comparing two
-identical arms while believing otherwise. **Same class as the `temperature`
-top-level bug** — a config flag that silently never applied.
-
-Pinned with a test rather than a doc line. **The mutation making the path honour the
-flag killed only that test**, confirming nothing else covered it. Fixing the flag is a
-production behaviour change on an arm under measurement, so it is logged in
-`TODO_CHECKLIST.md` §4 rather than smuggled into a test repair.
-
-**"A second failure is a real regression" is retired.** Any failure is now the signal
-— which is the whole point of fixing a one-test-red suite.
-
-### `chumcheck` purged — and one of the three had never worked
-
-All three `scripts/` files deleted, and the directory with them; no code referenced
-them, only docs. `delete_db.sh` was **never executable as written** — lines 4-5 were
-raw SQL sitting unquoted in a `#!/bin/bash` file, so the shell would have tried to run
-`drop` as a command. Only line 6 did anything, and it pointed at a dump deleted
-earlier the same day. **`reset_db.sh`/`.ps1` were the live hazard** — both valid, both
-a real `DROP DATABASE ... WITH (FORCE)` against a local `postgres` superuser.
-
-**Deleted rather than repointed, because there is no correct target:** Neon branches
-instead of drop-and-recreate, and `docker-compose.yml`'s `launchup_db` is unused.
-
-### Branch sweep: 23 → 4
-
-All 20 `[gone]` branches deleted after **verifying each is an ancestor of `master`**
-rather than trusting the earlier listing — 0 unmerged. Used `git branch -d`, not
-`-D`: with the merge already proven, the safe form does the same job and keeps its own
-guard. (The force-delete loop the skill prescribes was blocked by the permission
-classifier; the safe form was accepted, which is the better command anyway.)
-
-### Then: the backup branch, deleted on evidence rather than on its label
-
-`backup/rag-corpus-preflight` was carried for weeks as "disposable, 13.7 MB of
-PDF blobs". Both halves of that description were misleading. It is a
-**2026-07-28 snapshot far *behind* `master`**, not a branch holding extra work:
-its unique content is almost entirely files deliberately deleted since — the
-`chumcheck` dump, the scratch files, the three orphaned Tab components,
-`recommendation.entity.ts`. The only irreplaceable-looking material was three
-capstone PDFs, and those were **verified byte-identical by SHA-256 to the copies
-in `Downloads\capstone`** before deleting — matching filenames and sizes were not
-treated as sufficient. Branches: 23 → 3.
-
-### Then: the save verified, and a bug only the probe could find
-
-**The save works end to end.** Six POSTs to `/readinesslevel/startup/4/rate`, all
-**201**, all six rows stored with the exact values set in the UI, and the page
-flipped to the rated view on its own showing *"regulatory … currently at 33%"*
-= 3/9. **The last ⚠️ from the demo-critical sweep is closed:** deleting the
-unreachable form action was correct, and the live path it deferred to works.
-
-**Six *distinct* values were used (T7 A2 M5 O8 R3 I6), and that was the point.**
-The form's display order is Technology, **Acceptance, Market**, … while the enum
-order is T, M, A. Uniform values would have passed even if every select mapped to
-the wrong dimension. They didn't — but the test could not have told the
-difference.
-
-**It required creating a startup, which is itself a finding.** Neon holds exactly
-two startups and both are rated, so **the mentor form was unreachable anywhere on
-this database.** `ZZ Save-Path Probe` was created, used and removed in a
-transaction that **refused to commit unless startups 1 and 2 still held 12 rows**;
-AgroLink `T2 M3 A3 O2 R1 I1` and MediSync `T6 M5 A5 O2 R1 I1` confirmed unchanged
-before and after.
-
-🐞 **New bug, found only because the probe existed.** The first save flips
-`isRated()` and the form never renders again — confirmed by reloading: 0 selects,
-no Save button. So `rateStartupReadinessLevel` is a find-or-create upsert whose
-**update branch is unreachable from the app**; a mistyped baseline score can only
-be fixed by SQL. The obvious fix is unsafe on its own: `baselineScores`
-initialises to all-`1` and never reads stored rows, so re-exposing the form
-without pre-seeding turns a stray click into six overwritten levels.
-
-⚠️ **`GET /readiness/:startupId` writing on every read reproduced incidentally**
-— two page views left **two** `readiness_evaluations` rows and 12 dependent
-`readiness_gaps`. The §2 item is real, and cleanup must follow the FK chain.
-
-### Small things worth not rediscovering
-
-- **Backticks inside a double-quoted bash string are command substitution.** A doc
-  patch written as `"...the \`chumcheck\` purge..."` silently lost the word — bash ran
-  `chumcheck` as a command and substituted its empty output. Quoted heredocs
-  (`<<'EOF'`) are immune; that is why the other patches survived.
-- **A doc patch corrupted five line terminators, and nothing rendered differently.**
-  The newline substitution ran twice — text joined with CRLF, then every LF
-  expanded to CRLF again — giving CR+CRLF. Invisible in the editor and in
-  `git diff`; what surfaced it was a **diffstat far larger than the edit
-  justified**, then `file` reporting "CRLF, CR line terminators". It reached a
-  commit first. Treat an oversized diffstat as a signal, not noise.
-- `git worktree list` still shows `.claude/worktrees/xenodochial-colden-25e582` at a
-  detached HEAD. It is harness state, merged into `master`, and was left alone.
-
-## Close-out — 2026-08-22 (deferred-cleanup sweep) — SUPERSEDED, see the end of this file
-
-### What this session did
-
-Six tasks, all housekeeping picked up as a **new decision** after the 2026-08-07
-triage boundary was reached — none of it §0 work. In order: traced the
-baseline-score save (the recorded procedure turned out to be unrunnable), purged
-the `chumcheck` scripts, fixed the test that had kept `master` red, swept 20
-`[gone]` branches, deleted `backup/rag-corpus-preflight`, and verified the save
-live on a purpose-made startup. Full detail in the session section above.
-
-**Three results worth carrying forward:**
-- **The backend suite is green for the first time — 266/266 across 25 suites.**
-  "A second failure is a real regression" is retired; *any* failure is now the
-  signal.
-- **The baseline-score save works end to end**, closing the last ⚠️ from the
-  demo-critical sweep.
-- **Three new defects were found, none of which was on any list** — see below.
-
-### Branch state then — merged as PR #30
-
-`chore/deferred-cleanup-sweep`, **local, nothing pushed**, on top of `master` at
-`b0d5fc8`. `master` is an ancestor, so it **fast-forwards**.
-
-Gates at the tip: jest **266/266 across 25 suites**, measurement **257/257**,
-`tsc --noEmit` exit 0. `svelte-check` was not re-run and does not need to be —
-**no file under `frontend/src` is touched.**
-
-**Merge risk is low and the reason is specific:** the only change under
-`backend/src` is a **spec file**. No production code, no entity, no enum member —
-which matters because `main.ts` runs `updateSchema()` on every boot. The rest is
-three deleted shell scripts and four markdown files.
-
-### In progress at that point — nothing
-
-No work is half-done. The three defects below are **logged and unstarted**, by
-choice: each needs a decision before code, and none was smuggled into a cleanup
-branch.
-
-### Next step proposed then — one branch, three linked problems (✅ ALL THREE DONE 2026-08-23, `fix/silent-controls`)
-
-Agreed 2026-08-22: merge this branch first, then do all three on a **dedicated
-branch**, not on top of cleanup work.
-
-1. **SO 4.4's missing *action* on the flag** — the one substantive §0 gap left.
-   The badge is visible in all four Manager dialogs; **nothing happens when it
-   fires.** An alert nobody acts on is barely better than one nobody sees. Design
-   question — brainstorm before code.
-2. **`AI_SCORE_NORMALIZATION_ENABLED` does not gate task normalization**
-   (`TODO_CHECKLIST` §4). `generateTasksFromPrompt` normalizes unconditionally,
-   so an `ai_generation_runs` row stamped `scoreNormalization: false` still
-   carries normalized values — **the 4c arm mislabelled inside the table built to
-   make arms attributable.** Small fix, but it changes output on the disabled arm,
-   so stored comparisons need a deliberate call first, and the test currently
-   pinning the behaviour must be inverted in the same commit.
-3. **A mentor cannot correct a baseline score** (`TODO_CHECKLIST` §4). The first
-   save hides the form permanently, so the upsert's update branch is unreachable
-   from the app. **Pre-seeding the form from stored levels is a prerequisite, not
-   a nicety** — `baselineScores` starts at all-`1`, so re-exposing the form
-   without it turns a stray click into six overwritten levels, and those levels
-   are the measurement ground truth.
-
-**Why one branch:** 2 and 3 are both "a control that silently does not do what
-its name says", and 1 is the same shape one level up — a signal computed,
-surfaced, and then ignored. They share no files, so they can land as independent
-commits.
-
-**Known-good starting facts for that branch:** the demo mentor is
-`mentor@launchup.local` (real `Mentor` role, not `Manager as Mentor`); Neon holds
-only two startups and **both are rated**, so any UI work on the readiness-level
-mentor path needs a throwaway startup; and `readiness_gaps` →
-`readiness_evaluations` → `startups_readiness_level` → `startups` is the delete
-order for cleaning one up.
-
-**Not next, but not forgotten.** (SO 4.4's missing action has been promoted to
-the Next step list above; the rest is unchanged from 2026-08-20.)
-- **Metric 3 beyond the FAIL** — a *separately* pre-registered rule with a
-  **per-startup** noise floor, scored on new data. Calibrating on the 2026-08-20
-  run and reporting the fit is the forbidden move.
-- **A cheaper validation than more reps:** a *different* summary prompt or a
-  third document beats a fourth rep of the same two.
-- **RNA *generation* quality is still unmeasured.** Every grounding figure is the
-  levels probe; production's RNA path retrieves 12 rubric rows rather than 54.
-  Needs a **harder probe, not more reps**.
-
-**Open decisions, not blocking:** unchanged from 2026-08-20 — production cookie
-policy; RNS correlation-key uniqueness and stale verdicts on artifact edit; tier
-thresholds uncalibrated; `readiness_evaluations` mixed-scale rows; Neon TLS
-verification disabled; the owed manual auth click-through; VS Code's
-`git.postCommitCommand`; and §1's "guard the remaining unauthenticated modules"
-claim still needing confirmation rather than trust.
-
----
-
-## 2026-08-22 (3a / 3b) — the better transcription was being thrown away
-
-Branch `fix/ocr-transcription-preference`, 4 commits, local. Gates at the tip:
-jest **278/278 across 26 suites**, `tsc --noEmit` 0, `svelte-check` **119/14 —
-unchanged from baseline**.
-
-### Two defects, both "a signal computed and then ignored"
-
-1. **`parseCapsuleProposal` stored Tesseract's transcription, not Gemini's.** The
-   guard read `raw_transcription && !parsedText` — the inverse of its own
-   comment. Tesseract is installed, so `parsedText` was always truthy and
-   Gemini's `raw_transcription` reached **no consumer anywhere in either app**.
-   The `OCR_PLACEHOLDER` sentinel is also truthy and beat it too.
-   `detectSketch` deliberately still reads Tesseract's output — its weights are
-   tuned to that, and clean prose would stop sketches ever being detected.
-   Pinned by a test that was green before the fix.
-2. **`fieldConfidence` was `text.length < 40`.** The extraction prompt orders a
-   40-character minimum on every field, so the rule graded compliance with that
-   instruction. Replaced by content-word overlap with the transcription
-   (`src/ocr/field-confidence.ts`). The frontend also defaulted a missing field
-   to `'verified'`, rendering green for something never scored.
-
-### Live verification — one Gemini call, and it separated cleanly
-
-Synthetic handwriting (Caveat font, 1600×1200 JPEG) through the **running**
-server against Neon. `extractedText` came back as Gemini's verbatim
-transcription, no placeholder. The document deliberately carried only title /
-startup / problem / target-market content.
-
-**Every field present on the page scored `verified` (4/4); every field the model
-inferred scored `low` (4/4)** — `scope`, `objectives`, `methodology`,
-`solution_description`. The `scope` prediction recorded before the run held.
-
-**Do not overclaim this: n=1, one document, and a font is not handwriting** —
-uniformly formed glyphs are far easier than a real hand. It shows the rule and
-the wiring work end to end; it does **not** calibrate `SUPPORT_THRESHOLD = 0.5`,
-which remains a guess until 3c runs on real samples.
-
-Also confirmed live: `visionLabels: []` and `sketchDetected: false` — 3b's Vision
-path is inert, as the corrected wording now says.
-
-### Corrections to claims made earlier the same day
-
-- **The entropy gate is NOT inert.** Measured: the same page as PNG scores
-  **3.33** and is rejected; as JPEG **5.89** and passes. It reads the tail of the
-  *compressed file*, so a blank-bottomed PNG fails. Camera photos survive on
-  sensor noise. The sample-prep protocol was corrected.
-- `@google-cloud/vision` absence verified by `import()` at runtime
-  (`ERR_MODULE_NOT_FOUND`), not by reading `package.json`.
-
-### Gotchas worth keeping
-
-- **A capsule-proposal vision call took 175 s.** Well beyond a default HTTP
-  client timeout; budget for it before blaming the pipeline.
-- Playwright MCP refuses `file:` URLs and only writes inside the repo root —
-  serve the scratchpad over `http://127.0.0.1` and clean `.playwright-mcp/` after
-  (it is **not** gitignored).
-- A probe script must sit **inside `backend/`** or `@mikro-orm/postgresql` will
-  not resolve.
-- The probe's `ocr_documents` row was **deleted after the run** (id 2,
-  `ocr-sample.jpg`); only the pre-existing `capsule-page.png` from 2026-07-27
-  remains. Nothing references that table — no inbound foreign keys.
-
-### Still open
-
-- **3c is unblocked only by the samples.** Ten handwritten proposals plus
-  verbatim transcripts; the protocol is written and shared.
-- `SUPPORT_THRESHOLD` uncalibrated.
-
-### Same session — URAT and calculator steps were blank
-
-Reported while testing the OCR upload, unrelated to the branch's other work.
-
-**Root cause:** `urat_questions` and `calculator_questions` held **0 rows**. The
-18 URAT and 35 calculator questions lived only inside
-`AppService.generateUratQuestions` / `generateCalculatorQuestions`, and their
-only callers were three `@Post` endpoints in `app.controller.ts` that were **all
-commented out**. Nothing ran them at boot, so the data died in the 2026-07-26
-wipe and was never restored. `readiness_levels` still had its 54 rows, which is
-why only these two steps were affected.
-
-**Why nobody caught it:** both endpoints answer **200 with `[]`**, not an error.
-`getData()` in `Application.svelte` does silently return `undefined` when a fetch
-is not `ok`, but that path never fired — the components simply rendered an empty
-list. Nothing to log, nothing to catch.
-
-**Fix:** banks extracted to `src/assessment-questions.ts`; `seedAssessmentQuestions`
-runs on boot, guarded on emptiness. The original loop had **no guard at all**, so
-a second run would have produced 36 URAT questions and every applicant would have
-seen each question twice — the guard is the point, and it has a test. The
-superseded generators and the dead endpoints were deleted rather than left as a
-second copy of the data to drift out of sync.
-
-**Verified live, at three layers:** endpoints return 18 and 35 (the calculator one
-returns 7 because the service groups by category — 5 × 7, not a shortfall); the DB
-holds 18 / 35; and the flow renders **18 textareas** in the browser. Idempotency
-proved itself incidentally — the dev watcher restarted three times during the edits
-and the counts stayed put.
-
-**Found in passing, logged not fixed:** `@Controller('readinesslevel')` has **no
-class-level guard**, so its endpoints answer unauthenticated (curl, no token).
-`Application.svelte` calls them with a bare `fetch` carrying no credentials, so
-guarding it without fixing the caller repeats the PR #15 trap exactly.
-
-**Gotcha:** `allowGlobalContext` is unset (false), so a boot-time
-`app.get(AppService)` would throw. Boot seeders must take `orm.em.fork()` — which
-is what every other seeder in `main.ts` already does.
-
-### Same session — a 503 turned into confident garbage, and the confidence rule was circular
-
-A live upload hit **503 UNAVAILABLE** (model busy — *not* 429/quota; the two are
-different codes and must never share a code path). What followed exposed a flaw
-in the confidence rule shipped hours earlier.
-
-**The chain:** vision 503s → `catch` swallows it → Tesseract mangles the
-handwriting → `if (!aiPayload && parsedText)` fires a **second** Gemini call on
-the mangling → the model extracts fields from it → **two fields render as green
-"Verified" badges**. Measured on the stored row: `solution_description` scored a
-support ratio of **1.00**, `startup_description` **0.83**.
-
-**Why:** the rule compares a field against the transcription. On the vision path
-both derive independently from the image, so an unsupported field genuinely
-fails to match — that is why `scope` was caught on the clean run. On the fallback
-path the model is *handed* the text and asked to extract from it, so the
-comparison is output-versus-its-own-input and overlap is guaranteed. **The same
-circularity applies to the PDF path**, which was never on the vision path at all.
-
-**Fixes (three, all TDD):**
-1. `classifyField`/`scoreFields` take a **required** `EvidenceSource`
-   (`vision` | `derived`); `derived` caps everything at `low`. Required rather
-   than defaulted — a default of `vision` would let a forgotten argument restore
-   the bug silently. The compiler immediately caught the one existing call site,
-   which is the argument for making it required.
-2. `src/ai/retry-transient.ts` — 3 attempts, 2s/4s backoff, **never** retries a
-   429. Ported from `measure-grounding.js`, which has had this since 2026-08-03:
-   **the measurement harness was more robust than the application it measures.**
-   Delays are deliberately shorter than the harness's 15s/30s because a capsule
-   extraction already runs to ~200s.
-3. A service failure now raises `ServiceUnavailableException` and writes **no**
-   `ocr_documents` row; the controller passes `HttpException` through instead of
-   rewrapping as a 500. Non-service errors keep the Tesseract fallback, now
-   scored as `derived`.
-
-**Verified:** 300/300 across 28 suites, `tsc --noEmit` 0. The classifier is pinned
-by a regression test carrying the SDK's **verbatim** error string — a regex that
-matches a paraphrase but not the real message would be worthless.
-
-**Not verified live:** forcing a 503 on demand isn't possible without editing
-`.env`, so the retry and the fail-loud path are proven by tests only. The
-circular-evidence fix was *diagnosed* from live data (the stored row) even though
-its fix is test-proven.
-
-**Gotcha worth keeping:** the frontend's failure copy says "The image quality
-check failed… Re-upload a clearer image or switch to a PDF." For a 503 that is
-advice to re-photograph a perfectly good page. Failing loudly with a service
-message is what makes that copy correct again.
-
----
-
-## Open at end of 2026-08-22 (3a / 3b session) — superseded by the 2026-08-23 section below
-
-### What this session did
-
-Objectives **3a and 3b closed**, plus two bugs found by using the app rather than
-by reading it. Detail in the three sections above; outcomes only here.
-
-- **3a — two defects fixed.** Production stored *Tesseract's* transcription, not
-  Gemini's, and `fieldConfidence` was `text.length < 40`. Both live-verified.
-- **3b — descope wording corrected.** `visionLabels` is always `[]` because
-  `@google-cloud/vision` is not installed (verified by `import()` at runtime, not
-  by reading `package.json`). The descope decision itself stands.
-- **URAT and calculator steps rendered blank** — both question tables held 0 rows
-  and nothing had ever seeded them. Now seeded on boot, guarded, tested.
-- **A Gemini 503 became confident garbage** — and exposed that the confidence
-  rule shipped hours earlier was *circular* on the fallback path. Three fixes.
-- **`CLAUDE.md` gained a response-style section** after the session's own
-  communication failures.
-- **3c's sample-prep protocol written and shared** (artifact), including a
-  ready-to-copy proposal and its predicted per-field result.
-
-**Two claims made this session were wrong and were corrected in place:** the
-entropy gate is *not* inert (PNG 3.33 fails, JPEG 5.89 passes — it bites
-digitally-clean images), and "3c is blocked only on the samples" was true of the
-CER half only, not SUS.
-
-### Branch state — ready, NOT merged
-
-`fix/ocr-transcription-preference`, **8 commits, local, nothing pushed.**
-`master` is an ancestor, so it fast-forwards.
-
-Gates, run fresh at the tip: jest **301/301 across 28 suites**, measurement
-**257/257**, `tsc --noEmit` 0, `svelte-check` **119/14 — unchanged from
-baseline**. **No entity or migration is touched**, which matters because
-`main.ts` runs `updateSchema()` on every boot: merging cannot alter the schema.
-
-Two commits are broader than the branch name suggests (`10a1365` seeding,
-`237cbcc` resilience) — accurate history, misleading label.
-
-### In progress — nothing half-done
-
-### What is NOT verified, and must not be claimed
-
-- **The 503 retry and the fail-loud path are test-proven only.** A real 503
-  cannot be forced without editing `.env`. The circular-evidence bug was
-  *diagnosed* from live data; its fix is not re-observed in the app.
-- **`SUPPORT_THRESHOLD = 0.5` is a guess.** 3c replaces it.
-- **3a's accuracy is unmeasured** — hence 🟡, not 🟢.
-- The healthy-path re-check after the fixes is the **user's observation**, not a
-  measurement taken here.
-
-### Next step
-
-1. **Merge this branch** (fast-forward, no schema impact).
-2. **The substantive work available now is the three linked problems** proposed
-   on 2026-08-22 and still untouched — see the superseded close-out above: SO
-   4.4's missing *action* on the flag, `AI_SCORE_NORMALIZATION_ENABLED` not
-   gating task normalization, and a mentor being unable to correct a baseline
-   score. **3c cannot start without the ten handwritten samples**, so this is the
-   §0 work that is not externally blocked.
-3. **3c when the samples exist.** CER harness design is agreed but unwritten; the
-   protocol is shared. SUS is being built by the team, not here — and the
-   instrument must exist *before* the sample-writing session, because that
-   sitting is the only natural chance to catch respondents straight after use.
-
-**New this session, logged not fixed:** `@Controller('readinesslevel')` has no
-guard, so its endpoints answer unauthenticated, and `Application.svelte` calls
-them with a bare `fetch` carrying no credentials — guarding it without fixing the
-caller repeats the PR #15 trap. See `TODO_CHECKLIST.md` §2.
+## Compressed — 2026-08-22
+
+Compressed 2026-08-23 under the three-most-recent rule, from four sections
+(the deferred-cleanup sweep, its SUPERSEDED close-out, the OCR transcription
+fix, and its superseded open-items summary). Full detail lived in those
+sections and in `TODO_CHECKLIST.md`; durable gotchas are in **Standing
+operational notes** above. Both SUPERSEDED sections were superseded because
+the *plan* they proposed was later completed (`fix/silent-controls`,
+2026-08-23, covered above), not because their content was wrong — their
+findings are folded in below.
+
+**`chore/deferred-cleanup-sweep`** (merged as PR #30, `b0d5fc8`). Traced the
+one ⚠️ left by the demo-critical sweep — "re-save baseline scores, expect a
+toast" — and found **there was no button to click**: the live save path
+(`submitBaselineScores` → `POST /readinesslevel/startup/:id/rate`, a real
+find-or-create upsert) is real, but the mentor form is gated
+`{:else if isRated()}` and both demo startups already have all six rows, so
+it never renders. **The "zero-risk" procedure was the opposite of
+zero-risk** — `baselineScores` initialises to all-`1` and is never seeded
+from stored rows, so had the form rendered, a Save without touching all six
+selects would have overwritten the 2026-08-05 measurement ground truth with
+`T1 M1 A1 O1 R1 I1`; `isRated()` was the only thing standing between a stray
+click and that. Fifth instance of "the recorded symptom/procedure is real in
+description, nobody checked whether the code carrying it can execute" — the
+first time it applied to a verification step rather than a bug.
+
+**The red suite went green: 266/266 across 25 suites** (first time). The
+recorded conclusion held — the old test's expectation was wrong (`3`, the
+raw level, not `5`/`0`, what mocked `normalizeScore` actually returns) — but
+the recorded **mechanism** was wrong: it blamed `scoreNormalization: true` in
+the test context, but that flag never reached `generateTasksFromPrompt`
+(`ai.service.ts:984-992`), which normalized unconditionally regardless of the
+flag (`ctx.config.scoreNormalization` is read only inside `reviewBiasScore`).
+Cost: an `ai_generation_runs` row stamped `scoreNormalization: false` still
+carried normalized `target_level` values — same class of bug as the
+`temperature` top-level config bug. Logged rather than fixed inline (a
+production behaviour change belongs in its own commit); **fixed 2026-08-23**
+as item 1 of `fix/silent-controls`, above. "A second failure is a real
+regression" retired — any failure is now the signal.
+
+**`chumcheck` purged** — all three `scripts/` files and the directory
+deleted; nothing in code referenced them. `delete_db.sh` had never been
+executable as written (unquoted raw SQL on lines 4–5 inside a `#!/bin/bash`
+file); `reset_db.sh`/`.ps1` were the real hazard, both a valid
+`DROP DATABASE ... WITH (FORCE)` against a local Postgres superuser. Deleted
+rather than repointed — Neon uses branches, not drop-and-recreate, and
+`docker-compose.yml`'s `launchup_db` is unused. **Branch sweep: 23 → 3** — 20
+`[gone]` branches deleted after verifying each was an ancestor of `master`
+(`git branch -d`, not `-D`), then `backup/rag-corpus-preflight` deleted after
+its three capstone PDFs were verified byte-identical by SHA-256 to
+`Downloads\capstone` — the branch's unique content was almost entirely files
+already deleted elsewhere, not extra work.
+
+**The save verified live, and found a bug the probe alone could catch.** A
+throwaway startup (`ZZ Save-Path Probe`, created/used/removed inside a
+transaction that refused to commit unless AgroLink/MediSync still held their
+12 rows) took six *distinct* values (`T7 A2 M5 O8 R3 I6` — uniform values
+can't detect dimension mis-mapping between the form's display order and the
+enum order) through six real `201`s. 🐞 **New bug:** the first save flips
+`isRated()` permanently, so `rateStartupReadinessLevel`'s upsert **update**
+branch was unreachable from the app — a mistyped baseline score could only be
+fixed by SQL, and the naive fix (re-expose the form) was unsafe on its own
+because of the all-`1` default above. **Fixed 2026-08-23** as item 2 of
+`fix/silent-controls` (a mentor-only "Revise baseline scores" button, seeded
+from stored levels). ⚠️ **`GET /readiness/:startupId` writing on every read
+reproduced incidentally** — two page views left two `readiness_evaluations`
+rows and 12 dependent `readiness_gaps`; the existing `TODO_CHECKLIST.md` §2
+item is confirmed real, not theoretical.
+
+**`fix/ocr-transcription-preference`** (8 commits, later merged; gates at tip
+jest 301/301 across 28 suites, measurement 257/257, `tsc --noEmit` 0,
+`svelte-check` 119/14 unchanged, no entity/migration touched). Two defects:
+(1) `parseCapsuleProposal` stored **Tesseract's** transcription, not
+Gemini's — the guard (`raw_transcription && !parsedText`) was the inverse of
+its own comment, and since Tesseract is installed `parsedText` was always
+truthy, so Gemini's `raw_transcription` reached **no consumer anywhere in
+either app** (the `OCR_PLACEHOLDER` sentinel beat it too). `detectSketch`
+deliberately still reads Tesseract's output — its weights are tuned to that.
+(2) `fieldConfidence` was `text.length < 40`, which graded compliance with
+the extraction prompt's own 40-character minimum instruction rather than
+accuracy; replaced with content-word overlap against the transcription
+(`src/ocr/field-confidence.ts`). The frontend also defaulted a missing field
+to `'verified'`, rendering green for something never scored.
+
+**Live-verified** with synthetic handwriting (Caveat font, 1600×1200 JPEG)
+against the running server/Neon: every field present on the page scored
+`verified` (4/4), every field the model had to infer scored `low` (4/4).
+**n=1, one document, a font is not handwriting** — this proves the wiring,
+not accuracy; `SUPPORT_THRESHOLD = 0.5` remains a guess until 3c runs on real
+samples, and **3c is blocked on both the ten handwritten samples (CER) and a
+SUS instrument the team owns and must exist before the sample-writing
+sitting** — not the samples alone, a correction made here. Two claims made
+earlier the same day were also wrong and corrected in place: the entropy
+gate is **not** inert (measured: same page PNG scores 3.33/rejected, JPEG
+5.89/passes — it bites digitally-clean images, camera photos survive on
+sensor noise); `@google-cloud/vision` absence was verified by runtime
+`import()` (`ERR_MODULE_NOT_FOUND`), not by reading `package.json`.
+
+**Same session, unrelated to the branch: URAT and calculator steps rendered
+blank.** `urat_questions`/`calculator_questions` held 0 rows — the 18 URAT +
+35 calculator questions lived only inside two `AppService` generator methods
+whose only callers (three `@Post` endpoints) were all commented out, so the
+data died in the 2026-07-26 wipe and was never restored (`readiness_levels`
+kept its 54 rows, unaffected). Silent because both endpoints answered `200`
+with `[]`. Fixed: banks extracted to `src/assessment-questions.ts`, seeded on
+boot guarded on emptiness (the original loop had no guard — a second run
+would have produced 36 URAT questions, each applicant seeing every question
+twice). Verified at three layers: endpoints return 18/35, DB holds 18/35, UI
+renders 18 textareas. **Found and logged, not fixed:**
+`@Controller('readinesslevel')` has no class-level guard and its only caller
+(`Application.svelte`) sends no credentials — guarding one without the other
+repeats the PR #15 trap (`TODO_CHECKLIST.md` §2, still open).
+
+**Same session: a live 503 became confident garbage, exposing a circular
+confidence rule.** Vision **503 UNAVAILABLE** (not 429/quota — the two must
+never share a code path) → swallowed by `catch` → Tesseract mangled the
+handwriting → a second Gemini call extracted fields from the mangling → two
+fields rendered green: `solution_description` scored a support ratio of
+**1.00**, `startup_description` **0.83**, against the garbage they came
+from. Root cause: on the vision path both field and transcription derive
+independently from the image, so a genuinely unsupported field fails to
+match; on the Tesseract-fallback path (and the PDF path, same circularity)
+the model extracts from the very text it's scored against, so overlap is
+guaranteed. **Three TDD fixes:** `classifyField`/`scoreFields` take a
+*required* `EvidenceSource` (`vision`|`derived`, `derived` caps at `low` —
+required rather than defaulted so a forgotten argument can't silently
+restore the bug); `src/ai/retry-transient.ts` (3 attempts, 2s/4s backoff,
+never retries 429, ported from `measure-grounding.js`, which has had this
+since 2026-08-03 — the harness was more robust than the app it measures); a
+service failure now raises `ServiceUnavailableException`, writes no
+`ocr_documents` row, and the controller passes the `HttpException` through
+instead of rewrapping as a 500 (the old frontend copy told the user to
+re-upload a clearer image, which for a 503 was advice to re-photograph a
+perfectly good page — failing loudly with the real message fixes that too).
+Verified: 300/300 across 28 suites. **Not verified live** — a real 503
+cannot be forced without editing `.env`, so the retry and fail-loud path are
+test-proven only; the circular-evidence bug was diagnosed from live data but
+its fix was not re-observed live. A capsule vision call was separately
+observed to take **175 s** — budget client timeouts accordingly.
+
+**Open items from this date not tracked elsewhere:** `readiness_evaluations`
+holds mixed-scale rows (pre- and post- the ÷5→÷9 composite correction sit in
+the same table, uncorrected); Neon TLS certificate verification is disabled;
+VS Code's `git.postCommitCommand` setting is unresolved.
 
 ---
 
@@ -911,6 +593,10 @@ branch touching no entity cannot move the schema.
 3. **The failure toast was never observed.** The 409 and the cross-origin
    readability of its message are verified; the `toast.error` render is not.
 
+> **Resolved since (2026-08-23, later):** merged as PR #33 (`0ab8b48`), the probe
+> kept and tracked, the fixtures and their log row torn down. **The toast is still
+> unobserved** — item 3 stands.
+
 ### Next step
 
 **Merge `fix/silent-controls` to `master` locally** (fast-forward), after the
@@ -938,3 +624,153 @@ Recommendation: **merge, then take the RNA generation probe**, because it is
 the only item on that list that is both unblocked and load-bearing for an
 Objective 1 claim. Everything else is either waiting on the samples or is a
 second measurement of something already measured.
+
+---
+
+## 2026-08-23 (later) — metric 6 (redundant-need rate): built, pre-registered, code-reviewed
+
+Branch `feat/rna-redundancy-probe`, local, nothing pushed. **Zero Gemini
+generation calls this session** — every commit is pre-generation build,
+pilot, or review work.
+
+**What metric 6 measures.** The gap every 1b figure names: production never
+asks the model to assign levels, it consumes mentor-set levels and generates
+recommendations. Metric 6 mirrors metric 5's classifier on the opposite bin —
+does the RNA recommend acquiring an artifact class the document already
+evidences (`artifactTokens`), rather than asserting one absent. Reference-free,
+`CLASSIFIER_SOURCE` untouched. Pre-registered in `measurement/README.md`
+before any quota spend, per this project's standing rule against scoring
+under a rule chosen after seeing the data.
+
+**The pilot caught the metric firing almost entirely on false positives.**
+Run for free against 96 real observations already on disk
+(`2026-08-06-supplied-level.json`, `2026-08-09-supplied-level.json`). As
+first written it fired 10 times; a hand-read found essentially all 10 false
+positives — the "satisfied" token named an origin being left behind
+(*"transition from paper prototype"*) or a scope a recommendation ranged
+over (*"across the target market"*), never the artifact actually being asked
+for. **The uncorrected headline would have read baseline 21% vs corpus 0% on
+`truth` — large, quotable, wrong, and favouring the corpus specifically.**
+
+**Fixed with an acquisition requirement.** A satisfied token now only counts
+as redundant when an acquisition verb (identify/define/establish/create/
+develop/build/secure/obtain/acquire/find/determine/conduct) governs it
+directly, with no origin/scope preposition or progression verb intervening —
+both anchored directly against the token after a same-day review pass found
+the first cut unanchored and able to veto (or fail to veto) a token a
+different word in the clause actually governed. Re-run on the same 96
+observations: **0/96.**
+
+**Read 0/96 as pilot confirmation, not a precision figure.** It says the
+corrected detector no longer fires on the false positives it used to fire
+on. It is not a true-positive rate — **the metric has never yet produced a
+true positive on real generated text**, because every observation scored so
+far predates the metric existing as a probe.
+
+**Defects fixed along the way, all caught before quota was spent:**
+
+- **Two binary condition ternaries.** `levelsForCondition` and
+  `conditionField` mapped only truth/inflated; a third (`deflated`)
+  condition would have received truth-condition levels while being stored in
+  the inflated pool — an unmanipulated prompt under a manipulated label,
+  silently. Made total maps before `deflated` was added.
+- **A merge double-push.** Metric 6 rescores the same stored
+  `assertionTruthCalls`/`assertionDeflatedCalls` metric 5 already owns.
+  `mergeRuns` iterates per metric key, so without a per-field guard a shared
+  field would be pushed once per key referencing it — doubling `n` for any
+  file scored by both metrics. Closed with a per-arm `fieldsPushed` set in
+  the same commit that wired the sharing up, before it could ever ship.
+- **A merge refusal that logged but never enforced.** `refusedKeys` was
+  computed and printed to the console ("Not pooled...") but
+  `summarizeResults` never consulted it — a refused pool still printed a
+  number for both metric 5 and metric 6. Fixed in the commit that completed
+  metric 6's fingerprint grid; both metrics' rows now read `refused` when
+  their own key is refused.
+
+**Then code-reviewed, and five more gaps closed** (fix-wave commits later the
+same day):
+
+- Metric 6 had no honesty column — `mentioned`/`unclassified` were computed
+  per observation but never reached the printed row, so a printed
+  `truth 0% (n=6)` was indistinguishable from the classifier reading nothing.
+- `--merge`'s refusal for metric 6 is correct but was undocumented: no
+  stored file predates the probe, so `--merge results/*.json` will correctly
+  refuse every metric-6 row, including the fresh run's own valid data.
+  Documented, not changed.
+- `redundancy-inflated|<arm>` was fingerprinted and refusal-enforced but
+  `printReports` hand-rolled `truth`/`deflated` only, orphaning the
+  `inflated` row the code's own comments already said it reports. Fixed by
+  switching to `console.table`, matching metric 5.
+- A blank-string dimension was scored clean instead of skipped — the guard
+  only caught `undefined`/`null`. At `--reps=1` (~6 observations/row) one
+  blank moved a row's rate by roughly 17%.
+- The null-dimension guard had no dedicated test. Added one, then proved it
+  non-vacuous by mutation: weakening `typeof text !== 'string'` to
+  `text === undefined` throws `TypeError: Cannot read properties of null
+  (reading 'trim')` rather than silently mis-scoring — the guard is
+  load-bearing, not decorative.
+
+`backend/measurement/lib/assertions.js` stayed untouched throughout (its
+source is hashed into every stored fingerprint). Measurement suite 300 → 304,
+every new test failing before its fix and green after.
+
+**The 12-call run was pre-registered, then run the same day — see below.**
+Command and full rationale in `measurement/README.md`'s metric 6 section:
+
+```
+node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation-deterministic --only-probe=rna --level-condition=truth,deflated --reps=1 --out=measurement/results/<date>-rna-redundancy.json
+```
+
+3 arms × 2 startups × 2 conditions × 1 rep = 12 calls, against a 20/day
+free-tier budget.
+
+## 2026-08-23 (evening) — the run, and prediction 1 failed
+
+`measurement/results/2026-08-23-rna-redundancy.json`. 12/12 calls, no 429s,
+no 503s, no retries.
+
+**`redundantRate` is 0 in all six arm × condition cells** — `truth` and
+`deflated` alike, every arm. `deniedCount` 0 everywhere. `mentioned` and
+`unclassified` are equal in every cell (baseline truth/deflated 2/6, 1/6;
+sdd-semantic 2/6, 2/6; deviation-deterministic 1/6, 1/6): every clause that
+mentioned a satisfied token landed in `unclassified`, none in `recommended`
+— so the acquisition gate never had a `recommended` verdict to act on. That
+is consistent both with the model never making this error and with the
+classifier being unable to read these constructions at all; this run can't
+tell those two apart.
+
+**Prediction 1 — the pre-registered rule that `deflated` must read
+substantially above `truth` or the run is void — failed.** `deflated` reads
+identical to `truth`: 0 everywhere. By the rule written before the run, this
+voids it as a model result. Prediction 2 (corpus arm worse than baseline
+under `deflated`) is untestable as a consequence — there is no arm
+difference to read when every arm is 0.
+
+**The pre-registration's own inference from a failed control turned out to
+be wrong, and that's now recorded in `measurement/README.md` rather than
+quietly revised.** The README said a failed control "reports a detector
+problem." Reading the actual generated text under the deflated condition
+shows the opposite: every arm produced forward-looking recommendations
+correctly anchored to the source document, never a claim that the startup
+already has what the deflation removed — e.g. *"Needs further market
+penetration across the remaining target facilities"* (`baseline`, MediSync,
+deflated). The manipulation didn't induce the target behaviour, so the
+detector had nothing to catch. Different failure from a blind detector; the
+two must not be conflated.
+
+**The honest claim this run supports is narrow: the model did not make this
+error in these 36 observations.** Not "the detector works," not "the model
+is robust to a deflated supplied level." The two uncaught classes named in
+the pre-registration (passive/postposed acquisition; acquisition verbs
+outside the frozen list) are completely untested by this run. n=1 rep, 2
+documents, 3 arms, one model.
+
+**Also observed, not this run's question, n=1:** metric 5's `asserted` is
+0/6 on every arm both conditions; `mentioned` on `truth` varied — baseline
+1/6, `sdd-semantic` 2/6, `deviation-deterministic` 4/6.
+
+Full arm × condition table and the complete verdict live in
+`measurement/README.md`'s metric 6 "Result, 2026-08-23" subsection. Next
+step: a stronger manipulation or a document/level pair where the rubric
+criterion is unambiguously already met — pre-registered before it runs, same
+as this one was.
