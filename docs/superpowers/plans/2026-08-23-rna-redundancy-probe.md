@@ -799,7 +799,9 @@ git commit -m "feat: summarise the redundant-need rate per arm and condition"
 **Interfaces:**
 - Produces: `rnaTexts: Array<{arm, startup, condition, rep, dimension, text}>` in the results payload.
 
-Today `rnaCalls` holds generated text in memory and the writer emits only aggregates plus `flaggedClauses`. **Every RNA this project has paid quota for is unrecoverable** — that is why metric 6 needs a fresh run rather than a re-score, and this step is what stops metric 7 paying the same price.
+**Corrected 2026-08-23 — the claim below was false.** `writeResults` already embeds the whole `results` accumulator, and every cell in it carries the raw `byDim` text (verified directly against `results/2026-08-09-supplied-level.json`). Nothing has ever been unrecoverable — that stored text is what made the free metric-6 pilot in `task-7b-report.md` possible. `rnaTexts` below is a flat convenience accessor over data that already existed, not new persistence.
+
+~~Today `rnaCalls` holds generated text in memory and the writer emits only aggregates plus `flaggedClauses`. Every RNA this project has paid quota for is unrecoverable — that is why metric 6 needs a fresh run rather than a re-score, and this step is what stops metric 7 paying the same price.~~
 
 - [ ] **Step 1: Write the failing test**
 
@@ -844,9 +846,10 @@ Beside `flaggedClauses` in `measure-grounding.js`:
 
 ```js
 /**
- * Every generated dimension, flat. The harness used to discard this at write
- * time, which is why no metric added after a run could ever be scored against
- * it — the text was gone and only a re-run could recover it.
+ * Every generated dimension, flat. Corrected 2026-08-23: this comment used to
+ * claim the harness discarded this at write time — false. `writeResults`
+ * already embeds the whole `results` accumulator, byDim text included; this
+ * is a flat accessor over data that was already persisted, not new storage.
  *
  * `rep` is absent from the per-call records, so it is emitted as the call's
  * index within its condition pool. Enough to distinguish reps within one file;

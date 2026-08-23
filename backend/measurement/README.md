@@ -1262,6 +1262,129 @@ the *noun* "needs", which reclassifies one real fabrication in the stored data
 but it is a detection lost, not a free win. A clause-initial anchor recovers it
 and costs two other clauses.
 
+### Metric 6 — redundant-need rate, added 2026-08-23
+
+**What it measures.** One binary observation per (call, dimension): does the
+generated RNA state as a **need** an artifact class the source document shows
+the startup **already has**. Reference-free — a property of the document, not
+an adjudicated judgement, so no arm is scored against its own prompt.
+
+**Why the obvious design was refused.** The obvious metric — "did the RNA name
+the criterion the `L+1` rubric defines" — is circular. `lib/hard-absences.js`
+already records why: an adjudicator reading the document with the rubric
+ladder in view is approximately the `deviation-deterministic` condition, so
+its agreement with that arm proves nothing. It would reproduce the
+vocabulary-reuse metric retired on 2026-07-29.
+
+**The mechanism.** Not forked from metric 5 — same classifier, opposite input:
+
+| | token list | bin read |
+|---|---|---|
+| metric 5 | `absentTokens` — what the document never mentions | `asserted` |
+| metric 6 | `artifactTokens` (`lib/satisfactions.js`) — what the document evidences | `recommended` |
+
+Same segmentation, same scope-inheritance repair. `CLASSIFIER_SOURCE` is
+pinned and stays byte-identical, or metric 5's pooling breaks.
+
+**The pilot, reported honestly.** Piloted for free against 96 real
+observations already on disk (`results/2026-08-06-supplied-level.json`,
+`results/2026-08-09-supplied-level.json`). As first written it fired 10
+times, and a hand-read found essentially all 10 false positives — the
+satisfied token was the origin being moved away from (`transition from paper
+prototype`, `beyond paper prototypes`) or the scope a recommendation ranged
+over (`across the target market`). **The uncorrected headline would have
+read baseline 21% vs corpus 0% on `truth` — large, quotable, and wrong,** and
+favouring the corpus specifically. This is the most useful thing in this
+section to remember before trusting any redundancy number.
+
+**The correction** (`backend/measurement/lib/redundancy.js`): an acquisition
+requirement — the token must be the direct object of an acquisition verb
+(`identify, define, establish, create, develop, build, secure, obtain,
+acquire, find, determine, conduct`), with no origin/scope preposition
+(`from, beyond, past, across, outside, rather than, versus, for`, anchored
+directly against the token) or progression verb (`transition, move, expand,
+scale, penetrate, grow, further`, same anchoring) governing it — plus a
+broad/narrow token split in `lib/satisfactions.js` mirroring
+`hard-absences.js` (`target market` moved to `notArtifacts`; it was scope in
+every pilot firing, never a genuine ask). After both fixes: **0 firings
+across the same 96 observations.**
+
+**Direction and named uncaught classes.** Metric 6 is a **lower bound** —
+every ambiguity resolves away from redundancy, matching metric 5's posture.
+Named uncaught classes:
+
+- **Passive/postposed acquisition** — `"A paper prototype should be created…"`
+  goes silent; the gate requires the verb to precede the token in the string.
+- **Acquisition verbs outside the frozen list** — `gather`, `collect`, `run`,
+  `validate`, `engage` are natural acquisition verbs the brief's list omits.
+
+A lower bound is quotable *because* its uncaught classes are named, not
+because it happens to have none.
+
+**The `deflated` condition — positive control.** `inflated` (2026-08-06)
+manipulates O/R/I upward, truth elsewhere. `deflated` is its mirror: **T/M/A
+→ 1, O/R/I left at truth**, as the within-call control. The split is forced
+by the data: both startups sit at `O2 R1 I1` with no deflation room, while
+MediSync's `T6 M5 A5` has plenty against a document evidencing the
+level-1/2 criteria. Recorded before the run: **if the control fires on
+MediSync and not on AgroLink** (`T2 M3 A3`, thinner document), **that is the
+expected shape, not a defect.**
+
+**Two pre-registered predictions, verbatim:**
+
+1. **The control fires.** `deflated` redundancy is substantially above
+   `truth` on every arm. **If this fails the run is void** and reports a
+   detector problem, not a model result.
+2. **The corpus arm scores worse than baseline under `deflated`,** because it
+   is handed level-1/2 criteria as retrieved targets.
+
+Prediction 2 predicts the corpus looks bad, deliberately. Both pre-registered
+predictions on 2026-08-09 turned out wrong in opposite directions — which is
+the only reason that run's result carries weight, and the reason for
+pre-registering these two rather than reporting whichever direction lands.
+
+**The null-control reading rule.** `sdd-semantic` sends a prompt
+byte-identical to `baseline` on the RNA probe — semantic rubric retrieval
+returns zero rows. Re-verified independently for this section: a 2026-08-23
+`--dry-run` of the exact run command below, diffed section-by-section, shows
+the `baseline` and `sdd-semantic` RNA blocks identical for both startups
+(5263 and 5521 characters respectively, `truth`+`deflated` combined, byte
+match) — the only difference anywhere in the two arms' output is the arm-name
+header itself. **Any arm difference smaller than the baseline/`sdd-semantic`
+spread is noise and must not be quoted as an effect.**
+
+**The methodological sequence, stated explicitly:** pilot on historical data
+→ pre-register → run on **fresh** data. Refining a detector against
+already-collected runs is legitimate pilot work; scoring the *reported* run
+under a rule chosen after seeing it is not. The historical files
+(`2026-08-06-supplied-level.json`, `2026-08-09-supplied-level.json`) were
+pilot input. They must never become the reported result.
+
+**Limits to quote:**
+
+- **Directional** — silent on failing to recommend what is missing; catches
+  only recommending what exists.
+- `satisfiedTokens`/`artifactTokens` are **authored, with no external
+  source**.
+- **Lower bound**, with the two classes above named as uncaught.
+- **n=2**, two documents, one model (`gemini-3.6-flash`), one quota window.
+- **`deflated` is a manipulation production does not produce.** Mentors do
+  not systematically under-set levels, so a `deflated` result speaks to a
+  vulnerability, not to shipped RNA quality. Only the `truth` cells speak to
+  what users receive.
+
+**The run command:**
+
+```
+node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation-deterministic --only-probe=rna --level-condition=truth,deflated --reps=1 --out=measurement/results/<date>-rna-redundancy.json
+```
+
+**Confirm `--reps=1` at launch, by eye, not by counting printed blocks.** The
+dry-run printer ignores `--only-probe` (it still prints phantom `LEVELS`
+blocks) and does not reflect `--reps`, so the printed prompt-block count is
+not a reliable stand-in for the call count. The correct derivation is
+**3 arms × 2 startups × 2 conditions × reps = 12 calls at reps=1.**
+
 ## Reading the output
 
 Trust the **gap and its direction**, not the absolute levels — there is no

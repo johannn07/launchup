@@ -116,12 +116,25 @@ across it.
 
 ### Raw RNA text is persisted
 
-The results file gains `rnaTexts`: `{arm, startup, condition, rep, dimension,
+**Corrected 2026-08-23 — the claim below was false.** `writeResults`
+(`measure-grounding.js:1503-1517`) embeds the whole `results` accumulator
+verbatim, and every cell in it (`rnaCalls`, `assertionTruthCalls`,
+`assertionDeflatedCalls`, …) already carries the raw `byDim` text. Verified
+directly against `results/2026-08-09-supplied-level.json`:
+`results.baseline.startups['AgroLink PH'].rnaCalls[0].byDim.Technology` holds
+the full generated RNA sentence, not an aggregate. Nothing has ever been
+unrecoverable — the historical text is precisely what made the free pilot in
+`task-7b-report.md` possible: 96 real observations, scored at zero quota,
+against exactly this stored text. The `rnaTexts` accessor below is a flat
+convenience view over data that was already there, not a new persistence
+mechanism.
+
+~~The results file gains `rnaTexts`: `{arm, startup, condition, rep, dimension,
 text}`. Today `rnaCalls` holds generated text in memory and the writer emits only
-aggregates plus classifier-flagged clauses, so **every RNA this project has paid
-quota for is unrecoverable**. That is why this design needs a new run rather than
+aggregates plus classifier-flagged clauses, so every RNA this project has paid
+quota for is unrecoverable. That is why this design needs a new run rather than
 a re-score, and persisting the text is what stops the next metric paying the same
-price.
+price.~~
 
 ## Reported numbers
 
@@ -227,5 +240,11 @@ baseline/`sdd-semantic` spread is noise and must not be quoted as an effect.
 - Scoring coverage in the positive direction — needs an adjudicated reference,
   explicitly declined during design.
 - Any change to `lib/assertions.js` cues or `CLASSIFIER_SOURCE`.
-- Re-scoring historical files. The text no longer exists.
+- ~~Re-scoring historical files. The text no longer exists.~~ **Corrected
+  2026-08-23: false — see "Raw RNA text is persisted" above.** The text does
+  exist, and re-scoring it is exactly how the metric 6 detector was piloted
+  and fixed before any quota was spent. Out of scope here for a narrower
+  reason: a historical re-score can pilot a detector but can never be *the*
+  reported result once the detector was built by reading it (see
+  `task-7b-report.md`, "Methodological sequence").
 - The RNS path. Same retrieval, different prompt, different consumer.
