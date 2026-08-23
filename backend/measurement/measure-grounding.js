@@ -1379,6 +1379,7 @@ const { fingerprintMap } = require(path.join(__dirname, 'lib/fingerprint.js'));
 const { MARKERS } = require(path.join(__dirname, 'lib/stage-markers.js'));
 const { scoreAssertedAbsences, CLASSIFIER_SOURCE } = require(path.join(__dirname, 'lib/assertions.js'));
 const { HARD_ABSENCES, verifyAbsences } = require(path.join(__dirname, 'lib/hard-absences.js'));
+const { REDUNDANCY_SOURCE } = require(path.join(__dirname, 'lib/redundancy.js'));
 
 function currentFingerprints() {
   return fingerprintMap({
@@ -1405,12 +1406,16 @@ function currentFingerprints() {
       // Not scoreAssertedAbsences.toString(): it contains neither the cue
       // regexes nor the helpers it calls. See CLASSIFIER_SOURCE.
       assertion: CLASSIFIER_SOURCE,
+      // Same reasoning: REDUNDANCY_SOURCE already folds in CLASSIFIER_SOURCE.
+      redundancy: REDUNDANCY_SOURCE,
     },
     arms: ARMS,
     levelsRubricScope: 'full-ladder',
     rnaRubricScope: 'current-and-next',
     absences: HARD_ABSENCES,
     inflatedLevels: INFLATED_OVERRIDE,
+    satisfactions: SATISFACTIONS,
+    deflatedLevels: DEFLATED_OVERRIDE,
   });
 }
 
@@ -1527,6 +1532,8 @@ function mergeRuns(files, arms) {
     fabrication: 'hallucCalls',
     assertion: 'assertionTruthCalls',
     'assertion-inflated': 'assertionInflatedCalls',
+    redundancy: 'assertionTruthCalls',
+    'redundancy-deflated': 'assertionDeflatedCalls',
   };
 
   for (const { file, data } of days) {
@@ -1534,6 +1541,12 @@ function mergeRuns(files, arms) {
       const src = data.results[arm.name];
       if (!src) continue;
       merged[arm.name].quotaHit = merged[arm.name].quotaHit || src.quotaHit;
+
+      // redundancy shares assertionTruthCalls with assertion - it rescores the
+      // same stored truth-condition calls rather than making its own. This loop
+      // iterates per metric KEY, so without this guard a shared field gets
+      // pushed once per metric key that references it, doubling n.
+      const fieldsPushed = new Set();
 
       for (const [metric, field] of Object.entries(FIELD)) {
         const key = `${metric}|${arm.name}`;
@@ -1554,6 +1567,11 @@ function mergeRuns(files, arms) {
           continue;
         }
 
+        contributions[key] = (contributions[key] || []).concat(path.basename(file));
+
+        if (fieldsPushed.has(field)) continue;
+        fieldsPushed.add(field);
+
         for (const [startupName, cell] of Object.entries(src.startups)) {
           const dst =
             merged[arm.name].startups[startupName] ||
@@ -1566,7 +1584,6 @@ function mergeRuns(files, arms) {
           // array (hand-edited, or written by a partial run) must not throw.
           dst[field].push(...(cell[field] || []));
         }
-        contributions[key] = (contributions[key] || []).concat(path.basename(file));
       }
     }
   }

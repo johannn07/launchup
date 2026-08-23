@@ -16,7 +16,7 @@
  * never folded into the headline.
  */
 
-const { splitClauses, classifyClause } = require('./assertions.js');
+const { splitClauses, classifyClause, CLASSIFIER_SOURCE } = require('./assertions.js');
 
 const CONTINUATION = /^\s*(?:and|or|then)\b/i;
 
@@ -55,4 +55,12 @@ function scoreRedundantNeeds(rnaByDim, satisfactions) {
   return { observations };
 }
 
-module.exports = { scoreRedundantNeeds };
+/**
+ * What `redundancy|*` hashes. classifyClause's own cue regexes decide
+ * `recommended` here exactly as they decide `asserted` for metric 5, so
+ * CLASSIFIER_SOURCE is included, not just this module's own additions —
+ * editing a cue changes redundancy scoring too, not only assertion scoring.
+ */
+const REDUNDANCY_SOURCE = [CLASSIFIER_SOURCE, CONTINUATION.source, scoreRedundantNeeds.toString()].join('\n');
+
+module.exports = { scoreRedundantNeeds, REDUNDANCY_SOURCE };

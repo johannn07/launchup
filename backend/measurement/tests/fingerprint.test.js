@@ -177,3 +177,48 @@ test('the assertion probe adds two keys per arm', () => {
     'the two conditions must never pool with each other',
   );
 });
+
+// Pinned literally, same reasoning as the assertion-probe test above: adding
+// redundancy keys may only ADD keys, never move an existing one. These are the
+// real currentFingerprints() values captured immediately before the redundancy
+// probe was wired in, so this is a genuine before/after comparison, not two
+// calls with nothing between them.
+test('adding redundancy keys leaves every pre-existing hash byte-identical', () => {
+  const fps = require(path.resolve(__dirname, '../measure-grounding.js')).currentFingerprints();
+  const EXPECTED = {
+    'levels|baseline': 'f37240d520f1',
+    'rna|baseline': 'c989157dd47c',
+    'fabrication|baseline': '5c3658a9d8a0',
+    'assertion|baseline': '5bc942c001b2',
+    'assertion-inflated|baseline': 'd6da5974ba15',
+    'levels|sdd-semantic': '685aaca78813',
+    'rna|sdd-semantic': 'e493360bc91d',
+    'fabrication|sdd-semantic': 'ad0cadacf33b',
+    'assertion|sdd-semantic': '50865a2a2b56',
+    'assertion-inflated|sdd-semantic': '54768a48564c',
+    'levels|deviation-deterministic': '068c08908b27',
+    'rna|deviation-deterministic': '0496862854ed',
+    'fabrication|deviation-deterministic': '2cea25747e77',
+    'assertion|deviation-deterministic': '6bdfc9e3b6a7',
+    'assertion-inflated|deviation-deterministic': '83ba8cf12214',
+    'levels|deviation-titles': '0334a04515c0',
+    'rna|deviation-titles': '0496862854ed',
+    'fabrication|deviation-titles': '2cea25747e77',
+    'assertion|deviation-titles': '6bdfc9e3b6a7',
+    'assertion-inflated|deviation-titles': '83ba8cf12214',
+    'levels|deviation-bare': '28a2e7c629fe',
+    'rna|deviation-bare': '0496862854ed',
+    'fabrication|deviation-bare': '2cea25747e77',
+    'assertion|deviation-bare': '6bdfc9e3b6a7',
+    'assertion-inflated|deviation-bare': '83ba8cf12214',
+  };
+  for (const [key, value] of Object.entries(EXPECTED)) {
+    assert.equal(fps[key], value, `${key} moved — historical files stop pooling`);
+  }
+});
+
+test('the deflated override is part of redundancy-deflated comparability', () => {
+  const fps = require(path.resolve(__dirname, '../measure-grounding.js')).currentFingerprints();
+  assert.ok(fps['redundancy|baseline']);
+  assert.notEqual(fps['redundancy-deflated|baseline'], fps['redundancy|baseline']);
+});
