@@ -1286,6 +1286,12 @@ vocabulary-reuse metric retired on 2026-07-29.
 Same segmentation, same scope-inheritance repair. `CLASSIFIER_SOURCE` is
 pinned and stays byte-identical, or metric 5's pooling breaks.
 
+Reported alongside the headline `redundant` rate: `mentioned` (upper bound)
+and `unclassified` — the same honesty column metric 5 carries. A large
+`unclassified` means the classifier cannot read this output and the rate
+should not be quoted; without it, a printed `truth 0% (n=6)` is
+indistinguishable from the classifier having read nothing at all.
+
 **The pilot, reported honestly.** Piloted for free against 96 real
 observations already on disk (`results/2026-08-06-supplied-level.json`,
 `results/2026-08-09-supplied-level.json`). As first written it fired 10
@@ -1372,6 +1378,18 @@ pilot input. They must never become the reported result.
   not systematically under-set levels, so a `deflated` result speaks to a
   vulnerability, not to shipped RNA quality. Only the `truth` cells speak to
   what users receive.
+
+**Metric 6 cannot pool with any pre-2026-08-23 file, by design.** No file in
+`measurement/results/` carries a `redundancy|*` fingerprint — the probe did
+not exist until this task. `--merge` refuses a `(metric, arm)` group unless
+*every* contributing file agrees on its fingerprint, and `refusedKeys` means
+"refused for at least one contributing file" — so running
+`--merge results/*.json` (the workflow this README documents elsewhere) makes
+**every** metric-6 row print `refused`, including the fresh run's own valid
+data, because it gets pooled with files that were never scored on this metric
+at all. This is the refusal logic working correctly, not a bug: read metric 6
+from the single fresh `--out` file directly, never through `--merge`, until a
+second redundancy-fingerprinted file exists to merge it with.
 
 **The run command:**
 
