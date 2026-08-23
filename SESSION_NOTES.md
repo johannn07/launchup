@@ -1032,9 +1032,8 @@ same day):
 source is hashed into every stored fingerprint). Measurement suite 300 → 304,
 every new test failing before its fix and green after.
 
-**The 12-call run is pre-registered but NOT yet run, and awaits
-authorisation.** Command and full rationale in `measurement/README.md`'s
-metric 6 section:
+**The 12-call run was pre-registered, then run the same day — see below.**
+Command and full rationale in `measurement/README.md`'s metric 6 section:
 
 ```
 node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation-deterministic --only-probe=rna --level-condition=truth,deflated --reps=1 --out=measurement/results/<date>-rna-redundancy.json
@@ -1042,3 +1041,48 @@ node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation
 
 3 arms × 2 startups × 2 conditions × 1 rep = 12 calls, against a 20/day
 free-tier budget.
+
+## 2026-08-23 (evening) — the run, and prediction 1 failed
+
+`measurement/results/2026-08-23-rna-redundancy.json`. 12/12 calls, no 429s,
+no 503s, no retries.
+
+**`redundantRate` is 0 in all six arm × condition cells** — `truth` and
+`deflated` alike, every arm. `deniedCount` 0 everywhere; `mentioned` and
+`unclassified` sit at 1–2 of 6 per cell.
+
+**Prediction 1 — the pre-registered rule that `deflated` must read
+substantially above `truth` or the run is void — failed.** `deflated` reads
+identical to `truth`: 0 everywhere. By the rule written before the run, this
+voids it as a model result. Prediction 2 (corpus arm worse than baseline
+under `deflated`) is untestable as a consequence — there is no arm
+difference to read when every arm is 0.
+
+**The pre-registration's own inference from a failed control turned out to
+be wrong, and that's now recorded in `measurement/README.md` rather than
+quietly revised.** The README said a failed control "reports a detector
+problem." Reading the actual generated text under the deflated condition
+shows the opposite: every arm produced forward-looking recommendations
+correctly anchored to the source document, never a claim that the startup
+already has what the deflation removed — e.g. *"Needs further market
+penetration across the remaining target facilities"* (`baseline`, MediSync,
+deflated). The manipulation didn't induce the target behaviour, so the
+detector had nothing to catch. Different failure from a blind detector; the
+two must not be conflated.
+
+**The honest claim this run supports is narrow: the model did not make this
+error in these 36 observations.** Not "the detector works," not "the model
+is robust to a deflated supplied level." The two uncaught classes named in
+the pre-registration (passive/postposed acquisition; acquisition verbs
+outside the frozen list) are completely untested by this run. n=1 rep, 2
+documents, 3 arms, one model.
+
+**Also observed, not this run's question, n=1:** metric 5's `asserted` is
+0/6 on every arm both conditions; `mentioned` on `truth` varied — baseline
+1/6, `sdd-semantic` 2/6, `deviation-deterministic` 4/6.
+
+Full arm × condition table and the complete verdict live in
+`measurement/README.md`'s metric 6 "Result, 2026-08-23" subsection. Next
+step: a stronger manipulation or a document/level pair where the rubric
+criterion is unambiguously already met — pre-registered before it runs, same
+as this one was.

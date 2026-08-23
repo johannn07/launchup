@@ -1403,6 +1403,79 @@ blocks) and does not reflect `--reps`, so the printed prompt-block count is
 not a reliable stand-in for the call count. The correct derivation is
 **3 arms × 2 startups × 2 conditions × reps = 12 calls at reps=1.**
 
+### Result, 2026-08-23 — the control did not fire
+
+`measurement/results/2026-08-23-rna-redundancy.json`. 12/12 calls, no 429s,
+no 503s, no retries. Command exactly as pre-registered above.
+
+| arm | condition | redundant | mentioned | unclassified | denied | n |
+|---|---|---|---|---|---|---|
+| `baseline` | truth | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+| `baseline` | deflated | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+| `sdd-semantic` | truth | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+| `sdd-semantic` | deflated | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+| `deviation-deterministic` | truth | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+| `deviation-deterministic` | deflated | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+
+`redundantRate` is **0 in every one of the six cells**, `truth` and
+`deflated` alike. `deniedCount` is 0 everywhere. `mentioned` and
+`unclassified` sit at 1–2 of 6 per cell — small and non-zero, so the
+classifier read something in every cell; it just never classified it as a
+genuine acquisition request.
+
+**Verdict, in the order it must be read:**
+
+1. **Prediction 1 failed — the `deflated` control did not fire.** The
+   pre-registration required `deflated` redundancy to sit substantially above
+   `truth` on every arm. It is identical to `truth`: 0 on both, on all three
+   arms. By the rule written before the run, **this voids the run as a model
+   result.**
+2. **Prediction 2 is untestable.** It asked whether the corpus arm scores
+   worse than baseline under `deflated`. Every arm reads 0 under `deflated`.
+   There is no arm difference to compare.
+3. **The pre-registration's own stated inference from a failed control was
+   wrong, and that has to be recorded, not quietly recategorised.** The
+   README said a failed control "reports a detector problem." Reading the
+   generated text shows otherwise. Under a supplied level of 1 on
+   Technology/Market/Acceptance, every arm produced forward-looking
+   recommendations correctly anchored to the source document — never a claim
+   that the startup already has what the deflation removed. Quoted verbatim
+   from the results file:
+   - *"Needs to expand paid subscriptions beyond the initial 6
+     facilities..."* — `sdd-semantic`, MediSync Cebu, deflated, Market.
+   - *"Needs further market penetration across the remaining target
+     facilities."* — `baseline`, MediSync Cebu, deflated, Market.
+   - *"Needs: Convert provisional buyer interest into formal agreements..."*
+     — `deviation-deterministic`, AgroLink PH, deflated, Market.
+
+   None of these recommends acquiring something the document shows the
+   startup already has. **The manipulation failed to induce the target
+   behaviour — the detector had nothing to catch.** That is a different
+   failure from a blind detector, and the two must not be conflated.
+4. **The honest claim is narrow, and its bounds have to be stated
+   explicitly: "the model did not make this error in these 36
+   observations."** Not "the detector works." Not "the model is robust to a
+   deflated supplied level." The two uncaught classes named in the
+   pre-registration — passive/postposed acquisition, and acquisition verbs
+   outside the frozen list — remain completely untested here; a redundancy
+   phrased that way would still have been missed by this instrument, control
+   or no control. And: n=1 rep, 2 documents, 3 arms, one model.
+5. **What a future test needs.** The deflation manipulation did not make the
+   model contradict its own source document — the same shape as the
+   2026-08-06 finding that a wrong supplied level alone produces no
+   fabrication in the baseline arm (see metric 5 above). A stronger
+   manipulation, or a document/level pair where the rubric criterion is
+   unambiguously already met, is the next design. **It must be
+   pre-registered before it is run**, the same way this one was.
+
+**Also observed, same run — metric 5, not this run's pre-registered
+question, n=1, report as observation only.** `asserted` is 0/6 on every arm
+under both conditions — no run produced a scoreable metric-5 hit either.
+`mentioned` varied on `truth`: baseline 1/6, `sdd-semantic` 2/6,
+`deviation-deterministic` 4/6. Consistent in direction with the corpus arm
+surfacing absent-artifact vocabulary more often, but n=1 and not what this
+run was built to answer — do not read it as a metric-5 result.
+
 ## Reading the output
 
 Trust the **gap and its direction**, not the absolute levels — there is no
