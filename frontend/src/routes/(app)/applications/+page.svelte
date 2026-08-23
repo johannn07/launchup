@@ -76,7 +76,11 @@
     }
   }
 
-  async function approveStartup(startupId: number, selectedMentor: any) {
+  async function approveStartup(
+    startupId: number,
+    selectedMentor: any,
+    acknowledgedFlaggedSummary = false
+  ) {
     const response = await fetch(
       `${PUBLIC_API_URL}/startups/${startupId}/approve-applicant/`,
       {
@@ -84,34 +88,41 @@
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${access}`
-        }
+        },
+        body: JSON.stringify({ acknowledgedFlaggedSummary })
       }
     );
 
-    if (response.ok) {
-      const assignmentor = await fetch(
-        `${PUBLIC_API_URL}/startups/${startupId}/appoint-mentors/`,
-        {
-          method: 'post',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${access}`
-          },
-          body: JSON.stringify({
-            mentorIds: [selectedMentor]
-          })
-        }
-      );
-      if (assignmentor.ok) {
-        await Promise.all([
-          $queries[0].refetch(),
-          $queries[1].refetch(),
-          $queries[2].refetch()
-        ]);
+    // A refused approval must not read as a success. This used to fall through
+    // silently, so the dialog's success toast fired for a rejected request —
+    // which would make SO 4.4's 409 invisible.
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.message || 'Failed to approve this application.');
+    }
 
-        showDialog = false;
-        selectedStartup = null;
+    const assignmentor = await fetch(
+      `${PUBLIC_API_URL}/startups/${startupId}/appoint-mentors/`,
+      {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${access}`
+        },
+        body: JSON.stringify({
+          mentorIds: [selectedMentor]
+        })
       }
+    );
+    if (assignmentor.ok) {
+      await Promise.all([
+        $queries[0].refetch(),
+        $queries[1].refetch(),
+        $queries[2].refetch()
+      ]);
+
+      showDialog = false;
+      selectedStartup = null;
     }
   }
 

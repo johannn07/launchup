@@ -4,6 +4,9 @@ import { StartupApplicationDto } from './dto';
 import { AiRunContext } from '../ai/ai-run.service';
 import { StartupAnalysisSummary } from '../ai/ai.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
+import { ActivityLog } from 'src/entities/activity-log.entity';
+import { QualificationStatus } from 'src/entities/enums/qualification-status.enum';
+import { ConflictException } from '@nestjs/common';
 
 /**
  * First spec for src/startup/. Scoped to the summary path only — the service is
@@ -88,6 +91,102 @@ function buildWithRows(rows: unknown[]) {
 const withSummary = (id: number, aiAnalysisSummary?: string) => ({
   id,
   capsuleProposal: aiAnalysisSummary === undefined ? undefined : { aiAnalysisSummary },
+});
+
+// A summary the shipped rule flags: praise with no critical observation.
+const LENIENT =
+  'The venture demonstrates strong market viability. The team is impressive and execution has been excellent.';
+// Balanced by the same rule: 4 critical clauses to 1 positive is ratio 0.8,
+// clear of the 0.75 threshold. An earlier fixture read 2 critical to 1 positive
+// (0.667) and was flagged — the rule counts clauses, not severity.
+const BALANCED =
+  'Revenue is unproven. Regulatory approval is absent. The team lacks a technical lead. Market validation is insufficient. The founders are impressive.';
+
+/**
+ * Builder for the approval gate. `em.find` feeds attachSummaryVerdicts, which
+ * approveApplicant reuses so the gate and the Manager's badge cannot disagree.
+ */
+function buildForApproval(summary: string, recordedRows: unknown[] = []) {
+  const startup: any = { id: 42, qualificationStatus: QualificationStatus.PENDING, capsuleProposal: { aiAnalysisSummary: summary } };
+  const logs: any[] = [];
+  const em = {
+    findOne: jest.fn().mockResolvedValue(startup),
+    find: jest.fn().mockResolvedValue(recordedRows),
+    create: jest.fn((entity: unknown, data: Record<string, unknown>) => {
+      if (entity === ActivityLog) logs.push(data);
+      return data;
+    }),
+    flush: jest.fn().mockResolvedValue(undefined),
+  };
+  const service = new StartupService(em as any, {} as any, {} as any, {} as any);
+  return { service, startup, logs, em };
+}
+
+describe('StartupService.approveApplicant — SO 4.4 acknowledgement gate', () => {
+  it('refuses to approve a flagged summary without an acknowledgement', async () => {
+    const { service, startup, logs } = buildForApproval(LENIENT);
+
+    await expect(service.approveApplicant(42)).rejects.toThrow(ConflictException);
+
+    // The refusal has to be the whole outcome: a status written before the
+    // throw would qualify the startup anyway.
+    expect(startup.qualificationStatus).toBe(QualificationStatus.PENDING);
+    expect(logs).toHaveLength(0);
+  });
+
+  it('approves a flagged summary once acknowledged, and records who did it', async () => {
+    const { service, startup, logs } = buildForApproval(LENIENT);
+
+    await service.approveApplicant(42, {
+      acknowledged: true,
+      actor: 'manager@launchup.local'
+    });
+
+    expect(startup.qualificationStatus).toBe(QualificationStatus.QUALIFIED);
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actor).toBe('manager@launchup.local');
+    expect(logs[0].details).toContain('42');
+  });
+
+  it('approves a balanced summary with no acknowledgement and logs nothing', async () => {
+    const { service, startup, logs } = buildForApproval(BALANCED);
+
+    await service.approveApplicant(42);
+
+    expect(startup.qualificationStatus).toBe(QualificationStatus.QUALIFIED);
+    // The log means "approved against a warning". Logging every approval would
+    // dilute it into an access log.
+    expect(logs).toHaveLength(0);
+  });
+
+  // The one defect in this feature that no mock could catch, pinned at the only
+  // level a mock can reach. findOne without this populate loads capsuleProposal
+  // as an id-only reference, so aiAnalysisSummary reads undefined and the gate
+  // never fires — it shipped past all four tests above and was caught by a live
+  // request. The real proof is that probe; this asserts the query keeps asking
+  // for the column the gate depends on.
+  it('loads the capsule proposal, without which the gate cannot see a summary', async () => {
+    const { service, em } = buildForApproval(LENIENT);
+
+    await service.approveApplicant(42, { acknowledged: true });
+
+    expect(em.findOne).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 42 },
+      expect.objectContaining({ populate: expect.arrayContaining(['capsuleProposal']) }),
+    );
+  });
+
+  it('gates on the recorded verdict, not a fresh reading, when a row exists', async () => {
+    // Balanced text, but the run that generated it recorded a flag. The badge
+    // shows the recorded verdict, so the gate must too.
+    const { service, startup } = buildForApproval(BALANCED, [
+      { startup: { id: 42 }, confidenceStatus: 'positive-language-flagged', createdAt: new Date('2026-01-01'), generationRun: { id: 9 } }
+    ]);
+
+    await expect(service.approveApplicant(42)).rejects.toThrow(ConflictException);
+    expect(startup.qualificationStatus).toBe(QualificationStatus.PENDING);
+  });
 });
 
 describe('StartupService.attachSummaryVerdicts', () => {
