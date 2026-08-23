@@ -140,7 +140,15 @@ function selectProbes(filter) {
   return { probes: ALL_PROBES.filter((p) => entries.includes(p)), errors: [] };
 }
 
-const ALL_LEVEL_CONDITIONS = ['truth', 'inflated'];
+const ALL_LEVEL_CONDITIONS = ['truth', 'inflated', 'deflated'];
+
+// `both` is FROZEN at its pre-2026-08-23 meaning. Widening it would silently
+// change what an already-recorded command produces — the --merge failure mode
+// in a different costume. `all` is the new name for everything.
+const CONDITION_ALIASES = {
+  both: ['truth', 'inflated'],
+  all: ['truth', 'inflated', 'deflated'],
+};
 
 /**
  * Organizational, Regulatory and Investment are the three dimensions with
@@ -166,6 +174,20 @@ function inflatedLevels(levels) {
   return { ...levels, ...INFLATED_OVERRIDE };
 }
 
+/**
+ * The mirror of INFLATED_OVERRIDE, and the split is forced by the data rather
+ * than chosen. Both startups sit at O2 R1 I1, which has no deflation room;
+ * MediSync's T6 M5 A5 has plenty and its document evidences the level-1/2
+ * criteria plainly. O/R/I stay at truth so every call carries its own
+ * unmanipulated control, exactly as T/M/A do under `inflated`.
+ */
+const DEFLATED_OVERRIDE = { Technology: 1, Market: 1, Acceptance: 1 };
+
+/** Returns a NEW object, for the reason inflatedLevels does. */
+function deflatedLevels(levels) {
+  return { ...levels, ...DEFLATED_OVERRIDE };
+}
+
 /** The one place a condition maps to supplied levels — live run and --dry-run.
  *  A total map, not a ternary: an unknown condition used to fall through to
  *  truth levels, which would have sent an unmanipulated prompt under a
@@ -173,6 +195,7 @@ function inflatedLevels(levels) {
 const CONDITION_LEVELS = {
   truth: (startup) => startup.levels,
   inflated: (startup) => inflatedLevels(startup.levels),
+  deflated: (startup) => deflatedLevels(startup.levels),
 };
 
 function levelsForCondition(startup, condition) {
@@ -187,6 +210,7 @@ function levelsForCondition(startup, condition) {
 const CONDITION_FIELD = {
   truth: 'assertionTruthCalls',
   inflated: 'assertionInflatedCalls',
+  deflated: 'assertionDeflatedCalls',
 };
 
 function conditionField(condition) {
@@ -196,21 +220,33 @@ function conditionField(condition) {
 }
 
 /**
- * Exact names only, like selectProbes: two fixed values, so a prefix match buys
- * nothing and could silently select the wrong one. Defaults to `truth`, which
- * reproduces the harness's behaviour before this flag existed.
+ * Exact names, comma lists, or an alias. Prefix matching is still refused — it
+ * buys nothing over three fixed values and could silently select the wrong one.
+ * An unrecognised entry hard-errors before any network call, like selectProbes:
+ * silently running fewer conditions than asked for looks identical to a clean run.
  */
 function selectLevelConditions(filter) {
   if (filter == null) return { conditions: ['truth'], errors: [] };
   const raw = String(filter).trim().toLowerCase();
-  if (raw === 'both') return { conditions: ALL_LEVEL_CONDITIONS.slice(), errors: [] };
-  if (ALL_LEVEL_CONDITIONS.includes(raw)) return { conditions: [raw], errors: [] };
-  return {
-    conditions: [],
-    errors: [
-      `--level-condition=${filter} is not a condition. Available: ${ALL_LEVEL_CONDITIONS.join(', ')}, both.`,
-    ],
-  };
+  const available = `Available: ${ALL_LEVEL_CONDITIONS.join(', ')}, both, all.`;
+  if (CONDITION_ALIASES[raw]) return { conditions: CONDITION_ALIASES[raw].slice(), errors: [] };
+
+  const entries = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (entries.length === 0) {
+    return { conditions: [], errors: [`--level-condition=${filter} named no condition. ${available}`] };
+  }
+  const unknown = entries.filter((e) => !ALL_LEVEL_CONDITIONS.includes(e));
+  if (unknown.length) {
+    return {
+      conditions: [],
+      errors: [
+        `--level-condition=${filter} is not a condition: ${unknown.map((u) => `"${u}"`).join(', ')}. ${available}`,
+      ],
+    };
+  }
+  // Canonical order, not argument order, so two spellings of the same request
+  // produce the same run shape.
+  return { conditions: ALL_LEVEL_CONDITIONS.filter((c) => entries.includes(c)), errors: [] };
 }
 
 /**
@@ -240,7 +276,7 @@ function validateArgs(argv, mergeFiles) {
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
             '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
             '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, ' +
-            '--level-condition=<truth|inflated|both>, --merge <files...>.',
+            '--level-condition=<truth|inflated|deflated|both|all|comma-list>, --merge <files...>.',
         );
       }
     } else {
@@ -989,7 +1025,7 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
       results[arm.name].startups[startupName] = {
         retrieved: truthRetrieved,
         rnaCalls: [], levelCalls: [], hallucCalls: [],
-        assertionTruthCalls: [], assertionInflatedCalls: [],
+        assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
       };
     }
   }
@@ -1444,7 +1480,7 @@ function mergeRuns(files, arms) {
             (merged[arm.name].startups[startupName] = {
               retrieved: cell.retrieved,
               rnaCalls: [], levelCalls: [], hallucCalls: [],
-              assertionTruthCalls: [], assertionInflatedCalls: [],
+              assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
             });
           // Defensive: a file carrying an assertion fingerprint but no assertion
           // array (hand-edited, or written by a partial run) must not throw.
@@ -1594,6 +1630,8 @@ module.exports = {
   ALL_LEVEL_CONDITIONS,
   INFLATED_OVERRIDE,
   inflatedLevels,
+  DEFLATED_OVERRIDE,
+  deflatedLevels,
   selectLevelConditions,
   levelsForCondition,
   conditionField,

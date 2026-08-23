@@ -87,7 +87,7 @@ test('metric 5 reports asserted, mentioned and unclassified per condition', () =
 // says 0% — an absent row and a zero row mean different things.
 test('metric 5 gives every arm a row even with no calls', () => {
   const s = H.summarizeResults({});
-  assert.equal(s.metric5.length, H.ARMS.length * 2, 'one row per arm per condition');
+  assert.equal(s.metric5.length, H.ARMS.length * 3, 'one row per arm per condition');
   assert.equal(s.metric5[0]['asserted %'], 'n/a');
 });
 
