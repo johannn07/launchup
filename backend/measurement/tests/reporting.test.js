@@ -214,7 +214,7 @@ test('rnaTexts carries every generated dimension so a future metric can re-score
       startups: {
         'MediSync Cebu': {
           retrieved: [],
-          rnaCalls: [], levelCalls: [], hallucCalls: [],
+          rnaCalls: [{ byDim: { Market: 'Needs: define the segment.' } }], levelCalls: [], hallucCalls: [],
           assertionTruthCalls: [{ byDim: { Market: 'Needs: define the segment.' } }],
           assertionInflatedCalls: [],
           assertionDeflatedCalls: [{ byDim: { Technology: 'Needs: build a prototype.' } }],

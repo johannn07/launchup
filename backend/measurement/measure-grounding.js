@@ -1438,9 +1438,10 @@ function flaggedClauses(results) {
 }
 
 /**
- * Every generated dimension, flat. The harness used to discard this at write
- * time, which is why no metric added after a run could ever be scored against
- * it — the text was gone and only a re-run could recover it.
+ * Every generated dimension, flat. The text is already persisted nested under
+ * `results` (e.g., `results.baseline.startups['startup'].rnaCalls[].byDim`,
+ * `results.baseline.startups['startup'].assertionTruthCalls[].byDim`, etc.);
+ * this function provides a flat accessor for scoring scripts.
  *
  * `rep` is absent from the per-call records, so it is emitted as the call's
  * index within its condition pool. Enough to distinguish reps within one file;
@@ -1474,7 +1475,6 @@ function writeResults(file, results) {
     fingerprints: currentFingerprints(),
     results,
     flaggedClauses: flaggedClauses(results),
-    rnaTexts: rnaTexts(results),
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
