@@ -183,6 +183,28 @@ test('spares: a recommended clause with no acquisition verb governing the token 
   assert.equal(market.redundant, false);
 });
 
+// Finding 4 (2026-08-23 review): the guard `typeof text !== 'string'` skips
+// undefined/null but a '' (or whitespace-only) dimension is a string, so it
+// fell through to a full observation scored mentioned:false, redundant:false
+// — scored clean, not skipped, contradicting both this file's own comment and
+// the "omitted is skipped" rule metric 5 also states. At --reps=1 (~6
+// observations per row) one blank moves the rate by ~17%.
+test('a blank or whitespace-only dimension is skipped, not scored clean', () => {
+  const { observations } = scoreRedundantNeeds({ Market: '', Technology: '   ' }, MEDI);
+  assert.deepEqual(observations, []);
+});
+
+// Finding 5 (2026-08-23 review): mutating `typeof text !== 'string'` to
+// `text === undefined` still passes every other test in this file, because
+// splitClauses coerces its input with String(...) rather than throwing. A
+// model returning `"rna": null` is plausible (a JSON-schema response with a
+// nullable field), so this pins the guard against exactly that case rather
+// than trusting the mutation would be caught incidentally.
+test('a null dimension is skipped, not coerced into a scored observation', () => {
+  const { observations } = scoreRedundantNeeds({ Market: null }, MEDI);
+  assert.deepEqual(observations, []);
+});
+
 test('metric 6 does not disturb CLASSIFIER_SOURCE — every stored metric-5 fingerprint depends on it', () => {
   const { CLASSIFIER_SOURCE } = require(path.resolve(__dirname, '../lib/assertions.js'));
   const crypto = require('crypto');

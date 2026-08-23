@@ -1321,7 +1321,7 @@ function summarizeResults(results) {
       // Same enforcement as metric 5's loop above, against metric 6's own key
       // family - the two can disagree on the very same pooled field.
       const refused = refusedKeys.has(`${REDUNDANCY_METRIC[condition]}|${arm.name}`);
-      let n = 0, redundant = 0, denied = 0;
+      let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0;
       for (const [startupName, cell] of Object.entries(armResult.startups)) {
         const spec = SATISFACTIONS[startupName];
         if (!spec) continue;
@@ -1330,6 +1330,8 @@ function summarizeResults(results) {
             n += 1;
             if (obs.redundant) redundant += 1;
             if (obs.denied) denied += 1;
+            if (obs.mentioned) mentioned += 1;
+            if (obs.unclassified) unclassified += 1;
           }
         }
       }
@@ -1341,6 +1343,11 @@ function summarizeResults(results) {
         // score is the mistake lib/field-overlap.js's jaccard avoids. `refused`
         // outranks both: this pool's comparability was never established.
         redundantRate: refused ? 'refused' : n ? redundant / n : null,
+        // mentioned/unclassified mirror metric 5's honesty column: a large
+        // `unclassified` means the classifier cannot read this output and
+        // `redundantRate` should not be quoted.
+        mentioned: refused ? 'refused' : mentioned,
+        unclassified: refused ? 'refused' : unclassified,
         deniedCount: refused ? 'refused' : denied,
       });
     }
@@ -1379,19 +1386,11 @@ function printReports(results) {
 
   console.log('\n--- Metric 6: redundant-need rate (recommending an artifact already evidenced) ---');
   console.log('(share of dimensions whose RNA recommends acquiring something the document shows the');
-  console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.)\n');
-  const fmtRate = (rate) => (rate === 'refused' ? 'refused' : rate === null ? 'n/a' : `${(rate * 100).toFixed(0)}%`);
-  for (const arm of ARMS) {
-    const truth = s.metric6.find((r) => r.arm === arm.name && r.condition === 'truth');
-    const deflated = s.metric6.find((r) => r.arm === arm.name && r.condition === 'deflated');
-    console.log(
-      `  ${arm.name}: metric 6 redundant-need   truth ${fmtRate(truth.redundantRate)} (n=${truth.redundantN})   ` +
-        `deflated ${fmtRate(deflated.redundantRate)} (n=${deflated.redundantN})`,
-    );
-    console.log(
-      `  ${arm.name}: metric 6 denied (secondary, NOT in the headline)  truth ${truth.deniedCount}  deflated ${deflated.deniedCount}`,
-    );
-  }
+  console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.');
+  console.log(' `mentioned` is an upper bound and `unclassified` the honesty column, same read rule as');
+  console.log(' metric 5: a large `unclassified` means the classifier cannot read this output and the');
+  console.log(' rate should not be quoted. `deniedCount` is secondary and never folds into the headline.)\n');
+  console.table(s.metric6);
 }
 
 // --------------------------------------------------------------------------
@@ -1775,6 +1774,7 @@ module.exports = {
   isAbsentAnswer,
   mean,
   summarizeResults,
+  printReports,
   mergeRuns,
   currentFingerprints,
   flaggedClauses,

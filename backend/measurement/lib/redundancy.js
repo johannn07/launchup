@@ -176,13 +176,14 @@ function isAcquisitionRequest(clause, tokens) {
  * Binary rather than a token count, because counting rewards verbosity and the
  * corpus arm writes longer RNAs — the same rule metric 5 uses.
  *
- * A dimension the model omitted is skipped rather than scored clean. Watch n.
+ * A dimension the model omitted or left blank is skipped rather than scored
+ * clean. Watch n.
  */
 function scoreRedundantNeeds(rnaByDim, satisfactions) {
   const observations = [];
   for (const [dimension, spec] of Object.entries(satisfactions ?? {})) {
     const text = rnaByDim?.[dimension];
-    if (typeof text !== 'string') continue;
+    if (typeof text !== 'string' || text.trim() === '') continue;
 
     const clauses = [];
     let scope = '';
@@ -208,6 +209,11 @@ function scoreRedundantNeeds(rnaByDim, satisfactions) {
       mentioned: clauses.length > 0,
       redundant: clauses.some((c) => c.klass === 'recommended'),
       denied: clauses.some((c) => c.klass === 'negated'),
+      // Mirrors scoreAssertedAbsences (lib/assertions.js): a clause that
+      // mentioned a token but matched none of classifyClause's own cues. Not
+      // `scoped` — that klass is this module's own acquisition-gate downgrade
+      // of an already-classified `recommended`, not a read failure.
+      unclassified: clauses.some((c) => c.klass === 'unclassified'),
       clauses,
     });
   }
