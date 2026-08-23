@@ -137,6 +137,56 @@ test('flaggedClauses emits one seven-field row per flagged clause', () => {
   });
 });
 
+test('metric 6 is summarised per arm and condition, and n counts dimensions the model wrote', () => {
+  const results = {
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'MediSync Cebu': {
+          retrieved: [],
+          rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [],
+          assertionInflatedCalls: [],
+          assertionDeflatedCalls: [
+            { byDim: { Market: 'Needs: identify a target market segment.', Technology: 'Needs: secure ISO certification.' } },
+          ],
+        },
+      },
+    },
+  };
+  const s = H.summarizeResults(results);
+  const row = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'deflated');
+  assert.equal(row.redundantN, 2, 'both written dimensions are observations');
+  assert.equal(row.redundantRate, 0.5, 'one of the two is redundant');
+});
+
+test('an omitted dimension is not scored clean', () => {
+  const results = {
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'MediSync Cebu': {
+          retrieved: [],
+          rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [], assertionInflatedCalls: [],
+          assertionDeflatedCalls: [{ byDim: { Market: 'Needs: identify a target market segment.' } }],
+        },
+      },
+    },
+  };
+  const s = H.summarizeResults(results);
+  const row = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'deflated');
+  assert.equal(row.redundantN, 1);
+});
+
+test('metric 6 reports null rather than 0 when no dimensions were observed', () => {
+  const s = H.summarizeResults({});
+  const row = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.equal(row.redundantN, 0);
+  assert.equal(row.redundantRate, null);
+  assert.equal(row.deniedCount, 0);
+});
+
 test('flaggedClauses labels the inflated condition and the rep index', () => {
   const rows = H.flaggedClauses({
     baseline: {

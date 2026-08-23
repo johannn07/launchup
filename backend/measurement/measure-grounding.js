@@ -350,6 +350,8 @@ const { levelPlacement, stageAppropriateness, differentiationGap } = require(
   path.join(__dirname, 'lib/metrics.js'),
 );
 const { isStageInappropriate } = require(path.join(__dirname, 'lib/stage-markers.js'));
+const { scoreRedundantNeeds } = require(path.join(__dirname, 'lib/redundancy.js'));
+const { SATISFACTIONS, verifySatisfactions } = require(path.join(__dirname, 'lib/satisfactions.js'));
 
 // Documents are measure-differentiation.js's verbatim early/mid pair; levels
 // mirror src/demo-readiness-levels.ts, the rows seedDemoStartups writes.
@@ -963,6 +965,9 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
   // documents. The README and the metric-5 comment both say that is asserted at
   // run time; before this line only audit-ground-truth.js asserted it.
   verifyAbsences(Object.fromEntries(Object.entries(STARTUPS).map(([n, s]) => [n, s.doc])));
+  // Metric 6's lower bound rests on SATISFACTIONS' evidence phrases being verbatim
+  // in the documents too — same reasoning as verifyAbsences above, same gate.
+  verifySatisfactions(Object.fromEntries(Object.entries(STARTUPS).map(([n, s]) => [n, s.doc])));
 
   const selectedStartups = startupNames.map((n) => [n, STARTUPS[n]]);
   const filtered = arms.length !== ARMS.length || startupNames.length !== Object.keys(STARTUPS).length;
@@ -1167,6 +1172,7 @@ function summarizeResults(results) {
   const metric3 = [];
   const metric4 = [];
   const metric5 = [];
+  const metric6 = [];
 
   for (const arm of ARMS) {
     const armResult = results[arm.name] || { startups: {} };
@@ -1276,9 +1282,40 @@ function summarizeResults(results) {
         unclassified: obs ? `${unclassified}/${obs}` : 'n/a',
       });
     }
+
+    // --- Metric 6: redundant-need rate (recommending an artifact the document
+    // already evidences) ---
+    //
+    // Keyed by condition rather than folded together: `truth` is what users
+    // receive and `deflated` is the positive control, and averaging the two
+    // would report neither.
+    for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = conditionField(condition);
+      let n = 0, redundant = 0, denied = 0;
+      for (const [startupName, cell] of Object.entries(armResult.startups)) {
+        const spec = SATISFACTIONS[startupName];
+        if (!spec) continue;
+        for (const call of cell[field] ?? []) {
+          for (const obs of scoreRedundantNeeds(call.byDim, spec).observations) {
+            n += 1;
+            if (obs.redundant) redundant += 1;
+            if (obs.denied) denied += 1;
+          }
+        }
+      }
+      metric6.push({
+        arm: arm.name,
+        condition,
+        redundantN: n,
+        // null, never 0, at n=0 - 0/0 is undefined and reading it as a clean
+        // score is the mistake lib/field-overlap.js's jaccard avoids.
+        redundantRate: n ? redundant / n : null,
+        deniedCount: denied,
+      });
+    }
   }
 
-  return { metric1, metric2, metric3, metric4, metric5 };
+  return { metric1, metric2, metric3, metric4, metric5, metric6 };
 }
 
 function printReports(results) {
@@ -1308,6 +1345,22 @@ function printReports(results) {
   console.log(' `asserted` is a lower bound and `mentioned` an upper one. A large `unclassified`');
   console.log(' means the classifier cannot read this output and the rate should not be quoted.)\n');
   console.table(s.metric5);
+
+  console.log('\n--- Metric 6: redundant-need rate (recommending an artifact already evidenced) ---');
+  console.log('(share of dimensions whose RNA recommends acquiring something the document shows the');
+  console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.)\n');
+  const fmtRate = (rate) => (rate === null ? 'n/a' : `${(rate * 100).toFixed(0)}%`);
+  for (const arm of ARMS) {
+    const truth = s.metric6.find((r) => r.arm === arm.name && r.condition === 'truth');
+    const deflated = s.metric6.find((r) => r.arm === arm.name && r.condition === 'deflated');
+    console.log(
+      `  ${arm.name}: metric 6 redundant-need   truth ${fmtRate(truth.redundantRate)} (n=${truth.redundantN})   ` +
+        `deflated ${fmtRate(deflated.redundantRate)} (n=${deflated.redundantN})`,
+    );
+    console.log(
+      `  ${arm.name}: metric 6 denied (secondary, NOT in the headline)  truth ${truth.deniedCount}  deflated ${deflated.deniedCount}`,
+    );
+  }
 }
 
 // --------------------------------------------------------------------------
