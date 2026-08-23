@@ -15,17 +15,48 @@
  * falsely denying evidenced fact — so it is counted separately as `denied` and
  * never folded into the headline.
  *
- * SECOND uncaught class, added task 7b (2026-08-23): classifyClause's
- * `recommended` bin does not distinguish "get this thing" from "move on FROM
- * / BEYOND / ACROSS this thing" — a satisfied token can sit inside a clause
- * that names it as the origin being left behind or the scope a recommendation
- * ranges over, never as what's being asked for. A 96-observation pilot against
- * two historical result files found this firing on ten real clauses and NONE
- * of them a genuine redundancy — see task-7b-brief.md. `isAcquisitionRequest`
- * below is a second, independent gate on top of classifyClause's `recommended`
- * verdict: it only lets a clause count when an acquisition verb governs the
- * token AND no origin/scope marker intervenes. Every ambiguity resolves AWAY
- * from redundant, the same direction lib/assertions.js already errs.
+ * Task 7b (2026-08-23) added a second, independent gate on top of
+ * classifyClause's `recommended` verdict: classifyClause alone does not
+ * distinguish "get this thing" from "move on FROM / BEYOND / ACROSS this
+ * thing" — a satisfied token can sit inside a clause that names it as the
+ * origin being left behind or the scope a recommendation ranges over, never
+ * as what's being asked for. A 96-observation pilot against two historical
+ * result files found this firing on ten real clauses and NONE of them a
+ * genuine redundancy — see task-7b-brief.md. `isAcquisitionRequest` below
+ * only lets a clause count when an acquisition verb governs the token AND no
+ * origin/scope marker intervenes. Every ambiguity resolves AWAY from
+ * redundant, the same direction lib/assertions.js already errs.
+ *
+ * That gate buys correctness at the cost of two more named uncaught classes
+ * (review, 2026-08-23) — both err toward not firing, so the lower-bound
+ * property holds, but both are real and deliberately NOT patched, because
+ * catching either risks reopening the false-positive hole this task exists
+ * to close:
+ *
+ * THIRD uncaught class — passive and postposed acquisition. The gate
+ * requires an acquisition verb to precede the token in the string
+ * ("develop a paper prototype"). It has no notion of grammatical voice, so
+ * "A paper prototype should be created to de-risk the build" and "Recommend
+ * that a paper prototype be developed and tested with users" both go silent
+ * — the verb is present but follows the token, or the construction is
+ * passive. Passive is a plausible model register, so this is a real gap, not
+ * a hypothetical one; it is not fixed because distinguishing genuine passive
+ * acquisition from a passive clause about something else ("A paper prototype
+ * was mentioned in the interview") is exactly the kind of judgment call that
+ * produced the original ten false positives, and getting it wrong in the
+ * other direction is the more expensive failure for this probe.
+ *
+ * FOURTH uncaught class — verb coverage. ACQUISITION_VERB is the brief's
+ * fixed list (identify/define/establish/create/develop/build/secure/obtain/
+ * acquire/find/determine/conduct) and is not extended past it. Natural
+ * acquisition verbs like `gather`, `collect`, `run`, `validate`, `engage`
+ * are absent, so "The startup should gather user feedback from cooperative
+ * officers" goes silent even though "gather" governs the token exactly the
+ * way "identify" does in the fixture that must fire. Left uncaught rather
+ * than added on the spot: each verb the brief listed was checked against a
+ * concrete false-positive clause before being trusted; an unvetted addition
+ * here would be exactly the "extend only with a recorded reason" rule this
+ * file already states, broken.
  */
 
 const { splitClauses, classifyClause, CLASSIFIER_SOURCE } = require('./assertions.js');
@@ -48,9 +79,26 @@ const ACQUISITION_VERB =
  * something being acquired. "from paper prototype", "beyond paper
  * prototypes", "across the target market", "rather than the incumbent
  * approach". Checked only in the text strictly BEFORE the token match.
+ *
+ * `for` added (review finding 1, 2026-08-23): the original list let a clause
+ * like "develop offerings for the market segment" fire, because "develop"
+ * precedes the token somewhere in the string with nothing on this list
+ * between them — but "develop" governs "offerings", not the token; the token
+ * sits in a trailing purpose phrase. Anchoring already requires the marker to
+ * directly abut the token (optionally through one determiner), so adding
+ * `for` only vetoes "for (the/a/...) TOKEN", never a `for` earlier in the
+ * clause governing something else.
+ *
+ * `to` and `of` were considered and NOT added. `to` abuts the token in
+ * "secure access TO paying customers", which is a genuine redundancy — an
+ * acquisition verb, an artifact directly following "to". `of` abuts the
+ * token in "development OF a paper prototype", also genuine acquisition.
+ * Neither has the "verb governs something else, token is scope" shape `for`
+ * has; adding either would re-introduce the exact false-negative failure
+ * mode this whole task exists to avoid.
  */
 const ORIGIN_OR_SCOPE_PREP =
-  /\b(?:from|beyond|past|across|outside|rather\s+than|versus|vs\.?)\s+(?:the|a|an|its|their|our|this|that)?\s*$/i;
+  /\b(?:from|beyond|past|across|outside|rather\s+than|versus|vs\.?|for)\s+(?:the|a|an|its|their|our|this|that)?\s*$/i;
 
 /**
  * A governing verb naming movement or expansion rather than first
@@ -61,9 +109,26 @@ const ORIGIN_OR_SCOPE_PREP =
  * token match: "identify a target market segment before further
  * development" must not be excluded by a "further" that governs a different,
  * later noun phrase entirely (fixture: the pre-existing "fires" test).
+ *
+ * Anchored (review finding 2, 2026-08-23), the same way ORIGIN_OR_SCOPE_PREP
+ * already is: the verb must directly govern the token — one optional
+ * determiner, then the token — not merely appear somewhere earlier in the
+ * clause. Unanchored, "To grow revenue, the team should first identify a
+ * target customer profile" silently spared, because `grow` governs
+ * "revenue", not the token; "Further work is needed to define a clear market
+ * segment" silently spared too, because `further` is ordinary filler nowhere
+ * near the token. Both are avoidable sensitivity losses in the safe
+ * direction (spared, not falsely fired), but unjustified next to the sibling
+ * check's anchoring. Re-verified against all six original pilot
+ * false-positive clauses after anchoring: all six remain spared — clause 4
+ * ("further penetrate the target market") still matches via `penetrate the`
+ * directly abutting the token; clauses 1/2/3/6 are still caught by
+ * ORIGIN_OR_SCOPE_PREP (from/beyond/across abut the token independently);
+ * clause 5 is still caught because `execute` was never in ACQUISITION_VERB.
+ * Anchoring did not let any of the six back through.
  */
 const PROGRESSION_VERB =
-  /\b(?:transition(?:s|ed|ing)?|mov(?:e|es|ed|ing)|expand(?:s|ed|ing)?|scal(?:e|es|ed|ing)|penetrat(?:e|es|ed|ing)|grow(?:s|ing)?|grew|grown|further)\b/i;
+  /\b(?:transition(?:s|ed|ing)?|mov(?:e|es|ed|ing)|expand(?:s|ed|ing)?|scal(?:e|es|ed|ing)|penetrat(?:e|es|ed|ing)|grow(?:s|ing)?|grew|grown|further)\s+(?:the|a|an|its|their|our|this|that)?\s*$/i;
 
 /** Same construction as lib/assertions.js' tokenRe, kept local: that file is
  *  off limits and does not export it, but the matching behaviour it wants —

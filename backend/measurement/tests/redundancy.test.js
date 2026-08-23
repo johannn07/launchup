@@ -93,6 +93,41 @@ test('spares: the six observed false-positive clauses', () => {
   }
 });
 
+// Review finding 1 (2026-08-23): the acquisition guard checked only that an
+// acquisition verb PRECEDES the token, not that the token is that verb's
+// object rather than sitting in a trailing "for the X" prepositional phrase.
+// In each of these the acquired artifact is the offerings/roadmap; the
+// satisfied token is scope. All three FIRE before the "for" fix below and
+// must not after it — this is a lower-bound correctness defect, not a
+// sensitivity one.
+test('spares: an acquisition verb governing a DIFFERENT object, with the token only in a trailing "for" phrase', () => {
+  const cases = [
+    ['MediSync Cebu', 'Market', 'Needs: develop offerings for the market segment.', MEDI],
+    ['MediSync Cebu', 'Market', 'Needs: develop offerings for the target customer.', MEDI],
+    ['AgroLink PH', 'Technology', 'Needs: develop a roadmap for the paper prototype.', AGRO],
+  ];
+  for (const [startup, dimension, text, spec] of cases) {
+    const { observations } = scoreRedundantNeeds({ [dimension]: text }, spec);
+    const obs = observations.find((o) => o.dimension === dimension);
+    assert.equal(obs.redundant, false, `${startup}/${dimension}: "${text}"`);
+  }
+});
+
+// Review finding 2 (2026-08-23): PROGRESSION_VERB was unanchored, so a
+// progression word anywhere earlier in the clause could veto a token it does
+// not actually govern. Both silent before anchoring; both must fire after.
+test('fires: a progression verb earlier in the clause that does not govern the token', () => {
+  const cases = [
+    ['MediSync Cebu', 'Market', 'To grow revenue, the team should first identify a target customer profile.', MEDI],
+    ['MediSync Cebu', 'Market', 'Further work is needed to define a clear market segment.', MEDI],
+  ];
+  for (const [startup, dimension, text, spec] of cases) {
+    const { observations } = scoreRedundantNeeds({ [dimension]: text }, spec);
+    const obs = observations.find((o) => o.dimension === dimension);
+    assert.equal(obs.redundant, true, `${startup}/${dimension}: "${text}"`);
+  }
+});
+
 // classifyClause returns null the instant no token is present at all —
 // that only proves token-absence short-circuiting, never that the bin logic
 // (negation/recommendation/assertion/unclassified) actually runs. This
