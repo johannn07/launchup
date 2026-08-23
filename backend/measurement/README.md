@@ -1410,18 +1410,23 @@ no 503s, no retries. Command exactly as pre-registered above.
 
 | arm | condition | redundant | mentioned | unclassified | denied | n |
 |---|---|---|---|---|---|---|
-| `baseline` | truth | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
-| `baseline` | deflated | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
-| `sdd-semantic` | truth | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
-| `sdd-semantic` | deflated | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
-| `deviation-deterministic` | truth | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
-| `deviation-deterministic` | deflated | 0/6 | 1–2/6 | 1–2/6 | 0/6 | 6 |
+| `baseline` | truth | 0/6 | 2/6 | 2/6 | 0/6 | 6 |
+| `baseline` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
+| `sdd-semantic` | truth | 0/6 | 2/6 | 2/6 | 0/6 | 6 |
+| `sdd-semantic` | deflated | 0/6 | 2/6 | 2/6 | 0/6 | 6 |
+| `deviation-deterministic` | truth | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
+| `deviation-deterministic` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
 
 `redundantRate` is **0 in every one of the six cells**, `truth` and
-`deflated` alike. `deniedCount` is 0 everywhere. `mentioned` and
-`unclassified` sit at 1–2 of 6 per cell — small and non-zero, so the
-classifier read something in every cell; it just never classified it as a
-genuine acquisition request.
+`deflated` alike. `deniedCount` is 0 everywhere. **`mentioned` and
+`unclassified` are equal in every cell** — every observation that contained
+a satisfied-token clause at all had that clause land in `unclassified`, and
+none ever landed in `recommended`. So no clause was binned `recommended` and
+then rejected by the acquisition gate; the gate never had a `recommended`
+verdict to act on in this run. That is consistent both with the model never
+making this error, and with the classifier being unable to read these
+particular constructions at all — this run cannot separate those two
+readings, and that ambiguity belongs next to the number, not underneath it.
 
 **Verdict, in the order it must be read:**
 

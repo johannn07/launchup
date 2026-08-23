@@ -1048,8 +1048,14 @@ free-tier budget.
 no 503s, no retries.
 
 **`redundantRate` is 0 in all six arm × condition cells** — `truth` and
-`deflated` alike, every arm. `deniedCount` 0 everywhere; `mentioned` and
-`unclassified` sit at 1–2 of 6 per cell.
+`deflated` alike, every arm. `deniedCount` 0 everywhere. `mentioned` and
+`unclassified` are equal in every cell (baseline truth/deflated 2/6, 1/6;
+sdd-semantic 2/6, 2/6; deviation-deterministic 1/6, 1/6): every clause that
+mentioned a satisfied token landed in `unclassified`, none in `recommended`
+— so the acquisition gate never had a `recommended` verdict to act on. That
+is consistent both with the model never making this error and with the
+classifier being unable to read these constructions at all; this run can't
+tell those two apart.
 
 **Prediction 1 — the pre-registered rule that `deflated` must read
 substantially above `truth` or the run is void — failed.** `deflated` reads
