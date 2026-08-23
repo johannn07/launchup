@@ -942,3 +942,103 @@ Recommendation: **merge, then take the RNA generation probe**, because it is
 the only item on that list that is both unblocked and load-bearing for an
 Objective 1 claim. Everything else is either waiting on the samples or is a
 second measurement of something already measured.
+
+---
+
+## 2026-08-23 (later) — metric 6 (redundant-need rate): built, pre-registered, code-reviewed
+
+Branch `feat/rna-redundancy-probe`, local, nothing pushed. **Zero Gemini
+generation calls this session** — every commit is pre-generation build,
+pilot, or review work.
+
+**What metric 6 measures.** The gap every 1b figure names: production never
+asks the model to assign levels, it consumes mentor-set levels and generates
+recommendations. Metric 6 mirrors metric 5's classifier on the opposite bin —
+does the RNA recommend acquiring an artifact class the document already
+evidences (`artifactTokens`), rather than asserting one absent. Reference-free,
+`CLASSIFIER_SOURCE` untouched. Pre-registered in `measurement/README.md`
+before any quota spend, per this project's standing rule against scoring
+under a rule chosen after seeing the data.
+
+**The pilot caught the metric firing almost entirely on false positives.**
+Run for free against 96 real observations already on disk
+(`2026-08-06-supplied-level.json`, `2026-08-09-supplied-level.json`). As
+first written it fired 10 times; a hand-read found essentially all 10 false
+positives — the "satisfied" token named an origin being left behind
+(*"transition from paper prototype"*) or a scope a recommendation ranged
+over (*"across the target market"*), never the artifact actually being asked
+for. **The uncorrected headline would have read baseline 21% vs corpus 0% on
+`truth` — large, quotable, wrong, and favouring the corpus specifically.**
+
+**Fixed with an acquisition requirement.** A satisfied token now only counts
+as redundant when an acquisition verb (identify/define/establish/create/
+develop/build/secure/obtain/acquire/find/determine/conduct) governs it
+directly, with no origin/scope preposition or progression verb intervening —
+both anchored directly against the token after a same-day review pass found
+the first cut unanchored and able to veto (or fail to veto) a token a
+different word in the clause actually governed. Re-run on the same 96
+observations: **0/96.**
+
+**Read 0/96 as pilot confirmation, not a precision figure.** It says the
+corrected detector no longer fires on the false positives it used to fire
+on. It is not a true-positive rate — **the metric has never yet produced a
+true positive on real generated text**, because every observation scored so
+far predates the metric existing as a probe.
+
+**Defects fixed along the way, all caught before quota was spent:**
+
+- **Two binary condition ternaries.** `levelsForCondition` and
+  `conditionField` mapped only truth/inflated; a third (`deflated`)
+  condition would have received truth-condition levels while being stored in
+  the inflated pool — an unmanipulated prompt under a manipulated label,
+  silently. Made total maps before `deflated` was added.
+- **A merge double-push.** Metric 6 rescores the same stored
+  `assertionTruthCalls`/`assertionDeflatedCalls` metric 5 already owns.
+  `mergeRuns` iterates per metric key, so without a per-field guard a shared
+  field would be pushed once per key referencing it — doubling `n` for any
+  file scored by both metrics. Closed with a per-arm `fieldsPushed` set in
+  the same commit that wired the sharing up, before it could ever ship.
+- **A merge refusal that logged but never enforced.** `refusedKeys` was
+  computed and printed to the console ("Not pooled...") but
+  `summarizeResults` never consulted it — a refused pool still printed a
+  number for both metric 5 and metric 6. Fixed in the commit that completed
+  metric 6's fingerprint grid; both metrics' rows now read `refused` when
+  their own key is refused.
+
+**Then code-reviewed, and five more gaps closed** (fix-wave commits later the
+same day):
+
+- Metric 6 had no honesty column — `mentioned`/`unclassified` were computed
+  per observation but never reached the printed row, so a printed
+  `truth 0% (n=6)` was indistinguishable from the classifier reading nothing.
+- `--merge`'s refusal for metric 6 is correct but was undocumented: no
+  stored file predates the probe, so `--merge results/*.json` will correctly
+  refuse every metric-6 row, including the fresh run's own valid data.
+  Documented, not changed.
+- `redundancy-inflated|<arm>` was fingerprinted and refusal-enforced but
+  `printReports` hand-rolled `truth`/`deflated` only, orphaning the
+  `inflated` row the code's own comments already said it reports. Fixed by
+  switching to `console.table`, matching metric 5.
+- A blank-string dimension was scored clean instead of skipped — the guard
+  only caught `undefined`/`null`. At `--reps=1` (~6 observations/row) one
+  blank moved a row's rate by roughly 17%.
+- The null-dimension guard had no dedicated test. Added one, then proved it
+  non-vacuous by mutation: weakening `typeof text !== 'string'` to
+  `text === undefined` throws `TypeError: Cannot read properties of null
+  (reading 'trim')` rather than silently mis-scoring — the guard is
+  load-bearing, not decorative.
+
+`backend/measurement/lib/assertions.js` stayed untouched throughout (its
+source is hashed into every stored fingerprint). Measurement suite 300 → 304,
+every new test failing before its fix and green after.
+
+**The 12-call run is pre-registered but NOT yet run, and awaits
+authorisation.** Command and full rationale in `measurement/README.md`'s
+metric 6 section:
+
+```
+node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation-deterministic --only-probe=rna --level-condition=truth,deflated --reps=1 --out=measurement/results/<date>-rna-redundancy.json
+```
+
+3 arms × 2 startups × 2 conditions × 1 rep = 12 calls, against a 20/day
+free-tier budget.
