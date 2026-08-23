@@ -28,6 +28,41 @@ test('only the deflated dimensions are specified — O/R/I have no deflation roo
   }
 });
 
+// Mirrors assertions.test.js:155-177 for HARD_ABSENCES — same broad/narrow
+// device, same two failure modes to guard: a narrow token from nowhere, and a
+// notArtifacts entry that silently removes nothing.
+test('the narrow artifactTokens list is a subset of satisfiedTokens, plus multiword refinements', () => {
+  for (const [startup, dims] of Object.entries(SATISFACTIONS)) {
+    for (const [dim, spec] of Object.entries(dims)) {
+      for (const t of spec.artifactTokens) {
+        const derived = spec.satisfiedTokens.includes(t) || (spec.artifactExtras || []).includes(t);
+        assert.ok(derived, `${startup}/${dim}: "${t}" is in neither satisfiedTokens nor artifactExtras`);
+      }
+    }
+  }
+});
+
+test('every notArtifacts entry matches something in its own satisfiedTokens', () => {
+  for (const [startup, dims] of Object.entries(SATISFACTIONS)) {
+    for (const [dim, spec] of Object.entries(dims)) {
+      for (const t of spec.notArtifacts || []) {
+        assert.ok(
+          spec.satisfiedTokens.includes(t),
+          `${startup}/${dim}: notArtifacts entry "${t}" matches nothing in satisfiedTokens — typo or wrong case silently no-ops`,
+        );
+      }
+    }
+  }
+});
+
+test('"target market" is narrowed out of Market\'s artifactTokens for both startups', () => {
+  for (const startup of ['AgroLink PH', 'MediSync Cebu']) {
+    const market = SATISFACTIONS[startup].Market;
+    assert.ok(market.satisfiedTokens.includes('target market'), `${startup}: broad list lost "target market"`);
+    assert.ok(!market.artifactTokens.includes('target market'), `${startup}: narrow list still has "target market"`);
+  }
+});
+
 test('no satisfied token collides with a corpus keyTerm', async () => {
   // Mirrors tests/stage-markers.test.js:17-24. A collision would penalise the
   // corpus arm for echoing its own prompt, confounding pre-registered
