@@ -840,3 +840,101 @@ approval gate; logging every approval; removing the `populate`.
   its message were verified; the `toast.error` render was not.
 - The acknowledgement is **per-approval, not per-session** — a Manager who
   reopens the dialog must tick again. Deliberate, but untested across a reload.
+
+### Manual verification by John — both features confirmed from the database side
+
+John tested items 1 and 3 in the browser after the branch was built. The state
+left in Neon is independent confirmation, not a report:
+
+- **Startup 10** (flagged, pending fixture) went **Pending → Qualified** with
+  exactly **one** `activity_logs` row naming `manager@launchup.local`. The
+  acknowledged-approval path works end to end through the UI.
+- **Startup 11** (rated fixture) reads `Technology=4` with `A2 M5 O8 R3 I6`
+  untouched. The revise flow updated **one dimension in place** — the upsert's
+  update branch, reached from the app.
+- **AgroLink and MediSync unchanged** throughout, asserted before and after
+  every fixture command.
+
+`backend/probe-manual-test.js` provides `setup` / `status` / `teardown` for this,
+each guarded on the 2026-08-05 ground truth and refusing to run if it has moved.
+**Untracked at time of writing** — decide whether to keep it as a dev utility or
+delete it.
+
+### Item 2 has no user-visible effect, and that was discovered late
+
+While writing the manual test steps it turned out **`target_level_normalized`
+has no live consumer either**. Its only reader (`rns.service.ts:433`) feeds a
+`deviation` const on the next line that is **never used** — `recordBiasAudit`
+is passed a different expression on `:440`. So both normalization outputs are
+unconsumed, and the 4c flag fix is **provenance-correctness only**: it stops an
+`ai_generation_runs` row stamped `scoreNormalization: false` from carrying
+normalized values, and it saves a `normalizeScore` call per task and roadblock.
+Nothing in the UI changes. The checklist claim that it "has exactly one
+consumer" was corrected in `ea3d9f0`.
+
+**Do not present item 2 as a user-facing fix.** It is an attribution fix inside
+the table built to make measurement arms attributable.
+
+### A caveat on what the audit trail proves
+
+The `activity_logs` row is written with `action: 'Manager'`, but
+`approve-applicant` is `@UseGuards(JwtGuard)` only — the deferred §1 P1 item.
+**Any authenticated user, including a `Startup`-role account, can still call
+it.** The gate makes them acknowledge and records whoever they are in `actor`,
+so the row is honest about identity; the `'Manager'` string is an assumption,
+not an enforced fact. This bounds what the audit trail proves and is worth
+saying plainly rather than being asked.
+
+### Merge readiness — gates re-run at the tip after testing
+
+| gate | result |
+|---|---|
+| backend jest | **308/308**, 28 suites |
+| measurement | **257/257** |
+| `tsc --noEmit` | exit 0 |
+| `svelte-check` | **119 / 14** — unchanged from baseline, extractor proven non-vacuous (119 `Error:` matches) |
+| merge shape | `master` is an ancestor → **fast-forward** |
+| entity / migration files touched | **0** |
+
+Five commits: three fixes, two docs. The zero on the last row is the one that
+matters operationally — `main.ts` runs `updateSchema()` on every boot, so a
+branch touching no entity cannot move the schema.
+
+### State at session end
+
+**Not merged, not pushed.** Outstanding before or alongside the merge:
+
+1. **Fixtures 10 and 11 are still in Neon**, plus one `activity_logs` row.
+   Harmless, but they appear in the Applications list during a demo.
+   `node probe-manual-test.js teardown` removes them, guard-checked.
+2. **`backend/probe-manual-test.js` is untracked** — keep as a dev utility or delete.
+3. **The failure toast was never observed.** The 409 and the cross-origin
+   readability of its message are verified; the `toast.error` render is not.
+
+### Next step
+
+**Merge `fix/silent-controls` to `master` locally** (fast-forward), after the
+fixture teardown. Nothing is pushed without asking.
+
+Then the §0 work that is not externally blocked is **thin**, and that is the
+real headline for planning:
+
+- **3c is blocked only on the ten handwritten samples** — the single largest
+  remaining objective, and it cannot start here. The CER harness design is
+  agreed but unwritten; SUS is the team's and must exist *before* the
+  sample-writing sitting, because that is the only natural chance to catch
+  respondents straight after use.
+- **RNA generation quality is still unmeasured.** Every grounding figure is the
+  levels probe, a harness construct; production's RNA path retrieves 12 rubric
+  rows rather than 54. Needs a harder probe, not more reps. This is the most
+  valuable *unblocked* measurement left.
+- **Metric 3 beyond the FAIL** — a separately pre-registered per-startup noise
+  floor, scored on new data. Re-scoring the 2026-08-20 run under one is the
+  forbidden move.
+- **4b's remaining half** (the readiness-*scoring* path) is a larger job than a
+  prompt change and was deliberately deferred on 2026-08-18.
+
+Recommendation: **merge, then take the RNA generation probe**, because it is
+the only item on that list that is both unblocked and load-bearing for an
+Objective 1 claim. Everything else is either waiting on the samples or is a
+second measurement of something already measured.
