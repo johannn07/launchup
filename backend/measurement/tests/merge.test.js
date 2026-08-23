@@ -223,6 +223,32 @@ test('a shared storage field is pushed once, not once per metric key that refere
   );
 });
 
+// Review finding 1: a refusal logged in `refusals` was never enforced at
+// report time - the pooled field still got scored and printed as a real
+// number. This is the exact scenario 'refuses to pool redundancy across a
+// changed satisfaction spec' constructs: assertion matches, redundancy
+// doesn't, and both read the same pooled assertionTruthCalls. Metric 6's row
+// must come back 'refused' (its own key was refused) while metric 5's row -
+// a DIFFERENT metric key, matching fingerprint - must still show a number.
+test('a refused fingerprint key produces a refused report row without suppressing a sharing metric that matched', () => {
+  const a = writeRedundancyRun('redundancy-report-a.json', {
+    assertionFp: 'A1', redundancyFp: 'RD1', truth: [{ byDim: { Investment: 'x' } }],
+  });
+  const b = writeRedundancyRun('redundancy-report-b.json', {
+    assertionFp: 'A1', redundancyFp: 'RD2', truth: [{ byDim: { Investment: 'y' } }],
+  });
+  const { merged } = H.mergeRuns([a, b], H.ARMS);
+  const s = H.summarizeResults(merged);
+
+  const metric6Truth = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.equal(metric6Truth.redundantN, 'refused', 'redundancy|baseline was refused - its row must say so, not print a number');
+  assert.equal(metric6Truth.redundantRate, 'refused');
+
+  const metric5Truth = s.metric5.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.notEqual(metric5Truth.asserted, 'refused', 'assertion|baseline matched - it must not be suppressed by redundancy\'s refusal');
+  assert.equal(metric5Truth.asserted, '0/2');
+});
+
 test('a legacy file sorted first does not block two compatible files from pooling', () => {
   // Regression: `--merge results/*.json` is the documented workflow, the shell
   // sorts by name, and the one real legacy file's date sorts first. If the

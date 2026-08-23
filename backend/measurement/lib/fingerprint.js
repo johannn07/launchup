@@ -133,6 +133,10 @@ function fingerprintMap(spec) {
       };
       out[`assertion|${arm.name}`] = hash(assertionMaterial);
       out[`assertion-inflated|${arm.name}`] = hash({ ...assertionMaterial, inflatedLevels });
+      // Completes metric 5's grid: it reports all three ALL_LEVEL_CONDITIONS
+      // rows, so all three need a comparability key or the deflated row prints
+      // over a pool nothing ever checked.
+      out[`assertion-deflated|${arm.name}`] = hash({ ...assertionMaterial, deflatedLevels });
     }
 
     // Additive only, same reasoning as the assertion block above.
@@ -151,6 +155,9 @@ function fingerprintMap(spec) {
         satisfactions,
       };
       out[`redundancy|${arm.name}`] = hash(redundancyMaterial);
+      // Mirrors assertion-deflated above: metric 6 also reports all three
+      // conditions, so the inflated row needs its own key too.
+      out[`redundancy-inflated|${arm.name}`] = hash({ ...redundancyMaterial, inflatedLevels });
       out[`redundancy-deflated|${arm.name}`] = hash({ ...redundancyMaterial, deflatedLevels });
     }
   }

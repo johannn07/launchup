@@ -220,6 +220,24 @@ function conditionField(condition) {
 }
 
 /**
+ * The one place a condition maps to metric 5's fingerprint key prefix — what
+ * `refusedKeys` is checked against, so a stale HARD_ABSENCES or classifier
+ * edit on one condition suppresses only that condition's row, not the others.
+ */
+const ASSERTION_METRIC = {
+  truth: 'assertion',
+  inflated: 'assertion-inflated',
+  deflated: 'assertion-deflated',
+};
+
+/** Metric 6's mirror of ASSERTION_METRIC. */
+const REDUNDANCY_METRIC = {
+  truth: 'redundancy',
+  inflated: 'redundancy-inflated',
+  deflated: 'redundancy-deflated',
+};
+
+/**
  * Exact names, comma lists, or an alias. Prefix matching is still refused — it
  * buys nothing over three fixed values and could silently select the wrong one.
  * An unrecognised entry hard-errors before any network call, like selectProbes:
@@ -1167,6 +1185,10 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
  * a zero row mean different things and the tables must not conflate them.
  */
 function summarizeResults(results) {
+  // Only mergeRuns' output carries this - a live run's `results` has no such
+  // property, so refusedKeys is empty and nothing is ever suppressed there.
+  const refusedKeys = results.refusedKeys instanceof Set ? results.refusedKeys : new Set();
+
   const metric1 = [];
   const metric2 = [];
   const metric3 = [];
@@ -1259,6 +1281,11 @@ function summarizeResults(results) {
     // verbosity, and the corpus arm writes longer RNAs.
     for (const condition of ALL_LEVEL_CONDITIONS) {
       const field = conditionField(condition);
+      // A pooled field's own union rule (see mergeRuns) can admit data whose
+      // comparability THIS metric's own fingerprint key refused, on another
+      // sharing key's authority. `refused` overrides the row rather than
+      // computing a number over a pool this metric never agreed to.
+      const refused = refusedKeys.has(`${ASSERTION_METRIC[condition]}|${arm.name}`);
       let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
       for (const [, cell] of Object.entries(armResult.startups)) {
         for (const c of cell[field] || []) {
@@ -1273,13 +1300,13 @@ function summarizeResults(results) {
       metric5.push({
         arm: arm.name,
         condition,
-        asserted: `${asserted}/${obs}`,
-        'asserted %': obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
-        mentioned: `${mentioned}/${obs}`,
+        asserted: refused ? 'refused' : `${asserted}/${obs}`,
+        'asserted %': refused ? 'refused' : obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
+        mentioned: refused ? 'refused' : `${mentioned}/${obs}`,
         // x/obs, never a bare 0: at obs=0 a bare 0 reads as "the classifier
         // handled everything cleanly" for an arm that was never run — in the
         // one column the design calls the honesty column.
-        unclassified: obs ? `${unclassified}/${obs}` : 'n/a',
+        unclassified: refused ? 'refused' : obs ? `${unclassified}/${obs}` : 'n/a',
       });
     }
 
@@ -1291,6 +1318,9 @@ function summarizeResults(results) {
     // would report neither.
     for (const condition of ALL_LEVEL_CONDITIONS) {
       const field = conditionField(condition);
+      // Same enforcement as metric 5's loop above, against metric 6's own key
+      // family - the two can disagree on the very same pooled field.
+      const refused = refusedKeys.has(`${REDUNDANCY_METRIC[condition]}|${arm.name}`);
       let n = 0, redundant = 0, denied = 0;
       for (const [startupName, cell] of Object.entries(armResult.startups)) {
         const spec = SATISFACTIONS[startupName];
@@ -1306,11 +1336,12 @@ function summarizeResults(results) {
       metric6.push({
         arm: arm.name,
         condition,
-        redundantN: n,
+        redundantN: refused ? 'refused' : n,
         // null, never 0, at n=0 - 0/0 is undefined and reading it as a clean
-        // score is the mistake lib/field-overlap.js's jaccard avoids.
-        redundantRate: n ? redundant / n : null,
-        deniedCount: denied,
+        // score is the mistake lib/field-overlap.js's jaccard avoids. `refused`
+        // outranks both: this pool's comparability was never established.
+        redundantRate: refused ? 'refused' : n ? redundant / n : null,
+        deniedCount: refused ? 'refused' : denied,
       });
     }
   }
@@ -1349,7 +1380,7 @@ function printReports(results) {
   console.log('\n--- Metric 6: redundant-need rate (recommending an artifact already evidenced) ---');
   console.log('(share of dimensions whose RNA recommends acquiring something the document shows the');
   console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.)\n');
-  const fmtRate = (rate) => (rate === null ? 'n/a' : `${(rate * 100).toFixed(0)}%`);
+  const fmtRate = (rate) => (rate === 'refused' ? 'refused' : rate === null ? 'n/a' : `${(rate * 100).toFixed(0)}%`);
   for (const arm of ARMS) {
     const truth = s.metric6.find((r) => r.arm === arm.name && r.condition === 'truth');
     const deflated = s.metric6.find((r) => r.arm === arm.name && r.condition === 'deflated');
@@ -1526,13 +1557,23 @@ function mergeRuns(files, arms) {
 
   const contributions = {};
   const refusals = [];
+  // Raw `${metric}|${arm}` keys that were refused for at least one file - the
+  // report-time enforcement of what `refusals` above only logs to the console.
+  // Tracked per metric key, not per field: two metric keys can share a field
+  // (pooling is a union, see fieldsPushed below) while still needing SEPARATE
+  // refused/not-refused verdicts, because each metric's own report row reads
+  // that field under its own scoring rules (metric 5 vs metric 6) and only one
+  // of the two may have actually gone stale.
+  const refusedKeys = new Set();
   const FIELD = {
     levels: 'levelCalls',
     rna: 'rnaCalls',
     fabrication: 'hallucCalls',
     assertion: 'assertionTruthCalls',
     'assertion-inflated': 'assertionInflatedCalls',
+    'assertion-deflated': 'assertionDeflatedCalls',
     redundancy: 'assertionTruthCalls',
+    'redundancy-inflated': 'assertionInflatedCalls',
     'redundancy-deflated': 'assertionDeflatedCalls',
   };
 
@@ -1543,9 +1584,18 @@ function mergeRuns(files, arms) {
       merged[arm.name].quotaHit = merged[arm.name].quotaHit || src.quotaHit;
 
       // redundancy shares assertionTruthCalls with assertion - it rescores the
-      // same stored truth-condition calls rather than making its own. This loop
-      // iterates per metric KEY, so without this guard a shared field gets
-      // pushed once per metric key that references it, doubling n.
+      // same stored truth-condition calls rather than making its own (same for
+      // the -inflated/-deflated pairs). This loop iterates per metric KEY, so
+      // without this guard a shared field gets pushed once per metric key that
+      // references it, doubling n.
+      //
+      // This is a UNION, not a priority rule: a refused key `continue`s before
+      // reaching this guard, so the field is pushed as soon as ANY key sharing
+      // it matches - whichever key happens to come first in FIELD only decides
+      // which key gets credited in `contributions`, not whether the push
+      // happens. Reordering FIELD cannot change what gets pooled. A refusal on
+      // one sharing key does not block a match on another (see refusedKeys
+      // below for how that refusal still surfaces at report time instead).
       const fieldsPushed = new Set();
 
       for (const [metric, field] of Object.entries(FIELD)) {
@@ -1564,6 +1614,7 @@ function mergeRuns(files, arms) {
         // hadn't accumulated anywhere yet.
         if (mine === undefined || ref === undefined || mine !== ref) {
           refusals.push(`${key} (${path.basename(file)}: ${mine ?? 'pre-fingerprint'} vs ${ref ?? 'pre-fingerprint'})`);
+          refusedKeys.add(key);
           continue;
         }
 
@@ -1587,6 +1638,12 @@ function mergeRuns(files, arms) {
       }
     }
   }
+
+  // Threaded onto the merged object (not just returned alongside it) so
+  // summarizeResults/printReports, which only ever see `merged`, can enforce
+  // it without a signature change. A live (non-merge) run's `results` simply
+  // has no `.refusedKeys`, so nothing there is ever marked refused.
+  merged.refusedKeys = refusedKeys;
 
   return { merged, contributions, refusals };
 }

@@ -217,6 +217,20 @@ test('adding redundancy keys leaves every pre-existing hash byte-identical', () 
   }
 });
 
+// Review finding 1: metric 5 and metric 6 both report all three
+// ALL_LEVEL_CONDITIONS rows, so both need a key per condition or a condition's
+// row can print over a pool nothing ever fingerprinted (assertion-deflated and
+// redundancy-inflated were the two missing before this).
+test('the full (metric, condition) grid exists per arm and every condition is distinct', () => {
+  const fps = require(path.resolve(__dirname, '../measure-grounding.js')).currentFingerprints();
+  const keys = [
+    'assertion|baseline', 'assertion-inflated|baseline', 'assertion-deflated|baseline',
+    'redundancy|baseline', 'redundancy-inflated|baseline', 'redundancy-deflated|baseline',
+  ];
+  for (const key of keys) assert.ok(fps[key], `${key} missing`);
+  assert.equal(new Set(keys.map((k) => fps[k])).size, keys.length, 'two conditions collided onto the same hash');
+});
+
 test('the deflated override is part of redundancy-deflated comparability', () => {
   const fps = require(path.resolve(__dirname, '../measure-grounding.js')).currentFingerprints();
   assert.ok(fps['redundancy|baseline']);

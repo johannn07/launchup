@@ -60,7 +60,18 @@ function scoreRedundantNeeds(rnaByDim, satisfactions) {
  * `recommended` here exactly as they decide `asserted` for metric 5, so
  * CLASSIFIER_SOURCE is included, not just this module's own additions —
  * editing a cue changes redundancy scoring too, not only assertion scoring.
+ *
+ * A satisfied-token edit (SATISFACTIONS) is NOT covered here — that's a data
+ * change, not a code change, and is hashed separately as fingerprint.js's
+ * `satisfactions` material. This constant is code only.
+ *
+ * String(CONTINUATION), not .source: .source drops the `i` flag, and losing it
+ * would change classifyClause's actual scoping behaviour while leaving this
+ * hash unmoved — a fingerprint that looks present but stops detecting the
+ * change it exists to catch. CLASSIFIER_SOURCE has the same latent issue in
+ * assertions.js (its CUES use `.source` too) but that file is frozen
+ * byte-identical for this task, so it is noted here rather than fixed there.
  */
-const REDUNDANCY_SOURCE = [CLASSIFIER_SOURCE, CONTINUATION.source, scoreRedundantNeeds.toString()].join('\n');
+const REDUNDANCY_SOURCE = [CLASSIFIER_SOURCE, String(CONTINUATION), scoreRedundantNeeds.toString()].join('\n');
 
 module.exports = { scoreRedundantNeeds, REDUNDANCY_SOURCE };
