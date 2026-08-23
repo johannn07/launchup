@@ -166,13 +166,34 @@ function inflatedLevels(levels) {
   return { ...levels, ...INFLATED_OVERRIDE };
 }
 
-/** The one place a condition maps to supplied levels — live run and --dry-run. */
-const levelsForCondition = (startup, condition) =>
-  condition === 'inflated' ? inflatedLevels(startup.levels) : startup.levels;
+/** The one place a condition maps to supplied levels — live run and --dry-run.
+ *  A total map, not a ternary: an unknown condition used to fall through to
+ *  truth levels, which would have sent an unmanipulated prompt under a
+ *  manipulated label. */
+const CONDITION_LEVELS = {
+  truth: (startup) => startup.levels,
+  inflated: (startup) => inflatedLevels(startup.levels),
+};
 
-/** The one place a condition maps to its storage field — scoring and audit trail. */
-const conditionField = (condition) =>
-  condition === 'inflated' ? 'assertionInflatedCalls' : 'assertionTruthCalls';
+function levelsForCondition(startup, condition) {
+  const build = CONDITION_LEVELS[condition];
+  if (!build) throw new Error(`levelsForCondition: unknown condition "${condition}"`);
+  return build(startup);
+}
+
+/** The one place a condition maps to its storage field — scoring and audit trail.
+ *  Total for the same reason: the old `else` sent every non-truth condition into
+ *  the inflated pool, which would have silently mixed two manipulations. */
+const CONDITION_FIELD = {
+  truth: 'assertionTruthCalls',
+  inflated: 'assertionInflatedCalls',
+};
+
+function conditionField(condition) {
+  const field = CONDITION_FIELD[condition];
+  if (!field) throw new Error(`conditionField: unknown condition "${condition}"`);
+  return field;
+}
 
 /**
  * Exact names only, like selectProbes: two fixed values, so a prefix match buys
@@ -994,16 +1015,11 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
                   byDim[x.readiness_level_type] = x.rna;
                 }
               }
-              // One call, two records: metrics 1-2 read rnaCalls, metric 5 reads
-              // its own per-condition field. Separate fields keep mergeRuns'
-              // 1:1 metric->field invariant, which double-pushes if two metric
-              // keys share a field and silently doubles n.
-              if (condition === 'truth') {
-                cell.rnaCalls.push({ byDim });
-                cell.assertionTruthCalls.push({ byDim });
-              } else {
-                cell.assertionInflatedCalls.push({ byDim });
-              }
+              // rnaCalls is the truth-only pool metrics 1-2 read. The
+              // per-condition pool is chosen by the total map so a new condition
+              // cannot land in another condition's field.
+              if (condition === 'truth') cell.rnaCalls.push({ byDim });
+              cell[conditionField(condition)].push({ byDim });
             }
           } catch (e) {
             if (is429(e)) {
@@ -1579,6 +1595,8 @@ module.exports = {
   INFLATED_OVERRIDE,
   inflatedLevels,
   selectLevelConditions,
+  levelsForCondition,
+  conditionField,
   isRetryableServerError,
   is429,
   withRetry,

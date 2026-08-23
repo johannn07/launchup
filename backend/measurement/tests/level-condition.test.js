@@ -4,7 +4,7 @@ const path = require('path');
 
 const {
   selectLevelConditions, inflatedLevels, INFLATED_OVERRIDE, STARTUPS, validateArgs,
-  runGenerationArms, ARMS, buildRnaCell,
+  runGenerationArms, ARMS, buildRnaCell, levelsForCondition, conditionField,
 } = require(path.resolve(__dirname, '../measure-grounding.js'));
 
 test('no filter runs the truth condition only, preserving current behaviour', () => {
@@ -178,4 +178,22 @@ test('the fabrication probe gets the truth rubric block under an inflated-only r
   });
   assert.equal(results['deviation-deterministic'].startups['AgroLink PH'].retrieved.length, 12);
   assert.match(r.prompts[0], /Verified Readiness Rubrics \(authoritative\)/);
+});
+
+test('levelsForCondition rejects an unknown condition instead of silently returning truth', () => {
+  const startup = { levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 } };
+  assert.throws(() => levelsForCondition(startup, 'nonsense'), /unknown condition/i);
+});
+
+test('conditionField rejects an unknown condition instead of silently returning the inflated pool', () => {
+  assert.throws(() => conditionField('nonsense'), /unknown condition/i);
+});
+
+test('the known conditions still map exactly as before', () => {
+  const startup = { levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 } };
+  assert.deepEqual(levelsForCondition(startup, 'truth'), startup.levels);
+  assert.equal(levelsForCondition(startup, 'inflated').Organizational, 3);
+  assert.equal(levelsForCondition(startup, 'inflated').Technology, 6);
+  assert.equal(conditionField('truth'), 'assertionTruthCalls');
+  assert.equal(conditionField('inflated'), 'assertionInflatedCalls');
 });
