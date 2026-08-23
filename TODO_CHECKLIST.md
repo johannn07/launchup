@@ -31,7 +31,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | Output validation layer (1c), scope-limited | PR #18 |
 | Sector-aware weighted scoring (2b) + ÷9 correction | PR #19 |
 | Grounding measurement, ground-truth audit, fabrication probe | unmerged branches — see `SESSION_NOTES.md` |
-| SO 4.4 approval gate, 4c flag gating, mentor baseline revision | `fix/silent-controls` — local, 5 commits, **browser-tested and gates green; fast-forwards, no schema impact**. Not merged, not pushed |
+| SO 4.4 approval gate, 4c flag gating, mentor baseline revision | PR #33 (`0ab8b48`) — browser-tested, gates green, no schema impact |
 
 ---
 

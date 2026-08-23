@@ -911,6 +911,10 @@ branch touching no entity cannot move the schema.
 3. **The failure toast was never observed.** The 409 and the cross-origin
    readability of its message are verified; the `toast.error` render is not.
 
+> **Resolved since (2026-08-23, later):** merged as PR #33 (`0ab8b48`), the probe
+> kept and tracked, the fixtures and their log row torn down. **The toast is still
+> unobserved** — item 3 stands.
+
 ### Next step
 
 **Merge `fix/silent-controls` to `master` locally** (fast-forward), after the
