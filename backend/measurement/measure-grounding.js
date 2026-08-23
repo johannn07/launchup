@@ -1437,6 +1437,32 @@ function flaggedClauses(results) {
   return out;
 }
 
+/**
+ * Every generated dimension, flat. The harness used to discard this at write
+ * time, which is why no metric added after a run could ever be scored against
+ * it — the text was gone and only a re-run could recover it.
+ *
+ * `rep` is absent from the per-call records, so it is emitted as the call's
+ * index within its condition pool. Enough to distinguish reps within one file;
+ * not a claim about which day a call came from.
+ */
+function rnaTexts(results) {
+  const rows = [];
+  for (const [arm, armData] of Object.entries(results)) {
+    for (const [startup, cell] of Object.entries(armData.startups ?? {})) {
+      for (const condition of ALL_LEVEL_CONDITIONS) {
+        const calls = cell[conditionField(condition)] ?? [];
+        calls.forEach((call, rep) => {
+          for (const [dimension, text] of Object.entries(call.byDim ?? {})) {
+            rows.push({ arm, startup, condition, rep, dimension, text });
+          }
+        });
+      }
+    }
+  }
+  return rows;
+}
+
 function writeResults(file, results) {
   const payload = {
     generatedAt: new Date().toISOString(),
@@ -1448,6 +1474,7 @@ function writeResults(file, results) {
     fingerprints: currentFingerprints(),
     results,
     flaggedClauses: flaggedClauses(results),
+    rnaTexts: rnaTexts(results),
   };
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
@@ -1677,6 +1704,7 @@ module.exports = {
   mergeRuns,
   currentFingerprints,
   flaggedClauses,
+  rnaTexts,
   validateArgs,
   selectCells,
   selectProbes,

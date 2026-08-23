@@ -206,3 +206,29 @@ test('flaggedClauses labels the inflated condition and the rep index', () => {
     ['inflated', 1, 'asserted'],
   ]);
 });
+
+test('rnaTexts carries every generated dimension so a future metric can re-score without quota', () => {
+  const results = {
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'MediSync Cebu': {
+          retrieved: [],
+          rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [{ byDim: { Market: 'Needs: define the segment.' } }],
+          assertionInflatedCalls: [],
+          assertionDeflatedCalls: [{ byDim: { Technology: 'Needs: build a prototype.' } }],
+        },
+      },
+    },
+  };
+  const rows = H.rnaTexts(results);
+  assert.equal(rows.length, 2);
+  assert.deepEqual(
+    rows.map((r) => [r.arm, r.startup, r.condition, r.dimension, r.text]).sort(),
+    [
+      ['baseline', 'MediSync Cebu', 'deflated', 'Technology', 'Needs: build a prototype.'],
+      ['baseline', 'MediSync Cebu', 'truth', 'Market', 'Needs: define the segment.'],
+    ].sort(),
+  );
+});
