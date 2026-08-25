@@ -1,6 +1,6 @@
 # LaunchUp — Remaining Work Checklist
 
-Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md)), plus a verification pass hunting broken frontend→backend calls, missing guards, and dead code.
+Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)), plus a verification pass hunting broken frontend→backend calls, missing guards, and dead code.
 
 **Type legend**
 
@@ -1059,7 +1059,7 @@ Neither the SRS nor the SDD names a storage vendor, a model version, or Docker �
 - [ ] ❓ **SCOPE · S · Drop Docker, give each developer a Neon branch**
   `docker-compose.yml` only ever provided local Postgres, and `backend/.env` points at Neon. **Neither the SRS nor the SDD mentions Docker** — there is no requirement to satisfy, nothing in the remaining work is containerization-shaped, and Vercel/Render don't build from a compose file.
   **But fix the real problem it masks:** `main.ts:292` runs `updateSchema()` and seeds demo data on every boot, and everyone points at the *same* Neon database — so every `pnpm dev` mutates shared schema. Use **Neon branching** (one branch per developer, free tier supports it), combined with gating the auto-sync behind `NODE_ENV !== 'production'` (§4).
-  **Then:** delete `docker-compose.yml` or mark it unused, and correct `README.md` / `CLAUDE.md` / `PROJECT_OVERVIEW.md` §8.
+  **Then:** delete `docker-compose.yml` or mark it unused, and correct `README.md` / `CLAUDE.md` (`docs/ARCHITECTURE.md` no longer documents local setup).
 
 ---
 
