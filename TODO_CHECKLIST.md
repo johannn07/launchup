@@ -32,6 +32,7 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | Sector-aware weighted scoring (2b) + ÷9 correction | PR #19 |
 | Grounding measurement, ground-truth audit, fabrication probe | unmerged branches — see `SESSION_NOTES.md` |
 | SO 4.4 approval gate, 4c flag gating, mentor baseline revision | PR #33 (`0ab8b48`) — browser-tested, gates green, no schema impact |
+| **First deployment of this codebase** — Render backend, Vercel frontend, same-origin API proxy | PRs #35–#37 (`b93e213`) — both apps live, login verified for `demo@` and `admin@` |
 
 ---
 
@@ -40,11 +41,11 @@ Prioritized backlog from a full read of the codebase (see [PROJECT_OVERVIEW.md](
 | Objective | Status |
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b/1c/2a/2b/2c/4c built and measured; SO 4.2 delivered and measured on the **application-summary** path 2026-08-18 (the scoring path is untouched, so 4b stays 🟡); SO 4.4 **complete 2026-08-23** — flag rule recalibrated to `ratio < 0.75` (shipped rule measured unfirable), **validated on a held-out run**, the verdict reaches the reviewing Manager, and **approving a flagged application now requires an acknowledgement that is enforced server-side and recorded**; **metric 3 rebuilt and run (2026-08-19/20)** — the count-based verdict is retired, field-overlap scoring ships against a rule pre-registered a day before the run, and the run returned a quotable **FAIL** whose cause is noise-floor instability on one document rather than uniform harshness; 1a partial, 3b minimal (**descope wording corrected 2026-08-22** — the Vision label path is inert, not "instrumented"), **3a advanced 2026-08-22** (two defects fixed and live-verified; a third fixed after a 503 exposed the confidence rule as circular on the fallback path — accuracy still unmeasured and `SUPPORT_THRESHOLD` still a guess), **3c unblocked only by the ten handwritten samples** (protocol written and shared; SUS owned by the team), 4a still a research task. **3a and 3b are both 🟡 for opposite reasons** — 3a has the code and lacks the measurement; 3b lacks the code, and the fragment it does have was measured to fire on 4 of 4 sketch-free pages. **Metric 6 (redundant-need rate, the RNA-generation-quality gap 1b names) built, pilot-confirmed at 0/96, code-reviewed, and run 2026-08-23 (12/12 calls) — the pre-registered positive control did not fire (`redundantRate` 0 on every arm, both conditions), which voids the run as a model result; see `measurement/README.md`** |
-| **Security issues (§1)** | In progress — all P0 fixed except the cookie policy (blocked — needs decision); **🎯 item done 2026-08-22** (raw-SQL debug endpoints deleted), 5 P1 deferred |
+| **Security issues (§1)** | In progress — **all P0 now closed (2026-08-25)**. The cookie policy is resolved by the same-origin `/api` proxy, and **the diagnosis this checklist carried for it was wrong**: `sameSite` was never the obstacle, because cookies cannot cross registrable domains at all. 🎯 item done 2026-08-22 (raw-SQL debug endpoints deleted). **6 P1 open** — one new, `data.access` ships the raw JWT into the page payload and largely defeats the `httpOnly` cookie; and IDOR + the admissions endpoints are no longer behind localhost |
 | **Broken functionality (§2)** | In progress — **9 of 15 fixed**; the 3 original 🎯 items done 2026-08-22 (every one collapsed to a deletion), plus **two more 🎯 found the same day by *using* the app rather than reading it**: URAT and calculator steps rendered blank (both question tables empty, nothing ever seeded them), and a Gemini **503 degrading into confident garbage** (a field scored 1.00 against the text it was extracted from and rendered green). 6 deferred, and one new **P1 security** item (`readinesslevel` unguarded) found in the same diagnosis |
 | **Incomplete features (§3)** | Decision made 2026-08-07 — **cut, don't defer**; 6 scope calls resolved as *cut cleanly* |
-| **Cleanup / tech debt (§4)** | In progress — **8 of 25 done, 17 open** (two closed 2026-08-23, one added the same day) (counted from the section 2026-08-22; the long-standing "of 19" was stale). **All 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day. **Verified 2026-08-23: `cd backend && pnpm test` 308/308 across 28 suites; `pnpm test:measurement` 304/304** — two separate suites, not one figure; the earlier "266/266" was jest-only and is stale on both counts. Four items were *added* 2026-08-22: the 4c flag that does not gate task normalization, the mentor-revision bug found by the live save probe, and two findings rescued from the compressed session notes |
-| **Infrastructure decisions (§5)** | In progress — storage and model settled; **🎯 item done 2026-08-22 — the `GEMINI_API_KEY` is valid**, 3 deferred |
+| **Cleanup / tech debt (§4)** | In progress — **8 of 26 done, 18 open** (one added 2026-08-25: `pnpm start` points at `dist/main`, which `nest build` never produces) (two closed 2026-08-23, one added the same day) (counted from the section 2026-08-22; the long-standing "of 19" was stale). **All 3 🎯 items done 2026-08-22**, plus the `chumcheck` purge and the red `master` test the same day. **Verified 2026-08-23: `cd backend && pnpm test` 308/308 across 28 suites; `pnpm test:measurement` 304/304** — two separate suites, not one figure; the earlier "266/266" was jest-only and is stale on both counts. Four items were *added* 2026-08-22: the 4c flag that does not gate task normalization, the mentor-revision bug found by the live save probe, and two findings rescued from the compressed session notes |
+| **Infrastructure decisions (§5)** | **Hosting settled 2026-08-25 — deployed and login-verified**: Render (backend) + Vercel (frontend), both free tier, neither needing a card. Storage, model and API key already settled. **Two new production-hygiene items** before a second account exists — `debug: true` logs SQL parameter values to Render, and the boot seeder re-seeds demo data on every redeploy. 3 older items deferred |
 
 ---
 
@@ -642,16 +643,21 @@ measurement.
   `JwtGuard` on `upload.controller.ts`, covering the new presign routes. `test-connection` no longer echoes raw SDK error text naming the bucket and endpoint. Verified live: all three routes 401 unauthenticated.
   **Correction:** this item previously claimed there was no file-type or size validation. Wrong — `validateFile()` already enforces a 10 MB cap and an 8-entry MIME allowlist before the object is written. The real gap was authentication only. Note the allowlist trusts client-supplied `file.mimetype`, so it stops honest mistakes, not a determined uploader.
 
-- [ ] 🔒 **SEC · S · Decide the production cookie policy before deploying** — **blocked, needs a decision**
-  Guarding the controllers required the backend to accept the `Access` cookie, because it is `httpOnly` and the shared axios instance sent **no credentials at all**. That works locally: `localhost:5173` and `localhost:3000` are the *same site* (cookie "site" ignores the port), so `sameSite: 'strict'` permits it.
-  **It will not work deployed.** `launchup.vercel.app` → `launchup.onrender.com` are different sites; the browser will not attach the cookie and every client-side call will 401.
-  **Decision:** either `sameSite: 'none'; secure: true` on the login cookie (`routes/(auth)/login/+page.server.ts:50`) and accept the CSRF exposure, or proxy client-side calls through SvelteKit server routes so they are same-origin.
+- [x] ✅ 🔒 **SEC · S · Production cookie policy** — *resolved 2026-08-25 (PR #37), and the diagnosis recorded here was wrong*
+  This item said the fix was `sameSite: 'none'; secure: true`. **It is not, and that change was measured to do nothing.** The `Access` cookie is set by SvelteKit and scoped to the *frontend's* host; a browser selects cookies by **destination** host, so a cookie held for `launchup-enhanced.vercel.app` can never be sent to `launchup-4w6d.onrender.com`. Different registrable domains cannot share a cookie. `SameSite` only governs a cookie that already matches.
+  **Why it looked like a SameSite problem:** locally both apps are `localhost` and **cookies ignore ports**, so the domains match and SameSite is genuinely the only obstacle. The one thing separating the two apps in development is the one thing the cookie layer ignores.
+  **Fix shipped:** a same-origin proxy at `routes/api/[...path]/+server.ts` swaps the cookie for the `Authorization: Bearer` header the API already accepts. axios `baseURL: '/api'` (19 callers), 49 direct fetch sites across 16 components rewritten, `getData` de-prefixed. The 13 `.server.ts` files are unchanged — they hold the token already. `sameSite` is back to `'strict'`, which is now correct **and stricter than the state that shipped**. CORS ceases to apply to browser traffic entirely.
 
 ### P1 — before any real deployment
 
 > **Deferred (2026-08-07)** except the 🎯 item below. IDOR is the judgement call — see **Capstone triage**. The rest are real pre-deployment work that a capstone demo does not reach.
 
+- [ ] 🔒 **SEC · M · Stop shipping the raw JWT to the browser** — *found 2026-08-25*
+  `getData(url, access)` (`lib/utils.ts`) takes the token from `data.access`, so **it is serialised into the page payload the browser receives**. Any XSS reads it straight out of hydration data without needing cookie access — which substantially defeats the `httpOnly` cookie the rest of the auth design rests on.
+  **Now cheap to fix:** the `/api` proxy reads the cookie itself and overwrites the header, so the argument is dead weight. Drop `data.access` from `(app)/+layout.server.ts` and the parameter from ~40 call sites.
+
 - [ ] 🔒 **SEC · M · Add ownership checks to startup detail endpoints (IDOR)** — *judgement call, see triage*
+  ⚠️ **Raised by deployment (2026-08-25):** this and the admissions item below are no longer behind localhost. Both are reachable from a public URL by any authenticated user.
   `startup.controller.ts:135-137` (`GET /startups/:startupId`) and every sibling route are `JwtGuard`-only. Row-level filtering exists **only** in the list endpoint (`StartupService.getStartups()`).
   **Why it matters:** any logged-in founder can read any other startup's full record — capsule proposal, members, waitlist messages — by changing the id in the URL.
   **Fix:** a reusable guard or service helper asserting the requester owns / is a member of / mentors the startup, unless Manager or Admin.
@@ -855,6 +861,10 @@ Each verified by reading **both** sides of the call.
 
 > **Deferred (2026-08-07)** except the three 🎯 items, which are deletions a reviewer would notice. Everything else here is invisible to a panel and survives the capstone unchanged.
 
+- [ ] 🧹 **DEBT · S · `pnpm start` points at a file the build does not produce** — *found 2026-08-25, worked around in Render's dashboard*
+  `"start": "node dist/main"`, but `nest build` emits `dist/src/main.js` — `seed-dummy.ts` sits at the backend root, which drags TypeScript's inferred `rootDir` up a level. The standing note about `dist/src/` already existed; this script is an unfixed instance of it, invisible locally because `pnpm dev` never reads that path.
+  **Fix:** `"start": "node dist/src/main"`, then drop the Start Command override on Render. `backend/vercel.json` points at `dist/main.js` too and cannot work regardless — it targets `@vercel/node` at a file that calls `app.listen()` rather than exporting a handler. Delete it.
+
 - [x] ✅ 🧹 **DEBT · S · Three components carried a hardcoded, expired JWT from the previous team's app** — *resolved 2026-08-22 by deleting the three files*
   `admin/PendingTab.svelte:19`, `AcceptedTab.svelte:19`, `RatedTab.svelte` each declare `const access = 'eyJ...'` and send it as `Authorization: Bearer`. Decoded, it is a **Django SimpleJWT** token (`token_type`, `jti`, `user_id`) that **expired 2024-09-06** — a payload shape this backend has never issued.
   **Why it mattered:** it looked like working auth and was not, which is how the "the frontend already sends Bearer tokens" assumption survived. Independently re-verified before deletion — `exp` decodes to 2024-09-06 on all three. ⚠️ The literals remain in git history.
@@ -972,6 +982,18 @@ Each verified by reading **both** sides of the call.
 ## 5. Infrastructure decisions (open questions)
 
 Neither the SRS nor the SDD names a storage vendor, a model version, or Docker — these are genuinely your call.
+
+- [x] ✅ **SCOPE · M · Hosting** — *settled 2026-08-25: Render (backend) + Vercel (frontend), both free tier, neither needing a card*
+  `https://launchup-4w6d.onrender.com` and `https://launchup-enhanced.vercel.app`. The previously live `launchup.*` pair is the **previous team's**; this codebase had never been deployed.
+  **The backend cannot go on Vercel.** `main.ts:379` calls `app.listen()` rather than exporting a handler, boot runs a schema sync plus four seeders plus an embedding backfill, Gemini calls take ~6.5 s on thinking tokens, and Tesseract spawns a worker — all hostile to serverless.
+  **Two build settings are load-bearing:** `pnpm install --prod=false` (Render sets `NODE_ENV=production`, so pnpm drops `@nestjs/cli` and `nest build` vanishes), and the RAG corpus seed appended to the build command, because **Render's free tier has no shell** — safe only because the seeder is idempotent.
+  **Limits to plan around:** free instances spin down after 15 min with a ~1 min cold start (750 instance-hours/month), and have no persistent disk, so Tesseract re-fetches `eng.traineddata` after each spin-down.
+
+- [ ] ⚠️ **INFRA · S · Turn off `debug: true` before any second account exists** — *raised by deployment 2026-08-25*
+  `mikro-orm.config.ts:26` logs every SQL query **with parameter values** to Render's logs. Acceptable while only you have an account; not once 30 validation users have data.
+
+- [ ] ⚠️ **INFRA · S · Gate the boot seeder out of production** — *raised by deployment 2026-08-25*
+  `main.ts:364` runs `updateSchema()` and four seeders on **every boot**, so each redeploy re-seeds demo data into the production database. Gate behind `NODE_ENV !== 'production'`. This was left on deliberately for the first deploy — it is what creates the accounts used to verify login — but must go before validation data exists.
 
 > **Deferred (2026-08-07)** except the 🎯 API-key check. Storage and model are settled; output caps, `responseSchema` and Docker are all invisible to a panel.
 
