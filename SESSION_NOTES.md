@@ -31,6 +31,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **A doc patch can corrupt line terminators invisibly.** A newline substitution ran twice on the same text — joined with CRLF, then every LF expanded to CRLF again — giving CR+CRLF, invisible in the editor and in `git diff`. Surfaced only by a diffstat far larger than the edit justified, then `file` reporting "CRLF, CR line terminators." Treat an oversized diffstat as a signal, not noise.
 - **Playwright MCP refuses `file:` URLs and writes only inside the repo root.** Serve a scratch page over `http://127.0.0.1` instead, and clean `.playwright-mcp/` afterward — it is not gitignored.
 - **`allowGlobalContext` is unset (false), so a boot-time `app.get(...)` throws.** Boot seeders must take `orm.em.fork()` — every seeder in `main.ts` already does this.
+- **The Browser pane does not composite while hidden**, so CSS animations never advance and `requestAnimationFrame` never fires (`visibilityState: hidden`; a rAF loop ticks exactly once). Any library behaviour gated on `animationend` or rAF looks permanently stuck — bits-ui menus never unmount and leave `body { pointer-events: none }`, which reads exactly like a real freeze and **reproduces on unmodified code**. Install a rAF counter before believing any "the page is frozen" finding.
 - **A capsule-proposal vision call took 175 s.** Budget client/HTTP timeouts well beyond a default before blaming the pipeline.
 
 ---
@@ -669,20 +670,35 @@ the cookie would 401 — a half-fix that looks green. The route supersedes the
 proxy, so the block only had to go. Verified with **nothing listening on 3001**:
 RNA and RNS pages both load, every `/api/*` call 200, zero console errors.
 
-### bits-ui leaves the page unclickable after any CheckboxItem menu
+### A bug I reported that turned out not to exist
 
-`ScrollLock` restores `body.style.pointerEvents` **only in its effect teardown**
-— on unmount, not on close — and the shared `Content` wrapper's
-`data-[state=closed]:animate-out` classes keep the node mounted. So
-`body { pointer-events: none }` sticks and the whole page stops responding to
-clicks until reload. **Reproduced on untouched master**: the RNS page's *View*
-dropdown does it too; the avatar menu (plain `Item`s) does not.
+Mid-session I diagnosed "any `CheckboxItem` dropdown leaves the page unclickable
+after closing", reproduced it on untouched master (the RNS *View* dropdown),
+shipped `preventScroll={false}` for it, wrote it into this file and
+`TODO_CHECKLIST` §2, and John approved a shared-wrapper fix on the strength of
+it. **It is not a real bug.** All of that was reverted.
 
-This broke the new feature outright — ticking boxes made Generate unclickable.
-Fixed locally with `preventScroll={false}` on the new menu only. The same
-one-line default in `dropdown-menu-content.svelte` would fix every dropdown in
-the app; left alone as shared UI beyond the approved scope. Logged in
-`TODO_CHECKLIST` §2.
+The chain is real but every link is frame-dependent. bits-ui gates unmount on
+`animationend` (the wrapper's 0.15 s `data-[state=closed]:animate-out`), and
+`useBodyScrollLock` schedules `resetBodyStyle()` inside `requestAnimationFrame`.
+**The Browser pane's tab does not composite** — `document.visibilityState` is
+`hidden` and a rAF loop ticked **once** across calls seconds apart — so neither
+ever fires, the menu never unmounts, and `body { pointer-events: none }` stays
+forever. Confirmed by dispatching a synthetic `animationend`, which unmounted the
+node on demand. In any visible tab both gates fire and the lock releases; the app
+has no `prefers-reduced-motion` rule that could disable the animation, so there
+is no real-user path to it.
+
+**What made it convincing:** it reproduced on master, so "pre-existing" felt
+proven — but master and the branch were both being observed through the same
+non-compositing pane, which is the actual common cause. *Reproducing on
+unmodified code rules out your change; it does not rule out your instrument.*
+
+The shared wrapper (`dropdown-menu-content.svelte`) is untouched at HEAD. The
+only residue is that the RNA picker carries no `preventScroll` prop, which is
+correct. **Cost of the wrong fix, had it shipped:** `preventScroll={false}` lets
+the page scroll behind an open menu, and the menu does not follow its trigger —
+measured, the gap between them went 38 px → 114 px after a 120 px scroll.
 
 ### Verified
 

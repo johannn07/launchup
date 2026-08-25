@@ -280,11 +280,7 @@
               <span class="sr-only">Choose dimensions</span>
               <ChevronDown class="h-4 w-4" />
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content
-              align="end"
-              class="w-64"
-              preventScroll={false}
-            >
+            <DropdownMenu.Content align="end" class="w-64">
               <DropdownMenu.Label>Dimensions to generate</DropdownMenu.Label>
               <DropdownMenu.Separator />
               {#each dimensionOptions as dimension}
