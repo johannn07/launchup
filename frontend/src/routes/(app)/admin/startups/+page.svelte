@@ -6,8 +6,6 @@
   import { Label } from '$lib/components/ui/label';
   import * as Select from '$lib/components/ui/select';
   import { Plus, Edit2, Trash2, Rocket, Loader2, User } from 'lucide-svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   let { data } = $props<{ data: { startups: Array<any>; users: Array<any>; access: string } }>();
   let startups = $state(data.startups);
@@ -67,7 +65,7 @@
       const payload: any = { ...createForm };
       if (payload.userId) payload.userId = Number(payload.userId);
 
-      const res = await fetch(`${PUBLIC_API_URL}/admin/startups/create-json`, {
+      const res = await fetch(`/api/admin/startups/create-json`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
@@ -126,7 +124,7 @@
       if (payload.userId) payload.userId = Number(payload.userId);
 
       const res = await fetch(
-        `${PUBLIC_API_URL}/admin/startups/edit-json/${toEdit.id}`,
+        `/api/admin/startups/edit-json/${toEdit.id}`,
         {
           method: 'POST',
           headers: {

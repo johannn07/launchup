@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   export let stepName: string;
   export let currentStep: string;
   import { Input } from '$lib/components/ui/input/index.js';
@@ -19,7 +17,7 @@
   };
 
   async function searchUsers() {
-    const response = await fetch(`${PUBLIC_API_URL}/users/?search=${search}`, {
+    const response = await fetch(`/api/users/?search=${search}`, {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${access}`

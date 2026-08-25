@@ -3,8 +3,6 @@
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
   import { ShieldAlert, ShieldCheck, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX } from 'lucide-svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   export let data: { audits: any[]; access: string };
   let audits = data.audits ?? [];
@@ -16,7 +14,7 @@
     if (overrideValue === null) return;
     overriding = true;
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/admin/ai/bias-audits/override/${id}`, {
+      const res = await fetch(`/api/admin/ai/bias-audits/override/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.access}` },
         body: JSON.stringify({ correctedScore: overrideValue })

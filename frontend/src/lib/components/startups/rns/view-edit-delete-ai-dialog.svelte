@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   import { Button } from '$lib/components/ui/button';
   import * as Dialog from '$lib/components/ui/dialog/index.js';
   import { Textarea } from '$lib/components/ui/textareav2';
@@ -57,7 +55,7 @@
     isLoadingHistory = true;
     try {
       const response = await fetch(
-        `${PUBLIC_API_URL}/chat-history/rns/${rns.id}`
+        `/api/chat-history/rns/${rns.id}`
       );
       if (!response.ok) throw new Error('Failed to load chat history');
       const history = await response.json();
@@ -127,7 +125,7 @@
     isLoading = true;
 
     try {
-      const response = await fetch(`${PUBLIC_API_URL}/rns/${rns.id}/refine`, {
+      const response = await fetch(`/api/rns/${rns.id}/refine`, {
         method: 'POST',
         // Raw fetch, not the shared axios instance, so it does not inherit
         // withCredentials. Without this the httpOnly Access cookie is not sent

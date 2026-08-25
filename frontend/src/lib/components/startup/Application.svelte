@@ -1,17 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   export async function getData() {
     const uratQuestions = await fetch(
-      `${PUBLIC_API_URL}/readinesslevel/urat-questions`
+      `/api/readinesslevel/urat-questions`
     );
 
     const data = await uratQuestions.json();
     if (uratQuestions.ok) {
       const calculatorQuestions = await fetch(
-        `${PUBLIC_API_URL}/readinesslevel/calculator-questions`
+        `/api/readinesslevel/calculator-questions`
       );
 
       const data2 = await calculatorQuestions.json();

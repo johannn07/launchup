@@ -16,8 +16,6 @@
     Upload,
     ChevronRight
   } from 'lucide-svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   import { ASSESSMENT_TYPES } from '$lib/types/assessment.types';
   import { invalidateAll } from '$app/navigation';
 
@@ -131,7 +129,7 @@
 
     let res;
     if (editingField.id) {
-      res = await fetch(`${PUBLIC_API_URL}/assessments/${editingField.id}`, {
+      res = await fetch(`/api/assessments/${editingField.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -153,7 +151,7 @@
 
   async function createAssessment() {
     if (!createName.trim()) return;
-    const res = await fetch(`${PUBLIC_API_URL}/assessments`, {
+    const res = await fetch(`/api/assessments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -182,7 +180,7 @@
   async function deleteAssessment() {
     if (!editingField?.id) return;
     const res = await fetch(
-      `${PUBLIC_API_URL}/assessments/${editingField.id}`,
+      `/api/assessments/${editingField.id}`,
       {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${data.access}` }
