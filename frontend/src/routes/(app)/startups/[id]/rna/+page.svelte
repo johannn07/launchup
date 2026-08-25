@@ -1,10 +1,11 @@
 <script lang="ts">
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
-  import { getData } from '$lib/utils';
+  import { cn, getData } from '$lib/utils';
   import { useQueries } from '@sveltestack/svelte-query';
   import { RnaCard, RnaCreateDialog } from '$lib/components/startups/rna';
-  import { Button } from '$lib/components/ui/button';
-  import { Loader, Plus, Sparkles } from 'lucide-svelte';
+  import { Button, buttonVariants } from '$lib/components/ui/button';
+  import { ChevronDown, Loader, Plus, Sparkles } from 'lucide-svelte';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import axiosInstance from '$lib/axios';
   import { toast } from 'svelte-sonner';
   import { Skeleton } from '$lib/components/ui/skeleton';
@@ -32,10 +33,6 @@
     {
       queryKey: ['startupData', startupId],
       queryFn: () => getData(`/startups/${startupId}`, access)
-    },
-    {
-      queryKey: ['rnaComplete', startupId],
-      queryFn: () => getData(`/rna/${startupId}/check-complete`, access)
     }
   ]);
 
@@ -51,16 +48,21 @@
   let generatingRNA = $state(false);
 
   const generateRNA = async () => {
+    if (selectedTypes.length === 0) {
+      toast.error('Select at least one dimension to generate');
+      return;
+    }
+
     generatingRNA = true;
     try {
       await axiosInstance.get(`/rna/${data.startupId}/generate-rna/`, {
+        params: { readinessTypes: selectedTypes.join(',') },
         headers: {
           Authorization: `Bearer ${data.access}`
         }
       });
       toast.success('Successfully generated RNA');
       $rnaQueries[1].refetch();
-      $rnaQueries[4].refetch();
     } catch (error: any) {
       console.error(error);
       const msg = error.response?.data?.message || 'Failed to generate RNA';
@@ -101,7 +103,6 @@
     );
     toast.success('Successfuly added to RNA');
     $rnaQueries[1].refetch().then(() => (open = false));
-    $rnaQueries[4].refetch();
   };
 
   const createRNA = async (payload: any) => {
@@ -123,7 +124,6 @@
     toast.success('Successfully created the RNA');
     open = false;
     $rnaQueries[1].refetch();
-    $rnaQueries[4].refetch();
   };
 
   const editRNA = async (id: number, payload: any) => {
@@ -135,7 +135,6 @@
     toast.success('Successfuly updated the RNA');
     open = false;
     $rnaQueries[1].refetch();
-    $rnaQueries[4].refetch();
   };
 
   const deleteRNA = async (id: number, index: number) => {
@@ -146,7 +145,6 @@
     });
     toast.success('Successfuly deleted the RNA');
     $rnaQueries[1].refetch();
-    $rnaQueries[4].refetch();
   };
 
   const readinessData = $derived(
@@ -161,9 +159,34 @@
       : []
   );
 
-  const isAllRNAComplete = $derived(
-    $rnaQueries[4].isSuccess && $rnaQueries[4].data === true
+  // Covered dimensions stay listed so a mentor can regenerate one.
+  const dimensionOptions = $derived(
+    readinessData.map((d: any) => ({
+      readinessType: d.readinessLevel.readinessType,
+      level: d.readinessLevel.level,
+      hasRna:
+        $rnaQueries[1].isSuccess &&
+        $rnaQueries[1].data.some(
+          (rna: any) =>
+            rna.readinessLevel.readinessType === d.readinessLevel.readinessType
+        )
+    }))
   );
+
+  let selectedTypes: string[] = $state([]);
+
+  // Default to the gaps, so "fill what's missing" stays a single click.
+  $effect(() => {
+    selectedTypes = dimensionOptions
+      .filter((d: any) => !d.hasRna)
+      .map((d: any) => d.readinessType);
+  });
+
+  const toggleDimension = (readinessType: string, checked: boolean) => {
+    selectedTypes = checked
+      ? [...selectedTypes, readinessType]
+      : selectedTypes.filter((t) => t !== readinessType);
+  };
 </script>
 
 <svelte:head>
@@ -231,17 +254,55 @@
           ><Plus class="h-4 w-4" />Add</Button
         >
 
-        <Button
-          onclick={generateRNA}
-          disabled={generatingRNA || isAllRNAComplete}
-        >
-          {#if generatingRNA}
-            <Loader class="mr-2 h-4 w-4 animate-spin" />
-          {:else}
-            <Sparkles class="h-4 w-4" />
-          {/if}
-          Generate</Button
-        >
+        <div class="flex">
+          <Button
+            class="rounded-r-none"
+            onclick={generateRNA}
+            disabled={generatingRNA || selectedTypes.length === 0}
+          >
+            {#if generatingRNA}
+              <Loader class="mr-2 h-4 w-4 animate-spin" />
+              Generating...
+            {:else}
+              <Sparkles class="h-4 w-4" />
+              Generate{selectedTypes.length ? ` (${selectedTypes.length})` : ''}
+            {/if}
+          </Button>
+
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger
+              class={cn(
+                buttonVariants(),
+                'border-primary-foreground/25 rounded-l-none border-l px-2'
+              )}
+              disabled={generatingRNA}
+            >
+              <span class="sr-only">Choose dimensions</span>
+              <ChevronDown class="h-4 w-4" />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" class="w-64">
+              <DropdownMenu.Label>Dimensions to generate</DropdownMenu.Label>
+              <DropdownMenu.Separator />
+              {#each dimensionOptions as dimension}
+                <DropdownMenu.CheckboxItem
+                  closeOnSelect={false}
+                  checked={selectedTypes.includes(dimension.readinessType)}
+                  onCheckedChange={(checked) =>
+                    toggleDimension(dimension.readinessType, checked)}
+                >
+                  <div class="flex w-full items-center justify-between gap-3">
+                    <span>{dimension.readinessType}</span>
+                    <span class="text-xs text-muted-foreground">
+                      Level {dimension.level}{dimension.hasRna
+                        ? ' · has RNA'
+                        : ''}
+                    </span>
+                  </div>
+                </DropdownMenu.CheckboxItem>
+              {/each}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </div>
       {/if}
     </div>
   </div>
@@ -266,12 +327,12 @@
 {/snippet}
 
 {#snippet inaccessible()}
-  <div class="text-2xl font-bold mt-10 text-center">
+  <div class="mt-10 text-center text-2xl font-bold">
     {#if data.role === 'Startup'}
       Your mentor has not yet rated your startup's readiness levels.
     {:else if data.role === 'Mentor'}
       Please rate your startup's readiness levels to access the Readiness and
-    Needs Assessment.
+      Needs Assessment.
     {:else}
       Something went wrong...
     {/if}
@@ -279,5 +340,7 @@
 {/snippet}
 
 {#snippet fallback()}
-  <div class="text-2xl font-bold mt-10 text-center">Something went wrong...</div>
+  <div class="mt-10 text-center text-2xl font-bold">
+    Something went wrong...
+  </div>
 {/snippet}

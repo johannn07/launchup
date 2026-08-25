@@ -1,10 +1,12 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
   Headers,
   Param,
+  ParseArrayPipe,
   ParseIntPipe,
   Patch,
   Post,
@@ -17,6 +19,7 @@ import { RnaService } from './rna.service';
 import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { AiRunService } from '../ai/ai-run.service';
 import { Role } from '../entities/enums/role.enum';
+import { ReadinessType } from '../entities/enums/readiness-type.enum';
 
 @UseGuards(JwtGuard)
 @Controller('rna')
@@ -50,15 +53,30 @@ export class RnaController {
   async generateTasks(
     @Param('id', ParseIntPipe) id: number,
     @Req() req: any,
+    @Query(
+      'readinessTypes',
+      new ParseArrayPipe({ items: String, separator: ',', optional: true }),
+    )
+    readinessTypes?: string[],
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
+    const selected = readinessTypes?.map((type) => type.trim()).filter(Boolean);
+    const unknown = selected?.filter(
+      (type) => !Object.values(ReadinessType).includes(type as ReadinessType),
+    );
+    if (unknown?.length)
+      throw new BadRequestException(
+        `Unknown readiness type(s): ${unknown.join(', ')}`,
+      );
+
     const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
     return this.aiRunService.track(
       id,
       'rna',
       pipelineConfig,
       isPrivileged,
-      (ctx) => this.rnaService.generateRNA(id, ctx),
+      (ctx) =>
+        this.rnaService.generateRNA(id, ctx, selected as ReadinessType[]),
     );
   }
 

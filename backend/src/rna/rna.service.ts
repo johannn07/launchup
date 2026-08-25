@@ -17,6 +17,7 @@ import { OutputValidatorService } from './output-validator.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { RNA_MAX_LENGTH } from './rna.constants';
+import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
 
 @Injectable()
 export class RnaService {
@@ -122,7 +123,11 @@ export class RnaService {
     return rna;
   }
 
-  async generateRNA(id: number, ctx: AiRunContext) {
+  async generateRNA(
+    id: number,
+    ctx: AiRunContext,
+    readinessTypes?: ReadinessType[],
+  ) {
     const startup = await this.em.findOne(
       Startup,
       { id: id },
@@ -150,23 +155,35 @@ export class RnaService {
       { populate: ['readinessLevel'] },
     );
 
-    // Generation only fills gaps; existing RNAs are never regenerated.
-    const readinessLevelsWithoutRNA = startupReadinessLevels.filter(
-      (startupReadinessLevel) =>
-        !existingRNAs.some(
-          (existingRNA) =>
-            existingRNA.readinessLevel.id ===
-            startupReadinessLevel.readinessLevel.id,
-        ),
-    );
+    // No explicit selection fills gaps only. An explicit selection regenerates
+    // the named dimensions whether or not they already have an RNA.
+    const targetReadinessLevels = readinessTypes?.length
+      ? [...new Set(readinessTypes)].map((readinessType) => {
+          const rated = startupReadinessLevels.find(
+            (srl) => srl.readinessLevel.readinessType === readinessType,
+          );
+          if (!rated)
+            throw new BadRequestException(
+              `Startup has no rated ${readinessType} readiness level.`,
+            );
+          return rated;
+        })
+      : startupReadinessLevels.filter(
+          (startupReadinessLevel) =>
+            !existingRNAs.some(
+              (existingRNA) =>
+                existingRNA.readinessLevel.id ===
+                startupReadinessLevel.readinessLevel.id,
+            ),
+        );
 
-    if (readinessLevelsWithoutRNA.length === 0) {
+    if (targetReadinessLevels.length === 0) {
       return [];
     }
 
     const ragContext = await this.ragQueryService.queryVectorDatabase(id.toString(), {
       config: ctx.config,
-      dimensions: readinessLevelsWithoutRNA.map((srl) => ({
+      dimensions: targetReadinessLevels.map((srl) => ({
         readinessType: srl.readinessLevel.readinessType,
         level: srl.readinessLevel.level,
       })),
@@ -184,13 +201,13 @@ export class RnaService {
     // equivalent guard drifted out of step precisely by doing that.
     let prompt: string;
     if (!ragContext.lowConfidence) {
-      const missingTypes = readinessLevelsWithoutRNA.map(
+      const targetTypes = targetReadinessLevels.map(
         (rl) => rl.readinessLevel.readinessType,
       );
       prompt = this.groundedPromptBuilderService.buildGroundedPrompt(
         ragContext,
         startupProfile,
-        missingTypes,
+        targetTypes,
       );
     } else {
       // rubricMode passed through so a low-confidence semantic result doesn't
@@ -202,7 +219,7 @@ export class RnaService {
       if (!basePrompt) {
         throw new BadRequestException('No capsule proposal found for this startup');
       }
-      prompt = `${basePrompt}\n\nTASK: Generate a Readiness and Needs Assessment (RNA) for: ${readinessLevelsWithoutRNA
+      prompt = `${basePrompt}\n\nTASK: Generate a Readiness and Needs Assessment (RNA) for: ${targetReadinessLevels
         .map((srl) => srl.readinessLevel.readinessType)
         .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max ${RNA_MAX_LENGTH} chars)}]`;
     }
@@ -212,7 +229,7 @@ export class RnaService {
 
     const createdRNAs: StartupRNA[] = [];
     for (const generatedRNA of generatedRNAs) {
-      const matchingReadinessLevel = readinessLevelsWithoutRNA.find(
+      const matchingReadinessLevel = targetReadinessLevels.find(
         (rl) =>
           rl.readinessLevel.readinessType === generatedRNA.readiness_level_type,
       );

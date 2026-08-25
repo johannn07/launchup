@@ -31,6 +31,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **A doc patch can corrupt line terminators invisibly.** A newline substitution ran twice on the same text — joined with CRLF, then every LF expanded to CRLF again — giving CR+CRLF, invisible in the editor and in `git diff`. Surfaced only by a diffstat far larger than the edit justified, then `file` reporting "CRLF, CR line terminators." Treat an oversized diffstat as a signal, not noise.
 - **Playwright MCP refuses `file:` URLs and writes only inside the repo root.** Serve a scratch page over `http://127.0.0.1` instead, and clean `.playwright-mcp/` afterward — it is not gitignored.
 - **`allowGlobalContext` is unset (false), so a boot-time `app.get(...)` throws.** Boot seeders must take `orm.em.fork()` — every seeder in `main.ts` already does this.
+- **The Browser pane does not composite while hidden**, so CSS animations never advance and `requestAnimationFrame` never fires (`visibilityState: hidden`; a rAF loop ticks exactly once). Any library behaviour gated on `animationend` or rAF looks permanently stuck — bits-ui menus never unmount and leave `body { pointer-events: none }`, which reads exactly like a real freeze and **reproduces on unmodified code**. Install a rAF counter before believing any "the page is frozen" finding.
 - **A capsule-proposal vision call took 175 s.** Budget client/HTTP timeouts well beyond a default before blaming the pipeline.
 
 ---
@@ -425,102 +426,37 @@ identity. The frontend still has no test runner.
 
 ---
 
-## 2026-08-23 (later) — metric 6 (redundant-need rate): built, pre-registered, code-reviewed
+## Compressed — 2026-08-23 (metric 6 built)
 
-Branch `feat/rna-redundancy-probe`, local, nothing pushed. **Zero Gemini
-generation calls this session** — every commit is pre-generation build,
-pilot, or review work.
-
-**What metric 6 measures.** The gap every 1b figure names: production never
+Branch `feat/rna-redundancy-probe`, local. Zero Gemini calls. Metric 6
+(redundant-need rate) measures the gap every 1b figure names — production never
 asks the model to assign levels, it consumes mentor-set levels and generates
-recommendations. Metric 6 mirrors metric 5's classifier on the opposite bin —
-does the RNA recommend acquiring an artifact class the document already
-evidences (`artifactTokens`), rather than asserting one absent. Reference-free,
-`CLASSIFIER_SOURCE` untouched. Pre-registered in `measurement/README.md`
-before any quota spend, per this project's standing rule against scoring
-under a rule chosen after seeing the data.
+recommendations. Reference-free; mirrors metric 5's classifier on the opposite
+bin (does the RNA recommend acquiring an artifact the document already
+evidences). Pre-registered in `measurement/README.md` before any quota spend.
 
-**The pilot caught the metric firing almost entirely on false positives.**
-Run for free against 96 real observations already on disk
-(`2026-08-06-supplied-level.json`, `2026-08-09-supplied-level.json`). As
-first written it fired 10 times; a hand-read found essentially all 10 false
-positives — the "satisfied" token named an origin being left behind
-(*"transition from paper prototype"*) or a scope a recommendation ranged
-over (*"across the target market"*), never the artifact actually being asked
-for. **The uncorrected headline would have read baseline 21% vs corpus 0% on
-`truth` — large, quotable, wrong, and favouring the corpus specifically.**
+**The pilot caught the metric firing almost entirely on false positives.** Run
+free against 96 stored observations it fired 10 times, and a hand-read found
+essentially all 10 false — the "satisfied" token named an origin being left
+behind or a scope a recommendation ranged over, never the artifact asked for.
+**The uncorrected headline would have read baseline 21% vs corpus 0% — large,
+quotable, wrong, and favouring the corpus specifically.** Fixed with an
+acquisition-verb requirement anchored directly against the token; re-run
+**0/96**. **Read 0/96 as pilot confirmation, not precision** — the metric has
+still never produced a true positive on real generated text.
 
-**Fixed with an acquisition requirement.** A satisfied token now only counts
-as redundant when an acquisition verb (identify/define/establish/create/
-develop/build/secure/obtain/acquire/find/determine/conduct) governs it
-directly, with no origin/scope preposition or progression verb intervening —
-both anchored directly against the token after a same-day review pass found
-the first cut unanchored and able to veto (or fail to veto) a token a
-different word in the clause actually governed. Re-run on the same 96
-observations: **0/96.**
+Defects closed before quota was spent: two binary condition ternaries that would
+have given a `deflated` run truth-condition levels under a manipulated label; a
+`mergeRuns` double-push that would have doubled `n` for any file scored by both
+metrics 5 and 6; and a merge refusal that printed "Not pooled" but never
+enforced it. Code review closed five more — a missing honesty column (a printed
+`truth 0%` was indistinguishable from the classifier reading nothing), an
+orphaned `inflated` row, a blank-string dimension scored clean instead of
+skipped (~17% swing on a `--reps=1` row), an undocumented but correct `--merge`
+refusal, and a null-dimension guard proved load-bearing by mutation.
+`measurement/lib/assertions.js` untouched throughout; measurement suite 300 → 304.
 
-**Read 0/96 as pilot confirmation, not a precision figure.** It says the
-corrected detector no longer fires on the false positives it used to fire
-on. It is not a true-positive rate — **the metric has never yet produced a
-true positive on real generated text**, because every observation scored so
-far predates the metric existing as a probe.
-
-**Defects fixed along the way, all caught before quota was spent:**
-
-- **Two binary condition ternaries.** `levelsForCondition` and
-  `conditionField` mapped only truth/inflated; a third (`deflated`)
-  condition would have received truth-condition levels while being stored in
-  the inflated pool — an unmanipulated prompt under a manipulated label,
-  silently. Made total maps before `deflated` was added.
-- **A merge double-push.** Metric 6 rescores the same stored
-  `assertionTruthCalls`/`assertionDeflatedCalls` metric 5 already owns.
-  `mergeRuns` iterates per metric key, so without a per-field guard a shared
-  field would be pushed once per key referencing it — doubling `n` for any
-  file scored by both metrics. Closed with a per-arm `fieldsPushed` set in
-  the same commit that wired the sharing up, before it could ever ship.
-- **A merge refusal that logged but never enforced.** `refusedKeys` was
-  computed and printed to the console ("Not pooled...") but
-  `summarizeResults` never consulted it — a refused pool still printed a
-  number for both metric 5 and metric 6. Fixed in the commit that completed
-  metric 6's fingerprint grid; both metrics' rows now read `refused` when
-  their own key is refused.
-
-**Then code-reviewed, and five more gaps closed** (fix-wave commits later the
-same day):
-
-- Metric 6 had no honesty column — `mentioned`/`unclassified` were computed
-  per observation but never reached the printed row, so a printed
-  `truth 0% (n=6)` was indistinguishable from the classifier reading nothing.
-- `--merge`'s refusal for metric 6 is correct but was undocumented: no
-  stored file predates the probe, so `--merge results/*.json` will correctly
-  refuse every metric-6 row, including the fresh run's own valid data.
-  Documented, not changed.
-- `redundancy-inflated|<arm>` was fingerprinted and refusal-enforced but
-  `printReports` hand-rolled `truth`/`deflated` only, orphaning the
-  `inflated` row the code's own comments already said it reports. Fixed by
-  switching to `console.table`, matching metric 5.
-- A blank-string dimension was scored clean instead of skipped — the guard
-  only caught `undefined`/`null`. At `--reps=1` (~6 observations/row) one
-  blank moved a row's rate by roughly 17%.
-- The null-dimension guard had no dedicated test. Added one, then proved it
-  non-vacuous by mutation: weakening `typeof text !== 'string'` to
-  `text === undefined` throws `TypeError: Cannot read properties of null
-  (reading 'trim')` rather than silently mis-scoring — the guard is
-  load-bearing, not decorative.
-
-`backend/measurement/lib/assertions.js` stayed untouched throughout (its
-source is hashed into every stored fingerprint). Measurement suite 300 → 304,
-every new test failing before its fix and green after.
-
-**The 12-call run was pre-registered, then run the same day — see below.**
-Command and full rationale in `measurement/README.md`'s metric 6 section:
-
-```
-node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation-deterministic --only-probe=rna --level-condition=truth,deflated --reps=1 --out=measurement/results/<date>-rna-redundancy.json
-```
-
-3 arms × 2 startups × 2 conditions × 1 rep = 12 calls, against a 20/day
-free-tier budget.
+---
 
 ## 2026-08-23 (evening) — the run, and prediction 1 failed
 
@@ -695,3 +631,133 @@ Confirm the proxy in the browser, then close the two production-hygiene items
 (`debug: true`, boot seeding) before any second account exists. After that the
 midterm critical path is the SPMP and traceability matrix, which compete for the
 same two weeks as the 30-user study.
+
+---
+
+## 2026-08-25 (later) — mentor-selectable RNA dimensions, and two bugs that were never mine
+
+Branch `feat/rna-dimension-picker`, 2 commits, local, nothing pushed. **2 Gemini
+generation calls.**
+
+### What shipped
+
+RNA generation was gap-fill only: one prompt for every dimension lacking an RNA,
+and `[]` once all six were covered, so a mentor could never regenerate one.
+
+- `GET /rna/:id/generate-rna` takes `?readinessTypes=Technology,Market`. Named
+  dimensions regenerate **whether or not they already have an RNA** (John's
+  call); omitting the param keeps gap-fill, so no existing caller changes.
+  Unknown types 400 **before** `aiRunService.track()`, so a bad request leaves no
+  orphan `ai_generation_runs` row.
+- The page's Generate button became a split button with a `CheckboxItem` picker,
+  pre-checked to the dimensions with no RNA yet. Every selected dimension still
+  goes out in **one** Gemini call — picking six costs the same as picking one.
+- Dropped the `check-complete` query; completeness no longer disables the button
+  and nothing else read it.
+
+### The vite proxy could never have been confirmed locally
+
+Last session's open item was "confirm the proxy in the browser." It could not
+have passed: `frontend/vite.config.ts` proxied `/api` to port **3001** while the
+backend serves **3000**, and vite's `server.proxy` runs ahead of the SvelteKit
+handler. Every client-side API call ECONNREFUSED and 500'd in dev — left behind
+by `5a453d2`, the commit that added `routes/api/[...path]/+server.ts`.
+
+**Repointing it to 3000 would have been the wrong fix.** The proxy forwards
+straight to Nest, skipping that route's cookie-to-Bearer swap, so calls carrying
+an explicit token via `getData(url, access)` would work and everything relying on
+the cookie would 401 — a half-fix that looks green. The route supersedes the
+proxy, so the block only had to go. Verified with **nothing listening on 3001**:
+RNA and RNS pages both load, every `/api/*` call 200, zero console errors.
+
+### A bug I reported that turned out not to exist
+
+Mid-session I diagnosed "any `CheckboxItem` dropdown leaves the page unclickable
+after closing", reproduced it on untouched master (the RNS *View* dropdown),
+shipped `preventScroll={false}` for it, wrote it into this file and
+`TODO_CHECKLIST` §2, and John approved a shared-wrapper fix on the strength of
+it. **It is not a real bug.** All of that was reverted.
+
+The chain is real but every link is frame-dependent. bits-ui gates unmount on
+`animationend` (the wrapper's 0.15 s `data-[state=closed]:animate-out`), and
+`useBodyScrollLock` schedules `resetBodyStyle()` inside `requestAnimationFrame`.
+**The Browser pane's tab does not composite** — `document.visibilityState` is
+`hidden` and a rAF loop ticked **once** across calls seconds apart — so neither
+ever fires, the menu never unmounts, and `body { pointer-events: none }` stays
+forever. Confirmed by dispatching a synthetic `animationend`, which unmounted the
+node on demand. In any visible tab both gates fire and the lock releases; the app
+has no `prefers-reduced-motion` rule that could disable the animation, so there
+is no real-user path to it.
+
+**What made it convincing:** it reproduced on master, so "pre-existing" felt
+proven — but master and the branch were both being observed through the same
+non-compositing pane, which is the actual common cause. *Reproducing on
+unmodified code rules out your change; it does not rule out your instrument.*
+
+The shared wrapper (`dropdown-menu-content.svelte`) is untouched at HEAD. The
+only residue is that the RNA picker carries no `preventScroll` prop, which is
+correct. **Cost of the wrong fix, had it shipped:** `preventScroll={false}` lets
+the page scroll behind an open menu, and the menu does not follow its trigger —
+measured, the gap between them went 38 px → 114 px after a 120 px scroll.
+
+### Verified
+
+Backend **315/315** across 29 suites, four new selection tests written first and
+watched fail. `svelte-check` **119/14 unchanged from master**, none in the
+touched files. Live through the real UI with a mentor session: ticked Technology
++ Regulatory, request went out as `?readinessTypes=Technology,Regulatory`, RNA
+rows **9 → 11** (+1 each, nothing else touched), and `ai_generation_runs`
+recorded **one** run (id 24, 13 s, completed). Three 400s created **zero** rows.
+
+### A note on `pnpm lint`
+
+Running it rewrote **107 backend files** (3,481 insertions) over the CRLF
+conflict the standing note already describes — and it also reformats untouched
+lines *inside* the files being edited, which is the part that makes your own diff
+unreviewable. Discarded with John's approval; the three backend files were
+rebuilt with `git show HEAD:<path> > <path>` and the edits re-applied. Use
+`npx eslint --no-fix src/<path>`, and judge against a baseline of **291 errors on
+an untouched file**, not zero.
+
+### Merge and deploy readiness
+
+Four commits, **fast-forward onto master** (master is an ancestor), 8 files, and
+**no entity or migration files touched** — so the boot `updateSchema()` is a
+no-op for this diff. Backend **315/315** across 29 suites; `nest build` exits 0
+and emits `dist/src/main.js`, the path Render's start-command override points at.
+`svelte-check` **119/14, unchanged from baseline**. The frontend build completes
+both vite phases (client and server bundles, the `/api` endpoint compiled) and
+fails only at adapter-vercel's Windows symlink step — the documented Windows-only
+limitation, and the same state the previous successful deploys were in.
+
+**Deploy the backend before the frontend.** `?readinessTypes=` is additive, so an
+old frontend against a new backend is fine; the reverse is not — the picker would
+send a parameter the old backend ignores, and generation would silently gap-fill
+instead of regenerating. Wrong behaviour rather than an error, so it would not
+announce itself.
+
+### The picker removes an accidental quota ceiling
+
+The old Generate button disabled itself once all six dimensions had an RNA, so a
+mentor could not spend further calls on a completed startup. Regeneration is now
+always available, against a free tier of roughly **20 calls/day**. This is the
+approved design, not a regression, but it sharpens the constraint the last
+session already recorded: for a 30-user study, pre-seed the AI artifacts so
+testers review output rather than generate it.
+
+### Open
+
+- The branch is **unpushed and unreviewed**; John tests before anything reaches
+  master.
+- Last session's two production-hygiene items are untouched: `debug: true`
+  logging SQL parameter values to Render, and `main.ts` re-seeding demo data on
+  every redeploy.
+- Dev servers on 3000 and 5173 were stopped to free `dist/` for the production
+  build — restart them before testing.
+
+### Next step
+
+John tests `feat/rna-dimension-picker` locally; the vite fix is what makes that
+possible at all. If it holds, merge (fast-forward) and deploy **backend first**.
+Then close the two production-hygiene items before a second account exists. The
+midterm critical path is unchanged: the SPMP and the traceability matrix.

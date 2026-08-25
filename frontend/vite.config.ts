@@ -6,17 +6,10 @@ export default defineConfig({
   preview: {
     allowedHosts: ['launchup.onrender.com']
   },
+  // No `/api` proxy here: routes/api/[...path]/+server.ts handles it, and a
+  // vite proxy would shadow that route and skip its cookie-to-Bearer swap.
   server: {
     host: true,
-    port: 5173,
-    proxy: {
-      // Proxy API requests to backend during local development
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false,
-        rewrite: (path) => path.replace(/^\/api/, ''),
-      },
-    },
-  },
+    port: 5173
+  }
 });
