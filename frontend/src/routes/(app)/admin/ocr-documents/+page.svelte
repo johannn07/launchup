@@ -4,8 +4,6 @@
   import { Badge } from '$lib/components/ui/badge';
   import * as Dialog from '$lib/components/ui/dialog';
   import { Scan, Eye, ArrowLeft, ArrowRight, Image as ImageIcon, Search, CheckCircle, AlertTriangle, PenTool, ExternalLink } from 'lucide-svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   export let data: { ocrs: any[]; access: string };
   let ocrs = data.ocrs ?? [];
@@ -37,7 +35,7 @@
   async function toggleSketch(doc: any) {
     togglingId = doc.id;
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/admin/ocr-documents/flag/${doc.id}`, {
+      const res = await fetch(`/api/admin/ocr-documents/flag/${doc.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.access}` },
         body: JSON.stringify({ sketchDetected: !doc.sketchDetected, note: 'Admin override' })

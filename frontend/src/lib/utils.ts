@@ -2,9 +2,6 @@ import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { browser } from '$app/environment';
 import axiosInstance from './axios';
-import { env } from '$env/dynamic/public';
-
-const PUBLIC_API_URL = (env && env.PUBLIC_API_URL) ? env.PUBLIC_API_URL : '';
 import type { RNSItem } from './types/rns.types';
 import type { Role } from './types/user.types';
 import { mode } from 'mode-watcher';
@@ -244,12 +241,11 @@ export const getSavedTab = (name: string, searchParam: any) => {
   return selectedTab;
 };
 
-export const getData = async (url: string, access: string) => {
-  const URL = `${PUBLIC_API_URL}${url}`;
-  const response = await axiosInstance.get(URL, {
-    headers: {
-      Authorization: `Bearer ${access}`
-    }
+// `access` is still accepted so the ~40 call sites stay unchanged, but the
+// proxy overrides this header from the httpOnly cookie, which is authoritative.
+export const getData = async (url: string, access?: string) => {
+  const response = await axiosInstance.get(url, {
+    headers: access ? { Authorization: `Bearer ${access}` } : undefined
   });
   return response.data;
 };

@@ -10,8 +10,6 @@
   import * as Table from '$lib/components/ui/table';
   import * as Dialog from '$lib/components/ui/dialog';
   import { Plus, Search, Trash } from 'lucide-svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   import { Switch } from '$lib/components/ui/switch/index.js';
   import { toast } from 'svelte-sonner';
   import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
@@ -69,7 +67,7 @@
     isSearching = true;
     try {
       const response = await fetch(
-        `${PUBLIC_API_URL}/users/search?search=${encodeURIComponent(search)}&role=Startup`,
+        `/api/users/search?search=${encodeURIComponent(search)}&role=Startup`,
         {
           method: 'GET',
           headers: {

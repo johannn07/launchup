@@ -22,9 +22,6 @@
   type AssessmentType = { id: number; name: string };
   type AssessmentField = { id: number; label: string; answerTypeCode: number };
 
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
-
   let types: AssessmentType[] = [];
   let selectedType: AssessmentType | null = null;
   let fields: AssessmentField[] = [];
@@ -36,7 +33,7 @@
   let editingField: Partial<AssessmentField> & { id?: number } = {};
 
   async function fetchTypes() {
-    const res = await fetch(`${PUBLIC_API_URL}/assessment/types`, {
+    const res = await fetch(`/api/assessment/types`, {
       headers: { Authorization: `Bearer ${access}` }
     });
     const raw = await res.json();
@@ -53,7 +50,7 @@
 
   async function fetchFields() {
     if (!selectedType) return;
-    const res = await fetch(`${PUBLIC_API_URL}/assessment/types/${selectedType.id}/fields`, {
+    const res = await fetch(`/api/assessment/types/${selectedType.id}/fields`, {
       headers: { Authorization: `Bearer ${access}` }
     });
     fields = await res.json();
@@ -61,7 +58,7 @@
 
   async function createType() {
     if (!createTypeName.trim()) return;
-    await fetch(`${PUBLIC_API_URL}/assessment/types`, {
+    await fetch(`/api/assessment/types`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
       body: JSON.stringify({ name: createTypeName.trim() })
@@ -72,7 +69,7 @@
 
   async function renameType() {
     if (!selectedType) return;
-    await fetch(`${PUBLIC_API_URL}/assessment/types/${selectedType.id}`, {
+    await fetch(`/api/assessment/types/${selectedType.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
       body: JSON.stringify({ name: renameTypeName })
@@ -82,7 +79,7 @@
 
   async function deleteType() {
     if (!selectedType) return;
-    await fetch(`${PUBLIC_API_URL}/assessment/types/${selectedType.id}`, {
+    await fetch(`/api/assessment/types/${selectedType.id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${access}` }
     });
@@ -105,13 +102,13 @@
     } as any;
 
     if (editingField.id) {
-      await fetch(`${PUBLIC_API_URL}/assessment/fields/${editingField.id}`, {
+      await fetch(`/api/assessment/fields/${editingField.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
         body: JSON.stringify(payload)
       });
     } else {
-      await fetch(`${PUBLIC_API_URL}/assessment/fields`, {
+      await fetch(`/api/assessment/fields`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${access}` },
         body: JSON.stringify(payload)
@@ -123,7 +120,7 @@
   }
 
   async function removeField(id: number) {
-    await fetch(`${PUBLIC_API_URL}/assessment/fields/${id}`, {
+    await fetch(`/api/assessment/fields/${id}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${access}` }
     });

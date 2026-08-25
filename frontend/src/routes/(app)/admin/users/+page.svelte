@@ -6,8 +6,6 @@
   import { Label } from '$lib/components/ui/label';
   import * as Select from '$lib/components/ui/select';
   import { Plus, Edit2, Trash2, Users, Loader2 } from 'lucide-svelte';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   let { data } = $props<{ data: { users: Array<any>; access: string } }>();
   let users = $state(data.users);
@@ -54,7 +52,7 @@
     createError = null;
 
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/admin/users/create-json`, {
+      const res = await fetch(`/api/admin/users/create-json`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -107,7 +105,7 @@
 
     try {
       const res = await fetch(
-        `${PUBLIC_API_URL}/admin/users/edit-json/${toEdit.id}`,
+        `/api/admin/users/edit-json/${toEdit.id}`,
         {
           method: 'POST',
           headers: {

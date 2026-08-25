@@ -2,7 +2,6 @@
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import { Label } from '$lib/components/ui/label';
-  import { PUBLIC_API_URL } from '$env/static/public';
   import { Layers, Plus, Save, Trash2, Settings2, Loader2, Check } from 'lucide-svelte';
 
   import { toast } from 'svelte-sonner';
@@ -26,7 +25,7 @@
     try {
       const payload = tiers.map(t => ({ tierLabel: t.tierLabel, threshold: Number(t.threshold) }));
 
-      const res = await fetch(`${PUBLIC_API_URL}/admin/tiers/update`, {
+      const res = await fetch(`/api/admin/tiers/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.access}` },
         body: JSON.stringify(payload)

@@ -50,10 +50,9 @@ export const actions = {
         cookies.set('Access', data.access_token, {
           path: '/',
           httpOnly: true,
-          // Deployed, the frontend and backend are different sites, so 'strict'
-          // stops the browser attaching this to client-side API calls. 'none'
-          // requires secure, which !dev already gives outside dev.
-          sameSite: dev ? 'strict' : 'none',
+          // Safe at 'strict': client-side API calls go through the same-origin
+          // /api proxy, so nothing needs this cookie in a cross-site context.
+          sameSite: 'strict',
           maxAge: 60 * 5 * 60,
           secure: !dev
         });

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
   export let stepName: string;
   export let currentStep: string;
   import { Input } from '$lib/components/ui/input/index.js';
@@ -71,7 +69,7 @@
 
     try {
       const response = await fetch(
-        `${PUBLIC_API_URL}/startups/parse-capsule-proposal`,
+        `/api/startups/parse-capsule-proposal`,
         {
           method: 'POST',
           headers: {

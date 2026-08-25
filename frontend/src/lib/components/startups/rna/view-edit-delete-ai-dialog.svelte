@@ -11,8 +11,6 @@
   import { TextEditor } from '$lib/components/shared';
   import { tick } from 'svelte';
   import { Input } from '$lib/components/ui/input';
-  import { env } from '$env/dynamic/public';
-  const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
   type ChatMessage = {
     id?: number;
@@ -47,7 +45,7 @@
     isLoadingHistory = true;
     try {
       const response = await fetch(
-        `${PUBLIC_API_URL}/chat-history/rna/${rna.id}`
+        `/api/chat-history/rna/${rna.id}`
       );
       if (!response.ok) throw new Error('Failed to load chat history');
       const history = await response.json();
@@ -100,7 +98,7 @@
     isLoading = true;
 
     try {
-      const response = await fetch(`${PUBLIC_API_URL}/rna/${rna.id}/refine`, {
+      const response = await fetch(`/api/rna/${rna.id}/refine`, {
         method: 'POST',
         // Raw fetch, not the shared axios instance, so it does not inherit
         // withCredentials. Without this the httpOnly Access cookie is not sent
