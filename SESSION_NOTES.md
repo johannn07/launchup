@@ -719,18 +719,45 @@ rebuilt with `git show HEAD:<path> > <path>` and the edits re-applied. Use
 `npx eslint --no-fix src/<path>`, and judge against a baseline of **291 errors on
 an untouched file**, not zero.
 
+### Merge and deploy readiness
+
+Four commits, **fast-forward onto master** (master is an ancestor), 8 files, and
+**no entity or migration files touched** — so the boot `updateSchema()` is a
+no-op for this diff. Backend **315/315** across 29 suites; `nest build` exits 0
+and emits `dist/src/main.js`, the path Render's start-command override points at.
+`svelte-check` **119/14, unchanged from baseline**. The frontend build completes
+both vite phases (client and server bundles, the `/api` endpoint compiled) and
+fails only at adapter-vercel's Windows symlink step — the documented Windows-only
+limitation, and the same state the previous successful deploys were in.
+
+**Deploy the backend before the frontend.** `?readinessTypes=` is additive, so an
+old frontend against a new backend is fine; the reverse is not — the picker would
+send a parameter the old backend ignores, and generation would silently gap-fill
+instead of regenerating. Wrong behaviour rather than an error, so it would not
+announce itself.
+
+### The picker removes an accidental quota ceiling
+
+The old Generate button disabled itself once all six dimensions had an RNA, so a
+mentor could not spend further calls on a completed startup. Regeneration is now
+always available, against a free tier of roughly **20 calls/day**. This is the
+approved design, not a regression, but it sharpens the constraint the last
+session already recorded: for a 30-user study, pre-seed the AI artifacts so
+testers review output rather than generate it.
+
 ### Open
 
-- **The shared `dropdown-menu-content.svelte` fix** — every pre-existing
-  CheckboxItem dropdown still locks the page.
-- The branch is unpushed and unreviewed; John tests before anything reaches
+- The branch is **unpushed and unreviewed**; John tests before anything reaches
   master.
 - Last session's two production-hygiene items are untouched: `debug: true`
-  logging SQL parameters to Render, and `main.ts` re-seeding on every redeploy.
+  logging SQL parameter values to Render, and `main.ts` re-seeding demo data on
+  every redeploy.
+- Dev servers on 3000 and 5173 were stopped to free `dist/` for the production
+  build — restart them before testing.
 
 ### Next step
 
-John tests `feat/rna-dimension-picker` locally — the vite fix is what makes that
-possible at all. Then decide the shared dropdown fix, and close the two
-production-hygiene items before a second account exists. The midterm critical
-path is still the SPMP and traceability matrix.
+John tests `feat/rna-dimension-picker` locally; the vite fix is what makes that
+possible at all. If it holds, merge (fast-forward) and deploy **backend first**.
+Then close the two production-hygiene items before a second account exists. The
+midterm critical path is unchanged: the SPMP and the traceability matrix.
