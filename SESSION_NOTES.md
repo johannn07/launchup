@@ -379,251 +379,49 @@ VS Code's `git.postCommitCommand` setting is unresolved.
 
 ---
 
-## 2026-08-23 — the three linked controls, all silent, all now doing what their names say
+## Compressed — 2026-08-23 (the three linked controls)
 
-Branch `fix/silent-controls`, **3 commits, local, nothing pushed.** `master` is
-an ancestor, so it fast-forwards. Zero Gemini generation calls.
+Merged as **PR #33** (`0ab8b48`). Three signals that were computed correctly and
+then ignored; each hid a second defect only a live check could find. Zero Gemini
+calls.
 
-The three problems proposed 2026-08-22 and untouched since. They share one
-shape — **a signal computed correctly and then ignored** — and each turned out
-to hide a second defect that only a live check could find.
+**4c flag now gates the paths it names.** `generateRoadblocksFromPrompt` carried
+the identical defect and was on no list. **But both normalization outputs —
+`target_level_normalized` and `riskNumber_normalized` — have zero live
+consumers**, so this is provenance-correctness only: it stops a run stamped
+`scoreNormalization: false` from carrying normalized values. **Do not present it
+as a user-facing fix.**
 
-### 1. `AI_SCORE_NORMALIZATION_ENABLED` now gates the paths it names
+**Mentor baseline revision.** A mentor-only "Revise baseline scores" button.
+Live-verified on a throwaway startup with six distinct values (`T7 A2 M5 O8 R3
+I6` — uniform values cannot detect dimension mis-mapping): Technology 7 → 4
+updated row 20 in place, count still 6. Replaced dead `readiness()`, whose empty
+branch returned lowercase keys and success branch capitalised ones.
 
-The scope check the item demanded changed the item. `generateInitiativesFromPrompt`
-and the RNA path do **not** normalize — but **`generateRoadblocksFromPrompt`
-carries the identical defect and was on no list.** Both now return the model's
-output untouched when the flag is off.
+**SO 4.4 gained an action.** Approving a flagged application requires the Manager
+to acknowledge review, recorded in `activity_logs`. Enforced in `approveApplicant`,
+not the dialog — the route takes a client-controlled body, so a disabled button
+is not a control. Live: flagged + unacknowledged → **409**, status stays PENDING,
+0 log rows; acknowledged → QUALIFIED, exactly 1 row; balanced (ratio 0.800) →
+approves unblocked, log unchanged. Confirmed independently by John from the
+database side.
 
-**Absence of the fields, not raw-valued ones:** `rns.service.ts:433` reads
-`target_level_normalized ?? rawTarget`, so omitting them yields deviation 0.
+**Two defects promoted to standing notes**, both of which passed green tests:
+a missing `populate` meant the gate silently never fired and the first live
+request approved a flagged application; and a guard using
+`JSON.stringify(obj, keysArray)` compared `{}` to `{}` — it would have passed
+while ground-truth levels were overwritten.
 
-**The "do not do this silently" caveat resolved clean:** `backend/measurement/`
-references neither function, so no stored measurement result was produced
-through these paths. The test pinning the old behaviour was inverted in the
-same commit, and `generateRoadblocksFromPrompt` **had no unit test at all**.
+Gates at the tip: jest **308/308** (28 suites), measurement **257/257**,
+`tsc --noEmit` 0, `svelte-check` **119/14** unchanged from baseline, **0 entity
+or migration files touched**.
 
-**Found and logged, not fixed:** `riskNumber_normalized` has **zero consumers
-anywhere in either app** — computed, appended, discarded. See `TODO_CHECKLIST` §4.
-
-### 2. A mentor can correct a baseline score
-
-The rated view carries a mentor-only **"Revise baseline scores"** button opening
-the same form seeded from stored levels, with Cancel. Chosen over an
-always-visible form so a normal visit has no stray-click surface.
-
-**`readiness()` (`+page.svelte:141`) was dead code** — defined, never consumed —
-and carried a real latent bug: its empty branch returned **lowercase** keys while
-its success branch returned **capitalised** ones. Deleted and replaced by
-`frontend/src/lib/readiness-baseline.ts`, which always returns all six keys
-because a partial record posts `undefined` into an upsert.
-
-**Live-verified on a throwaway startup**, guarded before and after on AgroLink's
-and MediSync's exact levels: six *distinct* values `T7 A2 M5 O8 R3 I6` (uniform
-values cannot detect dimension mis-mapping), button survives a reload, Revise
-seeds all six, and **Technology 7 → 4 updated row id 20 in place with the count
-still 6** — the upsert's update branch running from the app for the first time.
-Cancel discards.
-
-**The frontend has no test runner at all** — zero test deps, zero test files.
-Agreed approach: extract the pure rule, verify live, and log adding a runner
-rather than smuggle a dependency into a bugfix branch.
-
-### 3. SO 4.4 — the flag now has an action
-
-**Approving an application whose summary is flagged requires the Manager to
-confirm they reviewed it against its unmet criteria**, and the approval writes
-an `activity_logs` row with their identity, the verdict and its source.
-Unflagged approvals are unchanged and log nothing, so the log means "approved
-against a warning" rather than being an access log. No new entity, **no schema
-change** — which matters because `main.ts` runs `updateSchema()` every boot.
-
-**Why approval specifically, and why not a hard block.** The Manager's role in
-this system is the **admissions decision** — Applications module, unscoped
-`findAllForUser`, approve/waitlist with mentor and assessment assignment at the
-moment of approval. The summary is decision support for that one call. Blocking
-the decision authority on a heuristic calibrated at n=10 inverts the hierarchy
-and leaves no legitimate override, so the action attaches to the decision
-without removing it. Waitlisting is deliberately ungated.
-
-**Enforced in `approveApplicant`, not in the dialog.** The route is
-`JwtGuard`-only and takes a client-controlled body, so a disabled button is not
-a control. It reuses `attachSummaryVerdicts` so the gate cannot refuse an
-approval for a summary the badge showed as balanced.
-
-#### The defect that matters most this session
-
-**`findOne` had no `populate`, so the gate silently never fired — past four
-green unit tests.** The relation loaded as an id-only reference
-(`select "s0".*, "c1"."id"`), `aiAnalysisSummary` read `undefined`,
-`attachSummaryVerdicts` early-returned, and the very first live request
-**approved a flagged application**. No mock-level test could have caught it: the
-mock hands back a fully-formed `capsuleProposal`. Promoted to a standing note.
-
-**Second defect, pre-existing:** `approveStartup` swallowed non-ok responses
-while the dialog reported success regardless — a 409 would have rendered as
-*"Startup has been approved successfully"*. It now throws with the server's
-message and the dialog surfaces it. **Without this fix the gate would have been
-invisible even while working.**
-
-**Live-verified** on a throwaway pending application with a verifiably flagged
-summary (ratio 0.000), plus a balanced control (ratio 0.800):
-
-| step | result |
-|---|---|
-| flagged, no acknowledgement | **409**, status stays PENDING, **0** log rows |
-| flagged, acknowledged | approved, status QUALIFIED, **1** row naming `manager@launchup.local` |
-| balanced, no acknowledgement | approved unblocked, log count **unchanged** |
-| browser, mentor assigned, unticked | Approve **disabled** — mentor assigned first, so the checkbox is the only blocker |
-| browser, ticked | Approve enabled; full approval reaches the database |
-
-The 409 body is readable cross-origin, which is the path the new error handling
-reads.
-
-### A guard of mine was vacuous, and it passed twice
-
-The ground-truth guard used `JSON.stringify(obj, Object.keys(...).sort())`. A
-replacer **array** filters keys at every level, so the root's `1`/`2` were
-stripped and it compared `{}` to `{}` — **it would have passed while the
-measurement levels were being overwritten.** Caught before any write, fixed with
-a recursive canonicaliser, and then *proved* to reject a deliberately wrong
-value. Same family as 2026-08-22's `grep -o "Error:.*"`. Promoted to a standing
-note.
-
-### Gates at the tip
-
-Backend jest **308/308 across 28 suites** (301 at the previous tip), `tsc
---noEmit` 0, `svelte-check` **119/14 — unchanged from baseline**, with neither
-new frontend file appearing in the output and the extractor proven non-vacuous
-(119 `Error:` matches). **No entity or migration is touched.**
-
-Mutations, all killed, each asserted to have landed *and* changed behaviour:
-disabling the tasks guard; inverting the roadblock guard; disabling the
-approval gate; logging every approval; removing the `populate`.
-
-### Open
-
-- **3c is still blocked only on the ten handwritten samples.** CER harness
-  design agreed, unwritten; SUS owned by the team and must exist *before* the
-  sample-writing sitting.
-- **RNA generation quality remains unmeasured** — every grounding figure is the
-  levels probe. Needs a harder probe, not more reps.
-- **Metric 3 beyond the FAIL** — a separately pre-registered per-startup floor,
-  scored on new data. Calibrating on the 2026-08-20 run is the forbidden move.
-- **The frontend has no test runner** (`TODO_CHECKLIST` §4).
-- Unchanged open decisions: production cookie policy; `readinesslevel`
-  unguarded (and its caller sends no credentials, so guarding it alone repeats
-  the PR #15 trap); admissions endpoints not restricted to Manager/Admin; RNS
-  correlation-key uniqueness; stale verdicts on artifact edit.
-
-### Not verified, and must not be claimed
-
-- **The failure toast itself was not observed.** The 409 and the readability of
-  its message were verified; the `toast.error` render was not.
-- The acknowledgement is **per-approval, not per-session** — a Manager who
-  reopens the dialog must tick again. Deliberate, but untested across a reload.
-
-### Manual verification by John — both features confirmed from the database side
-
-John tested items 1 and 3 in the browser after the branch was built. The state
-left in Neon is independent confirmation, not a report:
-
-- **Startup 10** (flagged, pending fixture) went **Pending → Qualified** with
-  exactly **one** `activity_logs` row naming `manager@launchup.local`. The
-  acknowledged-approval path works end to end through the UI.
-- **Startup 11** (rated fixture) reads `Technology=4` with `A2 M5 O8 R3 I6`
-  untouched. The revise flow updated **one dimension in place** — the upsert's
-  update branch, reached from the app.
-- **AgroLink and MediSync unchanged** throughout, asserted before and after
-  every fixture command.
-
-`backend/probe-manual-test.js` provides `setup` / `status` / `teardown` for this,
-each guarded on the 2026-08-05 ground truth and refusing to run if it has moved.
-**Untracked at time of writing** — decide whether to keep it as a dev utility or
-delete it.
-
-### Item 2 has no user-visible effect, and that was discovered late
-
-While writing the manual test steps it turned out **`target_level_normalized`
-has no live consumer either**. Its only reader (`rns.service.ts:433`) feeds a
-`deviation` const on the next line that is **never used** — `recordBiasAudit`
-is passed a different expression on `:440`. So both normalization outputs are
-unconsumed, and the 4c flag fix is **provenance-correctness only**: it stops an
-`ai_generation_runs` row stamped `scoreNormalization: false` from carrying
-normalized values, and it saves a `normalizeScore` call per task and roadblock.
-Nothing in the UI changes. The checklist claim that it "has exactly one
-consumer" was corrected in `ea3d9f0`.
-
-**Do not present item 2 as a user-facing fix.** It is an attribution fix inside
-the table built to make measurement arms attributable.
-
-### A caveat on what the audit trail proves
-
-The `activity_logs` row is written with `action: 'Manager'`, but
-`approve-applicant` is `@UseGuards(JwtGuard)` only — the deferred §1 P1 item.
-**Any authenticated user, including a `Startup`-role account, can still call
-it.** The gate makes them acknowledge and records whoever they are in `actor`,
-so the row is honest about identity; the `'Manager'` string is an assumption,
-not an enforced fact. This bounds what the audit trail proves and is worth
-saying plainly rather than being asked.
-
-### Merge readiness — gates re-run at the tip after testing
-
-| gate | result |
-|---|---|
-| backend jest | **308/308**, 28 suites |
-| measurement | **257/257** |
-| `tsc --noEmit` | exit 0 |
-| `svelte-check` | **119 / 14** — unchanged from baseline, extractor proven non-vacuous (119 `Error:` matches) |
-| merge shape | `master` is an ancestor → **fast-forward** |
-| entity / migration files touched | **0** |
-
-Five commits: three fixes, two docs. The zero on the last row is the one that
-matters operationally — `main.ts` runs `updateSchema()` on every boot, so a
-branch touching no entity cannot move the schema.
-
-### State at session end
-
-**Not merged, not pushed.** Outstanding before or alongside the merge:
-
-1. **Fixtures 10 and 11 are still in Neon**, plus one `activity_logs` row.
-   Harmless, but they appear in the Applications list during a demo.
-   `node probe-manual-test.js teardown` removes them, guard-checked.
-2. **`backend/probe-manual-test.js` is untracked** — keep as a dev utility or delete.
-3. **The failure toast was never observed.** The 409 and the cross-origin
-   readability of its message are verified; the `toast.error` render is not.
-
-> **Resolved since (2026-08-23, later):** merged as PR #33 (`0ab8b48`), the probe
-> kept and tracked, the fixtures and their log row torn down. **The toast is still
-> unobserved** — item 3 stands.
-
-### Next step
-
-**Merge `fix/silent-controls` to `master` locally** (fast-forward), after the
-fixture teardown. Nothing is pushed without asking.
-
-Then the §0 work that is not externally blocked is **thin**, and that is the
-real headline for planning:
-
-- **3c is blocked only on the ten handwritten samples** — the single largest
-  remaining objective, and it cannot start here. The CER harness design is
-  agreed but unwritten; SUS is the team's and must exist *before* the
-  sample-writing sitting, because that is the only natural chance to catch
-  respondents straight after use.
-- **RNA generation quality is still unmeasured.** Every grounding figure is the
-  levels probe, a harness construct; production's RNA path retrieves 12 rubric
-  rows rather than 54. Needs a harder probe, not more reps. This is the most
-  valuable *unblocked* measurement left.
-- **Metric 3 beyond the FAIL** — a separately pre-registered per-startup noise
-  floor, scored on new data. Re-scoring the 2026-08-20 run under one is the
-  forbidden move.
-- **4b's remaining half** (the readiness-*scoring* path) is a larger job than a
-  prompt change and was deliberately deferred on 2026-08-18.
-
-Recommendation: **merge, then take the RNA generation probe**, because it is
-the only item on that list that is both unblocked and load-bearing for an
-Objective 1 claim. Everything else is either waiting on the samples or is a
-second measurement of something already measured.
+**Still open from this session:** the failure toast was never observed (the 409
+and its cross-origin readability were); the acknowledgement is per-approval, not
+per-session, and untested across a reload; and the audit trail's `action:
+'Manager'` is an assumption, not an enforced fact — `approve-applicant` is
+`JwtGuard`-only, so any authenticated user can call it. `actor` is honest about
+identity. The frontend still has no test runner.
 
 ---
 
@@ -774,3 +572,126 @@ Full arm × condition table and the complete verdict live in
 step: a stronger manipulation or a document/level pair where the rubric
 criterion is unambiguously already met — pre-registered before it runs, same
 as this one was.
+
+---
+
+## 2026-08-25 — first deployment of this codebase, and a cookie that could never have worked
+
+Two threads: midterm planning, and getting both apps deployed for the first
+time. PRs **#35, #36, #37**, all merged; tip `b93e213`. Zero Gemini generation
+calls.
+
+- Backend: Render free — `https://launchup-4w6d.onrender.com` (Render suffixed
+  the name; `launchup-api` was not granted)
+- Frontend: Vercel — `https://launchup-enhanced.vercel.app`
+
+**The live `launchup.vercel.app` / `launchup.onrender.com` pair is the previous
+team's.** This codebase had never been deployed at all — a different problem
+from a broken deployment, because there was no working configuration to restore.
+
+### Four failures, in the order they appeared
+
+1. **`nest: not found`.** Render sets `NODE_ENV=production`, so pnpm skips
+   devDependencies and `@nestjs/cli` disappears. Build command must be
+   `pnpm install --prod=false && pnpm build`.
+2. **`Cannot find module dist/main` — `pnpm start` has never worked here.** The
+   standing note that `nest build` emits to `dist/src/` (because `seed-dummy.ts`
+   sits at the backend root) already existed; `package.json`'s `start` script is
+   an unfixed instance of it, invisible locally because `pnpm dev` never reads
+   that path. Render's start command is overridden to `node dist/src/main`.
+   **`package.json` itself is still wrong** — see `TODO_CHECKLIST` §4.
+3. **No shell on Render's free tier** (paid-only), so the RAG corpus cannot be
+   seeded after deploy. Moved into the build command instead, which is safe only
+   because the seeder is idempotent: first run reported `0 created, 0 updated,
+   64 unchanged, 0 embedded, 0 failed` — the Neon `production` branch inherited
+   the corpus as a copy-on-write clone of `main`.
+4. **`Unsupported Node.js version: v22`.** Deleting `frontend/vercel.json`
+   removed a **load-bearing** `NODE_VERSION=20` pin: `adapter-auto@3` resolves to
+   `adapter-vercel@4`, which recognises only Node 18 and 20. Pinning back to
+   Node 20 fixes the build and breaks local dev, since pnpm enforces `engines`
+   and everyone is on 22. Fixed by dropping `adapter-auto` for
+   `adapter-vercel@6` — which the build log itself recommends.
+
+### The cross-domain cookie — and why `axios.ts`'s comment was wrong
+
+Pages rendered, every guarded client-side call returned 401, and the preflight
+returned 204, so CORS was never the problem.
+
+**`sameSite` was never the obstacle either.** The `Access` cookie is set by
+SvelteKit and scoped to the frontend's own host, and a browser picks cookies by
+**destination** host — so nothing held for `vercel.app` can be sent to
+`onrender.com`. Different registrable domains cannot share a cookie, whatever
+SameSite says; SameSite only governs a cookie that already matches.
+**Locally both apps are `localhost`, and cookies ignore ports**, so this
+mismatch cannot appear in development. The `sameSite: 'none'` change shipped
+earlier the same day was harmless and pointless.
+
+The network tab split the case cleanly: `getData()` in `lib/utils.ts` sends an
+explicit `Authorization: Bearer` header and worked cross-domain; everything
+relying on `withCredentials` failed. Same origin, same session, same backend —
+only the credential channel differed.
+
+Fixed with a same-origin proxy (`routes/api/[...path]/+server.ts`) that swaps
+the cookie for a Bearer header: axios `baseURL: '/api'` covering 19 callers, 49
+direct fetch sites across 16 components rewritten, `getData` dropped its
+absolute prefix. The 13 `.server.ts` files are untouched — they hold the token
+already. `sameSite` reverted to `'strict'`, correct again and stricter than the
+state that shipped.
+
+### New finding — the httpOnly cookie is partly defeated
+
+`getData(url, access)` takes the raw JWT from `data.access`, so **the token is
+serialised into the page payload the browser receives.** Any XSS reads it out of
+hydration data without needing cookie access. The proxy makes the argument
+unnecessary; removing it means dropping `data.access` from the layout load and
+the parameter from ~40 call sites. Logged in `TODO_CHECKLIST` §1.
+
+### Midterm planning
+
+Course targets read against the repo. Recommended framework: **TAM primary, with
+SUS and task success / time-on-task supporting**, and the existing measurement
+harness presented as a separate output-quality layer rather than a substitute.
+System type settled as **business/organisational workflow tooling** — the
+educational frameworks and SBCVM are both out, the latter being the trap, since
+the domain is startups but the deliverable is not a startup concept.
+
+**Two deliverables are at zero: the SPMP and the traceability matrix.** Neither
+exists in the repo or the capstone folder. `TODO_CHECKLIST` §0 is already most
+of a traceability matrix and needs SRS requirement IDs, not a rewrite.
+
+### Verified from outside
+
+Backend `200` in 0.24 s; CORS preflight `204` with the correct
+`access-control-allow-origin` and `-credentials`; frontend landing and `/login`
+`200`; `/startups` while logged out `302 → /login?redirectTo=%2Fstartups`, which
+proves `hooks.server.ts` runs and — since `JWT_SECRET` is a build-time static
+import — that the secret is present. Login confirmed by John for both
+`demo@` and `admin@`.
+
+`svelte-check` **119/14 across 43 files, unchanged from master**, with none in
+the touched files. Local `pnpm build` completes both vite phases and then fails
+on Windows symlink permissions, which does not apply to Vercel's Linux builders
+— so the proxy is **verified as far as this machine allows, not end to end**.
+
+### Open
+
+- **Retest Readiness Level after the proxy deploy** — `POST /api/readiness/score`
+  should return 200 on the app's own origin.
+- **Gemini ~20 calls/day is the binding constraint on the 30-user study.**
+  Pre-seed the AI artifacts so testers review output rather than generate it —
+  which is the product's real workflow anyway.
+- `debug: true` (`mikro-orm.config.ts:26`) sends every SQL query, parameter
+  values included, to Render's logs.
+- `main.ts` seeds on every boot, so each redeploy re-seeds demo data into the
+  production database.
+- Render free spins down after 15 minutes with a ~1 minute cold start. Warm it
+  before validation sessions.
+- IDOR and the admissions endpoints are still `JwtGuard`-only — now behind a
+  public URL rather than localhost.
+
+### Next step
+
+Confirm the proxy in the browser, then close the two production-hygiene items
+(`debug: true`, boot seeding) before any second account exists. After that the
+midterm critical path is the SPMP and traceability matrix, which compete for the
+same two weeks as the 30-user study.
