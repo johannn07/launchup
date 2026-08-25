@@ -107,7 +107,7 @@ Every AI generation call opens an `ai_generation_runs` row (via `AiRunService.tr
 
 Structured outputs should still use `responseMimeType: 'application/json'` + `responseSchema` rather than the current regex fence-stripping in `extractJsonPayload` — that part is unchanged.
 
-**`PROJECT_OVERVIEW.md` and `TODO_CHECKLIST.md` in the repo root are the maintained reference** for architecture, known gaps, and prioritized work. Read them before a broad change; update them when findings change.
+**`docs/ARCHITECTURE.md` and `TODO_CHECKLIST.md` are the maintained reference** for architecture, known gaps, and prioritized work. Read them before a broad change; update them when findings change.
 
 ### Frontend (SvelteKit)
 
