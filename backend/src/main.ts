@@ -352,8 +352,12 @@ async function bootstrap() {
     origin: [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
-      'https://launchup.onrender.com',
-      'https://launchup.vercel.app',
+      // Deployed frontends. Set FRONTEND_ORIGINS (comma-separated) to add one
+      // without a code change — Vercel preview URLs are per-deployment, so
+      // client-side calls only work on whichever origins are listed here.
+      ...(process.env.FRONTEND_ORIGINS?.split(',')
+        .map((o) => o.trim())
+        .filter(Boolean) ?? []),
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

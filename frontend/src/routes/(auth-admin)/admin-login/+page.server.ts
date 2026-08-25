@@ -50,7 +50,8 @@ export const actions = {
         cookies.set('Access', data.access_token, {
           path: '/',
           httpOnly: true,
-          sameSite: 'strict',
+          // Same reason as the founder login — see (auth)/login/+page.server.ts.
+          sameSite: dev ? 'strict' : 'none',
           maxAge: 60 * 5 * 60,
           secure: !dev
         });
