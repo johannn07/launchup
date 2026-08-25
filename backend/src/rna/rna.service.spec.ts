@@ -561,3 +561,114 @@ describe('RnaService.getRNAbyId verdict join (Task 5)', () => {
     expect(result).not.toHaveProperty('generationRun');
   });
 });
+
+describe('RnaService.generateRNA dimension selection', () => {
+  // Technology has no RNA, Market already has one. Gap-fill alone would pick
+  // Technology, so asking for Market only fails unless the filter is applied.
+  function buildFixture() {
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: { title: 't', description: 'd', objectives: 'o', scope: 'sc' },
+    };
+
+    const technology = { id: 100, readinessType: 'Technology', level: 3 };
+    const market = { id: 101, readinessType: 'Market', level: 4 };
+
+    const em = {
+      findOne: jest.fn((entity: any) =>
+        Promise.resolve(entity === Startup ? startup : null),
+      ),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA)
+          return Promise.resolve([{ id: 1, readinessLevel: market }]);
+        if (entity === StartupReadinessLevel)
+          return Promise.resolve([
+            { id: 200, readinessLevel: technology },
+            { id: 201, readinessLevel: market },
+          ]);
+        return Promise.resolve([]);
+      }),
+      persist: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const aiService = {
+      // Returns both dimensions: whichever ones were targeted get matched and
+      // persisted, so the result reflects the filter, not the AI response.
+      generateRNAsFromPrompt: jest.fn().mockResolvedValue([
+        { readiness_level_type: 'Technology', rna: 'Technology RNA.' },
+        { readiness_level_type: 'Market', rna: 'Market RNA.' },
+      ]),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+    };
+
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({ model: 'gemini-3.6-flash', temperature: 0 }),
+    } as any;
+
+    const service = new RnaService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    return { service, ctx, aiService, ragQueryService };
+  }
+
+  it('generates only the requested dimension, even when it already has an RNA', async () => {
+    const { service, ctx } = buildFixture();
+
+    const created = await service.generateRNA(1, ctx, ['Market'] as any);
+
+    expect(created.map((r: any) => r.readinessLevel.readinessType)).toEqual([
+      'Market',
+    ]);
+  });
+
+  it('retrieves RAG context for the requested dimension only', async () => {
+    const { service, ctx, ragQueryService } = buildFixture();
+
+    await service.generateRNA(1, ctx, ['Market'] as any);
+
+    expect(ragQueryService.queryVectorDatabase).toHaveBeenCalledWith(
+      '1',
+      expect.objectContaining({
+        dimensions: [{ readinessType: 'Market', level: 4 }],
+      }),
+    );
+  });
+
+  it('rejects a dimension the startup has no rated readiness level for', async () => {
+    const { service, ctx } = buildFixture();
+
+    await expect(
+      service.generateRNA(1, ctx, ['Investment'] as any),
+    ).rejects.toThrow('Investment');
+  });
+
+  it('still fills every gap when no dimensions are requested', async () => {
+    const { service, ctx } = buildFixture();
+
+    const created = await service.generateRNA(1, ctx);
+
+    expect(created.map((r: any) => r.readinessLevel.readinessType)).toEqual([
+      'Technology',
+    ]);
+  });
+});
