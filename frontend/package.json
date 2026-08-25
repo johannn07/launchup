@@ -12,7 +12,7 @@
     "lint": "prettier --check . && eslint ."
   },
   "devDependencies": {
-    "@sveltejs/adapter-auto": "^3.3.1",
+    "@sveltejs/adapter-vercel": "^6.3.4",
     "@sveltejs/kit": "^2.43.2",
     "@sveltejs/vite-plugin-svelte": "^4.0.4",
     "@tailwindcss/typography": "^0.5.18",
