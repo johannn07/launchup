@@ -62,12 +62,16 @@
       </Breadcrumb.Item>
     </Breadcrumb.List>
   </Breadcrumb.Root>
-  <div class="flex items-center justify-between">
-    <div>
-      <h2 class="text-3xl font-bold">
-        {$startupQuery.isLoading ? 'Loading...' : info.name}
-      </h2>
-    </div>
-  </div>
+  <div class="flex flex-col items-center gap-2 py-2">
+  <span
+    class="rounded-full px-2.5 py-1 text-[11px] font-medium tracking-wide text-indigo-300"
+    style="background: rgba(124, 111, 240, 0.1)"
+  >
+    STARTUP
+  </span>
+  <h2 class="text-4xl font-bold tracking-tight text-white">
+    {$startupQuery.isLoading ? 'Loading...' : info.name}
+  </h2>
+</div>
   {@render children()}
 </div>

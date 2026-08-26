@@ -16,6 +16,8 @@
   import { Badge } from '$lib/components/ui/badge';
   import * as Select from '$lib/components/ui/select';
   import { Checkbox } from '$lib/components/ui/checkbox';
+  import { CircleCheck, Info } from 'lucide-svelte';
+  import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
 
   const { data } = $props();
   const { access, startupId } = data;
@@ -271,7 +273,14 @@
       }) || []
     );
   });
-
+  const typeConfig: Record<string, { icon: any; accent: string; ring: string; bar: string }> = {
+    Technology:     { icon: Cpu,          accent: 'text-indigo-400 bg-indigo-500/10',  ring: 'group-hover:border-indigo-500/50',  bar: 'bg-indigo-400' },
+    Market:         { icon: TrendingUp,   accent: 'text-blue-400 bg-blue-500/10',      ring: 'group-hover:border-blue-500/50',    bar: 'bg-blue-400' },
+    Acceptance:     { icon: CheckCircle2, accent: 'text-emerald-400 bg-emerald-500/10',ring: 'group-hover:border-emerald-500/50', bar: 'bg-emerald-400' },
+    Organizational: { icon: Building2,    accent: 'text-violet-400 bg-violet-500/10',  ring: 'group-hover:border-violet-500/50',  bar: 'bg-violet-400' },
+    Regulatory:     { icon: ShieldCheck,  accent: 'text-rose-400 bg-rose-500/10',      ring: 'group-hover:border-rose-500/50',    bar: 'bg-rose-400' },
+    Investment:     { icon: Wallet,       accent: 'text-amber-400 bg-amber-500/10',    ring: 'group-hover:border-amber-500/50',   bar: 'bg-amber-400' }
+  };
   const readinessTypes = getReadinessTypes();
 
   // Group assessments by readiness type
@@ -304,69 +313,90 @@
 {/if}
 
 {#snippet hasAssessments()}
-  {#if data.role === 'Startup'}
-    <h1>
-      Your application has been approved. Please complete the following
-      readiness assessments
-    </h1>
-  {:else}
-    <h1>
-      Here are the current assessments of the startup. Click on "View
-      Assessment" to see their progress.
-    </h1>
-  {/if}
+    {#if data.role === 'Startup'}
+      <div class="mt-2 flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+        <CircleCheck class="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
+        <p class="text-sm font-medium text-emerald-100">
+          Your application has been approved. Please complete the following readiness assessments.
+        </p>
+      </div>
+    {:else}
+      <div class="mt-2 flex items-start gap-3 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-3">
+        <Info class="mt-0.5 h-5 w-5 flex-shrink-0 text-indigo-400" />
+        <p class="text-sm font-medium text-indigo-100">
+          Here are the current assessments of the startup. Click on "View Assessment" to see their progress.
+        </p>
+      </div>
+    {/if}
   <h2 class="mt-6 text-xl font-bold">Required Assessments</h2>
 
   <!-- Readiness Type Cards -->
   <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-    {#each readinessTypes as type}
-      {@const assessments = assessmentsByType()[type.name] || []}
-      {@const applicableAssessments = assessments.filter(
-        (a: any) => a.isApplicable
-      )}
-      {@const completedCount = applicableAssessments.filter((a: any) => {
-        const hasAnswer =
-          a.response?.answerValue &&
-          String(a.response.answerValue).trim() !== '';
-        return a.status === 'Completed' && hasAnswer;
-      }).length}
-      {@const pendingCount = applicableAssessments.length - completedCount}
-      {@const currentLevel = readinessLevelsByType()[type.name]}
+  {#each readinessTypes as type}
+    {@const assessments = assessmentsByType()[type.name] || []}
+    {@const applicableAssessments = assessments.filter((a: any) => a.isApplicable)}
+    {@const completedCount = applicableAssessments.filter((a: any) => {
+      const hasAnswer = a.response?.answerValue && String(a.response.answerValue).trim() !== '';
+      return a.status === 'Completed' && hasAnswer;
+    }).length}
+    {@const pendingCount = applicableAssessments.length - completedCount}
+    {@const currentLevel = readinessLevelsByType()[type.name]}
+    {@const progress = applicableAssessments.length > 0
+      ? Math.round((completedCount / applicableAssessments.length) * 100)
+      : 0}
+    {@const config = typeConfig[type.name] ?? typeConfig['Technology']}
 
-      <Card.Root
-        class={`cursor-pointer transition-all ${getReadinessStyles(type.name as any)}`}
-        onclick={() => openTypeModal(type.name)}
-      >
-        <Card.Content class="p-6">
-          <div class="mb-2 flex items-center justify-between">
-            <h3 class="text-xl font-bold">{type.name}</h3>
-            {#if currentLevel}
-              <span class="text-sm font-semibold opacity-80"
-                >Level {currentLevel}</span
-              >
-            {/if}
+    <Card.Root
+      class={`group cursor-pointer border border-zinc-800 bg-zinc-900/60 backdrop-blur-sm transition-all hover:bg-zinc-900 hover:shadow-lg hover:-translate-y-0.5 ${config.ring}`}
+      onclick={() => openTypeModal(type.name)}
+    >
+      <Card.Content class="p-5">
+        <div class="mb-4 flex items-start justify-between">
+          <div class="flex items-center gap-3">
+            <div class={`flex h-10 w-10 items-center justify-center rounded-lg ${config.accent}`}>
+              <svelte:component this={config.icon} class="h-5 w-5" />
+            </div>
+            <div>
+              <h3 class="text-base font-semibold text-white">{type.name}</h3>
+              {#if currentLevel}
+                <span class="text-xs font-medium text-zinc-400">Readiness Level {currentLevel}</span>
+              {:else}
+                <span class="text-xs font-medium text-zinc-500">Not yet rated</span>
+              {/if}
+            </div>
           </div>
-          <div class="flex items-center justify-between text-sm">
-            <span>Assessments: {assessments.length}</span>
-            {#if assessments.length > 0}
-              <div class="flex gap-2">
-                {#if pendingCount > 0}
-                  <span class="rounded-full bg-amber-500/20 px-2 py-1 text-xs text-amber-200 border border-amber-500/30">
-                    {pendingCount} Pending
-                  </span>
-                {/if}
-                {#if completedCount > 0}
-                  <span class="rounded-full bg-emerald-500/20 px-2 py-1 text-xs text-emerald-200 border border-emerald-500/30">
-                    {completedCount} Done
-                  </span>
-                {/if}
-              </div>
-            {/if}
+        </div>
+
+        <div class="mb-3 flex items-center justify-between text-sm">
+          <span class="text-zinc-400">{assessments.length} assessment{assessments.length === 1 ? '' : 's'}</span>
+          {#if assessments.length > 0}
+            <div class="flex gap-1.5">
+              {#if pendingCount > 0}
+                <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
+                  {pendingCount} Pending
+                </span>
+              {/if}
+              {#if completedCount > 0}
+                <span class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                  {completedCount} Done
+                </span>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        {#if applicableAssessments.length > 0}
+          <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+            <div
+              class={`h-full rounded-full ${config.bar} transition-all`}
+              style={`width: ${progress}%`}
+            ></div>
           </div>
-        </Card.Content>
-      </Card.Root>
-    {/each}
-  </div>
+        {/if}
+      </Card.Content>
+    </Card.Root>
+  {/each}
+</div>
 
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
