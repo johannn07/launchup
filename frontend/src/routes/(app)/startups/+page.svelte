@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Skeleton } from '$lib/components/ui/skeleton';
   import Button from '$lib/components/ui/button/button.svelte';
-  import { RocketIcon, TargetIcon, CheckCircleIcon } from 'lucide-svelte';
+  import { RocketIcon, TargetIcon, CheckCircleIcon, Search as SearchIcon } from 'lucide-svelte';
   import { StartupCard } from '$lib/components/startups';
   import StartupStatusCard from '$lib/components/startups/base/StartupStatusCard.svelte';
   import StartupFilterButton from '$lib/components/startups/base/StartupFilterButton.svelte';
@@ -109,6 +109,7 @@
     );
   });
 
+  // Utility function to get initiatives for a single startup
   async function getInitiativesForStartup(startupId: number, access: string) {
     const res = await axiosInstance.get(`/initiatives?startupId=${startupId}`, {
       headers: { Authorization: `Bearer ${access}` }
@@ -116,10 +117,12 @@
     return res.data;
   }
 
+  // Fetch all initiatives for all startups
   async function getAllInitiativesForStartups(startups: any[], access: string) {
     const results = await Promise.all(
       startups.map((startup) => getInitiativesForStartup(startup.id, access))
     );
+    // Flatten the array if each result is an array of initiatives
     return results.flat();
   }
 
@@ -199,104 +202,102 @@
   <title>LaunchUp - Startups</title>
 </svelte:head>
 
-<div class="mb-8 flex items-center justify-between">
-  <div>
-    <h2 class="text-4xl font-black tracking-tight text-slate-950 dark:text-white">Startups</h2>
-    <p class="text-slate-600 dark:text-slate-400 mt-1">Manage your startups</p>
-  </div>
-  <Can role={['Startup']} userRole={role}>
-    <div class="flex gap-5">
-      <button
-        onclick={toggleApplicationForm}
-        class="group relative flex items-center gap-2.5 overflow-hidden rounded-xl bg-[#6366f1] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(99,102,241,0.55)] active:translate-y-0 active:shadow-[0_2px_10px_rgba(99,102,241,0.3)]"
-      >
-        <!-- animated shimmer -->
-        <span class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-500 group-hover:translate-x-full"></span>
-        <RocketIcon class="relative h-4 w-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
-        <span class="relative">Apply</span>
-      </button>
+<!-- Hero Banner Header -->
+<div
+  class="mb-8 rounded-[2rem] border border-white/40 bg-gradient-to-br from-indigo-50 via-white to-white p-8 shadow-[0_8px_32px_rgba(15,23,42,0.04)] backdrop-blur-xl dark:border-white/10 dark:from-indigo-950/40 dark:via-slate-950/60 dark:to-slate-950/60 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+>
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-4xl font-black tracking-tight text-slate-950 dark:text-white">Startups</h2>
+      <p class="text-slate-600 dark:text-slate-400 mt-1">Manage assigned startups</p>
     </div>
-  </Can>
+    <Can role={['Startup']} userRole={role}>
+      <div class="flex gap-5">
+        <button
+          onclick={toggleApplicationForm}
+          class="group relative flex items-center gap-2.5 overflow-hidden rounded-xl bg-[#6366f1] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(99,102,241,0.55)] active:translate-y-0 active:shadow-[0_2px_10px_rgba(99,102,241,0.3)]"
+        >
+          <!-- animated shimmer -->
+          <span class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-500 group-hover:translate-x-full"></span>
+          <RocketIcon class="relative h-4 w-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
+          <span class="relative">Apply</span>
+        </button>
+      </div>
+    </Can>
+  </div>
 </div>
 
 <!-- Statistics Cards -->
 <div class="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-  <div
-    class="group flex flex-col gap-1 rounded-[2rem] border border-white/40 bg-white/60 p-8 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
-  >
-    <div class="flex items-center justify-between mb-3">
-      <span class="text-sm font-medium text-muted-foreground">Total Startups</span>
-      <RocketIcon class="h-5 w-5 text-primary opacity-60" />
-    </div>
-    <span class="text-4xl font-bold tracking-tight">{listOfStartups().length}</span>
 
-    <div class="mt-4 pt-4 border-t border-border/50">
-      <p class="text-xs text-muted-foreground mb-3 font-medium">Status Breakdown</p>
-      <div class="gap-2 flex flex-wrap">
-        {#if role === 'Startup'}
-          <StartupStatusCard
-            count={pendingStartups.length}
-            label="Pending"
-            borderColor="border-yellow-500"
-            bgColor="bg-yellow-50 dark:bg-yellow-950"
-            textColor="text-yellow-700 dark:text-yellow-300"
-          />
-          <StartupStatusCard
-            count={waitlistedStartups.length}
-            label="Waitlisted"
-            borderColor="border-orange-500"
-            bgColor="bg-orange-50 dark:bg-orange-950"
-            textColor="text-orange-700 dark:text-orange-300"
-          />
-          <StartupStatusCard
-            count={qualifiedStartups.length}
-            label="Qualified"
-            borderColor="border-green-500"
-            bgColor="bg-green-50 dark:bg-green-950"
-            textColor="text-green-700 dark:text-green-300"
-          />
-        {:else if role === 'Mentor'}
-          <StartupStatusCard
-            count={qualifiedStartups.length}
-            label="Active"
-            borderColor="border-blue-500"
-            bgColor="bg-blue-50 dark:bg-blue-950"
-            textColor="text-blue-700 dark:text-blue-300"
-          />
-        {/if}
-        <StartupStatusCard
-          count={completedStartups.length}
-          label="Completed"
-          borderColor="border-purple-500"
-          bgColor="bg-purple-50 dark:bg-purple-950"
-          textColor="text-purple-700 dark:text-purple-300"
-        />
+  <!-- Total Startups -->
+  <div class="group flex flex-col rounded-[2rem] border border-white/40 bg-white/60 p-7 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+    <div class="flex items-center justify-between">
+      <span class="text-sm font-medium text-muted-foreground">Total Startups</span>
+      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+        <RocketIcon class="h-4 w-4 text-primary" />
+      </div>
+    </div>
+
+    <span class="mt-3 text-4xl font-bold leading-none tracking-tight">{listOfStartups().length}</span>
+
+    <div class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border/50 pt-4">
+      {#if role === 'Startup'}
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2 text-xs text-muted-foreground">
+            <span class="h-2 w-2 rounded-full bg-yellow-500"></span>Pending
+          </span>
+          <span class="text-sm font-semibold">{pendingStartups.length}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2 text-xs text-muted-foreground">
+            <span class="h-2 w-2 rounded-full bg-orange-500"></span>Waitlisted
+          </span>
+          <span class="text-sm font-semibold">{waitlistedStartups.length}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2 text-xs text-muted-foreground">
+            <span class="h-2 w-2 rounded-full bg-green-500"></span>Qualified
+          </span>
+          <span class="text-sm font-semibold">{qualifiedStartups.length}</span>
+        </div>
+      {:else if role === 'Mentor'}
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-2 text-xs text-muted-foreground">
+            <span class="h-2 w-2 rounded-full bg-blue-500"></span>Active
+          </span>
+          <span class="text-sm font-semibold">{qualifiedStartups.length}</span>
+        </div>
+      {/if}
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2 text-xs text-muted-foreground">
+          <span class="h-2 w-2 rounded-full bg-purple-500"></span>Completed
+        </span>
+        <span class="text-sm font-semibold">{completedStartups.length}</span>
       </div>
     </div>
   </div>
 
-  <div
-    class="group flex flex-col gap-3 rounded-[2rem] border border-white/40 bg-white/60 p-8 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
-  >
+  <!-- Initiatives Progress -->
+  <div class="group flex flex-col rounded-[2rem] border border-white/40 bg-white/60 p-7 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
     <div class="flex items-center justify-between">
       <span class="text-sm font-medium text-muted-foreground">Initiatives Progress</span>
-      <TargetIcon class="h-5 w-5 text-primary opacity-60" />
+      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+        <TargetIcon class="h-4 w-4 text-primary" />
+      </div>
     </div>
 
-    <div class="flex items-baseline gap-2">
-      <span class="text-4xl font-bold tracking-tight"
-        >{allInitiatives?.filter((initiative) => initiative?.status === 4)
-          ?.length || 0}</span
-      >
-      <span class="text-xl text-muted-foreground">/ {allInitiatives?.length ?? 0}</span>
+    <div class="mt-3 flex items-baseline gap-1.5">
+      <span class="text-4xl font-bold leading-none tracking-tight">
+        {allInitiatives?.filter((initiative) => initiative?.status === 4)?.length || 0}
+      </span>
+      <span class="text-lg text-muted-foreground">/ {allInitiatives?.length ?? 0}</span>
     </div>
 
-    <div class="space-y-2">
-      <div class="flex justify-between items-center">
+    <div class="mt-5 border-t border-border/50 pt-4">
+      <div class="mb-2 flex items-center justify-between">
         <span class="text-xs text-muted-foreground">Completion</span>
-        <span class="text-sm font-semibold text-primary"
-          >{completedInitiativesPercentage.toFixed(0)}%</span
-        >
+        <span class="text-sm font-semibold text-primary">{completedInitiativesPercentage.toFixed(0)}%</span>
       </div>
       <div class="h-3 w-full rounded-full bg-muted overflow-hidden">
         <div
@@ -307,86 +308,117 @@
     </div>
   </div>
 
-  <div
-    class="group flex flex-col gap-3 rounded-[2rem] border border-white/40 bg-white/60 p-8 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
-  >
+  <!-- Completion Rate -->
+  <div class="group flex flex-col rounded-[2rem] border border-white/40 bg-white/60 p-7 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
     <div class="flex items-center justify-between">
       <span class="text-sm font-medium text-muted-foreground">Completion Rate</span>
-      <CheckCircleIcon class="h-5 w-5 text-primary opacity-60" />
+      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
+        <CheckCircleIcon class="h-4 w-4 text-primary" />
+      </div>
     </div>
 
-    <span class="text-4xl font-bold tracking-tight"
-      >{listOfStartups().length > 0
-        ? Math.round(
-            (completedStartups.length / listOfStartups().length) * 100
-          )
-        : 0}%</span
-    >
+    <span class="mt-3 text-4xl font-bold leading-none tracking-tight">
+      {listOfStartups().length > 0
+        ? Math.round((completedStartups.length / listOfStartups().length) * 100)
+        : 0}%
+    </span>
 
-    <div class="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-      <span class="font-semibold text-foreground">{completedStartups.length}</span>
-      <span>of</span>
-      <span class="font-semibold text-foreground">{listOfStartups().length}</span>
-      <span>completed</span>
+    <div class="mt-5 border-t border-border/50 pt-4">
+      <div class="mb-2 flex items-center justify-between">
+        <span class="text-xs text-muted-foreground">Completed</span>
+        <span class="text-sm font-semibold">
+          <span class="text-foreground">{completedStartups.length}</span>
+          <span class="text-muted-foreground"> of {listOfStartups().length}</span>
+        </span>
+      </div>
+      <div class="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted">
+        <div
+          class="h-full rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500 ease-out"
+          style="width:{listOfStartups().length > 0 ? Math.round((completedStartups.length / listOfStartups().length) * 100) : 0}%"
+        ></div>
+      </div>
     </div>
   </div>
+
 </div>
 
-<!-- Search and Filters -->
-<div class="mb-5">
-  <div class="mb-2 flex w-[400px] items-center gap-2">
-    <div class="relative flex-1">
-      <input
-        class="w-full rounded-2xl border border-white/50 bg-white/70 px-4 py-3 pr-12 text-sm placeholder:text-slate-500 shadow-sm backdrop-blur-md transition-all focus:outline-none focus:ring-4 focus:ring-[#6366f1]/10 focus:border-[#6366f1]/50 dark:border-white/10 dark:bg-slate-950/60 dark:text-white dark:placeholder:text-slate-400"
-        type="text"
-        placeholder="Search startups..."
-        bind:value={search}
-      />
-      <button
-        class="hover:bg-primary/90 absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-primary p-2 transition-colors"
-        tabindex="-1"
-        type="button"
-      >
-        <img src="/magnifying_glass.png" alt="Search" class="h-4 w-4" />
-      </button>
-    </div>
-  </div>
-  <div class="flex w-fit gap-0.5 rounded-2xl border border-white/50 bg-white/40 p-1 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-slate-950/40">
-    <StartupFilterButton
-      label="All Startups"
-      active={filter === 'All Startups'}
+<!-- Search + Underline Tab Navigation -->
+<div class="mb-5 flex flex-wrap items-start justify-between gap-4">
+  <div class="flex gap-6 border-b border-slate-200/60 pt-3 dark:border-white/10">
+    <button
       onclick={() => (filter = 'All Startups')}
-      rounded="left"
-    />
+      class={`pb-3 text-sm font-semibold transition-colors ${
+        filter === 'All Startups'
+          ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
+          : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+      }`}
+    >
+      All Startups
+    </button>
 
     {#if role === 'Startup'}
-      <StartupFilterButton
-        label="Pending"
-        active={filter === 'Pending'}
+      <button
         onclick={() => (filter = 'Pending')}
-      />
-      <StartupFilterButton
-        label="Waitlisted"
-        active={filter === 'Waitlisted'}
+        class={`pb-3 text-sm font-semibold transition-colors ${
+          filter === 'Pending'
+            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
+            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+        }`}
+      >
+        Pending
+      </button>
+      <button
         onclick={() => (filter = 'Waitlisted')}
-      />
-      <StartupFilterButton
-        label="Qualified"
-        active={filter === 'Qualified'}
+        class={`pb-3 text-sm font-semibold transition-colors ${
+          filter === 'Waitlisted'
+            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
+            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+        }`}
+      >
+        Waitlisted
+      </button>
+      <button
         onclick={() => (filter = 'Qualified')}
-      />
+        class={`pb-3 text-sm font-semibold transition-colors ${
+          filter === 'Qualified'
+            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
+            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+        }`}
+      >
+        Qualified
+      </button>
     {:else if role === 'Mentor'}
-      <StartupFilterButton
-        label="Active"
-        active={filter === 'Qualified'}
+      <button
         onclick={() => (filter = 'Qualified')}
-      />
+        class={`pb-3 text-sm font-semibold transition-colors ${
+          filter === 'Qualified'
+            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
+            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+        }`}
+      >
+        Active
+      </button>
     {/if}
-    <StartupFilterButton
-      label="Completed"
-      active={filter === 'Completed'}
+
+    <button
       onclick={() => (filter = 'Completed')}
-      rounded="right"
+      class={`pb-3 text-sm font-semibold transition-colors ${
+        filter === 'Completed'
+          ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
+          : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+      }`}
+    >
+      Completed
+    </button>
+  </div>
+
+  <div class="relative w-full max-w-[400px]">
+    <SearchIcon class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+    <input
+      class="w-full rounded-2xl border border-white/50 bg-white/70 py-3 pl-11 pr-4 text-sm placeholder:text-slate-500 shadow-sm backdrop-blur-md transition-all focus:outline-none focus:ring-4 focus:ring-[#6366f1]/10 focus:border-[#6366f1]/50 dark:border-white/10 dark:bg-slate-950/60 dark:text-white dark:placeholder:text-slate-400"
+      type="text"
+      placeholder="Search startups..."
+      bind:value={search}
     />
   </div>
 </div>

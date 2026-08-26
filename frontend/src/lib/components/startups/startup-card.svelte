@@ -70,7 +70,7 @@
   };
 
   const tier = $derived(getTierLabel(startup));
-  
+
   const getTierColor = (t: string) => {
     if (t === 'Gold') return 'bg-amber-400/10 text-amber-500 border-amber-400/20';
     if (t === 'Silver') return 'bg-slate-400/10 text-slate-500 border-slate-400/20';
@@ -80,6 +80,26 @@
     if (t === 'Early') return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
     return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
   };
+
+  const initials = $derived(
+    startup.name
+      .split(' ')
+      .map((word: any) => word.charAt(0).toUpperCase())
+      .join('')
+      .slice(0, 3)
+  );
+
+  const truncatedName = $derived(
+    startup.name.length > 14 ? startup.name.slice(0, 14) + '...' : startup.name
+  );
+
+  const completedCount = $derived(
+    initiatives.filter((initiative) => initiative.status === 4).length
+  );
+
+  const progressPct = $derived(
+    initiatives.length > 0 ? (completedCount / initiatives.length) * 100 : 0
+  );
 </script>
 
 <a
@@ -94,58 +114,40 @@
   }}
 >
   <Card.Root
-    class="h-44 cursor-pointer rounded-[1.5rem] border border-white/40 bg-white/60 p-0 shadow-[0_4px_24px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+    class="cursor-pointer rounded-[1.5rem] border border-white/40 bg-white/60 p-0 shadow-[0_4px_24px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
   >
     <Card.Content class="h-full">
-      <div class="flex h-full flex-col justify-between p-4">
-        <div class="mb-1 flex w-full items-center gap-3">
-          <div
-            class="bg-primary text-primary-foreground flex h-9 w-9 items-center justify-center rounded-lg text-base font-bold"
-          >
-            {startup.name
-              .split(' ')
-              .map((word: any) => word.charAt(0).toUpperCase())
-              .join('')
-              .slice(0, 3)}
-          </div>
-          <span
-            class="max-w-[120px] truncate text-base font-semibold"
-            title={startup.name}
-          >
-            {startup.name.length > 10
-              ? startup.name.slice(0, 10) + '...'
-              : startup.name}
-          </span>
-          <Badge class={`ml-auto rounded px-2 py-0.5 text-xs font-semibold ${getBadgeColor(status.label)}`}>
-            {status.label === 'Qualified' && role === 'Mentor'
-              ? 'Active'
-              : status.label}
-          </Badge>
+      <div class="flex flex-col items-center p-6 text-center">
+        <div
+          class="bg-primary text-primary-foreground flex h-[52px] w-[52px] items-center justify-center rounded-2xl text-base font-bold"
+        >
+          {initials}
         </div>
-        <div class="mb-3 flex items-center gap-2 text-xs font-medium">
-          <span>Overall Tier:</span>
+
+        <span class="mt-2.5 max-w-[160px] truncate text-[15px] font-semibold" title={startup.name}>
+          {truncatedName}
+        </span>
+
+        <div class="mt-2 flex flex-wrap justify-center gap-1.5">
+          <Badge class={`rounded px-2 py-0.5 text-xs font-semibold ${getBadgeColor(status.label)}`}>
+            {status.label === 'Qualified' && role === 'Mentor' ? 'Active' : status.label}
+          </Badge>
           <div class={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${getTierColor(tier)}`}>
             {tier}
           </div>
         </div>
-        <div class="mb-1 flex items-center gap-2 text-xs">
-          Initiatives
-          <span class="ml-1 font-bold"
-            >{initiatives.filter((initiative) => initiative.status === 4)
-              .length} / {initiatives.length}</span
-          >
+
+        <div class="mt-6 w-full text-left">
+          <div class="mb-1.5 flex items-center justify-between text-xs">
+            <span>Initiatives</span>
+            <span class="font-bold">{completedCount} / {initiatives.length}</span>
+          </div>
+          <div class="bg-accent h-2 w-full rounded">
+            <div class="bg-primary h-2 rounded" style="width: {progressPct}%"></div>
+          </div>
         </div>
-        <div class="bg-accent mb-2 h-2 w-full rounded">
-          <div
-            class="bg-primary h-2 rounded"
-            style="width: {(initiatives.filter(
-              (initiative) => initiative.status === 4
-            ).length /
-              initiatives.length) *
-              100}%"
-          ></div>
-        </div>
-        <div class="flex items-center gap-2 text-xs">
+
+        <div class="mt-3.5 flex items-center justify-center gap-2 text-xs">
           <img src="/checked.png" alt="Checked" class="h-4 w-4" />
           <span>{startup.consultationText ?? 'No consultation pending'}</span>
         </div>
