@@ -37,13 +37,15 @@
       <div class="flex flex-col gap-4">
         <Label for="name">Task</Label>
         <Select.Root type="single" bind:value={data.rnsId}>
-          <Select.Trigger class="h-20 text-wrap text-start"
-            >{data.rnsId
-              ? tasks
-                  .filter((task: any) => task.id == data.rnsId)[0]
-                  .description.substring(0, 100)
-              : ''}</Select.Trigger
-          >
+          <Select.Trigger class="h-20 flex items-center justify-between gap-2 text-wrap text-start">
+            <span class={!data.rnsId ? 'text-slate-500' : ''}>
+              {data.rnsId
+                ? tasks
+                    .filter((task: any) => task.id == data.rnsId)[0]
+                    .description.substring(0, 100)
+                : 'Select a task'}
+            </span>
+          </Select.Trigger>
           <Select.Content>
             {#each tasks as task}
               <Select.Item value={`${task.id}`}
@@ -55,29 +57,31 @@
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Description</Label>
-        <Textarea rows={4} bind:value={data.description} />
+        <Textarea rows={4} bind:value={data.description} placeholder="Describe the initiative..." />
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Measures</Label>
-        <Textarea rows={2} bind:value={data.measures} />
+        <Textarea rows={2} bind:value={data.measures} placeholder="How will progress be measured?" />
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Target</Label>
-        <Textarea rows={2} bind:value={data.targets} />
+        <Textarea rows={2} bind:value={data.targets} placeholder="What is the target outcome?" />
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Remarks</Label>
-        <Textarea rows={2} bind:value={data.remarks} />
+        <Textarea rows={2} bind:value={data.remarks} placeholder="Additional remarks (optional)" />
       </div>
     </div>
     <div class="flex flex-col gap-4">
       <Label for="name">Assignee</Label>
       <Select.Root type="single" bind:value={data.assigneeId}>
-        <Select.Trigger class="w-[180px]"
-          >{data.assigneeId
-            ? `${members.filter((member: any) => member.userId === data.assigneeId)[0].firstName} ${members.filter((member: any) => member.userId === data.assigneeId)[0].lastName}`
-            : ''}</Select.Trigger
-        >
+        <Select.Trigger class="w-[180px] flex items-center justify-between gap-2">
+          <span class={!data.assigneeId ? 'text-slate-500' : ''}>
+            {data.assigneeId
+              ? `${members.filter((member: any) => member.userId === data.assigneeId)[0].firstName} ${members.filter((member: any) => member.userId === data.assigneeId)[0].lastName}`
+              : 'Select assignee'}
+          </span>
+        </Select.Trigger>
         <Select.Content>
           {#each members as member}
             <Select.Item value={member.userId}

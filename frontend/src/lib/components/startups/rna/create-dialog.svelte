@@ -44,13 +44,15 @@
       <div class="flex flex-col gap-4">
         <Label for="name">Type</Label>
         <Select.Root type="single" bind:value={data.readiness_level_id}>
-          <Select.Trigger class="w-[180px]">
-            {data.readiness_level_id
-              ? readinessData.find(
-                  (d: any) =>
-                    d.readinessLevel.id === Number(data.readiness_level_id)
-                )?.readinessLevel.readinessType
-              : ''}
+          <Select.Trigger class="w-[180px] flex items-center justify-between gap-2">
+            <span class={!data.readiness_level_id ? 'text-slate-500' : ''}>
+              {data.readiness_level_id
+                ? readinessData.find(
+                    (d: any) =>
+                      d.readinessLevel.id === Number(data.readiness_level_id)
+                  )?.readinessLevel.readinessType
+                : 'Select type'}
+            </span>
           </Select.Trigger>
           <Select.Content>
             {#each readinessData as type}
@@ -63,7 +65,7 @@
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Description</Label>
-        <Textarea rows={10} bind:value={data.rna} />
+        <Textarea rows={10} bind:value={data.rna} placeholder="Describe the RNA..." />
       </div>
     </div>
     <div class="flex flex-col gap-4">
@@ -75,7 +77,7 @@
                 (d: any) =>
                   d.readinessLevel.id === Number(data.readiness_level_id)
               )?.readinessLevel.level
-            : ''}
+            : '—'}
         </Select.NoTrigger>
       </Select.Root>
     </div>

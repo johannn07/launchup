@@ -34,21 +34,23 @@
     <div class="grid gap-4 py-4">
       <div class="flex flex-col gap-4">
         <Label for="username">Description</Label>
-        <Textarea rows={4} bind:value={data.description} />
+        <Textarea rows={4} bind:value={data.description} placeholder="Describe the roadblock..." />
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Fix</Label>
-        <Textarea rows={4} bind:value={data.fix} />
+        <Textarea rows={4} bind:value={data.fix} placeholder="How can this be resolved?" />
       </div>
     </div>
     <div class="flex flex-col gap-4">
       <Label for="name">Assignee</Label>
       <Select.Root type="single" bind:value={data.assigneeId}>
-        <Select.Trigger class="w-[180px]">
-          {data.assigneeId
-            ? `${members.filter((member: any) => member.userId === data.assigneeId)[0].firstName} ${members.filter((member: any) => member.userId === data.assigneeId)[0].lastName}`
-            : ''}</Select.Trigger
-        >
+        <Select.Trigger class="w-[180px] flex items-center justify-between gap-2">
+          <span class={!data.assigneeId ? 'text-slate-500' : ''}>
+            {data.assigneeId
+              ? `${members.filter((member: any) => member.userId === data.assigneeId)[0].firstName} ${members.filter((member: any) => member.userId === data.assigneeId)[0].lastName}`
+              : 'Select assignee'}
+          </span>
+        </Select.Trigger>
         <Select.Content>
           {#each members as member}
             <Select.Item value={member.userId}

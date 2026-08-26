@@ -81,13 +81,15 @@
       <div class="flex flex-col gap-4">
         <Label for="name">Type</Label>
         <Select.Root type="single" bind:value={data.readinessType}>
-          <Select.Trigger class="w-[180px]"
-            >{data.readinessType
-              ? getReadinessTypes().filter(
-                  (d) => d.name === data.readinessType
-                )[0].name
-              : ''}</Select.Trigger
-          >
+          <Select.Trigger class="w-[180px] flex items-center justify-between gap-2">
+            <span class={!data.readinessType ? 'text-slate-500' : ''}>
+              {data.readinessType
+                ? getReadinessTypes().filter(
+                    (d) => d.name === data.readinessType
+                  )[0].name
+                : 'Select type'}
+            </span>
+          </Select.Trigger>
           <Select.Content>
             {#each getReadinessTypes() as type}
               <Select.Item value={`${type.name}`}>{type.name}</Select.Item>
@@ -97,18 +99,20 @@
       </div>
       <div class="flex flex-col gap-4">
         <Label for="username">Description</Label>
-        <Textarea rows={10} bind:value={data.description} />
+        <Textarea rows={10} bind:value={data.description} placeholder="Describe the RNS..." />
         <!-- <TextEditor bind:value={data.description} placeholder="Description" classNames="h-[200px] w-full" /> -->
       </div>
     </div>
     <div class="flex flex-col gap-4">
       <Label for="name">Assignee</Label>
       <Select.Root type="single" bind:value={data.assigneeId}>
-        <Select.Trigger class="w-[180px]"
-          >{data.assigneeId
-            ? `${members.filter((member: any) => member.userId === data.assigneeId)[0].firstName} ${members.filter((member: any) => member.userId === data.assigneeId)[0].lastName}`
-            : ''}</Select.Trigger
-        >
+        <Select.Trigger class="w-[180px] flex items-center justify-between gap-2">
+          <span class={!data.assigneeId ? 'text-slate-500' : ''}>
+            {data.assigneeId
+              ? `${members.filter((member: any) => member.userId === data.assigneeId)[0].firstName} ${members.filter((member: any) => member.userId === data.assigneeId)[0].lastName}`
+              : 'Select assignee'}
+          </span>
+        </Select.Trigger>
         <Select.Content>
           {#each members as member}
             <Select.Item value={member.userId}
@@ -121,9 +125,11 @@
     <div class="flex flex-col gap-4">
       <Label for="name">Target Level</Label>
       <Select.Root type="single" bind:value={data.targetLevelId}>
-        <Select.Trigger class="w-[50px]"
-          >{getLevel(data.targetLevelId)}</Select.Trigger
-        >
+        <Select.Trigger class="w-[50px] flex items-center justify-between gap-2">
+          <span class={!data.targetLevelId ? 'text-slate-500' : ''}>
+            {data.targetLevelId ? getLevel(data.targetLevelId) : '—'}
+          </span>
+        </Select.Trigger>
         <!-- <Select.Trigger class="w-[50px]" -->
         <!--   >{data.target -->
         <!--     ? getLevel(data.targetLevel) -->
