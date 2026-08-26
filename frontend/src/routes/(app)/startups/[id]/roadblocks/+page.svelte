@@ -606,8 +606,14 @@
             </DropdownMenu.Trigger>
             <DropdownMenu.Content
               align="end"
-              class="max-h-[150px] w-[100px] overflow-y-auto"
+              class="max-h-[190px] w-[100px] overflow-y-auto"
             >
+              <DropdownMenu.Label
+                class="px-2 py-1.5 text-xs font-medium text-muted-foreground"
+              >
+                Quantity
+              </DropdownMenu.Label>
+              <DropdownMenu.Separator />
               <DropdownMenu.RadioGroup
                 value={numToGenerate.toString()}
                 onValueChange={(val) => (numToGenerate = Number(val))}
