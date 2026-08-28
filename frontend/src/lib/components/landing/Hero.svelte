@@ -73,7 +73,7 @@
             A better way to launch, judge, and grow serious startups.
           </span>
         </p>
-        <p class="max-w-2xl text-base leading-7 text-slate-600 sm:text-lg dark:text-slate-300">
+        <p class="max-w-2xl text-base leading-7 text-slate-500 sm:text-lg dark:text-slate-400">
           LaunchUp Enhanced gives founders a sharper application journey, a clearer readiness signal, and a calmer path from first impression to funding conversation.
         </p>
       </div>
