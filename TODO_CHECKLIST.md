@@ -866,7 +866,7 @@ Each verified by reading **both** sides of the call.
 
 ## 4. Cleanup / tech debt
 
-**Gates — two separate suites, never one figure.** Backend `pnpm test` **328/328 across 32 suites** (2026-09-04; was 308/308 across 28 on 2026-08-23); `pnpm test:measurement` **304/304** (2026-08-23). Frontend `pnpm check` sits at a **119 errors / 44 files** baseline on `master`, unrelated to current work — compare against it rather than expecting zero.
+**Gates — two separate suites, never one figure.** Backend `pnpm test` **336/336 across 33 suites**, re-run 2026-09-04 (was 308/308 across 28 on 2026-08-23); an earlier "328/328 across 32" in these docs was stale and is retired. `pnpm test:measurement` **304/304**, last run 2026-08-23 and not re-verified since. Frontend `pnpm check` sits at a **119 errors / 44 files** baseline on `master`, unrelated to current work — compare against it rather than expecting zero. Note the suite prints a `[OCR] Gemini Vision extraction failed` stack trace on the way past — that is a test exercising the Tesseract fallback, not a failure.
 
 > **Deferred (2026-08-07)** except the three 🎯 items, which are deletions a reviewer would notice. Everything else here is invisible to a panel and survives the capstone unchanged.
 
