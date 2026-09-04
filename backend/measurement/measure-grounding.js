@@ -107,7 +107,7 @@ const MERGE_FILES = MERGE_ARGS.flatMap((pattern) =>
 const KNOWN_EXACT_FLAGS = new Set([
   '--retrieval-only', '--dry-run', '--with-fabrication-probe', '--fingerprint', '--merge',
 ]);
-const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe=', '--level-condition='];
+const KNOWN_VALUE_FLAG_PREFIXES = ['--out=', '--reps=', '--only-arm=', '--only-startup=', '--only-probe=', '--level-condition=', '--doc-variant='];
 
 const ALL_PROBES = ['rna', 'levels'];
 
@@ -267,6 +267,86 @@ function selectLevelConditions(filter) {
   return { conditions: ALL_LEVEL_CONDITIONS.filter((c) => entries.includes(c)), errors: [] };
 }
 
+// Documents and their variants. Required this early because the CLI axis below
+// derives its accepted values from VARIANTS rather than restating them.
+const { ORIGINAL_DOCS, DOC_VARIANTS, VARIANTS, variantDocs, verifyVariants } = require(path.join(__dirname, 'lib/doc-variants.js'));
+const { evaluateG1 } = require(path.join(__dirname, 'lib/g1-cases.js'));
+
+const ALL_DOC_VARIANTS = VARIANTS;
+
+/**
+ * Where a (variant, condition)'s calls are stored.
+ *
+ * A TOTAL MAP that throws, not a ternary. The 2026-08-23 review found
+ * `levelsForCondition` and `conditionField` were both binary ternaries, so a
+ * third condition would have been given the wrong data and stored in the wrong
+ * pool, silently. This axis has exactly that shape, and a silent mis-store here
+ * costs a quota day to notice.
+ *
+ * `original` keeps the field names every stored run already uses. That is the
+ * whole point: this change alters no original-condition behaviour, so it must
+ * not move original-condition data out from under the historical pools.
+ */
+const DOC_VARIANT_FIELDS = {
+  original: { truth: 'assertionTruthCalls', inflated: 'assertionInflatedCalls', deflated: 'assertionDeflatedCalls' },
+  unlabelled: { truth: 'unlabelledTruthCalls', inflated: 'unlabelledInflatedCalls', deflated: 'unlabelledDeflatedCalls' },
+};
+
+function docVariantField(variant, condition) {
+  const byCondition = DOC_VARIANT_FIELDS[variant];
+  if (!byCondition) throw new Error(`docVariantField: unknown document variant "${variant}"`);
+  const field = byCondition[condition];
+  if (!field) throw new Error(`docVariantField: unknown condition "${condition}"`);
+  return field;
+}
+
+/** Condition suffix on a fingerprint key family. `truth` is the bare key,
+ *  because it was the only condition when these families were introduced and
+ *  renaming it would orphan every stored hash. */
+const CONDITION_SUFFIX = { truth: '', inflated: '-inflated', deflated: '-deflated' };
+
+/**
+ * The fingerprint key a reported row must consult before printing a number.
+ *
+ * Total, and throws: a key composed from an unknown variant or condition would
+ * name a hash nothing emits, so `refusedKeys.has(...)` would quietly answer
+ * false and the row would print over a pool whose comparability was never
+ * established. That is the failure this whole key family exists to prevent.
+ */
+function metricKey(base, variant, condition) {
+  if (!ALL_DOC_VARIANTS.includes(variant)) throw new Error(`metricKey: unknown document variant "${variant}"`);
+  const suffix = CONDITION_SUFFIX[condition];
+  if (suffix === undefined) throw new Error(`metricKey: unknown condition "${condition}"`);
+  return variant === 'original' ? `${base}${suffix}` : `${base}-${variant}${suffix}`;
+}
+
+/**
+ * Exact names or a comma list. No prefix matching and no aliases — two values
+ * do not need either, and both could silently select the wrong one. An
+ * unrecognised entry hard-errors before any network call, like selectProbes and
+ * selectLevelConditions: running fewer variants than asked for looks identical
+ * to a clean run in the output.
+ */
+function selectDocVariants(filter) {
+  if (filter == null) return { variants: ['original'], errors: [] };
+  const raw = String(filter).trim().toLowerCase();
+  const available = `Available: ${ALL_DOC_VARIANTS.join(', ')}.`;
+  const entries = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (entries.length === 0) {
+    return { variants: [], errors: [`--doc-variant=${filter} named no variant. ${available}`] };
+  }
+  const unknown = entries.filter((e) => !ALL_DOC_VARIANTS.includes(e));
+  if (unknown.length) {
+    return {
+      variants: [],
+      errors: [`--doc-variant=${filter} is not a variant: ${unknown.map((u) => `"${u}"`).join(', ')}. ${available}`],
+    };
+  }
+  // Canonical order, not argument order, so two spellings of the same request
+  // produce the same run shape.
+  return { variants: ALL_DOC_VARIANTS.filter((v) => entries.includes(v)), errors: [] };
+}
+
 /**
  * Pure validation over raw CLI args plus the glob-resolved --merge list.
  * Returns error strings; empty means well-formed. Exported and called only
@@ -294,7 +374,8 @@ function validateArgs(argv, mergeFiles) {
           `Unrecognized flag "${arg}". Known flags: --retrieval-only, --dry-run, ` +
             '--with-fabrication-probe, --fingerprint, --out=<file>, --reps=<n>, ' +
             '--only-arm=<names>, --only-startup=<names>, --only-probe=<rna|levels>, ' +
-            '--level-condition=<truth|inflated|deflated|both|all|comma-list>, --merge <files...>.',
+            '--level-condition=<truth|inflated|deflated|both|all|comma-list>, ' +
+            '--doc-variant=<original|unlabelled|comma-list>, --merge <files...>.',
         );
       }
     } else {
@@ -386,31 +467,20 @@ const { SATISFACTIONS, verifySatisfactions } = require(path.join(__dirname, 'lib
 // RNA prompt itself changed. audit-ground-truth.js keeps the OLD values, frozen
 // deliberately, because that is what the already-collected runs were scored
 // against.
+// The `doc` strings live in lib/doc-variants.js as ORIGINAL_DOCS — one copy,
+// imported, because the `unlabelled` variants are edits OF these documents and
+// two copies would drift exactly the way the levels did before
+// src/demo-readiness-levels.ts existed. Template literals normalise CRLF to LF
+// at parse time, so the move is byte-identical and no fingerprint shifts.
 const STARTUPS = {
   'AgroLink PH': {
-    doc: `Title: AgroLink PH: Cooperative Market Access Platform
-Description: Connects smallholder farmer cooperatives in Central Luzon directly to institutional buyers.
-Problem Statement: Smallholder farmers sell through a chain of traders and capture only a fraction of the final market price.
-Target Market: Rice and vegetable cooperatives in Nueva Ecija and Tarlac (roughly 400 cooperatives).
-Solution: A mobile-first platform where cooperative officers register expected harvest volumes and buyers post standing demand. Includes SMS fallback.
-Timeline: 2025-06 field interviews with 18 cooperatives. 2025-09 paper prototype of the lot-aggregation flow tested with 3 cooperatives. 2026-01 two founders committed full-time; provisional agreement with one buyer.
-Revenue: None to date.
-IP Status: No patents filed. The "AgroLink PH" wordmark has not been registered with IPOPHL.
-Team: Rafael Domingo (6 years agricultural extension officer), Ana Beltran (4 years backend engineer).`,
+    doc: ORIGINAL_DOCS['AgroLink PH'],
     levels: { Technology: 2, Market: 3, Acceptance: 3, Organizational: 2, Regulatory: 1, Investment: 1 },
     present: ['target_cooperative_count', 'number_of_founders', 'cooperatives_in_prototype_test'],
     absent: ['monthly_burn_rate_php', 'lead_investor_name', 'date_of_incorporation'],
   },
   'MediSync Cebu': {
-    doc: `Title: MediSync Cebu: Referral Coordination for Provincial Clinics
-Description: Links rural health units across Cebu province with district and tertiary hospitals, replacing a paper-and-phone referral process.
-Problem Statement: Referrals move by handwritten form and phone call; clinical history is frequently lost in transit.
-Target Market: The 44 rural health units in Cebu province, 8 district hospitals, and 3 tertiary referral centres.
-Solution: A structured referral record transmitted to the receiving facility with bed-availability status, triage category, and attached history.
-Timeline: 2025-02 pilot with 2 rural health units and 1 district hospital. 2025-08 expanded to 6 facilities; first paid facility subscriptions. 2026-02 reached PHP 5,000 monthly recurring revenue; team grew to 3 founders.
-Revenue: PHP 5,000 monthly recurring.
-IP Status: No patents. Trademark application filed with IPOPHL, pending.
-Team: Dr. Elena Reyes (9 years provincial public health), Marco Villanueva (7 years health IT), Joy Tabotabo (5 years LGU administration).`,
+    doc: ORIGINAL_DOCS['MediSync Cebu'],
     levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 },
     present: ['rural_health_units_in_cebu', 'monthly_recurring_revenue_php', 'number_of_founders'],
     absent: ['monthly_burn_rate_php', 'lead_investor_name', 'date_of_incorporation'],
@@ -977,6 +1047,9 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
     // that discriminates.
     probes = ['rna', 'levels'],
     conditions = ['truth'],
+    // The document axis. Default original-only, so every existing caller and
+    // every stored run keeps its exact shape.
+    docVariants = ['original'],
   } = opts;
 
   // Metric 5's lower bound rests on these tokens being absent from the
@@ -1049,6 +1122,13 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
         retrieved: truthRetrieved,
         rnaCalls: [], levelCalls: [], hallucCalls: [],
         assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
+        // Every non-original (variant, condition) pool exists whether or not it
+        // was selected, so a reader cannot mistake "never run" for "ran and found
+        // nothing" - the same reason metric 6 prints x/obs rather than a bare 0.
+        ...Object.fromEntries(
+          ALL_DOC_VARIANTS.filter((v) => v !== 'original')
+            .flatMap((v) => ALL_LEVEL_CONDITIONS.map((c) => [docVariantField(v, c), []])),
+        ),
       };
     }
   }
@@ -1061,10 +1141,23 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
         const cell = results[arm.name].startups[startupName];
 
         // --- RNA generation (metrics 1-2 on truth; metric 5 on both) ---
-        if (probes.includes('rna')) for (const condition of conditions) {
+        // Variants innermost: the two calls for one (arm, startup, condition)
+        // sit next to each other in time, so a mid-run quota hit or a model
+        // drift cannot land preferentially on one variant.
+        //
+        // Retrieval is NOT re-run per variant. It happens once, above, against
+        // the original document. For these three arms that is exactly
+        // equivalent: baseline retrieves nothing, deterministic retrieval is a
+        // key lookup on (readinessType, level) that no document text touches,
+        // and sdd-semantic has been measured to retrieve 0 rows. So the
+        // manipulation reaches the prompt's document and nothing else - which
+        // is what it claims to be, and would need restating if a genuinely
+        // retrieving semantic arm were ever added.
+        if (probes.includes('rna')) for (const condition of conditions) for (const variant of docVariants) {
           const entry = rnaBlocks.get(`${arm.name}|${startupName}|${condition}`);
+          const doc = variantDocs(variant)[startupName];
           try {
-            const out = await attempt(callFn, ai, rnaPrompt(startup.doc, entry.block, entry.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna(${condition})`);
+            const out = await attempt(callFn, ai, rnaPrompt(doc, entry.block, entry.levels), retry, `${arm.name} / ${startupName} / rep ${rep} / rna(${condition}/${variant})`);
             const payload = extractJsonPayload(out.text);
             const parsed = payload ? JSON.parse(payload) : null;
             if (Array.isArray(parsed)) {
@@ -1077,12 +1170,15 @@ async function runGenerationArms(ai, corpusVecs, opts = {}) {
               // rnaCalls is the truth-only pool metrics 1-2 read. The
               // per-condition pool is chosen by the total map so a new condition
               // cannot land in another condition's field.
-              if (condition === 'truth') cell.rnaCalls.push({ byDim });
-              cell[conditionField(condition)].push({ byDim });
+              // rnaCalls is the truth-only pool metrics 1-2 read, and their
+              // reference is derived from the ORIGINAL document - so a
+              // manipulated call reaching it would silently corrupt both.
+              if (condition === 'truth' && variant === 'original') cell.rnaCalls.push({ byDim });
+              cell[docVariantField(variant, condition)].push({ byDim });
             }
           } catch (e) {
             if (is429(e)) {
-              console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna(${condition})]`);
+              console.log(`  [quota hit: ${arm.name} / ${startupName} / rep ${rep} / rna(${condition}/${variant})]`);
               quotaHit = true;
               results[arm.name].quotaHit = true;
               break repLoop;
@@ -1279,13 +1375,13 @@ function summarizeResults(results) {
     // mentions, asserted at run time by verifyAbsences rather than trusted. One
     // binary observation per (call, dimension) — counting tokens would reward
     // verbosity, and the corpus arm writes longer RNAs.
-    for (const condition of ALL_LEVEL_CONDITIONS) {
-      const field = conditionField(condition);
+    for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = docVariantField(variant, condition);
       // A pooled field's own union rule (see mergeRuns) can admit data whose
       // comparability THIS metric's own fingerprint key refused, on another
       // sharing key's authority. `refused` overrides the row rather than
       // computing a number over a pool this metric never agreed to.
-      const refused = refusedKeys.has(`${ASSERTION_METRIC[condition]}|${arm.name}`);
+      const refused = refusedKeys.has(`${metricKey('assertion', variant, condition)}|${arm.name}`);
       let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
       for (const [, cell] of Object.entries(armResult.startups)) {
         for (const c of cell[field] || []) {
@@ -1299,6 +1395,7 @@ function summarizeResults(results) {
       }
       metric5.push({
         arm: arm.name,
+        variant,
         condition,
         asserted: refused ? 'refused' : `${asserted}/${obs}`,
         'asserted %': refused ? 'refused' : obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
@@ -1316,12 +1413,12 @@ function summarizeResults(results) {
     // Keyed by condition rather than folded together: `truth` is what users
     // receive and `deflated` is the positive control, and averaging the two
     // would report neither.
-    for (const condition of ALL_LEVEL_CONDITIONS) {
-      const field = conditionField(condition);
+    for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = docVariantField(variant, condition);
       // Same enforcement as metric 5's loop above, against metric 6's own key
       // family - the two can disagree on the very same pooled field.
-      const refused = refusedKeys.has(`${REDUNDANCY_METRIC[condition]}|${arm.name}`);
-      let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0;
+      const refused = refusedKeys.has(`${metricKey('redundancy', variant, condition)}|${arm.name}`);
+      let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0, scoped = 0;
       for (const [startupName, cell] of Object.entries(armResult.startups)) {
         const spec = SATISFACTIONS[startupName];
         if (!spec) continue;
@@ -1332,11 +1429,18 @@ function summarizeResults(results) {
             if (obs.denied) denied += 1;
             if (obs.mentioned) mentioned += 1;
             if (obs.unclassified) unclassified += 1;
+            // Derived here, not added to the observation: lib/redundancy.js is
+            // hashed byte-for-byte into `redundancy|*` (REDUNDANCY_SOURCE reads
+            // scoreRedundantNeeds.toString()), so adding a field there would
+            // refuse every pool with 2026-08-23 for a reporting change that
+            // alters no verdict.
+            if (isScoped(obs)) scoped += 1;
           }
         }
       }
       metric6.push({
         arm: arm.name,
+        variant,
         condition,
         redundantN: refused ? 'refused' : n,
         // null, never 0, at n=0 - 0/0 is undefined and reading it as a clean
@@ -1349,6 +1453,13 @@ function summarizeResults(results) {
         mentioned: refused ? 'refused' : mentioned,
         unclassified: refused ? 'refused' : unclassified,
         deniedCount: refused ? 'refused' : denied,
+        // Required change 1 (design 2026-09-04). Per OBSERVATION, like every
+        // sibling column, so the whole row shares redundantN's denominator;
+        // the clause-level count lives in the persisted `scopedClauses`.
+        // Never folded into `unclassified` - that column means the classifier
+        // could not read the clause, and a gate rejection means it read it and
+        // ruled against it.
+        scopedCount: refused ? 'refused' : scoped,
       });
     }
   }
@@ -1389,7 +1500,15 @@ function printReports(results) {
   console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.');
   console.log(' `mentioned` is an upper bound and `unclassified` the honesty column, same read rule as');
   console.log(' metric 5: a large `unclassified` means the classifier cannot read this output and the');
-  console.log(' rate should not be quoted. `deniedCount` is secondary and never folds into the headline.)\n');
+  console.log(' rate should not be quoted. `deniedCount` is secondary and never folds into the headline.');
+  console.log(' `scopedCount` is the acquisition gate rejections - clauses that read as recommendations');
+  console.log(' but named the artifact as an origin or a scope. An audit column, not a failure column: a');
+  console.log(' high scopedCount beside a 0 rate is what the gate working looks like. Verbatim text is');
+  console.log(' persisted as `scopedClauses`.');
+  console.log(' `variant` says which document was sent. `original` is what users receive;');
+  console.log(' `unlabelled` is the salience manipulation and is deliberately NOT production-like,');
+  console.log(' so only original rows speak to production. Never read a difference across variants');
+  console.log(' without checking it against the baseline / sdd-semantic null-control spread first.)\n');
   console.table(s.metric6);
 }
 
@@ -1446,6 +1565,12 @@ function currentFingerprints() {
     inflatedLevels: INFLATED_OVERRIDE,
     satisfactions: SATISFACTIONS,
     deflatedLevels: DEFLATED_OVERRIDE,
+    // Variant documents, hashed only into variant-condition keys. Never folded
+    // into `common` above: that would move every hash in the file over a
+    // document no historical run ever saw. See lib/fingerprint.js.
+    docVariants: Object.fromEntries(
+      ALL_DOC_VARIANTS.filter((v) => v !== 'original').map((v) => [v, variantDocs(v)]),
+    ),
   });
 }
 
@@ -1458,11 +1583,46 @@ function flaggedClauses(results) {
   const out = [];
   for (const [armName, armResult] of Object.entries(results)) {
     for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
-      for (const condition of ALL_LEVEL_CONDITIONS) {
-        (cell[conditionField(condition)] || []).forEach((c, rep) => {
+      for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[docVariantField(variant, condition)] || []).forEach((c, rep) => {
           for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
             for (const cl of o.clauses) {
-              out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+              out.push({ arm: armName, startup: startupName, variant, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+            }
+          }
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** A gate rejection: classifyClause said `recommended`, the acquisition gate
+ *  overruled it. Read off the clause list because lib/redundancy.js is frozen
+ *  for fingerprint reasons - see the metric 6 loop in summarizeResults. */
+const isScoped = (obs) => (obs.clauses || []).some((c) => c.klass === 'scoped');
+
+/**
+ * Every clause the acquisition gate rejected, verbatim - metric 6's half of the
+ * audit trail flaggedClauses provides for metric 5, and the same seven fields.
+ *
+ * Without it the gate is unfalsifiable from a results file: its rejections are
+ * absent from `redundant`, from `unclassified` and from `denied` alike, so a
+ * run in which the gate fired four times and one in which it never fired print
+ * identically. That is exactly what happened to 2026-08-23.
+ */
+function scopedClauses(results) {
+  const out = [];
+  for (const [armName, armResult] of Object.entries(results)) {
+    for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
+      const spec = SATISFACTIONS[startupName];
+      if (!spec) continue;
+      for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[docVariantField(variant, condition)] || []).forEach((c, rep) => {
+          for (const o of scoreRedundantNeeds(c.byDim, spec).observations) {
+            for (const cl of o.clauses) {
+              if (cl.klass !== 'scoped') continue;
+              out.push({ arm: armName, startup: startupName, variant, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
             }
           }
         });
@@ -1499,8 +1659,10 @@ function rnaTexts(results) {
   return rows;
 }
 
-function writeResults(file, results) {
-  const payload = {
+/** Exported so persistence is tested rather than trusted: the defect this
+ *  shape exists to fix was a value computed and never written down. */
+function resultsPayload(results) {
+  return {
     generatedAt: new Date().toISOString(),
     genModel: GEN_MODEL,
     embedModel: EMBED_MODEL,
@@ -1510,7 +1672,12 @@ function writeResults(file, results) {
     fingerprints: currentFingerprints(),
     results,
     flaggedClauses: flaggedClauses(results),
+    scopedClauses: scopedClauses(results),
   };
+}
+
+function writeResults(file, results) {
+  const payload = resultsPayload(results);
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
 }
@@ -1574,6 +1741,17 @@ function mergeRuns(files, arms) {
     redundancy: 'assertionTruthCalls',
     'redundancy-inflated': 'assertionInflatedCalls',
     'redundancy-deflated': 'assertionDeflatedCalls',
+    // Variant pools, derived rather than restated so a new variant cannot be
+    // added to the axis and silently dropped by the merge - which would read
+    // as a clean pool of zero rather than as lost data.
+    ...Object.fromEntries(
+      ALL_DOC_VARIANTS.filter((v) => v !== 'original').flatMap((v) =>
+        ALL_LEVEL_CONDITIONS.flatMap((c) => [
+          [metricKey('assertion', v, c), docVariantField(v, c)],
+          [metricKey('redundancy', v, c), docVariantField(v, c)],
+        ]),
+      ),
+    ),
   };
 
   for (const { file, data } of days) {
@@ -1629,6 +1807,10 @@ function mergeRuns(files, arms) {
               retrieved: cell.retrieved,
               rnaCalls: [], levelCalls: [], hallucCalls: [],
               assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
+              ...Object.fromEntries(
+                ALL_DOC_VARIANTS.filter((v) => v !== 'original')
+                  .flatMap((v) => ALL_LEVEL_CONDITIONS.map((c) => [docVariantField(v, c), []])),
+              ),
             });
           // Defensive: a file carrying an assertion fingerprint but no assertion
           // array (hand-edited, or written by a partial run) must not throw.
@@ -1687,9 +1869,43 @@ if (require.main === module) {
     );
     const probeSelection = selectProbes(flagValue('only-probe'));
     const conditionSelection = selectLevelConditions(flagValue('level-condition'));
-    if (selection.errors.length || probeSelection.errors.length || conditionSelection.errors.length) {
-      for (const e of [...selection.errors, ...probeSelection.errors, ...conditionSelection.errors]) console.error(e);
+    const variantSelection = selectDocVariants(flagValue('doc-variant'));
+    const argSelectionErrors = [
+      ...selection.errors, ...probeSelection.errors,
+      ...conditionSelection.errors, ...variantSelection.errors,
+    ];
+    if (argSelectionErrors.length) {
+      for (const e of argSelectionErrors) console.error(e);
       process.exit(1);
+    }
+
+    // The zero-quota gates, before anything can cost a call.
+    //
+    // G1 asks whether the detector can see the behaviour at all - a property of
+    // the code and the model's register, free to test. The variant checks ask
+    // whether the manipulated documents are what they claim to be. Both block:
+    // the 2026-08-23 run was voided because a control that had never been
+    // separated from the model question could not be read afterwards, and the
+    // fix is to answer the free question first and refuse to spend otherwise.
+    //
+    // Only for a non-original variant. An `original` run is the pre-existing
+    // probe and must not acquire a new way to fail.
+    if (variantSelection.variants.some((v) => v !== 'original')) {
+      const g1 = evaluateG1();
+      if (!g1.pass) {
+        console.error('G1 (detector control) does not pass - refusing to spend quota.');
+        for (const f of [...g1.pairFailures, ...g1.silentFailures, ...g1.unmet]) console.error(`  ${f}`);
+        process.exit(1);
+      }
+      try {
+        verifyVariants();
+        verifySatisfactions(variantDocs('unlabelled'));
+      } catch (e) {
+        console.error('Document variants failed their checks - refusing to spend quota.');
+        console.error(e.message);
+        process.exit(1);
+      }
+      console.log(`G1: pass (${g1.pairs} pairs, ${g1.dimensions.length} dimensions, ${g1.startups.length} startup). Variant checks: pass.`);
     }
 
     if (process.argv.includes('--fingerprint')) {
@@ -1729,7 +1945,12 @@ if (require.main === module) {
           for (const condition of conditionSelection.conditions) {
             const levels = levelsForCondition(startup, condition);
             const built = await buildRnaCell(ai, arm, startup, levels, corpusVecs, embedState);
-            console.log(`\n----- RNA PROMPT (${condition}) -----\n${rnaPrompt(startup.doc, built.rnaBlock, levels)}`);
+            for (const variant of variantSelection.variants) {
+              const doc = variantDocs(variant)[startupName];
+              console.log(`
+----- RNA PROMPT (${condition}/${variant}) -----
+${rnaPrompt(doc, built.rnaBlock, levels)}`);
+            }
           }
           console.log(`\n----- LEVELS PROMPT -----\n${levelsPrompt(startup.doc, levelBlock)}`);
         }
@@ -1743,6 +1964,7 @@ if (require.main === module) {
       startupNames: selection.startups,
       probes: probeSelection.probes,
       conditions: conditionSelection.conditions,
+      docVariants: variantSelection.variants,
     });
     if (OUT_FILE) writeResults(OUT_FILE, results);
   })().catch((e) => {
@@ -1778,6 +2000,8 @@ module.exports = {
   mergeRuns,
   currentFingerprints,
   flaggedClauses,
+  scopedClauses,
+  resultsPayload,
   rnaTexts,
   validateArgs,
   selectCells,
@@ -1788,6 +2012,10 @@ module.exports = {
   DEFLATED_OVERRIDE,
   deflatedLevels,
   selectLevelConditions,
+  selectDocVariants,
+  docVariantField,
+  metricKey,
+  ALL_DOC_VARIANTS,
   levelsForCondition,
   conditionField,
   isRetryableServerError,

@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const { levelPlacement } = require('./lib/metrics');
 const { HARD_ABSENCES, verifyAbsences } = require(path.join(__dirname, 'lib/hard-absences.js'));
+const { ORIGINAL_DOCS } = require(path.join(__dirname, 'lib/doc-variants.js'));
 
 const DIMENSIONS = ['Technology', 'Market', 'Acceptance', 'Organizational', 'Regulatory', 'Investment'];
 
@@ -98,14 +99,21 @@ const CONTRADICTIONS = [
   ['AgroLink PH', 'Acceptance', 'ARL 1: "no user has interacted with the product in any form"', 'paper prototype tested with 3 cooperatives'],
 ];
 
-/** The two documents, read from the harness so they cannot drift from it. */
+/**
+ * The two documents, imported from the single source the harness also reads
+ * (lib/doc-variants.js' ORIGINAL_DOCS) so they cannot drift from it.
+ *
+ * This used to regex-scrape the `doc:` template literal out of
+ * measure-grounding.js. That broke the moment the documents moved, which is the
+ * argument against source-scraping — but it was also quietly returning the RAW
+ * source text, so on a CRLF checkout the audit read documents with \r\n while
+ * the harness parsed the same literal to \n. Importing removes both problems.
+ */
 function loadDocuments() {
-  const src = fs.readFileSync(path.join(__dirname, 'measure-grounding.js'), 'utf8');
   const out = {};
   for (const name of Object.keys(SEEDED)) {
-    const m = src.match(new RegExp(`'${name}':\\s*\\{\\s*\\n\\s*doc: \`([\\s\\S]*?)\`,`));
-    if (!m) throw new Error(`could not extract document for ${name}`);
-    out[name] = m[1];
+    if (typeof ORIGINAL_DOCS[name] !== 'string') throw new Error(`could not extract document for ${name}`);
+    out[name] = ORIGINAL_DOCS[name];
   }
   return out;
 }

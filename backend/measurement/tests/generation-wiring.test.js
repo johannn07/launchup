@@ -172,3 +172,104 @@ test('a 429 during generation still stops the run without retrying', async () =>
   assert.equal(n, 1, 'a quota error must cost exactly one call, not three');
   assert.equal(results['deviation-deterministic'].quotaHit, true);
 });
+
+// --------------------------------------------------------------------------
+// The --doc-variant axis. A flag that selected variants and then generated from
+// the original document would leave every test in doc-variant-arg.test.js green
+// while the run measured nothing — and it would cost a quota day to find out.
+// These pin that the variant reaches the prompt, lands in its own pool, and
+// stays out of the pools metrics 1-2 read.
+// --------------------------------------------------------------------------
+
+const V = require(path.resolve(__dirname, '../lib/doc-variants.js'));
+
+const rnaOnly = {
+  arms: DEVIATION,
+  startupNames: ['MediSync Cebu'],
+  reps: 1,
+  report: false,
+  pacingMs: 0,
+  probes: ['rna'],
+};
+
+test('the default run is original-only and populates no variant pool', async () => {
+  const prompts = [];
+  const results = await runGenerationArms(aiThatMustNotBeUsed, null, {
+    ...rnaOnly,
+    callFn: async (_ai, prompt) => { prompts.push(prompt); return okResponse; },
+  });
+  assert.equal(prompts.length, 1, 'one call: one arm, one startup, one rep, truth, original');
+  assert.ok(prompts[0].includes(V.ORIGINAL_DOCS['MediSync Cebu']), 'the original document must reach the prompt');
+  const cell = results['deviation-deterministic'].startups['MediSync Cebu'];
+  assert.deepEqual(cell.unlabelledTruthCalls, [], 'no variant was requested, so no variant pool may fill');
+});
+
+test('an unlabelled run sends the unlabelled document, not the original', async () => {
+  const prompts = [];
+  await runGenerationArms(aiThatMustNotBeUsed, null, {
+    ...rnaOnly,
+    docVariants: ['unlabelled'],
+    callFn: async (_ai, prompt) => { prompts.push(prompt); return okResponse; },
+  });
+  assert.equal(prompts.length, 1);
+  assert.ok(
+    prompts[0].includes(V.DOC_VARIANTS['MediSync Cebu'].unlabelled),
+    'the unlabelled variant must reach the prompt verbatim',
+  );
+  assert.ok(
+    !prompts[0].includes('Target Market: The 44 rural health units'),
+    'the deleted field label must not survive into the prompt',
+  );
+  assert.ok(
+    prompts[0].includes('The 44 rural health units in Cebu province'),
+    'the evidence phrase itself must survive — this is a salience manipulation, not a deletion',
+  );
+});
+
+test('both variants run as separate calls and land in separate pools', async () => {
+  const prompts = [];
+  const results = await runGenerationArms(aiThatMustNotBeUsed, null, {
+    ...rnaOnly,
+    docVariants: ['original', 'unlabelled'],
+    callFn: async (_ai, prompt) => {
+      prompts.push(prompt);
+      return { ...okResponse, text: JSON.stringify([{ readiness_level_type: 'Technology', rna: 'x' }]) };
+    },
+  });
+  assert.equal(prompts.length, 2, 'one call per variant — the axis multiplies the call count');
+  const cell = results['deviation-deterministic'].startups['MediSync Cebu'];
+  assert.equal(cell.assertionTruthCalls.length, 1, 'original goes to the existing pool');
+  assert.equal(cell.unlabelledTruthCalls.length, 1, 'unlabelled goes to its own');
+});
+
+// Metrics 1-2 score level placement and stage-appropriateness against the
+// document-derived reference, which is derived from the ORIGINAL document. A
+// manipulated call reaching rnaCalls would silently corrupt both.
+test('rnaCalls, which metrics 1-2 read, receives only the original variant', async () => {
+  const results = await runGenerationArms(aiThatMustNotBeUsed, null, {
+    ...rnaOnly,
+    docVariants: ['original', 'unlabelled'],
+    callFn: async () => ({ ...okResponse, text: JSON.stringify([{ readiness_level_type: 'Technology', rna: 'x' }]) }),
+  });
+  const cell = results['deviation-deterministic'].startups['MediSync Cebu'];
+  assert.equal(cell.rnaCalls.length, 1, 'exactly one of the two calls may reach the metric 1-2 pool');
+});
+
+test('the levels probe always reads the original document', async () => {
+  const prompts = [];
+  await runGenerationArms(aiThatMustNotBeUsed, null, {
+    arms: DEVIATION,
+    startupNames: ['MediSync Cebu'],
+    reps: 1,
+    report: false,
+    pacingMs: 0,
+    probes: ['levels'],
+    docVariants: ['unlabelled'],
+    callFn: async (_ai, prompt) => { prompts.push(prompt); return okResponse; },
+  });
+  assert.equal(prompts.length, 1, 'the axis must not multiply the levels probe');
+  assert.ok(
+    prompts[0].includes(V.ORIGINAL_DOCS['MediSync Cebu']),
+    'metric 1 scores against a reference derived from the original document, so the levels probe must read it',
+  );
+});

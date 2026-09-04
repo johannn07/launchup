@@ -11,6 +11,13 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **Never run `pnpm build` while `pnpm dev` is watching.** Both write `dist/`; the race leaves the server unable to resolve its own modules. `pnpm test` is safe (ts-jest doesn't touch `dist/`).
 - **Green mocked tests have repeatedly coexisted with broken reality here.** The boot-time embedding backfill failed on every startup; deleting `TierConfig.weights` broke `seed-dummy.ts` so `pnpm dev` wouldn't compile — both with a green suite. Exercise the real path: `preview_start` + `preview_logs`, or `NestFactory.createApplicationContext`. Run SQL against Neon inside `begin`/`rollback`.
 - **Gemini free tier: 20 generation calls/day on `gemini-3.6-flash`, window resets 15:00 Philippine time** (midnight US Pacific). A run started before 15:00 draws on the *previous* window. One UI generation fans out into several calls — budget 3–5/day, not 20. 429s surface in the backend terminal, not the browser. Embedding has a separate 100/min quota.
+- **Never rewrite a `backend/measurement/*.js` file with LF endings.** The harness
+  fingerprints code by hashing `Function.prototype.toString()`, which carries the
+  file's *real* line endings; working copies are CRLF and git stores LF. An LF
+  rewrite moves every hash with no code change, and `--merge` then refuses every
+  historical pool. It presents as "collected data would stop pooling", which sends
+  you hunting in the wrong file. Preserve endings when editing, and re-check
+  `currentFingerprints()` against a stored run afterwards.
 - **`pg` is not resolvable from `backend/`** (pnpm-isolated under `@mikro-orm/postgresql`). Use `MikroORM.init(require('./dist/src/mikro-orm.config').default)` + `orm.em.getConnection().execute(sql)`. Tables are **pluralised**: `startups`, `startups_readiness_level`, `rag_contexts`, `rag_retrieval_logs`.
 - **`nest build` emits to `dist/src/`, not `dist/`** (because `seed-dummy.ts` sits at the backend root). `seed-admin.js` and `seed-demo-runner.js` hardcode `./dist/` and are broken.
 - **`mikro-orm.config.ts` hardcodes `entities: ['./dist/**/*.entity.js']`.** A build emitted anywhere else still loads **stale** entities from `dist/`, silently. Any probe compiled to a scratch dir must override `entities`, or it is measuring the last build — this produced a convincing false negative once (a new property read as "not in metadata").
@@ -118,87 +125,60 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 ---
 
-## 2026-08-25 — first deployment of this codebase, and a cookie that could never have worked
+## Compressed — 2026-08-25 (deployment, RNA dimension picker)
 
-PRs **#35–#37**, all merged; tip `b93e213`. Zero Gemini generation calls. Backend on Render free (`https://launchup-4w6d.onrender.com` — Render suffixed the name), frontend on Vercel (`https://launchup-enhanced.vercel.app`). **The live `launchup.vercel.app` / `launchup.onrender.com` pair is the previous team's**; this codebase had never been deployed at all, which is a different problem from a broken deployment because there was no working configuration to restore.
+**First deployment of this codebase** (PRs #35–#37, `b93e213`): backend on Render
+free, frontend on Vercel; the live `launchup.vercel.app`/`launchup.onrender.com`
+pair is the *previous team's*. Four failures, each with a lasting lesson:
+`NODE_ENV=production` makes pnpm skip devDependencies (`pnpm install --prod=false`);
+`pnpm start` points at `dist/main` while `nest build` emits `dist/src/` — worked
+around in Render's dashboard, **`package.json` is still wrong** (TODO §4); no shell
+on Render free, so corpus seeding moved into the build command (safe only because
+the seeder is idempotent); deleting `frontend/vercel.json` dropped a load-bearing
+`NODE_VERSION=20` pin, resolved by moving to `adapter-vercel@6`.
 
-### Four deployment failures, in the order they appeared
+**The cross-domain cookie could never have worked, and `sameSite` was never the
+obstacle.** A browser picks cookies by destination host, so nothing held for
+`vercel.app` can reach `onrender.com`; locally both apps are `localhost` and
+cookies ignore ports, so the mismatch cannot appear in development. Fixed with a
+same-origin proxy route swapping the cookie for a Bearer header (19 axios callers,
+49 fetch sites); `sameSite` reverted to `'strict'`.
 
-1. **`nest: not found`.** Render sets `NODE_ENV=production`, so pnpm skips devDependencies and `@nestjs/cli` disappears. Build command must be `pnpm install --prod=false && pnpm build`.
-2. **`Cannot find module dist/main` — `pnpm start` has never worked here.** `nest build` emits to `dist/src/` because `seed-dummy.ts` sits at the backend root; `package.json`'s `start` script is an unfixed instance of that, invisible locally because `pnpm dev` never reads the path. Render's start command is overridden to `node dist/src/main`. **`package.json` itself is still wrong** — `TODO_CHECKLIST` §4.
-3. **No shell on Render's free tier**, so the RAG corpus cannot be seeded after deploy. Moved into the build command, safe only because the seeder is idempotent: first run reported `0 created, 0 updated, 64 unchanged`.
-4. **`Unsupported Node.js version: v22`.** Deleting `frontend/vercel.json` removed a **load-bearing** `NODE_VERSION=20` pin — `adapter-auto@3` resolves to `adapter-vercel@4`, which knows only Node 18 and 20. Pinning back fixes the build and breaks local dev (pnpm enforces `engines`, everyone is on 22), so `adapter-auto` was dropped for `adapter-vercel@6`.
+⚠️ **Unresolved:** `getData(url, access)` serialises the raw JWT into the page
+payload, so any XSS reads it out of hydration data — the httpOnly cookie is partly
+defeated. Tracked in TODO §1. Also still open: `debug: true` logs SQL parameter
+values to Render, and `main.ts` re-seeds demo data on every redeploy.
 
-### The cross-domain cookie — and why `axios.ts`'s comment was wrong
+**Midterm framework decided:** TAM primary, SUS and task success/time-on-task
+supporting, with the measurement harness presented as a separate output-quality
+layer. System type is business/organisational workflow tooling. **The SPMP and the
+traceability matrix are both at zero** and compete for the same weeks as the
+30-user study.
 
-Pages rendered, every guarded client-side call returned 401, and the preflight returned 204, so CORS was never the problem. **`sameSite` was never the obstacle either.** The `Access` cookie is scoped to the frontend's own host and a browser picks cookies by **destination** host, so nothing held for `vercel.app` can be sent to `onrender.com`; SameSite only governs a cookie that already matches. **Locally both apps are `localhost`, and cookies ignore ports**, so this mismatch cannot appear in development — the `sameSite: 'none'` change shipped earlier the same day was harmless and pointless. The network tab split the case cleanly: `getData()` sends an explicit `Authorization: Bearer` header and worked cross-domain; everything relying on `withCredentials` failed.
+**Mentor-selectable RNA dimensions** (`feat/rna-dimension-picker`): 
+`GET /rna/:id/generate-rna?readinessTypes=` regenerates named dimensions whether or
+not they already have an RNA; omitting it keeps gap-fill. All selected dimensions
+go out in **one** Gemini call. Unknown types 400 before `aiRunService.track()`, so
+no orphan run rows. **Deploy backend before frontend** — the reverse silently
+gap-fills instead of regenerating. Live-verified: RNA rows 9 → 11, one
+`ai_generation_runs` row, three 400s created zero rows.
 
-Fixed with a same-origin proxy (`routes/api/[...path]/+server.ts`) that swaps the cookie for a Bearer header: axios `baseURL: '/api'` covering 19 callers, 49 direct fetch sites across 16 components rewritten. The 13 `.server.ts` files are untouched — they hold the token already. `sameSite` reverted to `'strict'`, correct again and stricter than the state that shipped.
+Two lessons worth more than the feature. **The vite dev proxy could never have
+confirmed anything** — it forwarded `/api` to port 3001 while Nest serves 3000, and
+vite's `server.proxy` runs ahead of the SvelteKit handler; repointing it to 3000
+would have been the *wrong* fix, since it skips the route's cookie-to-Bearer swap.
+The block was deleted. And **a bug I reported did not exist**: a `CheckboxItem`
+dropdown appearing to leave the page unclickable was the Browser pane's tab not
+compositing, so bits-ui's `animationend` never fired. It reproduced on untouched
+master, which felt like proof — but both were observed through the same instrument.
+*Reproducing on unmodified code rules out your change, not your instrument.* All of
+it was reverted.
 
-### New finding — the httpOnly cookie is partly defeated
-
-`getData(url, access)` takes the raw JWT from `data.access`, so **the token is serialised into the page payload the browser receives.** Any XSS reads it out of hydration data without needing cookie access. The proxy makes the argument unnecessary; removing it means dropping `data.access` from the layout load and the parameter from ~40 call sites. Logged in `TODO_CHECKLIST` §1.
-
-### Midterm planning
-
-Recommended framework: **TAM primary, with SUS and task success / time-on-task supporting**, with the measurement harness presented as a separate output-quality layer rather than a substitute. System type settled as **business/organisational workflow tooling** — the educational frameworks and SBCVM are both out, the latter being the trap, since the domain is startups but the deliverable is not a startup concept. **Two deliverables are at zero: the SPMP and the traceability matrix**, neither of which exists in the repo or the capstone folder. `TODO_CHECKLIST` §0 is already most of a traceability matrix and needs SRS requirement IDs, not a rewrite.
-
-### Verified from outside
-
-Backend `200` in 0.24 s; CORS preflight `204` with the correct headers; frontend landing and `/login` `200`; `/startups` while logged out `302 → /login?redirectTo=%2Fstartups`, which proves `hooks.server.ts` runs and — since `JWT_SECRET` is a build-time static import — that the secret is present. Login confirmed by John for both `demo@` and `admin@`. `svelte-check` **119/14 across 43 files, unchanged from master**. Local `pnpm build` completes both vite phases and then fails on Windows symlink permissions, which does not apply to Vercel's Linux builders — so the proxy is **verified as far as this machine allows, not end to end**.
-
-### Open
-
-- **Retest Readiness Level after the proxy deploy** — `POST /api/readiness/score` should return 200 on the app's own origin.
-- **Gemini ~20 calls/day is the binding constraint on the 30-user study.** Pre-seed the AI artifacts so testers review output rather than generate it — which is the product's real workflow anyway.
-- `debug: true` (`mikro-orm.config.ts:26`) sends every SQL query, parameter values included, to Render's logs.
-- `main.ts` seeds on every boot, so each redeploy re-seeds demo data into the production database.
-- Render free spins down after 15 minutes with a ~1 minute cold start. Warm it before validation sessions.
-- IDOR and the admissions endpoints are still `JwtGuard`-only — now behind a public URL rather than localhost.
-
-### Next step
-
-Confirm the proxy in the browser, then close the two production-hygiene items before any second account exists. After that the midterm critical path is the SPMP and traceability matrix, which compete for the same two weeks as the 30-user study.
-
----
-
-## 2026-08-25 (later) — mentor-selectable RNA dimensions, and two bugs that were never mine
-
-Branch `feat/rna-dimension-picker`, merged. **2 Gemini generation calls.**
-
-### What shipped
-
-RNA generation was gap-fill only: one prompt for every dimension lacking an RNA, and `[]` once all six were covered, so a mentor could never regenerate one.
-
-- `GET /rna/:id/generate-rna` takes `?readinessTypes=Technology,Market`. Named dimensions regenerate **whether or not they already have an RNA** (John's call); omitting the param keeps gap-fill, so no existing caller changes. Unknown types 400 **before** `aiRunService.track()`, so a bad request leaves no orphan `ai_generation_runs` row.
-- The Generate button became a split button with a `CheckboxItem` picker, pre-checked to the dimensions with no RNA yet. Every selected dimension still goes out in **one** Gemini call — picking six costs the same as picking one.
-- Dropped the `check-complete` query; nothing else read it.
-
-### The vite proxy could never have been confirmed locally
-
-Last session's open item was "confirm the proxy in the browser." It could not have passed: `vite.config.ts` proxied `/api` to port **3001** while the backend serves **3000**, and vite's `server.proxy` runs ahead of the SvelteKit handler, so every client-side API call ECONNREFUSED and 500'd in dev. Left behind by `5a453d2`, the commit that added the proxy route. **Repointing it to 3000 would have been the wrong fix** — the proxy forwards straight to Nest, skipping that route's cookie-to-Bearer swap, so calls carrying an explicit token would work and everything relying on the cookie would 401, a half-fix that looks green. The route supersedes the proxy, so the block only had to go. Verified with nothing listening on 3001: RNA and RNS both load, every `/api/*` call 200, zero console errors.
-
-### A bug I reported that turned out not to exist
-
-Mid-session I diagnosed "any `CheckboxItem` dropdown leaves the page unclickable after closing", reproduced it on untouched master, shipped a fix, wrote it into both documents, and John approved a shared-wrapper fix on the strength of it. **It is not a real bug, and all of it was reverted.** bits-ui gates unmount on `animationend` and `useBodyScrollLock` schedules its reset inside `requestAnimationFrame`; **the Browser pane's tab does not composite**, so neither ever fires and `body { pointer-events: none }` stays forever. Confirmed by dispatching a synthetic `animationend`, which unmounted the node on demand. **What made it convincing:** it reproduced on master, so "pre-existing" felt proven — but master and the branch were both being observed through the same non-compositing pane, which is the actual common cause. *Reproducing on unmodified code rules out your change; it does not rule out your instrument.* **Cost of the wrong fix, had it shipped:** `preventScroll={false}` lets the page scroll behind an open menu and the menu stops following its trigger — measured, the gap went 38 px → 114 px after a 120 px scroll.
-
-### Verified
-
-Backend **315/315** across 29 suites, four new selection tests written first and watched fail. `svelte-check` **119/14 unchanged from master**. Live through the real UI with a mentor session: ticked Technology + Regulatory, the request went out as `?readinessTypes=Technology,Regulatory`, RNA rows **9 → 11** (+1 each, nothing else touched), and `ai_generation_runs` recorded **one** run (id 24, 13 s, completed). Three 400s created **zero** rows. `nest build` exits 0 and emits `dist/src/main.js`, the path Render's start-command override points at.
-
-**Deploy the backend before the frontend.** `?readinessTypes=` is additive, so an old frontend against a new backend is fine; the reverse is not — the picker would send a parameter the old backend ignores and generation would silently gap-fill instead of regenerating. Wrong behaviour rather than an error, so it would not announce itself.
-
-### The picker removes an accidental quota ceiling
-
-The old Generate button disabled itself once all six dimensions had an RNA, so a mentor could not spend further calls on a completed startup. Regeneration is now always available, against a free tier of roughly **20 calls/day**. This is the approved design, not a regression, but it sharpens the constraint: for a 30-user study, pre-seed the AI artifacts so testers review output rather than generate it.
-
-### Open
-
-- Last session's two production-hygiene items are untouched: `debug: true` logging SQL parameter values to Render, and `main.ts` re-seeding demo data on every redeploy.
-- Running `pnpm lint` rewrote **107 backend files** over the CRLF conflict, including untouched lines *inside* the files being edited, which is the part that makes your own diff unreviewable. Use `npx eslint --no-fix src/<path>`, and judge against a baseline of **291 errors on an untouched file**, not zero.
+⚠️ **`pnpm lint` rewrote 107 backend files** over the CRLF conflict, including
+untouched lines inside edited files. Use `npx eslint --no-fix src/<path>`, judged
+against a baseline of ~291 errors on an untouched file, not zero.
 
 ---
-
 ## 2026-09-04 — LaunchUp has three roles
 
 **Merged as PRs #47–#50.** Role branch tested by John before merge. Started as "can we remove the Admin role", ended with the role model matching the spec and the startup module's access rules made real.
@@ -331,3 +311,114 @@ seeder still re-seeds demo data on every redeploy.
 Implement the metric 6 design, or take the midterm critical path — the SPMP and
 the traceability matrix — which competes for the same weeks as the 30-user
 study.
+
+---
+
+## 2026-09-05 — metric 6 built, run, and retired on its own rule
+
+Branch `measure/metric-6-salience`, local and unpushed. **12 Gemini calls.**
+Everything the 2026-09-04 design pre-registered was implemented at zero quota,
+every gate came up green, the run was spent — and it retired the metric.
+
+### What shipped
+
+- **`scopedCount` + persisted `scopedClauses`.** The acquisition gate's rejections
+  were computed and dropped, which is exactly why the 2026-08-23 finding sat unseen
+  for eleven days. Derived in the harness rather than added to `lib/redundancy.js`,
+  whose source is hashed — a field there would have refused every historical pool
+  for a reporting change that alters no verdict.
+- **G1**, a blocking zero-quota detector control (`lib/g1-cases.js`): every clause
+  the scorer bins `recommended`/`scoped` across three stored runs, each paired with
+  a mutant swapping the progression frame for an acquisition frame. Provenance is
+  machine-checked against the result files; mutants must name the same token.
+- **`unlabelled` variants** with both machine checks, **`--doc-variant`** hard-
+  failing before any network call, and **variant-only fingerprint keys**.
+
+### G1 passes, with two bounds that must be quoted with it
+
+11/11 pairs mutant-fires / original-silent; both expected-silent cases silent.
+Mutation-tested: 4 mutants, **3 killed**. The survivor is recorded, not patched —
+removing the `PROGRESSION_VERB` veto changes no G1 verdict because it is the sole
+silencer on zero cases, the model having written the origin frame with a
+preposition every time. G1 establishes nothing about that regex.
+
+**Amendment 1**, recorded in the design file before any call: the "at least 2
+startups" clause is struck. All 11 harvestable clauses are AgroLink PH — MediSync's
+six are descriptive (*"acceptance is demonstrated by…"*), never the recommendation
+register. ⚠️ **G1 therefore validates the detector against AgroLink's register only,
+while half the run's observations will be MediSync — whose descriptive register is
+precisely what `unlabelled` aims to move.** G1's blind spot sits where the
+manipulation acts.
+
+### The database has 12 startups; the harness uses 2, and that is right
+
+John asked why. Ten of the twelve are thin intake records — `historical_timeline:
+[]`, `intellectual_property_status: "Pending AI Generation"`, `members: []`. They
+evidence a target market and nothing else, so they cannot supply the Technology or
+Acceptance evidence all 11 G1 clauses live in. And G1's cases are the model's *own
+generated text*: a new document yields zero cases until quota is spent generating
+for it. Adding one also moves all 45 fingerprints, since `common.startups` is
+hashed into every key. Two quota days and forfeited pooling — declined, recorded.
+
+### Five of six cells
+
+⚠️ AgroLink/Market cannot be manipulated: its evidence phrase *includes* its own
+field label, so "byte-identical" and "label deleted" are mutually exclusive. It
+stays labelled as an accidental within-document control and must not be read as a
+manipulated observation. One confound: MediSync's Acceptance evidence shares a
+sentence with an Organizational fact, so that fact is unlabelled as a side effect —
+it cannot reach metric 6, but metric 5's `unlabelled` numbers carry it.
+
+### Verified without quota
+
+All 45 stored fingerprints byte-identical (30 variant keys added). Re-scoring
+2026-08-23 reproduces its six original rows exactly. The historical merge refusal
+list is byte-identical to before. `--dry-run` prints `G1: pass` and the two RNA
+prompts differ in exactly the document lines. A typo'd `--doc-variant` exits 1
+before any network call. **358/358** measurement tests.
+
+### Also worth knowing
+
+A doc de-duplication fell out of this: both documents now live once, in
+`ORIGINAL_DOCS`. `audit-ground-truth.js` used to regex-scrape the template literal
+out of the harness source — which also returned *raw* source, so on a CRLF checkout
+the audit read documents with `
+` while the harness parsed the same literal to
+`
+`.
+
+### The run, and the retirement
+
+**12/12 calls, 72/72 dimensions, no 429s, no 503s, no retries**
+(`results/2026-09-05-rna-salience.json`). **`redundantRate` is 0 on every arm under
+both `original` and `unlabelled`.** Prediction 1 (G2 fires) failed; prediction 2 is
+untestable as a consequence. **The stopping rule fired: metric 6 is retired.**
+
+**The manipulation was delivered, and that is what makes the null worth having.**
+Of 36 (startup, dimension) pairs, **0 are byte-identical** across variants, mean
+word overlap **0.44**. The model wrote materially different text under the
+manipulated document and still never asked for an artifact the document already
+evidenced — every clause naming a satisfied artifact describes it as achieved
+(*"having tested a paper prototype…"*, *"gained user acceptance across 6
+facilities…"*). Both `scoped` clauses are `original`; under `unlabelled` the model
+did not even write the progression construction the gate exists to reject.
+
+⚠️ **The only sentence this run licenses** is *"the model did not make this error
+under this manipulation, in these 36 observations per variant."* Not "the detector
+works" — G1 is a bound, AgroLink-only, with `PROGRESSION_VERB` untested. Not "the
+model is robust" — n=1 rep, two documents, one model, one quota window, two
+uncaught classes still untested. **Metric 6 produced no true positive on any real
+generated text across its whole life** (96 + 36 + 72 observations). What it did
+establish: the acquisition gate rejects the progression frame correctly, 6 for 6.
+
+### Next step
+
+Metric 6 is closed, so the measurement track has no open item. The critical path
+is the SPMP and the traceability matrix, which compete for the same weeks as the
+30-user study.
+
+### Open
+
+Unchanged: the per-startup reads in `rna`, `rns`, `initiative` and `roadblock` are
+unguarded; no generalized `RolesGuard`; `debug: true` still logs SQL parameter
+values to Render; the boot seeder still re-seeds on every redeploy.

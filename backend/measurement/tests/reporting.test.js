@@ -87,7 +87,11 @@ test('metric 5 reports asserted, mentioned and unclassified per condition', () =
 // says 0% — an absent row and a zero row mean different things.
 test('metric 5 gives every arm a row even with no calls', () => {
   const s = H.summarizeResults({});
-  assert.equal(s.metric5.length, H.ARMS.length * 3, 'one row per arm per condition');
+  assert.equal(
+    s.metric5.length,
+    H.ARMS.length * H.ALL_DOC_VARIANTS.length * H.ALL_LEVEL_CONDITIONS.length,
+    'one row per arm per document variant per condition',
+  );
   assert.equal(s.metric5[0]['asserted %'], 'n/a');
 });
 
@@ -129,10 +133,10 @@ test('flaggedClauses emits one seven-field row per flagged clause', () => {
   });
   assert.equal(rows.length, 1);
   assert.deepEqual(Object.keys(rows[0]).sort(), [
-    'arm', 'condition', 'dimension', 'klass', 'rep', 'startup', 'text',
+    'arm', 'condition', 'dimension', 'klass', 'rep', 'startup', 'text', 'variant',
   ]);
   assert.deepEqual(rows[0], {
-    arm: 'baseline', startup: 'AgroLink PH', condition: 'truth', rep: 0,
+    arm: 'baseline', startup: 'AgroLink PH', variant: 'original', condition: 'truth', rep: 0,
     dimension: 'Investment', klass: 'asserted', text: 'The venture has drafted a funding plan.',
   });
 });
@@ -254,9 +258,11 @@ test('printReports displays all three metric-6 conditions, including an unrun in
   }
   const metric6Table = calls.find((rows) => rows.some((r) => 'redundantN' in r));
   assert.ok(metric6Table, 'printReports must render metric 6 via console.table, like metric 5');
-  const conditions = metric6Table.filter((r) => r.arm === 'baseline').map((r) => r.condition).sort();
+  const conditions = metric6Table
+    .filter((r) => r.arm === 'baseline' && r.variant === 'original')
+    .map((r) => r.condition).sort();
   assert.deepEqual(conditions, ['deflated', 'inflated', 'truth']);
-  const inflated = metric6Table.find((r) => r.arm === 'baseline' && r.condition === 'inflated');
+  const inflated = metric6Table.find((r) => r.arm === 'baseline' && r.variant === 'original' && r.condition === 'inflated');
   assert.equal(inflated.redundantN, 0, 'no inflated calls were made, so n must be the sentinel 0');
   assert.equal(inflated.redundantRate, null, 'n=0 must read as n/a, never a misleading 0%');
 });
@@ -305,4 +311,177 @@ test('rnaTexts carries every generated dimension so a future metric can re-score
       ['baseline', 'MediSync Cebu', 'truth', 'Market', 'Needs: define the segment.'],
     ].sort(),
   );
+});
+
+// ---------------------------------------------------------------------------
+// Required change 1 (design 2026-09-04): the acquisition gate's rejections were
+// computed and dropped. `scoreRedundantNeeds` downgrades a `recommended` clause
+// to `scoped`, and no column, no print and no persisted field carried it — so
+// the gate's entire activity was unobservable from a results file, and the four
+// rejections in the 2026-08-23 run went unseen for eleven days. A gate whose
+// rejections cannot be counted cannot be audited.
+//
+// The fixture is the real shape all four of those clauses had: the satisfied
+// artifact as the origin being left behind. It classifies `recommended` on
+// "Needs to", then ORIGIN_OR_SCOPE_PREP's `from` downgrades it — so it is
+// invisible in every existing column at once (redundant false, unclassified
+// false, denied false).
+const SCOPED_FIXTURE = 'Needs to move from paper prototype testing to full software development.';
+
+function scopedResults() {
+  return {
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [{ byDim: { Technology: SCOPED_FIXTURE } }],
+          assertionInflatedCalls: [], assertionDeflatedCalls: [],
+        },
+      },
+    },
+  };
+}
+
+test('metric 6 reports scopedCount, the acquisition gate rejections', () => {
+  const s = H.summarizeResults(scopedResults());
+  const row = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.equal(row.scopedCount, 1, 'the gate rejected one observation and the row must say so');
+  assert.equal(row.redundantN, 1);
+  assert.equal(row.redundantRate, 0, 'a rejected clause must never reach the headline');
+  assert.equal(row.unclassified, 0, '`scoped` is a gate verdict, not a read failure - never folded into the honesty column');
+});
+
+test('scopedCount is `refused` when metric 6 refused this pool, like every sibling column', () => {
+  // Nothing is merged here, so the value is a number rather than the sentinel;
+  // the assertion that matters is that the key exists on every row printed,
+  // including the conditions a run never populated.
+  const s = H.summarizeResults({});
+  for (const row of s.metric6) {
+    assert.ok('scopedCount' in row, `metric 6 row ${row.arm}/${row.condition} must carry scopedCount`);
+  }
+});
+
+test('scopedClauses persists the gate rejections verbatim, the way flaggedClauses persists metric 5', () => {
+  const rows = H.scopedClauses(scopedResults());
+  assert.equal(rows.length, 1);
+  assert.deepEqual(Object.keys(rows[0]).sort(), [
+    'arm', 'condition', 'dimension', 'klass', 'rep', 'startup', 'text', 'variant',
+  ]);
+  assert.deepEqual(rows[0], {
+    arm: 'baseline', startup: 'AgroLink PH', variant: 'original', condition: 'truth', rep: 0,
+    dimension: 'Technology', klass: 'scoped', text: SCOPED_FIXTURE,
+  });
+});
+
+test('scopedClauses carries only gate rejections, not every classified clause', () => {
+  const rows = H.scopedClauses({
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          // A genuine redundancy: an acquisition verb governs the token, so the
+          // gate keeps the `recommended` verdict and there is nothing to record.
+          assertionTruthCalls: [{ byDim: { Technology: 'Needs to develop a paper prototype of the lot-aggregation flow.' } }],
+          assertionInflatedCalls: [], assertionDeflatedCalls: [],
+        },
+      },
+    },
+  });
+  assert.deepEqual(rows, [], 'a kept `recommended` verdict is metric 6 headline data, not a gate rejection');
+});
+
+// The defect this whole change exists to fix is compute-but-not-persist, so the
+// payload itself is asserted rather than the pure function alone.
+test('the written payload carries both audit trails', () => {
+  const payload = H.resultsPayload(scopedResults());
+  assert.ok(Array.isArray(payload.flaggedClauses), 'metric 5 audit trail');
+  assert.ok(Array.isArray(payload.scopedClauses), 'metric 6 gate audit trail');
+  assert.equal(payload.scopedClauses.length, 1);
+  assert.equal(payload.scopedClauses[0].text, SCOPED_FIXTURE);
+});
+
+// ---------------------------------------------------------------------------
+// Per-variant reporting. Storing the unlabelled calls without scoring them
+// would recreate exactly the defect the scopedCount work above fixed: a value
+// computed, or in this case paid for with quota, and never reported.
+// ---------------------------------------------------------------------------
+
+test('metricKey maps (base, variant, condition) onto the fingerprint key family', () => {
+  assert.equal(H.metricKey('redundancy', 'original', 'truth'), 'redundancy');
+  assert.equal(H.metricKey('redundancy', 'original', 'deflated'), 'redundancy-deflated');
+  assert.equal(H.metricKey('redundancy', 'unlabelled', 'truth'), 'redundancy-unlabelled');
+  assert.equal(H.metricKey('redundancy', 'unlabelled', 'inflated'), 'redundancy-unlabelled-inflated');
+  assert.equal(H.metricKey('assertion', 'unlabelled', 'deflated'), 'assertion-unlabelled-deflated');
+});
+
+test('metricKey throws on an unknown variant or condition rather than composing a key nothing hashes', () => {
+  assert.throws(() => H.metricKey('redundancy', 'scrambled', 'truth'), /unknown document variant/i);
+  assert.throws(() => H.metricKey('redundancy', 'original', 'sideways'), /unknown condition/i);
+});
+
+test('every metricKey matches a key currentFingerprints actually emits', () => {
+  const fps = H.currentFingerprints();
+  for (const base of ['assertion', 'redundancy']) {
+    for (const variant of H.ALL_DOC_VARIANTS) {
+      for (const condition of H.ALL_LEVEL_CONDITIONS) {
+        const key = `${H.metricKey(base, variant, condition)}|baseline`;
+        assert.ok(key in fps, `${key} is reported but never fingerprinted`);
+      }
+    }
+  }
+});
+
+function unlabelledResults(text, dimension = 'Technology') {
+  return {
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
+          unlabelledTruthCalls: [{ byDim: { [dimension]: text } }],
+          unlabelledInflatedCalls: [], unlabelledDeflatedCalls: [],
+        },
+      },
+    },
+  };
+}
+
+test('metric 6 reports a row per (arm, variant, condition)', () => {
+  const s = H.summarizeResults({});
+  const baseline = s.metric6.filter((r) => r.arm === 'baseline');
+  assert.equal(baseline.length, H.ALL_DOC_VARIANTS.length * H.ALL_LEVEL_CONDITIONS.length);
+  for (const row of baseline) assert.ok('variant' in row, 'every row must say which document it scored');
+});
+
+test('an unlabelled call is scored into the unlabelled row, not the original one', () => {
+  const s = H.summarizeResults(unlabelledResults('Needs to develop a paper prototype of the lot-aggregation flow.'));
+  const original = s.metric6.find((r) => r.arm === 'baseline' && r.variant === 'original' && r.condition === 'truth');
+  const unlabelled = s.metric6.find((r) => r.arm === 'baseline' && r.variant === 'unlabelled' && r.condition === 'truth');
+  assert.equal(original.redundantN, 0, 'the original pool is empty and must stay empty');
+  assert.equal(original.redundantRate, null);
+  assert.equal(unlabelled.redundantN, 1);
+  assert.equal(unlabelled.redundantRate, 1);
+});
+
+test('metric 5 is reported per variant too', () => {
+  const s = H.summarizeResults({});
+  const baseline = s.metric5.filter((r) => r.arm === 'baseline');
+  assert.equal(baseline.length, H.ALL_DOC_VARIANTS.length * H.ALL_LEVEL_CONDITIONS.length);
+  for (const row of baseline) assert.ok('variant' in row);
+});
+
+test('the audit trails cover the variant pools and say which variant a clause came from', () => {
+  const scoped = H.scopedClauses(unlabelledResults(SCOPED_FIXTURE));
+  assert.equal(scoped.length, 1, 'a gate rejection in a variant pool must still be recorded');
+  assert.equal(scoped[0].variant, 'unlabelled');
+  assert.deepEqual(Object.keys(scoped[0]).sort(), [
+    'arm', 'condition', 'dimension', 'klass', 'rep', 'startup', 'text', 'variant',
+  ]);
+
+  const flagged = H.flaggedClauses(unlabelledResults('The venture has drafted a funding plan.', 'Investment'));
+  assert.equal(flagged.length, 1);
+  assert.equal(flagged[0].variant, 'unlabelled');
 });
