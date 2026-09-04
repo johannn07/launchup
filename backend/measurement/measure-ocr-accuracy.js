@@ -156,7 +156,7 @@ function parseAiPayload(raw, file) {
  * assembly, retry, payload parsing, accounting — is identical in both modes,
  * which is what makes --dry-run a rehearsal rather than a separate program.
  */
-async function runExtractions(aiService, config, { imageDir, generate, maxCalls = MAX_CALLS }) {
+async function runExtractions(aiService, config, { imageDir, generate, maxCalls = MAX_CALLS, existing = [], onRow }) {
   const models = aiService.ai.models;
   const impl = generate || models.generateContent.bind(models);
 
@@ -169,6 +169,16 @@ async function runExtractions(aiService, config, { imageDir, generate, maxCalls 
   const rows = [];
   try {
     for (const doc of DOCUMENTS) {
+      // Resume: a document already read successfully is never paid for twice.
+      // The daily cap is 20 calls, so a re-run after a 429 must cost only the
+      // documents that actually failed.
+      const done = existing.find((r) => r.file === doc.file && r.status === 'ok');
+      if (done) {
+        rows.push(done);
+        console.log(`  ${doc.file.padEnd(18)} [reused from stored run]`);
+        continue;
+      }
+
       if (apiCalls >= maxCalls) {
         rows.push({ file: doc.file, status: 'skipped', reason: `budget: ${apiCalls}/${maxCalls}` });
         continue;
@@ -179,23 +189,40 @@ async function runExtractions(aiService, config, { imageDir, generate, maxCalls 
       const before = apiCalls;
       const t0 = Date.now();
 
-      const ctx = ctxFor(config);
-      const raw = await aiService.getCapsuleProposalInfoFromImage(ctx, buffer, 'image/jpeg');
-      const payload = parseAiPayload(raw, doc.file);
+      // Per-document, so one 429 cannot discard every call that already
+      // succeeded. The caller persists after each row for the same reason.
+      try {
+        const ctx = ctxFor(config);
+        const raw = await aiService.getCapsuleProposalInfoFromImage(ctx, buffer, 'image/jpeg');
+        const payload = parseAiPayload(raw, doc.file);
 
-      rows.push({
-        file: doc.file,
-        writer: doc.writer,
-        status: 'ok',
-        imageSha256: sha256(buffer),
-        imageBytes: buffer.length,
-        transcription: payload.raw_transcription ?? '',
-        fields: Object.fromEntries(FIELDS.map((f) => [f, payload[f] ?? ''])),
-        apiCalls: apiCalls - before,
-        latencyMs: Date.now() - t0,
-        tokens: { ...ctx.tokens },
-      });
-      console.log(`  ${doc.file.padEnd(18)} ${rows[rows.length - 1].transcription.length} chars`);
+        rows.push({
+          file: doc.file,
+          writer: doc.writer,
+          status: 'ok',
+          imageSha256: sha256(buffer),
+          imageBytes: buffer.length,
+          transcription: payload.raw_transcription ?? '',
+          fields: Object.fromEntries(FIELDS.map((f) => [f, payload[f] ?? ''])),
+          apiCalls: apiCalls - before,
+          latencyMs: Date.now() - t0,
+          tokens: { ...ctx.tokens },
+        });
+        console.log(`  ${doc.file.padEnd(18)} ${rows[rows.length - 1].transcription.length} chars`);
+      } catch (err) {
+        const message = String(err?.message ?? err);
+        rows.push({
+          file: doc.file,
+          writer: doc.writer,
+          status: 'failed',
+          reason: message.slice(0, 300),
+          apiCalls: apiCalls - before,
+          latencyMs: Date.now() - t0,
+        });
+        console.log(`  ${doc.file.padEnd(18)} FAILED — ${message.slice(0, 120)}`);
+      }
+
+      if (onRow) onRow(rows);
     }
   } finally {
     models.generateContent = impl;
@@ -534,20 +561,44 @@ async function main() {
       return;
     }
 
-    console.log(`\n  --- LIVE: spending up to ${MAX_CALLS} generation calls ---\n`);
+    // Resume from a partial run rather than re-paying for rows already read.
+    const existing = fs.existsSync(RUN_FILE)
+      ? JSON.parse(fs.readFileSync(RUN_FILE, 'utf8')).rows ?? []
+      : [];
+    const reusable = existing.filter((r) => r.status === 'ok').length;
+    if (reusable) console.log(`\n  resuming: ${reusable}/10 already stored, paying only for the rest`);
+
+    console.log(`\n  --- LIVE: spending up to ${MAX_CALLS - reusable} generation calls ---\n`);
     const started = new Date().toISOString();
-    const { rows, apiCalls } = await runExtractions(aiService, config, { imageDir });
 
     fs.mkdirSync(RESULTS, { recursive: true });
-    fs.writeFileSync(
-      RUN_FILE,
-      JSON.stringify(
-        { started, finished: new Date().toISOString(), seed: SEED, config, apiCalls, rows },
-        null,
-        2,
-      ),
-    );
-    console.log(`\n  ${apiCalls} calls spent. Stored: ${path.relative(BACKEND, RUN_FILE)}`);
+    const persist = (rows, apiCalls) =>
+      fs.writeFileSync(
+        RUN_FILE,
+        JSON.stringify(
+          { started, finished: new Date().toISOString(), seed: SEED, config, apiCalls, rows },
+          null,
+          2,
+        ),
+      );
+
+    // Written after every row: a 429 partway must not discard the calls that
+    // already succeeded, because they cost the same daily budget as the rest.
+    const { rows, apiCalls } = await runExtractions(aiService, config, {
+      imageDir,
+      existing,
+      onRow: (rows) => persist(rows, undefined),
+    });
+    persist(rows, apiCalls);
+
+    const ok = rows.filter((r) => r.status === 'ok').length;
+    const failed = rows.filter((r) => r.status === 'failed');
+    console.log(`\n  ${apiCalls} calls spent. ${ok}/10 documents read.`);
+    if (failed.length) {
+      console.log(`  ${failed.length} failed — re-run --run to retry only those:`);
+      for (const f of failed) console.log(`      ${f.file}: ${f.reason.slice(0, 100)}`);
+    }
+    console.log(`  Stored: ${path.relative(BACKEND, RUN_FILE)}`);
     console.log('  Transcriptions are NOT printed — the reference spans must be typed blind.');
   } finally {
     await app.close();
@@ -562,6 +613,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runExtractions,
   parseReferenceSpans,
   observations,
   scoreThreshold,

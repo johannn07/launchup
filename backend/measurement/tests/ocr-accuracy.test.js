@@ -189,3 +189,95 @@ test('scoreSpans computes CER end to end against a real transcription', () => {
   assert.strictEqual(scored[0].status, 'ok');
   assert.strictEqual(scored[0].distance, 1, 'the page spelling costs the model exactly one edit');
 });
+
+// --------------------------------------------------------------------------
+// Quota resilience — the paths that matter under a 20-call daily cap
+// --------------------------------------------------------------------------
+
+const os = require('os');
+const { runExtractions } = require('../measure-ocr-accuracy');
+
+/** A throwaway image dir: the harness only reads bytes and hands them onward. */
+function fakeImageDir() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ocr-test-'));
+  for (const doc of DOCUMENTS) fs.writeFileSync(path.join(dir, doc.file), `bytes-of-${doc.file}`);
+  return dir;
+}
+
+/** Minimal stand-in for the resolved AiService. */
+function fakeAiService(behaviour) {
+  return {
+    ai: { models: { generateContent: async () => ({ text: '{}' }) } },
+    getCapsuleProposalInfoFromImage: async (ctx, buffer) => {
+      // Route through the patched hook so call accounting stays honest.
+      await ctx.__count();
+      return behaviour(buffer.toString());
+    },
+  };
+}
+
+function payloadFor(name) {
+  return JSON.stringify({ raw_transcription: `transcription of ${name}`, title: name });
+}
+
+test('one failing document does not discard the rows that already succeeded', async () => {
+  const dir = fakeImageDir();
+  const svc = fakeAiService((body) => {
+    if (body.includes('Sakayscan')) throw new Error('429 Too Many Requests');
+    return payloadFor(body);
+  });
+  // ctx.__count is not part of the real context; patch the hook the harness uses.
+  svc.ai.models.generateContent = async () => ({ text: '{}' });
+  const origin = svc.getCapsuleProposalInfoFromImage;
+  svc.getCapsuleProposalInfoFromImage = async (ctx, buffer, mime) => {
+    await svc.ai.models.generateContent({});
+    return origin({ ...ctx, __count: async () => {} }, buffer, mime);
+  };
+
+  const { rows, apiCalls } = await runExtractions(svc, {}, { imageDir: dir });
+
+  assert.strictEqual(rows.length, 10);
+  assert.strictEqual(apiCalls, 10, 'every document is still attempted');
+  const failed = rows.filter((r) => r.status === 'failed');
+  assert.strictEqual(failed.length, 1);
+  assert.strictEqual(failed[0].file, 'Sakayscan.jpg');
+  assert.match(failed[0].reason, /429/);
+  assert.strictEqual(rows.filter((r) => r.status === 'ok').length, 9, 'the other nine survive');
+});
+
+test('a stored ok row is reused rather than paid for again', async () => {
+  const dir = fakeImageDir();
+  const svc = fakeAiService((body) => payloadFor(body));
+  const origin = svc.getCapsuleProposalInfoFromImage;
+  svc.getCapsuleProposalInfoFromImage = async (ctx, buffer, mime) => {
+    await svc.ai.models.generateContent({});
+    return origin({ ...ctx, __count: async () => {} }, buffer, mime);
+  };
+
+  const existing = [
+    { file: 'Agritrack.jpg', writer: 'A', status: 'ok', transcription: 'stored', fields: {} },
+    { file: 'Mediqueue.jpg', writer: 'A', status: 'ok', transcription: 'stored', fields: {} },
+    // A failed row must NOT be reused — it is exactly what a re-run is for.
+    { file: 'Sakayscan.jpg', writer: 'A', status: 'failed', reason: '429' },
+  ];
+
+  const { rows, apiCalls } = await runExtractions(svc, {}, { imageDir: dir, existing });
+
+  assert.strictEqual(apiCalls, 8, 'two reused, eight paid for');
+  assert.strictEqual(rows.find((r) => r.file === 'Agritrack.jpg').transcription, 'stored');
+  assert.strictEqual(rows.find((r) => r.file === 'Sakayscan.jpg').status, 'ok', 'a failed row is retried');
+});
+
+test('onRow fires after every document so a partial run is always on disk', async () => {
+  const dir = fakeImageDir();
+  const svc = fakeAiService((body) => payloadFor(body));
+  const origin = svc.getCapsuleProposalInfoFromImage;
+  svc.getCapsuleProposalInfoFromImage = async (ctx, buffer, mime) => {
+    await svc.ai.models.generateContent({});
+    return origin({ ...ctx, __count: async () => {} }, buffer, mime);
+  };
+
+  const snapshots = [];
+  await runExtractions(svc, {}, { imageDir: dir, onRow: (rows) => snapshots.push(rows.length) });
+  assert.deepStrictEqual(snapshots, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+});

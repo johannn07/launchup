@@ -10,6 +10,12 @@
  * ground truth, so it is adjudicated by a human and recorded here rather than
  * derived at runtime.
  *
+ * Drafted from the photographs by Claude and **confirmed by John on
+ * 2026-09-05**, including the three contested `methodology` calls and the
+ * all-invented `startup_description` column. Stated because a label set that
+ * only a model has ever seen is not ground truth, and the difference must not
+ * be discoverable only by reading git history.
+ *
  * Why the negatives exist at all: the prompt orders the model to invent every
  * field it cannot find ("If not explicitly written, infer...", "NEVER leave any
  * field as an empty string"). Invention is instructed, not accidental, so a
