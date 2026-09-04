@@ -104,7 +104,15 @@ export const access = {
         {
           name: 'Admin',
           link: 'admin',
-          subModule: []
+          subModule: [
+            { name: 'Dashboard', link: '', subModule: [] },
+            { name: 'Users', link: 'users', subModule: [] },
+            { name: 'Startups', link: 'startups', subModule: [] },
+            { name: 'Assessments', link: 'assessments', subModule: [] },
+            { name: 'Tiers', link: 'tiers', subModule: [] },
+            { name: 'OCR', link: 'ocr-documents', subModule: [] },
+            { name: 'AI Bias', link: 'ai/bias-audits', subModule: [] }
+          ]
         },
         // {
         //   name: 'Analytics',

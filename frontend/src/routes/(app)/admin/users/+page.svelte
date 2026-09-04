@@ -164,7 +164,7 @@
         Manage Users
       </h1>
       <p class="mt-2 text-muted-foreground">
-        Administer user accounts, permissions, and roles across the platform.
+        Manage user accounts, permissions, and roles across the platform.
       </p>
     </div>
     <Button onclick={openCreateModal} class="gap-2 shadow-sm transition-all hover:-translate-y-0.5">

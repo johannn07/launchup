@@ -230,6 +230,8 @@ A Manager can flip a self-service toggle at `/account/role`, which sets an httpO
 ```
 1.  /manager-login  (separate door; Managers cannot sign in at /login, and
                     /login turns them away — both verify the JWT signature)
+      → lands on /startups; /admin is reached from the main nav, which is
+        the same header on every route (admin pages get a sub-row)
       → /admin dashboard, ActivityLog feed
 
 2.  /admin/users        → provision Mentor / Manager accounts

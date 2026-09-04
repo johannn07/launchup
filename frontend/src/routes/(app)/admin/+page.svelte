@@ -56,10 +56,10 @@
     <div>
       <h1 class="text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
         <LayoutDashboard class="h-8 w-8 text-primary opacity-80" />
-        Admin Dashboard
+        Manager Dashboard
       </h1>
       <p class="mt-2 text-muted-foreground">
-        Manage your platform from one centralized command center.
+        Manage the platform from one centralized command center.
       </p>
     </div>
   </div>

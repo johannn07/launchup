@@ -78,9 +78,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     };
 
     if (isPublicOnlyRoute) {
-      if (event.locals.user.role === 'Manager') {
-        throw redirect(302, '/admin');
-      }
       throw redirect(302, '/startups');
     }
   } catch (error) {

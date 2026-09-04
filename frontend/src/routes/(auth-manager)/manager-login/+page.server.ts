@@ -15,7 +15,7 @@ const managerLoginSchema = z.object({
 
 export const load: PageServerLoad = async ({ locals }) => {
   if (locals.user && locals.user.role === 'Manager') {
-    throw redirect(302, '/admin');
+    throw redirect(302, '/startups');
   }
   const form = await superValidate(zod(managerLoginSchema));
   return { form };

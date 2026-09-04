@@ -28,7 +28,7 @@
     if ($message && !$submitting) {
       toast.dismiss();
       toast.success('Manager login successful');
-      goto('/admin');
+      goto('/startups');
     }
     if ($errors.email && !$submitting) {
       toast.dismiss();

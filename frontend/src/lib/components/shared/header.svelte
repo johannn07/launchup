@@ -98,7 +98,7 @@
     </div>
     <div class="flex h-1/3 items-center justify-center gap-5">
       <ul class="flex flex-1 cursor-pointer items-center gap-7 text-sm">
-          {#if module !== subModule && module !== 'account' && subModule !== 'pending'}
+          {#if module !== subModule && module !== 'account' && module !== 'admin' && subModule !== 'pending'}
             <!-- submodule -->
             {#each (modules.filter((item) => item.link === module)[0]?.subModule ?? []) as item}
             {@const isActive =
@@ -129,7 +129,7 @@
               currentModule === item.link || currentModulev2 === item.link}
             <a
               data-sveltekit-preload-data="tap"
-              href={`/${item.link}${item.subModule.length > 0 && item.name !== 'Startups' ? `/${item.subModule[0].link}` : ''}`}
+              href={`/${item.link}${item.subModule.length > 0 && item.name !== 'Startups' && item.name !== 'Admin' ? `/${item.subModule[0].link}` : ''}`}
               class="hover:text-flutter-blue relative flex h-16 items-center justify-center text-center active:scale-95"
               class:text-flutter-blue={currentModule === item.link ||
                 currentModulev2 === item.link}
