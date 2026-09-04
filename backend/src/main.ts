@@ -13,7 +13,9 @@ import { Role } from './entities/enums/role.enum';
 import { ReadinessType } from './entities/enums/readiness-type.enum';
 import { EmbeddingIndexService } from './ai/embedding-index.service';
 import { WeightProfile } from './entities/weight-profile.entity';
+import { TierConfig } from './entities/tier-config.entity';
 import { SEED_WEIGHT_PROFILES } from './readiness/readiness.weights';
+import { SEED_TIER_CONFIGS } from './readiness/readiness.tiers';
 import { Sector } from './entities/enums/sector.enum';
 import { DEMO_READINESS_LEVELS, SEEDED_LEVEL_REMARK } from './demo-readiness-levels';
 import { seedAssessmentQuestions } from './seed-assessment-questions';
@@ -66,6 +68,24 @@ async function seedWeightProfiles(orm: MikroORM) {
 
   await em.flush();
   console.log(`Seeded weight profiles: created=${created} updated=${updated}`);
+}
+
+// Create-only: a Manager editing thresholds through /admin/tiers must not have
+// them rewritten on the next boot. Without this the page shows an empty table
+// while scoring silently applies these same values as its fallback.
+async function seedTierConfigs(orm: MikroORM) {
+  const em = orm.em.fork();
+
+  if ((await em.count(TierConfig, {})) > 0) {
+    return;
+  }
+
+  for (const spec of SEED_TIER_CONFIGS) {
+    em.persist(em.create(TierConfig, { ...spec, createdAt: new Date(), updatedAt: new Date() }));
+  }
+
+  await em.flush();
+  console.log(`Seeded tier configs: created=${SEED_TIER_CONFIGS.length}`);
 }
 
 async function seedLocalDemoData(orm: MikroORM) {
@@ -367,6 +387,7 @@ async function bootstrap() {
   const orm = app.get(MikroORM);
   await orm.getSchemaGenerator().updateSchema();
   await seedWeightProfiles(orm);
+  await seedTierConfigs(orm);
   await seedLocalDemoData(orm);
 
   // The URAT and calculator banks. Empty on every DB made after the 2026-07-26

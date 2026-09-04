@@ -5,6 +5,7 @@ import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.enti
 import { ReadinessEvaluation } from 'src/entities/readiness-evaluation.entity';
 import { ReadinessGap } from 'src/entities/readiness-gap.entity';
 import { TierConfig } from 'src/entities/tier-config.entity';
+import { SEED_TIER_CONFIGS } from './readiness.tiers';
 import { Startup } from 'src/entities/startup.entity';
 import { DEFAULT_WEIGHTS, DimensionKey } from './readiness.weights';
 import { WeightProfileService } from './weight-profile.service';
@@ -146,37 +147,23 @@ export class ReadinessService {
       dimensions.reduce((total, dimension) => total + dimension.weightedScore, 0),
     );
 
-    // Admin-configured thresholds, falling back to the constants above.
+    // Manager-configured thresholds, falling back to the same defaults the
+    // seeder writes — so an unseeded database classifies identically.
     const persisted = await this.em.find(TierConfig, {});
-    const sortedTiers = persisted.sort((a, b) => b.threshold - a.threshold);
+    const sortedTiers = (persisted.length > 0 ? persisted : SEED_TIER_CONFIGS)
+      .slice()
+      .sort((a, b) => b.threshold - a.threshold);
 
-    let tierLabel = 'Early';
-    let tierThreshold = 25;
-    
-    if (sortedTiers.length > 0) {
-      // Seed with the lowest tier so a score below every threshold still lands.
-      tierLabel = sortedTiers[sortedTiers.length - 1].tierLabel;
-      tierThreshold = sortedTiers[sortedTiers.length - 1].threshold;
+    // Start at the lowest tier so a score below every threshold still lands.
+    let tierLabel = sortedTiers[sortedTiers.length - 1].tierLabel;
+    let tierThreshold = sortedTiers[sortedTiers.length - 1].threshold;
 
-      for (const tier of sortedTiers) {
-        if (compositeScore >= tier.threshold) {
-          tierLabel = tier.tierLabel;
-          tierThreshold = tier.threshold;
-          break;
-        }
+    for (const tier of sortedTiers) {
+      if (compositeScore >= tier.threshold) {
+        tierLabel = tier.tierLabel;
+        tierThreshold = tier.threshold;
+        break;
       }
-    } else {
-      tierLabel =
-        compositeScore >= 85
-          ? 'Strong'
-          : compositeScore >= 70
-            ? 'Ready'
-            : compositeScore >= 55
-              ? 'Emerging'
-              : compositeScore >= 40
-                ? 'Developing'
-                : 'Early';
-      tierThreshold = compositeScore >= 85 ? 85 : compositeScore >= 70 ? 70 : compositeScore >= 55 ? 55 : compositeScore >= 40 ? 40 : 25;
     }
 
     const recommendations = [...dimensions]
