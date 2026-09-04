@@ -59,8 +59,6 @@ These are the three user classes SRS §2.3 defines. A fourth `Admin` role existe
 
 New signups **always** get `Role.Startup` — the enum default in `backend/src/entities/user.entity.ts:32` is never overridden by `AuthService.signup` (`backend/src/auth/auth.service.ts:17-34`). **Only a Manager can mint a Mentor or another Manager**, via `POST /admin/users/create-json` (`backend/src/admin/dto/create-user.dto.ts` requires an explicit `role`).
 
-There is also a **fourth, frontend-only pseudo-role**: `Manager as Mentor`.
-
 ### 2.1 Where permissions are actually enforced
 
 This is the single most important thing to understand about the codebase — **authorization is spread across five places that must agree**, and today they don't:
@@ -93,7 +91,6 @@ Two caveats that matter a great deal:
 | Generate AI artifacts (RNA/RNS/etc.) | ✅¹ | ✅ | ✅ |
 | **Approve** status changes | | ✅ | ✅ |
 | *Request* status changes (needs approval) | ✅ | | |
-| Toggle "act as Mentor" | | | ✅ |
 | Admin hub (`/admin/*`) | | | ✅ |
 | Create users with any role | | | ✅ |
 | Configure scoring tiers | | | ✅ |
@@ -126,11 +123,11 @@ Four endpoints gate *features* on *data existing*, independent of who you are (`
 
 So the coaching chain is strictly sequential: **rate readiness → then RNA → then everything else**.
 
-### 2.5 The `Manager as Mentor` pseudo-role
+### 2.5 Manager rubric access (was the `Manager as Mentor` pseudo-role)
 
-A Manager can flip a self-service toggle at `/account/role`, which sets an httpOnly cookie `isMentorRole=yes` (`frontend/src/routes/(app)/account/role/+page.server.ts:12-30`). On the next request, `frontend/src/routes/(app)/+layout.server.ts:14-16` rewrites `locals.user.role` to the string `'Manager as Mentor'`, which has its own entry in `frontend/src/lib/access.ts:151-167` (startup workspace + account, but **no** Applications tab).
+**Removed 2026-09-04.** A Manager used to flip a toggle at `/account/role`, setting an `isMentorRole=yes` cookie that rewrote `locals.user.role` to a synthetic `'Manager as Mentor'` string with its own `access.ts` entry. It was presentation-only — the JWT still said `Manager`, so every backend call already carried full Manager authority — but it was the *only* way a Manager reached the rubric-rating and member-management UI, both of which gated on the pseudo-role rather than on `Manager`.
 
-**Critically: this is presentation-only.** The JWT still says `Manager`, so every backend call still carries full Manager authority. It narrows the UI, not the permissions.
+Those gates now name `Manager` directly (`utils.ts`'s `canRateReadiness`, the `<Can>` block on the readiness page, three checks on the members page), so the capability is unconditional and matches §2.2. The toggle, its cookie, its route and the pseudo-role are gone.
 
 ---
 

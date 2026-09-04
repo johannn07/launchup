@@ -124,35 +124,7 @@ export const access = {
         // 	link: 'cohorts',
         // 	subModule: []
         // },
-        {
-          name: 'Account',
-          link: 'account',
-          subModule: [
-            ...settingsModule.subModule, // Spread the predefined settingsModule submodules
-            {
-              name: 'Role',
-              link: 'role', // The link for the manager settings page or section
-              subModule: []
-            }
-          ]
-        }
-      ]
-    },
-    'Manager as Mentor': {
-      modules: [
-        startupModule,
-        {
-          name: 'Account',
-          link: 'account',
-          subModule: [
-            ...settingsModule.subModule, // Spread the predefined settingsModule submodules
-            {
-              name: 'Role',
-              link: 'role', // The link for the manager settings page or section
-              subModule: []
-            }
-          ]
-        }
+        settingsModule
       ]
     }
   }

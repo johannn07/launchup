@@ -119,9 +119,9 @@ Route groups under `frontend/src/routes/`:
 Auth is a **BFF (backend-for-frontend) pattern**, not a proxy to the backend on every request:
 1. `+page.server.ts` form actions (e.g. `routes/(auth)/login/+page.server.ts`) call the NestJS backend directly (`POST /auth/signin`) and set the JWT as an httpOnly `Access` cookie themselves.
 2. `hooks.server.ts` verifies that cookie locally with `jose` using `JWT_SECRET` (no backend round-trip) on every request, populates `event.locals.user`, and enforces route protection (`protectedRoutes`/`publicOnlyRoutes` arrays) — admin paths redirect to `/admin-login`, everything else to `/login`.
-3. `routes/(app)/+layout.server.ts` re-derives role from `locals.user`, with a cookie-driven `isMentorRole` override that maps `Manager` → a synthetic `Manager as Mentor` role.
+3. `routes/(app)/+layout.server.ts` re-derives role from `locals.user`. (It used to carry a cookie-driven `isMentorRole` override mapping `Manager` → a synthetic `Manager as Mentor` role; that pseudo-role was removed 2026-09-04 and Managers hold the rubric/member capability directly.)
 
-Because of this, **role/permission changes must be kept in sync in three places**: the backend `Role` enum, `hooks.server.ts`'s protected-route logic, and `frontend/src/lib/access.ts` (the module/submodule nav config keyed by role, including the synthetic `Manager as Mentor` role).
+Because of this, **role/permission changes must be kept in sync in three places**: the backend `Role` enum, `hooks.server.ts`'s protected-route logic, and `frontend/src/lib/access.ts` (the module/submodule nav config keyed by role).
 
 Client-side API calls go through `frontend/src/lib/axios.ts` (baseURL from `PUBLIC_API_URL`); server-side load functions/actions use SvelteKit's `fetch` directly against the same backend URL rather than the axios instance.
 

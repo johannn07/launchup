@@ -11,9 +11,6 @@ export const load: LayoutServerLoad = async ({
     throw redirect(302, '/');
   }
 
-  if (cookies.get('isMentorRole') === 'yes' && locals.user.role === 'Manager') {
-    locals.user.role = 'Manager as Mentor';
-  }
   return {
     startup: params.id,
     user: locals.user,

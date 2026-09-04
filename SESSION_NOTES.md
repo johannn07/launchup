@@ -805,9 +805,8 @@ rendered. Backend 328/328; frontend typecheck at master's 119/44 baseline.
   boot conversion handles existing `Admin` rows, but any JWT already issued
   with `role: 'Admin'` is refused after deploy — those sessions must
   re-authenticate at `/manager-login`. Deploy backend first.
-- **`Manager as Mentor` still exists** — the frontend-only pseudo-role in
-  `access.ts` and `user.types.ts`, deliberately untouched. It is the same
-  class of spec deviation as `Admin` was.
+- ~~`Manager as Mentor` still exists~~ — **removed later the same day**, see
+  the follow-up section below.
 - The `/admin/*` route paths are unchanged by choice; only the copy changed.
 - Both production-hygiene items from 2026-08-25 remain untouched (`debug: true`
   logging SQL parameters, boot seeder re-seeding on every redeploy) — and the
@@ -816,9 +815,70 @@ rendered. Backend 328/328; frontend typecheck at master's 119/44 baseline.
 
 ### Next step
 
-John tests `feat/remove-admin-role` locally — all four roles' logins, the
+John tests `feat/remove-admin-role` locally — all three roles' logins, the
 admissions flow end to end, and the admin section. If it holds, merge and
 deploy **backend first**, warning anyone holding a session that they will be
-logged out. Then decide whether `Manager as Mentor` follows `Admin` out, since
-the argument against it is now identical and the files are already open. The
-midterm critical path is unchanged: the SPMP and the traceability matrix.
+logged out. The midterm critical path is unchanged: the SPMP and the
+traceability matrix.
+
+---
+
+## 2026-09-04 (later) — `Manager as Mentor` follows Admin out
+
+Fifth commit on `feat/remove-admin-role`. Same argument as the Admin role: a
+role the spec does not define, invented by the prior team.
+
+### It was not only cosmetic
+
+The pseudo-role read like a UI convenience — ARCHITECTURE.md §2.5 called it
+"presentation-only", and that was true of the *JWT*, which always said
+`Manager`. But it was **the only route by which a Manager reached two real
+capabilities**, because the gates named the pseudo-role rather than the role:
+
+- rubric rating — `isMentor()` in `utils.ts` (`['Mentor', 'Manager as Mentor']`),
+  used at two points on the readiness page, plus a third `<Can>` block
+- member management — three gates on the overview members page
+
+So deleting the role naively would have silently stripped both from every
+Manager. `docs/ARCHITECTURE.md` §2.2 already marked Manager ✅ for "Rate
+readiness levels (rubrics)" — the matrix described the *toggled* state without
+saying so. The gates now name `Manager` directly and the capability is
+unconditional, which is what the matrix always claimed.
+
+`isMentor` was renamed **`canRateReadiness`** — with Manager in the list, a
+predicate called `isMentor` returning true for a Manager is a trap for the next
+reader.
+
+### Also removed
+
+`/account/role` (the toggle page), its `isMentorRole` cookie, the override in
+`(app)/+layout.server.ts`, the `Role` entry in Manager's Account submodule, the
+`'Manager as Mentor'` union member, and a commented-out `Role` enum in
+`utils.ts` that still carried it.
+
+### Watch this one on review
+
+`overview/capsule_proposal/+page.svelte:17` derives
+`isMentor = data.role?.includes('Mentor')` — a **substring** test that matched
+`'Manager as Mentor'` and does not match `'Manager'`. Behaviour for an
+untoggled Manager is unchanged (they were already in the editable branch), so
+this is not a regression. But it means **a Manager can edit a founder's capsule
+proposal**, which was true before this change and is worth deciding on
+separately. Left alone deliberately.
+
+### Verified live against Neon
+
+Plain Manager, no `isMentorRole` cookie: "Revise baseline scores" renders on
+`/startups/1/readiness-level`, and Invite Member / Contracted member render on
+the members page — neither of which an untoggled Manager could reach before.
+Mentor unaffected (same page, same button). `/account/role` 404s; the Account
+submenu is Profile | Appearance. Backend 328/328. Frontend `pnpm check` **117
+errors / 43 files, down from the 119/44 baseline** — the two removals came from
+the deleted route, and an error-text diff against `master` confirms nothing new
+(the one apparent addition is the pre-existing `access.roles` indexing error,
+whose message no longer lists the pseudo-role).
+
+### Next step
+
+Unchanged: John tests the branch, then merge and deploy backend first. Decide
+separately whether a Manager should be able to edit capsule proposals.
