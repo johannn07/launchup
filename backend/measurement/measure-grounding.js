@@ -370,6 +370,7 @@ const { levelPlacement, stageAppropriateness, differentiationGap } = require(
 const { isStageInappropriate } = require(path.join(__dirname, 'lib/stage-markers.js'));
 const { scoreRedundantNeeds } = require(path.join(__dirname, 'lib/redundancy.js'));
 const { SATISFACTIONS, verifySatisfactions } = require(path.join(__dirname, 'lib/satisfactions.js'));
+const { ORIGINAL_DOCS } = require(path.join(__dirname, 'lib/doc-variants.js'));
 
 // Documents are measure-differentiation.js's verbatim early/mid pair; levels
 // mirror src/demo-readiness-levels.ts, the rows seedDemoStartups writes.
@@ -386,31 +387,20 @@ const { SATISFACTIONS, verifySatisfactions } = require(path.join(__dirname, 'lib
 // RNA prompt itself changed. audit-ground-truth.js keeps the OLD values, frozen
 // deliberately, because that is what the already-collected runs were scored
 // against.
+// The `doc` strings live in lib/doc-variants.js as ORIGINAL_DOCS — one copy,
+// imported, because the `unlabelled` variants are edits OF these documents and
+// two copies would drift exactly the way the levels did before
+// src/demo-readiness-levels.ts existed. Template literals normalise CRLF to LF
+// at parse time, so the move is byte-identical and no fingerprint shifts.
 const STARTUPS = {
   'AgroLink PH': {
-    doc: `Title: AgroLink PH: Cooperative Market Access Platform
-Description: Connects smallholder farmer cooperatives in Central Luzon directly to institutional buyers.
-Problem Statement: Smallholder farmers sell through a chain of traders and capture only a fraction of the final market price.
-Target Market: Rice and vegetable cooperatives in Nueva Ecija and Tarlac (roughly 400 cooperatives).
-Solution: A mobile-first platform where cooperative officers register expected harvest volumes and buyers post standing demand. Includes SMS fallback.
-Timeline: 2025-06 field interviews with 18 cooperatives. 2025-09 paper prototype of the lot-aggregation flow tested with 3 cooperatives. 2026-01 two founders committed full-time; provisional agreement with one buyer.
-Revenue: None to date.
-IP Status: No patents filed. The "AgroLink PH" wordmark has not been registered with IPOPHL.
-Team: Rafael Domingo (6 years agricultural extension officer), Ana Beltran (4 years backend engineer).`,
+    doc: ORIGINAL_DOCS['AgroLink PH'],
     levels: { Technology: 2, Market: 3, Acceptance: 3, Organizational: 2, Regulatory: 1, Investment: 1 },
     present: ['target_cooperative_count', 'number_of_founders', 'cooperatives_in_prototype_test'],
     absent: ['monthly_burn_rate_php', 'lead_investor_name', 'date_of_incorporation'],
   },
   'MediSync Cebu': {
-    doc: `Title: MediSync Cebu: Referral Coordination for Provincial Clinics
-Description: Links rural health units across Cebu province with district and tertiary hospitals, replacing a paper-and-phone referral process.
-Problem Statement: Referrals move by handwritten form and phone call; clinical history is frequently lost in transit.
-Target Market: The 44 rural health units in Cebu province, 8 district hospitals, and 3 tertiary referral centres.
-Solution: A structured referral record transmitted to the receiving facility with bed-availability status, triage category, and attached history.
-Timeline: 2025-02 pilot with 2 rural health units and 1 district hospital. 2025-08 expanded to 6 facilities; first paid facility subscriptions. 2026-02 reached PHP 5,000 monthly recurring revenue; team grew to 3 founders.
-Revenue: PHP 5,000 monthly recurring.
-IP Status: No patents. Trademark application filed with IPOPHL, pending.
-Team: Dr. Elena Reyes (9 years provincial public health), Marco Villanueva (7 years health IT), Joy Tabotabo (5 years LGU administration).`,
+    doc: ORIGINAL_DOCS['MediSync Cebu'],
     levels: { Technology: 6, Market: 5, Acceptance: 5, Organizational: 2, Regulatory: 1, Investment: 1 },
     present: ['rural_health_units_in_cebu', 'monthly_recurring_revenue_php', 'number_of_founders'],
     absent: ['monthly_burn_rate_php', 'lead_investor_name', 'date_of_incorporation'],
