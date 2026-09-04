@@ -407,7 +407,17 @@ function report(rows, spans) {
       `  best J ${cf.best.youdenJ.toFixed(3)} at ${cf.best.threshold.toFixed(4)}  sens ${pct(cf.best.sensitivity)}  spec ${pct(cf.best.specificity)}`,
     );
   }
+  console.log(
+    `  same gate applied here: ${cf.passes ? 'PASS' : 'FAIL'}  (pooled: ${pooled.passes ? 'PASS' : 'FAIL'})`,
+  );
   console.log('  ⚠ underpowered. If pooled is strong and this is at chance, POOLED IS THE ARTIFACT.');
+
+  // The verdict is the conjunction, not the pooled arm alone. Stated by the
+  // harness rather than left to prose, so it cannot be softened in the writeup.
+  const shipsThreshold = pooled.passes && cf.passes;
+  console.log(
+    `\n  VERDICT: ${shipsThreshold ? `ship ${pooled.best.threshold.toFixed(4)}` : 'NO new threshold ships — the confound check does not corroborate the pooled arm'}`,
+  );
 
   console.log('\n=== Stage 2 — CER on sampled spans ===\n');
   const scored = scoreSpans(rows, spans, selected);
