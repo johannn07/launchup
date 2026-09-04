@@ -42,6 +42,29 @@ Both apps read DB/JWT config from their own `.env` (see `backend/.env.example`, 
 
 Do not include a `Co-Authored-By` line in commit messages.
 
+## Branch scope
+
+**A branch changes only what its stated purpose requires.** Work that is
+adjacent, discovered along the way, or merely convenient to do while the files
+are open goes on its own branch — even when it is small, obviously correct, and
+you have just been given permission to do it.
+
+Permission to do a thing is not permission to do it *here*. When the user says
+yes to an adjacent piece of work, the default is a new branch off `master`, not
+another commit on the current one. Say which branch it belongs on before
+starting.
+
+The failure to avoid is drift by consent: offering the next adjacent task,
+getting a yes, and repeating until the branch no longer matches its name. On
+2026-09-04 `feat/remove-admin-role` accumulated tier seeding and an IDOR
+remediation this way — every step approved, none of it about the Admin role, and
+it had to be split back out afterwards.
+
+Before starting any new piece of work, state whether it belongs on the current
+branch. If it does not, create the branch first. When the current branch's
+stated purpose is complete, say so and stop, rather than proposing what else
+could be done while you are here.
+
 ## Comment & documentation style
 - Keep all code comments short and to the point — one line where possible.
 - Explain *why*, not *what* — don't describe what the code obviously already shows.
