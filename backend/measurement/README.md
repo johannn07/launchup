@@ -1,33 +1,31 @@
 # Model measurement harnesses
 
-Ad-hoc scripts used to decide the `GEMINI_MODEL` default, kept so the numbers
-in `TODO_CHECKLIST.md` §5 can be reproduced rather than taken on trust. They
-are **not** part of the test suite and are not run by `pnpm test`.
-
-Both read `GEMINI_API_KEY` from `backend/.env` and call Gemini directly — they
-do not need the server running, but they **do consume quota**.
+Ad-hoc scripts, originally used to decide the `GEMINI_MODEL` default, kept so
+the numbers in `TODO_CHECKLIST.md` can be reproduced
+rather than taken on trust. **Not** part of the test suite; not run by
+`pnpm test`. They read `GEMINI_API_KEY` from `backend/.env` and call Gemini
+directly — no server needed, but they **consume quota**.
 
 ```bash
 node measurement/measure-models.js
 node measurement/measure-differentiation.js
 node measurement/calibrate-similarity.js
 node measurement/measure-retrieval.js
-node measurement/measure-grounding.js                  # full harness (1 rep = 12 calls, 18 with --with-fabrication-probe)
-node measurement/measure-grounding.js --retrieval-only  # Step A only, no generation quota spent
-node measurement/measure-grounding.js --dry-run         # assemble and print every arm's prompts, no model call at all
-node measurement/measure-grounding.js --fingerprint     # print today's comparability fingerprints, no model call at all
+node measurement/measure-grounding.js                   # full harness (1 rep = 12 calls, 18 with --with-fabrication-probe)
+node measurement/measure-grounding.js --retrieval-only  # Step A only, no generation quota
+node measurement/measure-grounding.js --dry-run         # assemble and print every arm's prompts, no model call
+node measurement/measure-grounding.js --fingerprint     # print today's comparability fingerprints, no model call
 node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministic \
   --only-probe=rna --level-condition=both --reps=2 \
-  --out=measurement/results/<date>-supplied-level.json  # metric 5, see below — --only-arm is mandatory here
+  --out=measurement/results/<date>-supplied-level.json  # metric 5 — --only-arm is mandatory here
 
 # The summary-bias probe (SO 4.2 / SO 4.4). 2 arms x 2 startups x 3 reps = 12
 # calls. Unlike the others this boots a Nest context and calls the real
 # AiService.generateStartupAnalysisSummary, so it needs Neon reachable.
 node measurement/measure-summary-bias.js --fingerprint            # no calls
 node measurement/measure-summary-bias.js --dry-run --degrade=2 \
-  --out=<scratch>/x.json                                          # no calls; --degrade forces the
-                                                                  # schema-failure path. Writing into
-                                                                  # results/ is refused under --dry-run.
+  --out=<scratch>/x.json                                          # no calls; --degrade forces the schema-failure
+                                                                  # path. Writing into results/ is refused under --dry-run.
 node measurement/measure-summary-bias.js --reps=3 \
   --out=measurement/results/<date>-summary-bias.json
 
@@ -38,106 +36,97 @@ node measurement/measure-grounding.js --merge measurement/results/*.json
 
 ### Quota-free paths
 
-- `pnpm test:measurement` — `node --test measurement/tests/*.test.js`, **210
-  tests** (2026-08-18), no network at all. Every scorer and prompt builder runs
-  as a pure function. Known-weak: `tests/demo-proposals.test.js` regex-matches
-  the `.ts` source instead of importing `toApplicationDto`, so a `title:` inside
-  a comment satisfies it and a changed *value* is undetectable.
+- `pnpm test:measurement` — `node --test measurement/tests/*.test.js`, **304
+  tests** (2026-09-04), no network. Every scorer and prompt builder runs as a
+  pure function. Known-weak: `tests/demo-proposals.test.js` regex-matches the
+  `.ts` source instead of importing `toApplicationDto`, so a `title:` inside a
+  comment satisfies it and a changed *value* is undetectable.
 - `--dry-run` and `--fingerprint` — no generation calls. `--dry-run` still calls
   `embedContent` for the `sdd-semantic` arm, a separate and far higher ceiling.
-- `--retrieval-only` — no generation calls; Step A only.
-- `measure-summary-bias.js --dry-run` — stubs `generateContent` and nothing else,
-  so the container, both DTOs, the arm override, the loop order, `analyzeTone`,
-  every report and the results file are all exercised for zero quota. It does
-  append to `data/ai-metrics.json` when `--degrade` forces a schema miss.
+- `--retrieval-only` — Step A only.
+- `measure-summary-bias.js --dry-run` — stubs `generateContent` and nothing
+  else, so the container, both DTOs, the arm override, the loop order,
+  `analyzeTone`, every report and the results file are exercised for zero quota.
+  It does append to `data/ai-metrics.json` when `--degrade` forces a schema miss.
 
 `--dry-run` exists because unit tests cannot tell you whether an assembled
 prompt *looks* right, and this harness has twice measured a property of the
-prompt rather than of the model (see the confounds below).
+prompt rather than of the model (confounds 1 and 2 below).
 
 ### `--merge`
 
-Re-runs the report over the concatenated raw per-call records, so N days of one
-rep is arithmetically identical to one N-rep run. It refuses to merge files
-whose model, embedding model, corpus size, similarity floor **or probe design**
-differ, rather than averaging two different experiments.
+Re-runs the report over concatenated raw per-call records, so N days of one rep
+is arithmetically identical to one N-rep run. It refuses to merge files whose
+model, embedding model, corpus size, similarity floor **or probe design** differ.
 
-The glob works on any shell, including PowerShell. Neither PowerShell nor a
-plain `child_process` spawn expands globs — only a POSIX shell does. So any
-`--merge` argument containing `* ? [ ] { }` is expanded internally with Node
-22's `fs.globSync` instead.
-
-- Explicit file lists are never glob-expanded, so a typo surfaces as a plain
-  "file not found" rather than as "no matches".
-- A glob matching nothing, or a bare `--merge`, is a hard error (exit 1) rather
-  than falling through to a live 12-call run.
+- Globs are expanded internally with Node 22's `fs.globSync`, so they work in
+  PowerShell (neither PowerShell nor a bare `child_process` spawn expands them).
+- Explicit file lists are never glob-expanded, so a typo surfaces as "file not
+  found" rather than "no matches".
+- A glob matching nothing, or a bare `--merge`, hard-errors (exit 1) rather than
+  falling through to a live 12-call run.
 
 ### Why probe design is fingerprinted
 
-Both confounds below changed what a "rep" measures without changing its shape.
-A model-and-corpus check alone would pool a pre-fix levels probe — which leaked
+Both confounds below changed what a "rep" measures without changing its shape. A
+model-and-corpus check alone would pool a pre-fix levels probe — which leaked
 the answer to the deterministic arm — with a post-fix one asking a different
 question.
 
-`lib/fingerprint.js`'s `fingerprintMap` hashes **per (metric, arm)**, not once
-per metric: the grounding instruction, the dimension list, each startup's
+`lib/fingerprint.js`'s `fingerprintMap` hashes **per (metric, arm)**: the
+grounding instruction, the dimension list, each startup's
 document/levels/field lists, the arm's rubric mode, and its rubric *scope*
 (`'full-ladder'` / `'current-and-next'` / `'none'`).
 
-It does not stop at the top-level builder's source text. `.toString()` omits the
-body of anything a function calls, and `rnaPrompt` and `levelsPrompt` both
-delegate to helpers — so a helper change would move zero fingerprints while
-changing every affected prompt. Each metric hashes the helpers that reach it:
+It does not stop at the top-level builder's source. `.toString()` omits the body
+of anything a function calls, and both prompt builders delegate to helpers — so
+a helper change would move zero fingerprints while changing every affected
+prompt. Each metric hashes the helpers that reach it:
 
-- **`levels`** — `levelsPrompt`, `renderRubricBlock` and `fullLadderRubrics`
-  sources, the rubric scope, and for corpus arms a content hash of the full
-  `RUBRICS` corpus (per-row title/content/keyTerms/key/readinessType/level, not
-  the row *count*, which a same-length edit leaves unchanged).
+- **`levels`** — `levelsPrompt`, `renderRubricBlock`, `fullLadderRubrics`, the
+  rubric scope, and for corpus arms a content hash of the full `RUBRICS` corpus
+  (per-row title/content/keyTerms/key/readinessType/level — not the row *count*,
+  which a same-length edit leaves unchanged).
 - **`rna`** — `rnaPrompt`, `readinessLevelBlock` (every arm gets this block, not
-  only corpus arms — see confound 1) and `renderRubricBlock` sources, the rubric
-  scope, the stage-marker lexicon, and the same corpus hash.
+  only corpus arms — confound 1), `renderRubricBlock`, the rubric scope, the
+  stage-marker lexicon, and the same corpus hash.
 - **`fabrication`** — the hallucination prompt's source and the field lists.
 
 Per-arm granularity matters because a rubric-scope change alters what a corpus
-arm receives while leaving `baseline` untouched. One hash per metric would
-discard `baseline`'s still-valid data along with the arm that changed. The
-corpus-content hash is likewise folded in only for arms with `ragCorpus: true`.
+arm receives while leaving `baseline` untouched; one hash per metric would
+discard `baseline`'s still-valid data. The corpus-content hash is folded in only
+for arms with `ragCorpus: true`.
 
 `--fingerprint` prints what a run today would stamp — a 9-entry map (3 probes ×
-3 arms) — so you can check an existing results file is mergeable for free.
+3 arms) — so an existing results file can be checked for mergeability for free.
 
 ## What each one measures
 
-**`measure-models.js`** — one document, three probes:
+**`measure-models.js`** — one document, three probes: *leniency* (assign levels
+1–9 across six dimensions), *hallucination* (ask for six fields, three
+deliberately not in the document — the production grounding instruction says
+return null when uncertain, so inventing a value is a measurable failure), and
+*schema* (did the response parse).
 
-- *leniency* — assign readiness levels 1–9 across six dimensions
-- *hallucination* — ask for six fields, three of which are deliberately **not**
-  in the document. The production grounding instruction says to return null
-  when uncertain, so inventing a value is a measurable grounding failure.
-- *schema* — did the response parse into the expected shape
+**`measure-differentiation.js`** — the same assessment against an early-stage
+document (AgroLink: paper prototype, zero revenue) and a mid-stage one
+(MediSync: six paying facilities, PHP 5k MRR), reporting the **gap**. A model
+that cannot separate those two cannot support Objective 2 however the weights
+are tuned.
 
-**`measure-differentiation.js`** — the more useful one. Runs the same
-assessment against an early-stage document (AgroLink: paper prototype, zero
-revenue) and a mid-stage one (MediSync: six paying facilities, PHP 5k MRR),
-and reports the **gap** between them. A model that cannot separate those two
-cannot support Objective 2 no matter how the weights are tuned.
-
-**`calibrate-similarity.js`** — picks the retrieval similarity floor
-(`RAG_MIN_SIMILARITY` in `ai.service.ts`). Embeds nine startup descriptions
-across three domains, compares all 36 pairs, and reports what each candidate
-threshold keeps and leaks. Needed because embeddings score same-register prose
-high across the board: the same-domain and cross-domain distributions
-**overlap**, so the floor is a trade-off rather than a boundary. The first
-guess of 0.70 let 78% of cross-domain pairs through.
-
-This is the only one that decides a value used in production, so re-run it if
-the embedding model changes.
+**`calibrate-similarity.js`** — picks `RAG_MIN_SIMILARITY`. Embeds nine startup
+descriptions across three domains, compares all 36 pairs, reports what each
+candidate threshold keeps and leaks. Needed because embeddings score
+same-register prose high across the board: the same-domain and cross-domain
+distributions **overlap**, so the floor is a trade-off, not a boundary. A first
+guess of 0.70 leaked 78% of cross-domain pairs. **The only script that decides a
+production value — re-run it if the embedding model changes.**
 
 **`measure-retrieval.js`** — the Objective 1b arm comparison. Runs the two
 retrieval strategies `AI_RAG_STRATEGY` selects between over the same nine
-documents, using their production scoring functions (`scoreRagMatch` verbatim
-for keyword; embeddings + the 0.78 floor for semantic). A hit counts as correct
-if it shares the query's domain. Result on 2026-07-27:
+documents, using production scoring (`scoreRagMatch` verbatim for keyword;
+embeddings + the 0.78 floor for semantic). A hit is correct if it shares the
+query's domain. 2026-07-27:
 
 | arm | returned | correct | precision | top hit correct | same-domain recall |
 |---|---|---|---|---|---|
@@ -145,17 +134,14 @@ if it shares the query's domain. Result on 2026-07-27:
 | semantic | 21 | 16 | **76%** | 8/9 | 16/18 (89%) |
 
 The shape matters more than the headline: semantic returned **fewer** documents
-and still surfaced **more** correct ones, so this is not precision bought with
-recall. Keyword's `score > 0` floor admits anything sharing a common token,
-which is why it returns the full top-3 every time regardless of relevance.
+and surfaced **more** correct ones, so precision was not bought with recall.
+Keyword's `score > 0` floor admits anything sharing a common token, which is why
+it returns a full top-3 every time regardless of relevance. Both arms miss the
+same case (ClassKit Iloilo retrieves TeleKonsulta Leyte — both rural
+low-connectivity public services).
 
-Both arms miss the same case (ClassKit Iloilo retrieves TeleKonsulta Leyte —
-both are rural low-connectivity public services, so the confusion is at least
-reasonable).
-
-**`measure-grounding.js`** — does the verified corpus (54 readiness rubrics,
-10 business frameworks, built in tasks 1-8) actually reduce hallucination and
-improve differentiation? Three arms:
+**`measure-grounding.js`** — does the verified corpus (54 readiness rubrics, 10
+business frameworks) reduce hallucination and improve differentiation?
 
 | arm | `ragCorpus` | `rubricMode` | question |
 |---|---|---|---|
@@ -163,29 +149,24 @@ improve differentiation? Three arms:
 | sdd-semantic | `true` | `semantic` | does the *code's* semantic-mode substitute deliver the rubric? |
 | deviation-deterministic | `true` | `deterministic` | is the shipped deviation justified? |
 
-Two steps, run in that order because quota is the binding constraint:
+Two steps, in this order because quota binds.
 
-**Step A — rubric-retrieval accuracy (quota-free of the generation endpoint,
-full N, reproduces exactly).** Two separate questions, and they are **not
-the same mechanism** — worth stating plainly, because an earlier draft of
-this write-up conflated them:
+### Step A — rubric-retrieval accuracy (no generation quota, full N, reproduces exactly)
 
-1. **The code's current `semantic` substitute.** For each of the 2 seeded
-   startups × 6 dimensions (12 queries), embed the bare dimension name
-   (`"Technology"`, `"Regulatory"`, …) — what
-   `dimensions.map(d => d.readinessType).join(' ')` degenerates to for a
-   single missing dimension — and check the returned rubric's
-   `readinessType` against `rubricKey(type, level)` as ground truth. This is
-   **not** what SDD §3.2 specifies; it is the stand-in `rag-query.service
-   .ts:126` actually runs.
-2. **SDD §3.2 as written**: *"queries the vector database using the
-   startup's profile data as the search embedding."* This is tested
-   separately below by embedding each startup's own profile text
-   (`STARTUPS[name].doc`) whole and checking the result against the union of
-   all 12 valid `(dimension, current-or-next-level)` keys for that startup —
-   the code never actually does this for the rubric channel, so this query
-   exists only in this measurement, to test the specified mechanism on its
-   own terms.
+Two questions, and **not the same mechanism**:
+
+1. **The code's `semantic` substitute.** For 2 startups × 6 dimensions, embed
+   the bare dimension name (`"Technology"`, …) — what
+   `dimensions.map(d => d.readinessType).join(' ')` degenerates to for a single
+   missing dimension — and check the returned rubric's `readinessType` against
+   `rubricKey(type, level)`. This is **not** SDD §3.2; it is the stand-in
+   `rag-query.service.ts:126` actually runs.
+2. **SDD §3.2 as written** — *"queries the vector database using the startup's
+   profile data as the search embedding."* Embed each startup's own profile text
+   whole and check against the union of its 12 valid
+   `(dimension, current-or-next-level)` keys. The code never does this for the
+   rubric channel; the query exists only here, to test the specified mechanism
+   on its own terms.
 
 Result, 2026-07-28:
 
@@ -193,163 +174,112 @@ Result, 2026-07-28:
 |---|---|---|---|---|
 | deterministic | 12 | 12 | 0 | 0 |
 | code's dimension-name substitute | 12 | 0 | 0 | **12** |
-
-Deterministic is 12/12 by construction — it is an exact `(type, level)` key
-lookup, it cannot retrieve the wrong dimension. **The code's substitute
-returned nothing for every single query.** It embeds only the bare dimension
-name and compares it against corpus rows whose title and content use the
-SDD's abbreviations (`TRL 3 — …`, `RRL 1 — …`) rather than the enum's
-human-readable names. Every one of the 12 top-2 nearest-neighbour scores
-fell below the 0.78 floor. **This settles the narrower claim it can
-settle**: the code's current stand-in for semantic retrieval does not
-deliver the rubric it's trying to retrieve, for this corpus and this query
-shape — not "retrieves a worse rubric," but "retrieves nothing, every
-time." **It does not, by itself, say anything about whether SDD §3.2's
-actual mechanism works** — that is a different query, tested next.
-
-**SDD §3.2 as specified — profile-data query.** Both startups' full profile
-text, embedded whole, against the same 54-row corpus:
-
-| query | queries | correct (any of the 6 dimensions) | wrong | empty |
-|---|---|---|---|---|
 | profile-data (SDD §3.2) | 2 | 0 | 0 | **2** |
 
-**Also empty, for both startups.** So the specified mechanism does not fare
-better than the code's substitute here — but for a plausibly different
-reason: a profile is several sentences of narrative business prose, and the
-rubric rows are short, abbreviation-heavy definitional text (`TRL 3 —
-Experimental proof of concept: …`). The two have little shared vocabulary
-or register, so **a low score here is a structural property of comparing a
-startup's narrative profile against short definitional rubric text**, not
-an artifact of a badly-chosen query string the way the bare dimension name
-arguably was. Taken together: **neither the mechanism SDD §3.2 specifies
-nor the code's actual substitute for it can retrieve this rubric corpus**,
-for reasons that look different but land on the same 0.78 floor. This is
-the result that actually settles the SDD deviation question — measured
-against the mechanism SDD §3.2 describes, not a proxy for it — and it costs
-embedding calls only, not the exhausted generation quota.
+Deterministic is 12/12 by construction — an exact key lookup cannot retrieve the
+wrong dimension.
 
-**Step B — the three generation arms, redesigned after two confounds.**
+**The substitute returned nothing for every query.** It embeds a bare dimension
+name against rows whose title and content use the SDD's abbreviations (`TRL 3 —
+…`), and all 12 top-2 scores fell below the 0.78 floor. Narrow claim only: the
+stand-in does not deliver the rubric it is trying to retrieve — not "retrieves a
+worse rubric", but "retrieves nothing, every time."
 
-The 2026-07-28 attempts produced n=0 in every cell. The cause was a hard
-daily cap — `generativelanguage.googleapis.com/generate_content_free_tier_requests`,
-quota ID `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **20 requests
-per day** for `gemini-3.6-flash`, confirmed from the 429 body, not a
-per-minute limit that re-pacing works around — combined with a loop order
-that spent the entire budget inside the first arm. **Both were addressed:**
-`REPS` defaults to 1 (one rep is what a day's quota buys, whatever a rep
-currently costs — see below), reps are the **outermost** loop so a 429
-costs precision rather than the comparison itself, and `--out` / `--merge`
-accumulate raw per-call records across days. See the header comment in
-`measure-grounding.js`.
+**SDD §3.2's own mechanism is also empty, for a plausibly different reason.** A
+profile is several sentences of narrative business prose; rubric rows are short,
+abbreviation-heavy definitional text. Little shared vocabulary or register, so a
+low score here is **structural**, not an artifact of a badly-chosen query string
+the way the bare dimension name arguably was. Together: **neither SDD §3.2's
+mechanism nor the code's substitute can retrieve this corpus.** That is what
+settles the SDD deviation question, and it costs embedding calls only.
 
-The first full run, 2026-07-29, surfaced two further problems that were not
-quota-related — the harness ran cleanly, it just measured the wrong thing.
-Both are fixed now; each is worth stating on its own because neither was
-fixable by running more reps.
+### Step B — the three generation arms, redesigned after two confounds
 
-**Confound 1 — the levels block was withheld from every arm.**
-`ai.service.ts:937-943` emits the startup's current per-dimension levels
-(`Initial Readiness Level: TRL … MRL … ARL … ORL … RRL … IRL …`) into the
-production RNA prompt for **every** arm; only the rubric block varies with
-`ragCorpus`. The harness omitted that block for every arm, so it was
-contrasting "told its levels" against "not told its levels" — a difference
-production never presents, and not a retrieval effect at all. `rnaPrompt`
-now takes `levels` and emits production's block (`readinessLevelBlock`) for
-every arm, matching what `RnaService.generateRNA` actually sends.
+The 2026-07-28 attempts produced n=0 in every cell: a hard daily cap
+(`generativelanguage.googleapis.com/generate_content_free_tier_requests`, quota
+ID `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, **20 requests/day** for
+`gemini-3.6-flash`, confirmed from the 429 body — not a per-minute limit
+re-pacing works around) combined with a loop order that spent the whole budget
+inside the first arm. Fixed: `REPS` defaults to 1, reps are the **outermost**
+loop so a 429 costs precision rather than the comparison, and `--out`/`--merge`
+accumulate across days.
 
-**Confound 2 — the levels probe leaked its own answer to the deterministic
-arm.** Deterministic retrieval keys on `(readinessType, level)` using the
-startup's *actual current level*, so handing that retrieved rubric to a
-probe that then asks the model to assess the level was asking
-`deviation-deterministic` to read back a number it had just been given —
-any differentiation "advantage" for that arm was leakage, not grounding.
-The levels probe now receives the **full nine-rung ladder** for every
-dimension (`fullLadderRubrics()`) instead of the (current, current+1)
-lookup, so the model gets rubric vocabulary without being told which rung
-applies. The RNA probe deliberately keeps the (L, L+1) lookup, because that
-is what production ships for that call — the asymmetry between the two
-probes is intentional, not an oversight.
+The first full run (2026-07-29) then surfaced two non-quota problems. The
+harness ran cleanly; it measured the wrong thing. Neither was fixable by more
+reps.
 
-Fixing these also forced a rewrite of what "metric 1" and "metric 2" mean
-(the terms-reuse and invented-field metrics scored below no longer exist in
-the code):
+**Confound 1 — the levels block was withheld from every arm.** Production emits
+the startup's current per-dimension levels (`Initial Readiness Level: TRL … IRL
+…`) into the RNA prompt for **every** arm (`ai.service.ts:937-943`); only the
+rubric block varies with `ragCorpus`. The harness omitted it everywhere, so it
+contrasted "told its levels" against "not told" — a difference production never
+presents, and not a retrieval effect. `rnaPrompt` now emits
+`readinessLevelBlock` for every arm, matching what `RnaService.generateRNA`
+actually sends.
 
-- **Metric 1 — level-placement accuracy**, mean absolute error between the
-  levels probe's assigned level and the startup's actual seeded level
-  (`lib/metrics.js`'s `levelPlacement`). The metric it replaces —
-  "did the generated RNA reuse the retrieved rubric's exact vocabulary" —
-  scored 1/12 (8%) on the 2026-07-29 run, and inspection showed why that
-  number was mostly artifact, not signal: the model produced a
-  substantively correct TRL-2/3 characterization of AgroLink's technology
-  that reused none of the rubric's wording, because the RNA prompt's own
-  "be specific and grounded in the provided data" instruction structurally
-  discourages echoing abstract rubric phrasing. It measured vocabulary
-  reuse, not grounding, so it is gone.
-- **Metric 2 — stage-inappropriate recommendation rate**, SO 1.3's own
-  worked example of a hallucination ("recommending commercialization steps
-  to a TRL 2 startup") made mechanical (`lib/metrics.js`'s
-  `stageAppropriateness`, scored with `lib/stage-markers.js`'s
-  `isStageInappropriate`). It replaces the absent-field probe, which had
-  saturated at 0/15 invented across every arm and was aimed at something
-  the corpus cannot influence anyway — burn rate and investor name are not
-  readiness rubrics. The lexicon behind it lives in
-  `data/stage-markers.json` and **is authored, with no external source** —
-  say this plainly, the same way the corpus beside it carries a
-  `provenance` field per row. It is held disjoint from every corpus row's
-  `keyTerms` by `tests/stage-markers.test.js`, not by convention, so a
-  corpus arm cannot score well on metric 2 merely by echoing text metric 1
-  used to reward.
-- **Metric 3 — differentiation gap** is unchanged in definition (mid-stage
-  mean minus early-stage mean across the levels probe) but was the metric
-  Confound 2 leaked into: any gap difference favouring
-  `deviation-deterministic` in the 2026-07-29 numbers below cannot be
-  trusted, because that arm's levels probe was seeing its own answer.
+**Confound 2 — the levels probe leaked its answer to the deterministic arm.**
+Deterministic retrieval keys on `(readinessType, level)` using the *actual*
+level, so handing that rubric to a probe that then asks for the level was asking
+the arm to read back a number it had been given. The levels probe now receives
+the **full nine-rung ladder** (`fullLadderRubrics()`). The RNA probe keeps the
+(L, L+1) lookup because that is what production ships — **the asymmetry is
+intentional; do not tidy them into agreement.**
+
+Fixing these forced a rewrite of metrics 1 and 2:
+
+- **Metric 1 — level-placement accuracy**, MAE between the levels probe's
+  assignment and the reference level (`lib/metrics.js`). It replaces
+  "did the RNA reuse the retrieved rubric's exact vocabulary", which scored 1/12
+  (8%) on 2026-07-29 while the text was substantively correct — the RNA prompt's
+  own "be specific and grounded in the provided data" structurally discourages
+  echoing abstract rubric phrasing. It measured vocabulary reuse, not grounding.
+- **Metric 2 — stage-inappropriate recommendation rate.** SO 1.3's own worked
+  example ("recommending commercialization steps to a TRL 2 startup") made
+  mechanical (`lib/stage-markers.js`). It replaces the absent-field probe, which
+  saturated at 0/15 and was aimed at something the corpus cannot influence
+  anyway. Its lexicon (`data/stage-markers.json`) is **authored, with no
+  external source** — say so whenever it is quoted — and is held disjoint from
+  every corpus row's `keyTerms` by `tests/stage-markers.test.js`, so a corpus
+  arm cannot score well merely by echoing rubric text.
+- **Metric 3 — differentiation gap**, unchanged in definition (mid-stage mean
+  minus early-stage mean on the levels probe), but the metric confound 2 leaked
+  into: any 2026-07-29 gap favouring `deviation-deterministic` is untrustworthy.
 - **Metric 4 — the absent-field probe**, unchanged, now opt-in behind
-  `--with-fabrication-probe` rather than run by default. It stays in the
-  harness as SRS §2.2 evidence ("return null for unverifiable fields")
-  even though it is saturated and discriminates nothing between arms.
+  `--with-fabrication-probe`. Kept as SRS §2.2 evidence ("return null for
+  unverifiable fields") though it is saturated and discriminates nothing.
 
-A full rep is **2 calls per (arm, startup, probe)**. With five arms and two
-startups that is 20 calls — a whole day's cap — so full reps are no longer the
-normal way to run this. Use `--only-arm=` and `--only-probe=` to buy the cell
-you actually need; see below.
+A full rep is **2 calls per (arm, startup, probe)** — 20 calls at five arms and
+two startups, a whole day's cap. Use `--only-arm=` and `--only-probe=` to buy
+the cell you need.
 
 ### `--level-condition=` and metric 5 — added 2026-08-06
 
-Every result above is the **levels probe**, where the model infers the
-readiness level. Production never does that — mentors set levels and the RNA
-path consumes them as given. Metric 5 measures the path production actually
-ships: whether a generated RNA **asserts as fact** an artifact class the
-source document never mentions, when the *supplied* level is wrong.
+Every result above is the **levels probe**, where the model infers the level.
+Production never does that — mentors set levels and the RNA path consumes them.
+Metric 5 measures the shipped path: does a generated RNA **assert as fact** an
+artifact class the source document never mentions, when the *supplied* level is
+wrong.
 
-**Why this needs a manipulation, not an observational run.** The 2026-08-05
-level correction (see the result below) moved MediSync from IRL 3 to IRL 1.
-That removed the *trigger* — deterministic retrieval no longer pulls the
-funding-plan rubric text into the prompt — without touching the underlying
-vulnerability. An observational run today measures 0 and proves nothing. The
-probe instead supplies a deliberately wrong level (`Organizational: 3,
-Regulatory: 3, Investment: 3` — both startups share `O2 R1 I1`, so one
-override covers both) and checks whether the resulting rubric text turns into
-asserted fact. Technology/Market/Acceptance stay at the true level in the same
-call, so every observation carries its own unmanipulated control.
+**Why a manipulation, not an observational run.** The 2026-08-05 level
+correction moved MediSync from IRL 3 to IRL 1, removing the *trigger*
+(deterministic retrieval no longer pulls the funding-plan rubric) without
+touching the vulnerability. An observational run measures 0 and proves nothing.
+The probe supplies `Organizational: 3, Regulatory: 3, Investment: 3` — both
+startups share `O2 R1 I1`, so one override covers both — and checks whether the
+resulting rubric text turns into asserted fact. T/M/A stay at the true level in
+the same call, so every observation carries its own control.
 
-**Why 3 and not 4.** Deterministic retrieval pulls `(L, L+1)`, so 3 injects
-rows 3-4 — ORL 3's non-founder contributor under contract, RRL 3's engaged
-counsel and preliminary opinion, IRL 3's drafted funding plan. IRL 3 is the
-literal source of the observed *"The venture has drafted a funding plan (IRL
-3)"*; at an inflation of 4 that row appears in neither condition's prompt, so
-the manipulation would never present the instance it exists to reproduce. All
-three stay above `HARD_ABSENCES`' ceiling of 2, so every dimension is still
-scoreable, and +1/+2/+2 is a likelier mentor error than +2/+3/+3.
+**Why 3 and not 4.** `(L, L+1)` retrieval means 3 injects rows 3–4: ORL 3's
+non-founder contributor under contract, RRL 3's engaged counsel, IRL 3's drafted
+funding plan. IRL 3 is the literal source of the observed *"The venture has
+drafted a funding plan (IRL 3)"*; at 4 that row appears in neither condition's
+prompt. All three stay above `HARD_ABSENCES`' ceiling of 2, so every dimension
+is scoreable, and +1/+2/+2 is a likelier mentor error than +2/+3/+3.
 
-Reference-free, like the unsupported-claim rate below: `HARD_ABSENCES`
-(`lib/hard-absences.js`, shared with `audit-ground-truth.js`) names artifact
-classes neither document mentions, and `verifyAbsences` asserts that absence
-against the documents at run time rather than trusting the list. No ground
-truth level is needed.
-
-Run it with:
+Reference-free: `HARD_ABSENCES` (`lib/hard-absences.js`, shared with
+`audit-ground-truth.js`) names artifact classes neither document mentions, and
+`verifyAbsences` asserts that absence against the documents at run time rather
+than trusting the list.
 
 ```bash
 node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministic \
@@ -357,51 +287,46 @@ node measurement/measure-grounding.js --only-arm=baseline,deviation-deterministi
   --out=measurement/results/2026-08-06-supplied-level.json
 ```
 
-**`--only-arm` is not optional here.** `ARMS` holds five arms; omitting the
-filter runs all five, which at two startups × two conditions × two reps is
-**40 calls against a 20-call daily cap** — the run dies mid-experiment, the
-same failure mode that produced n=0 on 2026-07-29.
+**`--only-arm` is not optional here.** `ARMS` holds five; omitting the filter is
+**40 calls against a 20-call cap** — the run dies mid-experiment, the failure
+mode that produced n=0 on 2026-07-29.
 
-`--level-condition=truth|inflated|both` selects which supplied-level condition
-runs (default `truth`, today's existing behaviour unchanged). `both` issues
-one extra model call per (arm, startup, rep) for the inflated condition; under
-`truth` alone the inflated call is never generated, not generated-then-discarded.
+`--level-condition=truth|inflated|both` (default `truth`). `both` issues one
+extra call per (arm, startup, rep); under `truth` the inflated call is never
+generated, not generated-then-discarded.
 
-**What's reported, and why three numbers instead of one:**
+**Three reported numbers, not one:**
 
-- `mentioned` — any absent-artifact token appeared in the dimension's text.
-  Upper bound.
-- `asserted` — the headline: the text asserted at least one absent artifact
-  as already true, not merely raised it or recommended it. Lower bound.
-- `unclassified` — clauses that mentioned an absent token but matched none of
-  the classifier's negation/recommendation/assertion cues. The honesty
-  column: if it is large, the classifier cannot read this output and the
-  `asserted` rate should not be quoted. Reported `x/obs`, and `n/a` at obs=0
-  — a bare `0` for an arm that never ran reads as a clean bill of health.
+- `mentioned` — any absent-artifact token appeared. Upper bound.
+- `asserted` — the headline: the text asserted an absent artifact as already
+  true, not merely raised or recommended it. Lower bound.
+- `unclassified` — clauses that mentioned an absent token but matched no
+  negation/recommendation/assertion cue. **The honesty column:** if it is large,
+  the classifier cannot read this output and `asserted` should not be quoted.
+  Reported `x/obs`, and `n/a` at obs=0 — a bare `0` for an arm that never ran
+  reads as a clean bill of health.
 
-**Limitation, stated plainly.** Detection is token-based — it matches clauses
-containing a known absent-artifact token (`artifactTokens`, the narrow list;
-the broad `absentTokens` stays with `verifyAbsences`) and classifies them by
-cue words (`has`/`secured`/`in place` vs. `no`/`not`/`should`). Three channels
-push the reported rate down:
+**Limitation.** Detection is token-based (`artifactTokens`, the narrow list; the
+broad `absentTokens` stays with `verifyAbsences`) and cue-based
+(`has`/`secured`/`in place` vs. `no`/`not`/`should`). Three channels
+push the rate down:
 
-- **Paraphrase** that avoids the vocabulary entirely — *"the team has brought
-  in outside expertise"* dodges every Organizational token.
-- **Morphology.** Matching is stem-plus-optional-plural; other inflections and
-  compounds still escape.
+- **Paraphrase** avoiding the vocabulary — *"the team has brought in outside
+  expertise"* dodges every Organizational token.
+- **Morphology** — matching is stem-plus-optional-plural; other inflections and
+  compounds escape.
 - **Same-clause negation.** `NEGATION` has precedence, so a balanced sentence
-  that collapses into one clause scores `negated` even where it also asserts.
+  collapsing into one clause scores `negated` even where it also asserts.
   Splitting handles sentence and semicolon boundaries, comma-joined
-  coordination, bare `but`/`though`/`while`, a leading subordinator's comma,
-  and `and` before a modal or a negation — but not every bare `and`, which
-  would shred coordinated noun phrases into cue-less fragments. *"Assessment
-  of X, absence of Y"* is the modal shape of an RNA, so this channel is
-  probably larger than the paraphrase one.
+  coordination, bare `but`/`though`/`while`, a leading subordinator's comma, and
+  `and` before a modal or negation — but not every bare `and`, which would
+  shred coordinated noun phrases into cue-less fragments. *"Assessment of X,
+  absence of Y"* is the modal shape of an RNA, so this channel is probably the
+  largest.
 
 So `asserted` is a floor, not a census, and this probe **cannot prove the
-absence of fabrication** — only report what it caught. Every flagged clause is
-written verbatim to the results JSON (`flaggedClauses`), so what it did catch
-is checkable rather than trusted.
+absence of fabrication**. Every flagged clause is written verbatim to
+`flaggedClauses`, so what it caught is checkable rather than trusted.
 
 **Interpretation, pre-registered before any run:**
 
@@ -409,30 +334,29 @@ is checkable rather than trusted.
 |---|---|
 | corpus-inflated ≫ baseline-inflated | The corpus converts a wrong supplied level into asserted evidence. A real risk in the shipped path. |
 | corpus-inflated ≈ baseline-inflated | The wrong level alone drives it; the corpus is not culpable. |
-| both ≈ 0 | A one-rung supplied-level error did not induce detectable fabrication — not evidence about larger errors. |
+| both ≈ 0 | A one-rung error did not induce detectable fabrication — not evidence about larger errors. |
 | `unclassified` large | The classifier is too weak to read any of the above — report that, do not quote a rate. |
 
 ### Result, 2026-08-05 — the reference was broken; corrected, and the direction reverses
 
 **Read this before any result section below it.** Every "Result" section that
-follows scored metric 1 against the seeded `StartupReadinessLevel` rows. Those
-were demo fixtures written for the UI and never checked against the documents the
-model is shown — and they are contradicted by those documents in **ten of twelve
-cells**. Seeded Market 4 requires *"no prospect has yet indicated a specific
-willingness to pay"* beside a document stating PHP 5,000 monthly recurring
-revenue; seeded Organizational 4 requires a *"first full-time hire beyond the
-founders"* beside *"team grew to 3 founders"*; seeded Investment 3 requires a
-written funding plan beside a document mentioning no funding activity at all.
+follows scored metric 1 against the seeded `StartupReadinessLevel` rows — demo
+fixtures written for the UI, never checked against the documents the model is
+shown, and **contradicted by those documents in ten of twelve cells**. Seeded
+Market 4 requires *"no prospect has yet indicated a specific willingness to
+pay"* beside a document stating PHP 5,000 MRR; seeded Organizational 4 requires
+a *"first full-time hire beyond the founders"* beside *"team grew to 3
+founders"*; seeded Investment 3 requires a written funding plan beside a
+document mentioning no funding activity.
 
-`lib/metrics.js` justified that reference as *"independent of the prompt"*. True,
-and a sound fix for a real problem — a rubric-similarity metric would just reward
-parroting. But independence and correctness are different properties, and only
-the first was ever secured.
+`lib/metrics.js` justified that reference as *"independent of the prompt"*. True
+— and a sound fix for a real problem, since a rubric-similarity metric would
+reward parroting. But independence and correctness are different properties, and
+only the first was secured.
 
 The reference is now derived per cell from the documents
 (`data/ground-truth-adjudication.md`, single source `src/demo-readiness-levels.ts`).
-Re-running the three arms against it, n=3, 36 balanced observations per arm,
-levels probe, 18/18 calls
+n=3, 36 balanced observations per arm, levels probe, 18/18 calls
 (`results/2026-08-05-corrected-reference.json`):
 
 | arm | MAE | exact | within 1 rung |
@@ -441,82 +365,82 @@ levels probe, 18/18 calls
 | `sdd-semantic` *(null control)* | 0.94 | 15/36 (42%) | 28/36 |
 | `deviation-deterministic` | **0.22** | **28/36 (78%)** | **36/36** |
 
-The byte-identical control pair differs by 0.25 MAE and **1** on `within1`, so the
-corpus arm's margins over baseline — 0.47 MAE and **7** on `within1` — sit
-outside the noise floor. Mean signed error shows the mechanism: the corpus arm is
-*exactly* right on Organizational, Regulatory and Investment across all 36
-observations (0.00 / 0.00 / 0.00) while `baseline` inflates them by +1.67 / +0.67
-/ +1.17 and `sdd-semantic` by +1.33 / +0.83 / +1.83.
+The byte-identical control pair differs by 0.25 MAE and **1** on `within1`, so
+the corpus arm's margins over baseline — 0.47 MAE and **7** — sit outside the
+noise floor. Mean signed error shows the mechanism: the corpus arm is *exactly*
+right on Organizational, Regulatory and Investment across all 36 observations
+(0.00 / 0.00 / 0.00) while `baseline` inflates them by +1.67 / +0.67 / +1.17 and
+`sdd-semantic` by +1.33 / +0.83 / +1.83.
 
 The corpus arm's whole residual is Technology and Market on MediSync, where it
-places `T7 M6` on all three reps — exactly the *permissive* reading of those two
-cells. Scored against permissive instead of strict: corpus **0.19**, baseline
-0.94. The direction survives either reading.
+places `T7 M6` on all three reps — the *permissive* reading of those cells.
+Scored permissively instead of strictly: corpus **0.19**, baseline 0.94. The
+direction survives either reading.
 
-**The claim that needs no reference at all.** Three rungs require an artifact class
-neither document mentions anywhere — ORL 3+ a non-founder contributor, RRL 3+
+**The claim that needs no reference at all.** Three rungs require an artifact
+class neither document mentions — ORL 3+ a non-founder contributor, RRL 3+
 counsel engaged, IRL 3+ a written funding plan — so any placement above them
-asserts evidence that does not exist, whatever the true level is. `verifyAbsences`
-in `audit-ground-truth.js` asserts those absences at run time rather than trusting
-the list, and the ceilings are one rung more generous than the documents support,
-making these lower bounds: `baseline` 11/18 (**61%**), `sdd-semantic` 10/18,
-`deviation-deterministic` **0/18 (0%)**, titles 1/18, bare 1/18. This is an
-unsupported-claim rate measured directly against the source document, and it is
-the figure to quote, because it survives the reference being contested.
+asserts evidence that does not exist, whatever the true level is.
+`verifyAbsences` asserts those absences at run time, and the ceilings are one
+rung more generous than the documents support, making these lower bounds:
+`baseline` 11/18 (**61%**), `sdd-semantic` 10/18, `deviation-deterministic`
+**0/18 (0%)**, titles 1/18, bare 1/18. **This is the figure to quote** — it
+survives the reference being contested.
 
-**What this does and does not change below.**
+**What this changes below:**
 
 - The **negative conclusion is withdrawn.** Three reps agreeing in direction was
   not evidence — they agreed because the reference was consistently wrong.
-- The **volume ladder result stands in direction**: stripping the rubric bodies
-  still sends MediSync to TRL 9 on every rep, so the bodies are load-bearing
-  restraint. Its magnitudes are scored against the broken reference.
+- The **volume ladder stands in direction**: stripping rubric bodies still sends
+  MediSync to TRL 9 every rep, so the bodies are load-bearing restraint. Its
+  magnitudes are scored against the broken reference.
 - The **O/R/I rubric recalibration those sections prescribe is cancelled**, not
   deferred. It existed to make the corpus reproduce the seeded levels; those
   levels were the error, and O/R/I is now exactly right.
 - **Pooling:** levels sit inside `common`, so every fingerprint changed and the
-  pre-correction runs are a closed set. Verified rather than assumed — `--merge`
+  pre-correction runs are a closed set — verified, not assumed: `--merge`
   refuses the new file on all 15 (metric, arm) pairs. `audit-ground-truth.js`'s
-  `SEEDED` stays frozen at the old values, with a test asserting it does not track
-  the harness, because that is what the historical runs were scored against.
+  `SEEDED` stays frozen at the old values, with a test asserting it does not
+  track the harness, because that is what the historical runs were scored
+  against.
 
-**Scope limit, unchanged and still the one to quote.** This is the *levels* probe,
-a harness construct. Production does not ask the model to assign readiness levels
-— mentors set them. So this is a positive result for Objective 1b's *assessment*
-claim and says nothing about RNA generation quality, where metric 2 has never
-produced a signal on any arm. Metric 3 remains unresolvable: baseline 1.94,
-control 2.56, corpus 1.56, and the control pair's own spread (0.62) exceeds the
-corpus arm's deficit against baseline (0.38).
+**Scope limit, and it is the one to quote.** This is the *levels* probe, a
+harness construct; production does not ask the model to assign levels. So it is
+a positive result for Objective 1b's *assessment* claim and says nothing about
+RNA generation quality, where metric 2 has never produced a signal. Metric 3
+remains unresolvable: baseline 1.94, control 2.56, corpus 1.56 — the control
+pair's own spread (0.62) exceeds the corpus arm's deficit against baseline
+(0.38).
 
 ### Result, 2026-08-04 — n=3 complete, and the volume hypothesis is refuted
 
-Three files: `2026-08-04-rep3-refill.json` (2 calls, filling the cell a 503 cost
-on 2026-08-03), `2026-08-04-titles-arm.json` (12 calls), `2026-08-04-bare-arm.json`
-(6 calls). 20/20 of the day's quota.
+⚠ **Superseded by 2026-08-05 above.** The "direct negative result" is withdrawn:
+every figure here is scored against the seeded reference. Kept because the
+volume ladder holds in direction and because the retraction is part of the
+record.
 
-**All five arms, n=3, pooled** — merge the six post-redesign files:
+`2026-08-04-rep3-refill.json` (2 calls), `2026-08-04-titles-arm.json` (12),
+`2026-08-04-bare-arm.json` (6). 20/20 of the day's quota. All five arms, n=3,
+pooled over the six post-redesign files:
 
 | arm | levels block | MAE | exact | within1 |
 |---|---|---|---|---|
 | `baseline` | *none* | **0.78** | 44% | **30/36** |
-| `sdd-semantic` *(control — see below)* | *none* | 0.42 | 64% | 34/36 |
+| `sdd-semantic` *(control)* | *none* | 0.42 | 64% | 34/36 |
 | `deviation-deterministic` | 31,850 ch | 1.36 | 33% | 13/36 |
 | `deviation-titles` | 12,552 ch | 1.69 | 25% | 15/36 |
 | `deviation-bare` | 4,002 ch | 1.78 | 25% | 12/36 |
 
-**The recorded hypothesis is dead.** Since 2026-07-30 this file and
-`TODO_CHECKLIST.md` have carried: *"the levels probe hands corpus arms all 54
-rubric rows and that volume destabilises placement."* Two new arms test it as a
-ladder — `deviation-titles` drops each row's body, `deviation-bare` drops the
-provenance suffix too — holding level coverage fixed so exact placement stays
-reachable and the true level is still never leaked.
+**The recorded hypothesis is dead.** Since 2026-07-30 these docs carried "the
+levels probe hands corpus arms all 54 rubric rows and that volume destabilises
+placement." `deviation-titles` drops each row's body and `deviation-bare` the
+provenance suffix too, holding level coverage fixed so exact placement stays
+reachable and the true level is still never leaked. **An 87% cut in block size
+changes nothing** in aggregate — all three corpus arms sit in a band (MAE
+1.36–1.78, within1 12–15/36) far below an arm given no rubric at all.
 
-An **87% cut in block size changes nothing** in aggregate. All three corpus arms
-sit in a band (MAE 1.36–1.78, within1 12–15/36) far below an arm given no rubric
-at all. Volume does not explain the net damage.
-
-**But the per-dimension breakdown shows two different effects, responding to
-volume in opposite ways.** Mean *signed* error, + meaning placed too high:
+But mean *signed* error (+ = placed too high) shows two effects responding to
+volume in opposite ways:
 
 | arm | Tech | Mark | Acce | Orga | Regu | Inve |
 |---|---|---|---|---|---|---|
@@ -526,138 +450,101 @@ volume in opposite ways.** Mean *signed* error, + meaning placed too high:
 | `deviation-titles` | +2.50 | +1.50 | +3.00 | **−1.17** | −0.33 | **−1.00** |
 | `deviation-bare` | +2.50 | +2.00 | +3.00 | **−1.17** | −0.33 | **−1.00** |
 
-1. **Organizational and Investment are volume-invariant.** Every corpus arm sits
-   at −1.17 and −1.00 — identical to two decimals across the whole 87% cut —
-   while baseline places both *too high* at +0.67. The corpus flips the sign,
-   and the size of the flip does not care how much text is sent. That is the
-   signature of **rubric calibration**: those rungs demand more evidence than
-   the model's unaided prior. It is correctable in the corpus rows, per
-   dimension, and it is where the next work belongs.
-2. **Technology and Acceptance move the other way and *do* track volume**:
-   +1.00 → +2.50 and +2.17 → +3.00 as bodies are stripped. Removing text made
-   over-placement **worse**. A bare title — *"TRL 5 — Technology validated in
-   relevant environment"* — is an aspirational label with no criteria attached,
-   so the model assigns it freely; the body was the thing restraining it.
+1. **Organizational and Investment are volume-invariant** — every corpus arm at
+   −1.17 and −1.00, identical to two decimals across the whole 87% cut, while
+   baseline places both *too high* at +0.67. The corpus flips the sign and the
+   size of the flip does not care how much text is sent: the signature of
+   **rubric calibration**, correctable per dimension in the corpus rows.
+2. **Technology and Acceptance track volume the other way**: +1.00 → +2.50 and
+   +2.17 → +3.00 as bodies are stripped. A bare title — *"TRL 5 — Technology
+   validated in relevant environment"* — is an aspirational label with no
+   criteria attached, so the model assigns it freely; the body was the restraint.
 
-So the honest statement is narrower than "volume destabilises placement" and
-narrower than "volume is irrelevant". Volume does not drive the net error, and
-cutting it is actively harmful on the dimensions where the body text was doing
-the constraining. The dominant, volume-insensitive term is per-dimension rubric
-calibration.
+So: volume does not drive the net error, and cutting it is actively harmful
+where body text was doing the constraining. **Why trimming *levels* would have
+been the wrong experiment:** cutting to anchor rungs (1/5/9) shrinks the block
+far more but removes the correct answer for any startup at level 2–4. Both new
+arms keep all 54 keys for that reason.
 
-**Why trimming *levels* would have been the wrong experiment.** Cutting to
-anchor rungs (1/5/9) would shrink the block far more — and remove the correct
-answer for any startup at level 2, 3 or 4. Placement would degrade for a reason
-unrelated to the hypothesis. Both new arms keep all 54 keys for exactly this
-reason.
-
-**What still cannot be concluded, and why.** `baseline` and `sdd-semantic` send
-**byte-identical** prompts (semantic retrieval returns nothing: 0/12 rubric,
-0/2 profile). Their spread is therefore pure sampling noise — and `sdd-semantic`
-"beats" `baseline` in **all three reps**, by 0.25–0.42 MAE. So *a consistent
-direction across three reps is not evidence of an effect here*: the null pair
-does it too, at a similar magnitude. Any argument of the form "the corpus arm
-lost 3/3, therefore it is real" is refuted by this study's own control.
-
-What survives that objection is `within1`, where the control pair differs by
-0, −2, −2 while the corpus arms differ from baseline by −7, −6, −4 — two to
-three times larger, every rep, non-overlapping. The corpus arms are not slightly
-miscalibrated; they miss by more than one level in roughly two thirds of
-placements against baseline's one sixth. MAE understates this because the
-ungrounded arms accumulate many small errors while the corpus arms make fewer,
-much larger ones.
-
-**Scope limit, stated plainly.** This is the *levels* probe, a harness
-construct. Production does not ask the model to assign readiness levels this
-way — mentors set them.
-
-⚠ **Superseded — see "Result, 2026-08-05" above.** The "direct negative result"
-this section reported is withdrawn: every figure in it is scored against the
-seeded reference, which the documents contradict in ten of twelve cells. Against
-a document-derived reference the direction reverses. The section is kept because
-its volume ladder still holds in direction and because the retraction is part of
-the record.
+**What cannot be concluded, and why.** `baseline` and `sdd-semantic` send
+**byte-identical** prompts (semantic returns nothing: 0/12 rubric, 0/2 profile),
+so their spread is pure sampling noise — and `sdd-semantic` "beats" `baseline`
+in **all three reps**, by 0.25–0.42 MAE. *A consistent direction across three
+reps is not evidence of an effect here: the null pair does it too.* What
+survives is `within1`, where the control pair differs by 0, −2, −2 while the
+corpus arms differ from baseline by −7, −6, −4 — two to three times larger,
+every rep, non-overlapping. The corpus arms are not slightly miscalibrated: they
+miss by more than one level in roughly two thirds of placements against
+baseline's one sixth. MAE understates this because the ungrounded arms
+accumulate many small errors while the corpus arms make fewer, much larger ones.
 
 **Two data artifacts, recorded rather than hidden:** the refill re-ran the RNA
 probe for a cell that already had one, so `deviation-deterministic` reports 42
 RNA observations against 36 elsewhere (harmless — metric 2 is 0% universally and
 metrics 1 and 3 read `levelCalls` only); and `deviation-bare` has **no** metric-2
-data at all, because it was run `--only-probe=levels` deliberately.
+data, having been run `--only-probe=levels` deliberately.
 
 ### `--only-probe=` — added 2026-08-04
 
-Metric 2 has been saturated at 0% on every arm since the 2026-07-30 redesign, so
-half of every rep bought nothing. `--only-probe=rna|levels` narrows which probes
-run, halving the cost of the only metric that discriminates. The bare arm cost
-**6 calls where it would have cost 12** — which is the only reason a third point
-on the volume ladder fit inside the day's cap.
+Metric 2 had been saturated at 0% on every arm since the 2026-07-30 redesign, so
+half of every rep bought nothing. `--only-probe=rna|levels` halves the cost of
+the only metric that discriminates — the bare arm cost **6 calls instead of
+12**, the only reason a third point on the volume ladder fit inside the cap.
 
-Exact names only, no prefix matching: there are two fixed values, so a prefix
-would buy nothing and could select the wrong one. An unrecognised name errors
-rather than being dropped — silently running fewer probes than asked for looks
-identical to a quota hit in the output.
-
-The wiring test asserts the call is **suppressed**, not filtered afterwards: an
+Exact names only, no prefix matching: two fixed values, so a prefix buys nothing
+and could select the wrong one. An unrecognised name errors rather than being
+dropped — silently running fewer probes looks identical to a quota hit. The
+wiring test asserts the call is **suppressed**, not filtered afterwards: an
 option that issued both calls and discarded one would leave every reporting test
 green while buying nothing.
 
-**Ambiguous `--only-arm` prefixes now error.** Adding `deviation-titles` made
-`--only-arm=deviation` match two arms, which would have silently run both and
-doubled the spend against a 20/day cap. Over-selection is as costly here as
-under-selection: the filter now refuses and names the candidates. An exact name
-always wins, so one arm's name prefixing another's never makes it unselectable.
+**Ambiguous `--only-arm` prefixes error.** Adding `deviation-titles` made
+`--only-arm=deviation` match two arms, which would have silently doubled the
+spend. Over-selection is as costly as under-selection: the filter refuses and
+names the candidates. An exact name always wins, so one arm's name prefixing
+another's never makes it unselectable.
 
 ### Result, 2026-08-03 evening — rep 3, partial; metric 3 declared unresolvable
 
-`measurement/results/2026-08-03-rep3.json`. 11 of 12 calls landed. The twelfth
-failed on a **503 "high demand" — not a quota 429** — and it failed on the one
-cell that carries the finding: `deviation-deterministic / MediSync / levels`.
-
-**Two conclusions, and the second is the more useful one.**
+`results/2026-08-03-rep3.json`. 11 of 12 calls landed; the twelfth failed on a
+**503 "high demand" — not a quota 429** — on the one cell carrying the finding
+(`deviation-deterministic / MediSync / levels`).
 
 **1. Metric 1 separates the arms; metric 3 does not, and probably cannot at any
 N reachable on this quota.** `baseline` and `sdd-semantic` send byte-identical
-prompts, so every gap reading they produce is one draw from the same
-distribution. Six such draws now exist — 2.83, 1.67, 3.33 (baseline) and 2.33,
-1.83, 1.83 (sdd) — spanning **1.67 to 3.33, a spread of 1.66 gap points.** The
-corpus arm's pooled deficit is −1.19. **The deficit is smaller than the control
-arms' own spread**, so metric 3 cannot resolve it. The 2026-07-29 "±1.0 noise
-floor" was an underestimate, and the n=2 section below quoting a 0.17 control
-spread was a small-sample artifact — it grew to 0.61 with one more rep, which is
-exactly what a single paired difference of two means was warned not to support.
+prompts, so every gap reading is one draw from the same distribution. Six such
+draws exist — 2.83, 1.67, 3.33 (baseline), 2.33, 1.83, 1.83 (sdd) — spanning
+**1.67 to 3.33, a spread of 1.66 gap points**, against a corpus-arm pooled
+deficit of −1.19. The deficit is smaller than the controls' own spread. The
+2026-07-29 "±1.0 noise floor" was an underestimate, and the n=2 section below
+quoting a 0.17 control spread was a small-sample artifact — it grew to 0.61 with
+one more rep.
 
-Metric 1 behaves the opposite way. Per-rep MAE: baseline 0.67 / 0.75 / 0.92,
-sdd 0.42 / 0.33 / 0.50, deviation 1.50 / 1.33 / (rep 3 incomplete). The
-deviation readings sit outside the baseline range and the ranges do not overlap.
-**Report metric 1; treat metric 3 as unresolved and say why.**
+Metric 1 behaves the opposite way. Per-rep MAE: baseline 0.67 / 0.75 / 0.92, sdd
+0.42 / 0.33 / 0.50, deviation 1.50 / 1.33 / (incomplete). The ranges do not
+overlap. **Report metric 1; treat metric 3 as unresolved and say why.**
 
-**2. The AgroLink half of the reproducibility finding now holds three times.**
-Corpus-arm deltas on AgroLink: `+0 +2 +3 +0 +0 +0`, `+0 +2 +2 +0 +0 +0`,
-`+0 +1 +2 +0 +0 +0` — Market and Acceptance pushed up, the other four exact,
-three reps running. The MediSync half (the −2 collapse on O/R/I) still rests on
-two observations, because rep 3 is precisely the one that 503'd.
+**2. The AgroLink half of the reproducibility finding holds three times.**
+Corpus-arm deltas: `+0 +2 +3 +0 +0 +0`, `+0 +2 +2 +0 +0 +0`, `+0 +1 +2 +0 +0
++0`. The MediSync half (the −2 collapse on O/R/I) still rests on two
+observations — rep 3 is precisely the one that 503'd.
 
-**The missing cell biases the pooled numbers in the corpus arm's favour, so do
-not quote the n=3 pooled MAE.** Adding rep 3 moved deviation's pooled MAE from
-1.42 to **1.23** — not because the arm improved, but because rep 3 contributed
-6 AgroLink calls (its low-error startup) and 0 MediSync calls (where all of its
-error is). Deviation's pool is now 18 AgroLink / 12 MediSync against baseline's
-18 / 18. **The balanced n=2 figure below is the like-for-like comparison.**
-Metric 3 is barely affected by the same imbalance (deviation's AgroLink mean
-moves 2.25 → 2.17, shifting the gap by 0.09), but metric 3 is unresolvable
-anyway.
+**Do not quote the n=3 pooled MAE.** Adding rep 3 moved deviation's pooled MAE
+from 1.42 to **1.23**, not because the arm improved but because rep 3
+contributed 6 AgroLink calls (its low-error startup) and 0 MediSync calls (where
+its error is): 18/12 against baseline's 18/18. **The balanced n=2 figure below
+is the like-for-like comparison.** Metric 3 is barely affected by the imbalance
+(deviation's AgroLink mean moves 2.25 → 2.17, shifting the gap by 0.09), but is
+unresolvable anyway.
 
-**Next:** one run to fill the missing `deviation / MediSync / levels` cell —
-now **2 calls rather than a 12-call rep**, see below.
+### Cell filtering and 503 retry — added 2026-08-03
 
-### Cell filtering and 503 retry — added 2026-08-03 in response to the above
-
-Two harness gaps the partial rep exposed, both now closed (26 new tests, all
-four guards mutation-verified):
+Two gaps the partial rep exposed, both closed (26 tests, four guards
+mutation-verified).
 
 **`--only-arm=` / `--only-startup=`** narrow which cells run. Case-insensitive
-prefix match, comma-separated for several, so the space in `MediSync Cebu`
-never needs quoting:
+prefix match, comma-separated, so the space in `MediSync Cebu` never needs
+quoting:
 
 ```bash
 node measurement/measure-grounding.js --only-arm=deviation \
@@ -665,28 +552,21 @@ node measurement/measure-grounding.js --only-arm=deviation \
 ```
 
 A filter matching nothing **hard-errors before any network call** and lists the
-real names, rather than falling through to the full 12-call run — the same
-reasoning as `validateArgs`' refusal to fall through on an empty `--merge`.
-Unselected arms still get an empty results entry, so reports and `--merge` stay
-well-formed.
+real names. Unselected arms still get an empty results entry, so reports and
+`--merge` stay well-formed. **A filtered file is a partial rep** — its tables
+show n=0 for everything unselected; `--merge` it with a full run rather than
+reading it alone.
 
-**A filtered file is a partial rep.** Its own tables show n=0 for everything
-unselected; `--merge` it with a full run rather than reading it alone.
-
-**Transient 503s are now retried** — 3 attempts at 15s then 30s. A 503 is the
-model being busy; a **429 is never retried**, because the daily cap does not
-reopen for ~24h and a retry loop would only burn wall-clock to earn another
-429. That separation is the whole point, and it is the one guard that needed a
-dedicated test: a plain 429 body contains neither `503` nor `UNAVAILABLE`, so
-removing the quota check passed every other test. The test that pins it uses a
-body naming both.
+**Transient 503s are retried** — 3 attempts at 15s then 30s. A **429 is never
+retried**: the daily cap does not reopen for ~24h, so a retry loop only burns
+wall-clock to earn another 429. That separation needed a dedicated test — a
+plain 429 body contains neither `503` nor `UNAVAILABLE`, so removing the quota
+check passed every other test. The pinning test uses a body naming both.
 
 ### Result, 2026-08-03 — second rep, n=2 pooled
 
-`measurement/results/2026-08-03-rep2.json`, all 12 calls, no quota hit on the
-generation endpoint. Pooled with the 2026-07-30 rep below via
-`--merge`; all nine (metric, arm) fingerprint groups matched, so both reps
-pool. **n=2.**
+`results/2026-08-03-rep2.json`, all 12 calls. Pooled with the 2026-07-30 rep via
+`--merge`; all nine (metric, arm) fingerprint groups matched.
 
 | metric (direction) | baseline | sdd-semantic | deviation-deterministic |
 |---|---|---|---|
@@ -696,9 +576,8 @@ pool. **n=2.**
 | 2 — stage-inappropriate rate (lower better) | 0% | 0% | 0% |
 | 3 — differentiation gap (higher better) | 2.25 | 2.08 | **1.33** |
 
-**The headline change is not the pooled means — it is that the corpus arm's
-error turned out to be reproducible.** Per-dimension signed deltas against
-seeded truth, both reps:
+**The headline is not the pooled means — it is that the corpus arm's error is
+reproducible.** Per-dimension signed deltas against seeded truth:
 
 | MediSync (truth) | T5 | M4 | A3 | O4 | R3 | I3 |
 |---|---|---|---|---|---|---|
@@ -707,71 +586,49 @@ seeded truth, both reps:
 | baseline, rep 1 | +1 | +1 | +3 | 0 | 0 | +1 |
 | baseline, rep 2 | 0 | 0 | +2 | 0 | −1 | +1 |
 
-The corpus arm returns nearly the same wrong placement twice; `baseline` moves
-around more between reps than the corpus arm does. **So the working hypothesis
-recorded below — that 54 rubric rows *destabilise* placement — is not what the
-data shows, and is retracted.** The corpus arm is, if anything, the *more*
-stable of the two. What it does is **displace placement systematically**:
-on the mid-stage startup, +2 on Technology/Market/Acceptance and −2 on
-Organizational/Regulatory/Investment, in both reps. On AgroLink the same upward
-push appears on Market (+2.0) and Acceptance (+2.5) while the other four sit
-exact — the bottom three are already at level 1 and cannot collapse further, so
-the downward half of the pattern is only observable on MediSync.
+The corpus arm returns nearly the same wrong placement twice and `baseline`
+moves around more, **so the "54 rubric rows destabilise placement" hypothesis is
+retracted** — the corpus arm is the *more* stable one. What it does is
+**displace placement systematically**: on the mid-stage startup, +2 on T/M/A and
+−2 on O/R/I in both reps. On AgroLink the same upward push appears on Market
+(+2.0) and Acceptance (+2.5) while the other four sit exact — the bottom three
+are already at level 1 and cannot collapse further, so the downward half is only
+observable on MediSync. Instability would be a prompt-volume problem;
+reproducible displacement points at **rubric calibration** — a live hypothesis,
+not a demonstrated cause.
 
-That distinction matters because the two defects have different fixes.
-Instability would be a prompt-volume problem. A reproducible per-dimension
-displacement points at the **rubric text's own calibration**: the rungs for
-O/R/I appear to demand more evidence than the model's unaided prior, and those
-for T/M/A less. That is measurable per dimension and correctable in the corpus
-rows, and it is a live hypothesis rather than a demonstrated cause.
-
-**The `within one rung` row is the sharpest single number here.** Baseline
-lands within one rung 21/24 times; the corpus arm 8/24 — and its exact count is
-also 8, so **every non-exact corpus placement is off by more than one rung.**
-The error is large-grained, not a drift.
+**The sharpest single number:** baseline lands within one rung 21/24 times, the
+corpus arm 8/24 — and its exact count is also 8, so **every non-exact corpus
+placement is off by more than one rung.** Large-grained error, not drift.
 
 **Separate finding, not a corpus effect: every arm overshoots Acceptance.**
-Pooled mean signed delta on Acceptance is +1.0 to +2.5 for *all three* arms on
-*both* startups — including the two that receive no rubric text at all. Since it
-is present in the controls it cannot be attributed to the corpus, and because it
-lands on every arm roughly equally it inflates all three MAEs without biasing
-the between-arm contrast. The likeliest explanations are the seeded Acceptance
-ground truth being set too low, or the seeded documents carrying more adoption
-evidence than their assigned ARL rung implies. Worth checking against
-`seed-demo-full.js` before the Acceptance ground truth is used for anything
-else.
+Pooled mean signed delta is +1.0 to +2.5 for *all three* arms on *both*
+startups, including the two receiving no rubric text. Present in the controls,
+so not attributable to the corpus; roughly equal across arms, so it inflates all
+three MAEs without biasing the contrast. Likeliest causes: the seeded Acceptance
+truth set too low, or the documents carrying more adoption evidence than their
+ARL rung implies. Check against `seed-demo-full.js` before that ground truth is
+used for anything else.
 
-**Metrics 1 and 3 are still one finding read two ways, not two.** Both derive
-from the same `levelCalls` array; the displacement pattern above mechanically
-raises MAE *and* compresses the early-vs-mid gap (it lifts AgroLink's Market and
-Acceptance while lowering MediSync's O/R/I). Do not present them as
-corroborating each other.
+**Metrics 1 and 3 are one finding read two ways, not two.** Both derive from the
+same `levelCalls`; the displacement mechanically raises MAE *and* compresses the
+early-vs-mid gap. Do not present them as corroborating each other.
 
-**Noise floor at n=2.** `baseline` vs `sdd-semantic` remains the control — the
-two send byte-identical prompts, re-verified this rep by diffing the assembled
-prompts from `--dry-run` (identical, same md5). Their pooled spread is 0.33 MAE
-and 0.17 gap points. Note this is still a single paired difference of two means,
-not a variance estimate; it does not license an "N× the noise" multiplier. Note
-also that `sdd-semantic` scored better than `baseline` on metric 1 in *both*
-reps — with byte-identical prompts that is a coin flip landing the same way
-twice, and it is a useful reminder of how little a consistent direction proves
-at n=2.
+**Noise floor at n=2.** `baseline` vs `sdd-semantic` — byte-identical prompts,
+re-verified by diffing `--dry-run` output (same md5). Pooled spread 0.33 MAE and
+0.17 gap points. Still a single paired difference of two means, not a variance
+estimate; it licenses no "N× the noise" multiplier. `sdd-semantic` scored better
+in *both* reps — a coin flip landing the same way twice.
 
-**Still not established.** Whether the corpus helps or harms *in production*.
-Every number here comes from the levels probe, which hands corpus arms all 54
-rubric rows; production's RNA path retrieves 12 (current rung + next). The
-displacement is a property of the corpus text as read under the probe's
-conditions. A third rep is still worth running for metric 3, whose per-arm
-rep-to-rep swing (baseline 2.83 → 1.67) remains comparable to the effect.
+**Still not established:** whether the corpus helps or harms *in production*.
+Every number here is the levels probe, which hands corpus arms all 54 rows;
+production's RNA path retrieves 12.
 
 ### Result, 2026-07-30 — the first clean rep
 
-*Pooled into the n=2 result above; kept for the per-rep detail.*
-
-`measurement/results/2026-07-30-redesign-rep1.json`. All 12 calls completed,
-no quota hit. **This is the first rep in which the arms differ only by the
-rubric text** — every prior run compared "told its levels" against "not told".
-n=1 throughout.
+*Pooled into the n=2 result above; kept for per-rep detail.*
+`results/2026-07-30-redesign-rep1.json`, all 12 calls. **The first rep in which
+the arms differ only by the rubric text.** n=1 throughout.
 
 | metric (direction) | baseline | sdd-semantic | deviation-deterministic |
 |---|---|---|---|
@@ -780,87 +637,51 @@ n=1 throughout.
 | 2 — stage-inappropriate rate (lower better) | 0% | 0% | 0% |
 | 3 — differentiation gap (higher better) | 2.83 | 2.33 | **1.17** |
 
-**Read `baseline` vs `sdd-semantic` as a noise measurement, not a comparison.**
-Semantic retrieval returns nothing against this corpus, so those two arms send
-byte-identical prompts. Their spread is therefore pure run-to-run variance at
-`temperature: 0`, and it calibrates everything else in the table: **0.25 MAE on
-metric 1, 0.50 gap points on metric 3** in this rep.
+**Read `baseline` vs `sdd-semantic` as a noise measurement, not a comparison** —
+byte-identical prompts, so their spread is run-to-run variance at
+`temperature: 0`: **0.25 MAE on metric 1, 0.50 gap points on metric 3.**
 
-**The corpus arm did worse on both scored metrics, and both readings sit
-outside the noise measured above — but metrics 1 and 3 are not independent
-evidence of that, and this rep should not be read as if they were.**
-Deterministic is +0.83 MAE above baseline and −1.66 gap points below it
-(the latter also outside the ±1.0 floor measured on 2026-07-29). Both numbers,
-though, are two different summaries of the *same* twelve `levelCalls` values —
-metric 1 is the mean absolute distance of those assignments from the seeded
-truth, metric 3 is (MediSync's mean of those same assignments) minus
-(AgroLink's). Concretely: this rep's deterministic arm overshoots three of
-MediSync's dimensions and collapses the other three to level 1 (see the table
-below) — those same twelve numbers are mechanically what both raises MAE and
-shrinks the gap. So this is one internally-consistent pattern of unusual
-placements, read two ways, not two separate lines of evidence that happen to
-agree. The "~3×" comparison to the metric-1 noise floor in an earlier version
-of this section also overstated what a single paired difference can say:
-0.25 MAE between two byte-identical-prompt arms is one number, not a
-distribution, and it does not by itself establish how variable that noise
-actually is. At n=1, the honest statement is that the corpus arm's placements
-look unusual in this one rep — not that two independent metrics corroborate
-each other.
-
-The per-dimension assignments show why, and the failure is **not** uniform
-inflation:
+The corpus arm did worse on both scored metrics, outside that spread — **but
+metrics 1 and 3 are not independent evidence.** Both summarise the *same* twelve
+`levelCalls`: metric 1 is their mean absolute distance from truth, metric 3 is
+MediSync's mean minus AgroLink's. This rep's deterministic arm overshoots three
+of MediSync's dimensions and collapses the other three to level 1, which is
+mechanically what both raises MAE and shrinks the gap. One internally-consistent
+pattern read two ways. (An earlier version's "~3× the noise floor" also
+overstated what a single paired difference can say.)
 
 | MediSync (truth) | T5 | M4 | A3 | O4 | R3 | I3 |
 |---|---|---|---|---|---|---|
 | baseline | 6 | 5 | 6 | 4 | 3 | 4 |
 | deterministic | 7 | 6 | 5 | **1** | **1** | **1** |
 
-The deterministic arm overshoots on three dimensions and collapses the other
-three to level 1. ~~Working hypothesis: the levels probe hands corpus arms all
-54 rubric rows, and that volume destabilises placement rather than grounding
-it.~~ **Retracted by the second rep** — the corpus arm reproduced this pattern
-almost exactly, and reproducibility is the opposite of destabilisation. See the
-n=2 section above. The probe-vs-production caveat still stands: this is a
-property of the measurement instrument's confound-2 fix, and production's levels
-never come from this probe.
-
-This also demonstrates why metric 1 uses absolute error. MediSync's
-deterministic deltas are `+2 +2 +2 −3 −2 −2`: a signed mean of **−0.17**, which
-would have read as near-perfect, against a true MAE of **2.17**.
+**Why metric 1 uses absolute error:** MediSync's deterministic deltas are `+2 +2
++2 −3 −2 −2` — a signed mean of **−0.17**, near-perfect-looking, against a true
+MAE of **2.17**.
 
 **Metric 2 saturated at 0% on every arm, and that is a finding.** The probe is
-live — injecting `"Move to full market launch and prepare an IPO."` at
-AgroLink's Technology level 2 correctly flags both `ipo` and
-`full market launch` — so 0/12 means the model genuinely made no
-stage-inappropriate recommendations anywhere. Since fixing confound 1 gives
-**all three arms** the `Initial Readiness Level` block, the most economical
-reading is that **the levels block, not the rubric corpus, is what keeps
-recommendations stage-appropriate.** Isolating that needs the
-`baseline-no-levels` fourth arm the spec holds in reserve; it is not
-demonstrated here.
+live — injecting *"Move to full market launch and prepare an IPO."* at
+AgroLink's Technology level 2 correctly flags both `ipo` and `full market
+launch` — so 0/12 means the model made no stage-inappropriate recommendations.
+Since confound 1's fix gives **all three arms** the levels block, the most
+economical reading is that **the levels block, not the rubric corpus, keeps
+recommendations stage-appropriate.** Isolating that needs the `baseline-no-levels`
+fourth arm held in reserve; it is not demonstrated here.
 
 **What this rep does not establish.** n=1. It does not show the corpus is
 harmful — one rep cannot, and the differentiation baseline to beat (+2.28) was
-itself measured across 3 reps. It shows the instrument is now clean and that
-the first clean reading runs against the corpus rather than for it. Accumulate
-two more reps and `--merge` before quoting any of this as a result.
+itself measured across 3 reps.
 
----
+### Result, 2026-07-29 — superseded, kept for one finding
 
-**The 2026-07-29 result below is superseded, not merely old.** It was
-produced with both confounds still present, and its own metric 1 and 2
-definitions (rubric-term reuse, invented-absent-fields) no longer exist in
-the code — there is no way to re-express that table in current terms. It is
-kept in this file, and the results file itself
-(`measurement/results/2026-07-29-rep1.json`) is kept on disk, for one
-reason only: caveat (b) below measured the model's own sampling noise at
-`temperature: 0`, which is a fact about `gemini-3.6-flash`, not about
-either confound, and it survives the redesign intact.
+**Superseded, not merely old.** Produced with both confounds present, and its
+metric 1 and 2 definitions (rubric-term reuse, invented-absent-fields) no longer
+exist in the code, so the table cannot be re-expressed in current terms. Kept —
+with `results/2026-07-29-rep1.json` — for caveat (b), which is a fact about
+`gemini-3.6-flash` rather than about either confound.
 
-Result, 2026-07-29 (`measurement/results/2026-07-29-rep1.json`), n=1 per
-cell, quota exhausted on call 17 of 18, **under the old (confounded) probe
-design and the old metric definitions** — do not treat metrics 1 and 2 in
-this table as measuring what the current code measures:
+n=1 per cell, quota exhausted on call 17 of 18, **old probe design and old
+metric definitions**:
 
 | metric | baseline | sdd-semantic | deviation-deterministic |
 |---|---|---|---|
@@ -870,20 +691,14 @@ this table as measuring what the current code measures:
 
 **(a) `sdd-semantic` is not a distinct condition — it is a null-condition
 replicate of `baseline`.** Semantic rubric retrieval returned **0 rows** for
-both startups (`retrieved: []` in the results file), exactly as Step A
-predicted, so `renderRubricBlock([])` produced an empty string — and
-`baseline`, which retrieves nothing by construction, produced the same empty
-string. **The two arms sent byte-identical prompts.** This is a direct
-consequence of Step A's 0/12 finding and it means the harness currently runs
-*two* conditions (corpus off / deterministic corpus) plus one accidental
-control, not three conditions. This is a property of the corpus and the
-code's semantic substitute, not of either confound, so it still applies
-under the redesigned probes.
+both startups (`retrieved: []`), so `renderRubricBlock([])` produced an empty
+string, identical to `baseline`'s. The harness runs *two* conditions plus one
+accidental control, not three. A property of the corpus and the code, not of
+either confound, so it still applies under the redesigned probes.
 
-**(b) That control measured the noise floor, which is large — this finding
-survives the redesign.** Same prompt, same `temperature: 0`, two independent
-samples: **8 of the 12 per-dimension levels differed**, and the
-differentiation gap moved **+1.50 → +2.50**.
+**(b) That control measured the noise floor, and it is large — this survives the
+redesign.** Same prompt, same `temperature: 0`, two independent samples: **8 of
+12 per-dimension levels differed**, and the gap moved **+1.50 → +2.50**.
 
 | | baseline | sdd-semantic (identical prompt) |
 |---|---|---|
@@ -891,62 +706,38 @@ differentiation gap moved **+1.50 → +2.50**.
 | MediSync | T5 M4 A5 O4 R2 I3 | T6 M5 A6 O4 R2 I3 |
 
 So **±1.0 gap points is run-to-run variance at n=1** on this model.
-`gemini-3.6-flash` is thinking-enabled and does not sample deterministically
-at `temperature: 0` (already noted under Caveats, now quantified). **No
-corpus effect smaller than about one gap point is detectable at this N** —
-which is the strongest single reason to keep accumulating reps once
-generation quota is spent on the redesigned probes, and it is a fact about
-the model's sampling behaviour, not about either confound, so it is not
-invalidated by the rest of this table being superseded.
-
-**Next quota window**, run a full rep under the current (fixed) code and
-merge:
-
-```bash
-node measurement/measure-grounding.js --reps=1 --out=measurement/results/<date>-rep2.json
-node measurement/measure-grounding.js --merge measurement/results/*.json
-```
-
-`--merge` will refuse to pool that new file with `2026-07-29-rep1.json` —
-their fingerprints differ, by design, because the probe design changed.
-That refusal is correct, not a bug: metric 1 and metric 2 in the old file
-answer questions the current code no longer asks.
+`gemini-3.6-flash` is thinking-enabled and does not sample deterministically at
+`temperature: 0`. **No corpus effect smaller than about one gap point is
+detectable at this N.**
 
 **Do not read Step A's failures as "therefore deterministic improves
-grounding."** Step A establishes that neither the code's substitute nor
-SDD §3.2's actual mechanism can retrieve this rubric corpus. Objective 1's
-headline claim — does the corpus reduce hallucination and improve
-differentiation — remains untested under the current, confound-free probe
-design; the 2026-07-29 numbers above cannot answer it either way.
+grounding."** Step A establishes only that neither mechanism can retrieve this
+corpus; the 2026-07-29 numbers cannot answer Objective 1's headline claim either
+way.
 
 ## `measure-summary-bias.js` — SO 4.2 / SO 4.4
 
 > ⚠️ **Two different metrics in this file are called "metric 3".** The grounding
-> harness's metric 3 is the **differentiation gap** — mid-stage mean minus
-> early-stage mean of assigned readiness *levels*, declared unresolvable
-> 2026-08-03. This harness's metric 3 is the **overcorrection guard** on
-> generated *summaries*. Different quantities, different harnesses, and
-> opposite-looking sign conventions. They are unrelated; do not pool or compare
-> them.
+> harness's is the **differentiation gap** over readiness *levels*, declared
+> unresolvable 2026-08-03. This harness's is the **overcorrection guard** over
+> generated *summaries*. Different quantities, different harnesses,
+> opposite-looking sign conventions. Never pool or compare them.
 
-
-A different probe family from the grounding harness, so it carries its own
-fingerprints rather than `lib/fingerprint.js`'s. Two arms —
-`adversarialSummary` off (the prompt that shipped, `LEGACY_SUMMARY_PROMPT`) and
-on (field-ordered `responseSchema`) — × 2 startups × 3 reps, one call each.
-Unlike the other scripts it boots a Nest context and calls the real
+A different probe family, so it carries its own fingerprints rather than
+`lib/fingerprint.js`'s. Two arms — `adversarialSummary` off (the shipped
+`LEGACY_SUMMARY_PROMPT`) and on (field-ordered `responseSchema`) — × 2 startups
+× 3 reps, one call each. It boots a Nest context and calls the real
 `AiService.generateStartupAnalysisSummary`, so it needs Neon reachable.
 
 ### Result, 2026-08-18 — partial run, 10/12 calls
 
 `results/2026-08-18-summary-bias.json`. `gemini-3.6-flash`, temperature 0,
-grounding on, reps=3, 12 API requests spent, **10 succeeded**. Two adversarial
-cells (rep1/MediSync, rep2/AgroLink) failed on **HTTP 503 Service Unavailable —
-model overload, not quota**. Deliberately not re-run: the run is reported as
-partial and every mean is over surviving rows, never padded.
+grounding on, reps=3, 12 requests spent, **10 succeeded**. Two adversarial cells
+failed on **503 model overload, not quota**; deliberately not re-run, so every
+mean is over surviving rows, never padded.
 
 **Validity gate (metric 0) passed: zero degradations.** All 4 completed
-adversarial calls used `source=schema`, so no control output is wearing the
+adversarial calls used `source=schema`, so no control output wears the
 adversarial label — the confound that invalidated the first grounding run.
 
 | arm | n | meanCritical | meanPositive | meanRatio | flagged | flagRate | meanUnmetCriteria | meanCriticalRisks |
@@ -954,31 +745,26 @@ adversarial label — the confound that invalidated the first grounding run.
 | baseline | 6 | 1 | 1.67 | 0.39 | 0 | 0 | 0 (structural) | 0 (structural) |
 | adversarial | 4 | 3 | 0 | 1.00 | 0 | 0 | 4 | 3.75 |
 
-`structural` means the baseline arm has no criteria field at all —
-`legacySummaryOnly` returns `[]` by construction, so its zero is not a
-measurement and must not be read as one.
+`structural` = the baseline arm has no criteria field at all
+(`legacySummaryOnly` returns `[]` by construction), so its zero is not a
+measurement.
 
 **1. SO 4.2's mechanism works.** The adversarial arm produces markedly more
 critical observations and real structured findings where the baseline
-structurally produces none, at **100% schema adherence** on completed calls.
-What was tested is the *mechanism* — a field-ordered `responseSchema` with
-`propertyOrdering` — not prompt wording. Gemini honouring `propertyOrdering` is
-now supported by this run rather than assumed.
+structurally produces none, at **100% schema adherence**. What was tested is the
+*mechanism* — a field-ordered `responseSchema` with `propertyOrdering` — not
+prompt wording. Gemini honouring `propertyOrdering` is now supported by this run
+rather than assumed.
 
-**2. The SO 4.4 flag rule is measured to be WRONG, and the run supplies its
-replacement.** This is the run's most important finding.
-
-`flagged = criticalCount === 0` fired **zero times in ten summaries, in both
-arms**. Every baseline summary scored exactly `criticalCount: 1`, and not by
-chance: the legacy prompt mandates *"3. Critical risks and primary
+**2. The SO 4.4 flag rule is measured WRONG, and the run supplies its
+replacement.** `flagged = criticalCount === 0` fired **zero times in ten
+summaries, both arms**. Every baseline summary scored exactly `criticalCount: 1`,
+and not by chance: the legacy prompt mandates *"3. Critical risks and primary
 recommendations"*, so every baseline summary ends with a risk sentence. **The
-flag rule cannot fire against the prompt it exists to police.**
-
-The baseline summaries are plainly lenient — they open *"demonstrates strong
-market viability"*, *"demonstrates strong viability"*, *"presents strong market
-viability"* — and then append one dutiful risk sentence. The bias is positive
-framing with a token risk mention, not absence of critical language. The
-instrument tested for the wrong property.
+rule cannot fire against the prompt it exists to police.** The baseline
+summaries are plainly lenient — *"demonstrates strong market viability"* — then
+append one dutiful risk sentence. The bias is positive framing with a token risk
+mention, not absence of critical language.
 
 The replacement is in the same data. Per-call `ratio`:
 
@@ -987,53 +773,53 @@ baseline     0.33  0.33  0.33  0.33  0.50  0.50
 adversarial  1.00  1.00  1.00  1.00
 ```
 
-The arms do not overlap: a gap from **0.50 to 1.00**, so a threshold at
+The arms do not overlap — a gap from **0.50 to 1.00** — so a threshold at
 **~0.75** flags all six baseline summaries and none of the adversarial ones.
-This is exactly what spec §3 planned — it shipped an uncalibrated boundary on
-purpose and said the 12-call run would supply the distribution to set a real
-one. It did. **`ratio >= 0.75` is the calibrated candidate, and it is not yet
-implemented** — `summary-tone.ts` still ships `criticalCount === 0`.
+*(`ratio < 0.75` shipped in `summary-tone.ts` later the same day and was
+validated on a held-out run — `results/2026-08-18-threshold-validation.json`:
+baseline 5/5 flagged, adversarial 0/4, perfect separation.)*
 
 **3. The differentiation guard did NOT pass — an open question, not a pass.**
-Both arms returned `FAIL - uniform`, `criticalGap 0`. It was specified pass/fail
-before the run, so it is reported as failed:
+Both arms returned `FAIL - uniform`, `criticalGap 0`. Specified pass/fail before
+the run, so reported as failed:
 
 - the adversarial arm is **saturated** — all four calls at `criticalCount: 3`,
-  the maximum available in a three-sentence summary, so that column cannot
-  discriminate;
+  the maximum in a three-sentence summary, so that column cannot discriminate;
 - `unmetGap` is 0 because AgroLink 4,4 and MediSync 3,5 have coinciding means
   while the underlying values differ in no consistent direction;
 - the **baseline arm also fails**, uniformly at `criticalCount: 1`.
 
 So this run **cannot distinguish genuine overcorrection from instrument
-ceiling**. Resolving it needs a non-saturating metric, not more reps. The
-cautionary precedent that motivated the guard still stands:
-`gemini-2.5-flash-lite` read as lenient but was floor-bound and blind, and the
-real defect was differentiation.
+ceiling**; resolving it needs a non-saturating metric, not more reps. The
+cautionary precedent stands: `gemini-2.5-flash-lite` read as lenient but was
+floor-bound and blind, and the real defect was differentiation.
+*(Rebuilt on field overlap and re-run 2026-08-20, below.)*
 
-**Two structural limits the run exposed, neither fixable by more calls:**
+**Two structural limits, neither fixable by more calls:**
 
 - **`propertyOrdering` enforces sequence, not substance.** `unmet_criteria: []`
   is a valid response — `required` requires the key, not a non-empty array — and
   nothing cross-checks the summary against the criteria. A model could emit
-  empty findings then a glowing summary. The tone check is the only guard
-  against that, and it is the one that goes nowhere (see below).
+  empty findings then a glowing summary. The tone check is the only guard. Open.
 - **The SO 4.4 verdict is unreachable by a Manager.** Nothing in `frontend/src`
-  reads `confidenceStatus`, `positive-language-flagged` or `analysis_summary`,
-  and the only two backend queries against `AiRecommendation` filter
-  `recommendationKind` `'RNA'` / `'RNS'`. Detection is built and measured;
-  alerting is not delivered.
+  read `confidenceStatus`, `positive-language-flagged` or `analysis_summary`, and
+  the only two backend queries against `AiRecommendation` filtered
+  `recommendationKind` `'RNA'` / `'RNS'`. Detection was built and measured;
+  alerting was not. ⚠️ **Superseded 2026-08-18/23** — `summaryVerdict` now rides on `GET /startups/all` and renders
+  as a badge in all four Manager dialogs, and approving a flagged application
+  requires an acknowledgement that writes an `activity_logs` row. Recorded
+  because it was true when measured.
 
 ### Result, 2026-08-20 — metric 3 rebuilt and run, 10/10 calls
 
-`results/2026-08-20-differentiation-overlap.json`. `gemini-3.6-flash`,
-temperature 0, grounding on, `--only-arm=adversarial --reps=5`, **10 API
-requests, 10 succeeded, zero degradations.** The first full grid this harness
-has produced: 5 early / 5 mid, 25 cross pairs, 20 within pairs.
+`results/2026-08-20-differentiation-overlap.json`. `--only-arm=adversarial
+--reps=5`, **10 requests, 10 succeeded, zero degradations.** The first full grid:
+5 early / 5 mid, 25 cross pairs, 20 within pairs.
 
-The rule was **pre-registered on 2026-08-19** (`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`,
-committed a day before the first call): PASS iff `min(within-startup pair) >
-max(cross-startup pair)` — complete separation, no constant.
+Rule **pre-registered 2026-08-19**
+(`docs/superpowers/specs/2026-08-19-differentiation-margin-design.md`, committed a
+day before the first call): PASS iff `min(within-startup pair) > max(cross-startup
+pair)` — complete separation, no constant.
 
 | statistic | value |
 |---|---|
@@ -1045,56 +831,51 @@ max(cross-startup pair)` — complete separation, no constant.
 | chance reference | 3.2e-13 |
 | **verdict** | **`FAIL - uniform`** (quotable) |
 
-**The pre-registered prediction was right in outcome and wrong in mechanism.**
-FAIL was predicted, but *because* cross-overlap would run high (0.35–0.65) with
-small separation (0.05–0.25). Neither held: cross-overlap came in **below** the
-predicted band and separation **above** it. The arm distinguishes the two
-startups more than predicted.
+**The prediction was right in outcome and wrong in mechanism.** FAIL was
+predicted *because* cross-overlap would run high (0.35–0.65) with small
+separation (0.05–0.25). Cross-overlap came in **below** that band and separation
+**above** it — the arm distinguishes the two startups more than predicted.
 
 **The failure is instability on one document, not uniform harshness.**
-Cross-overlap never exceeds 0.5 — the arm never cites more than half the same
-fields for both startups. Complete separation fails because one *within* pair
-sits at 0.125, below the cross maximum. Split by startup:
+Cross-overlap never exceeds 0.5. Complete separation fails because one *within*
+pair sits at 0.125, below the cross maximum:
 
 | startup | within-overlap | min pair |
 |---|---|---|
 | AgroLink (early) | **0.800** | 0.500 |
 | MediSync (mid) | **0.424** | 0.125 |
 
-The arm cites the same four fields for AgroLink almost every time — reps 0, 1
-and 2 give **identical** field sets — and wanders on MediSync. So the verdict
-*label* is misleading in this instance: what failed is the noise floor, not the
-signal. **Pooling the within-startup floor across both documents hid that one is
-stable and the other is not**; a per-startup floor would have separated them.
-Recorded as an observation only — re-scoring this run under a per-startup rule
-is the post-hoc move the pre-registration forbids.
+The arm cites the same four fields for AgroLink almost every time (reps 0–2 give
+**identical** sets) and wanders on MediSync. So the verdict *label* misleads
+here: what failed is the noise floor, not the signal. **Pooling the
+within-startup floor across both documents hid that one is stable and the other
+is not.** Observation only — re-scoring under a per-startup rule is the post-hoc
+move the pre-registration forbids.
 
 **The instrument is not degenerate, which is the positive result.** The
 pre-registered "field identity is too coarse" failure mode required
 `crossOverlap > 0.5` **and** `separation < 0.1`; neither holds. Field overlap
 carries real signal, unlike the count columns it replaced — those stayed
-degenerate here too (`criticalGap` 0, favours neither; `unmetGap` −0.2, favours
-mid).
+degenerate here too (`criticalGap` 0; `unmetGap` −0.2, favours mid).
 
-**Instrument stability came in below prediction.** Predicted `withinOverlap` >
+**Instrument stability came in below prediction:** predicted `withinOverlap` >
 0.7 at temperature 0; observed 0.612 pooled and **bimodal** (0.80 / 0.42). Above
-the 0.4 "unstable" line, but the model is markedly less deterministic on
-MediSync than temperature 0 implies.
+the 0.4 "unstable" line, but markedly less deterministic on MediSync than
+temperature 0 implies.
 
 **No re-tuning.** The means separate clearly and a margin-based rule would have
-passed. That is exactly what the pre-registration forbids claiming. What this
-run legitimately provides is the **first observed distribution** of overlap
-values, which a *separately* pre-registered rule could be calibrated on and then
-scored on new data.
+passed — exactly what the pre-registration forbids claiming. What the run
+legitimately provides is the **first observed distribution** of overlap values,
+which a *separately* pre-registered rule could be calibrated on and scored on
+new data.
 
 **Two fingerprint-verified n gains.** `criteria|adversarial` is `82fc2961c7ff`,
 identical to both prior runs, so SO 4.2's criteria result gains these 10 calls:
 **3.9 mean unmet criteria, 3.2 mean critical risks** (against 4 and 3.75 at
 n=4). `tone|adversarial` is `e6304665e036`, identical to the validation run:
-**0/10 flagged, ratio 1.00 on all ten**, a third independent confirmation that
+**0/10 flagged, ratio 1.00 on all ten** — a third independent confirmation that
 `ratio < 0.75` does not fire on the arm that is behaving.
-`differentiation|adversarial` is `2ddb92a91be5` — new, as it must be, since the
-metric was rebuilt.
+`differentiation|adversarial` is `2ddb92a91be5`, new, as it must be.
 
 **Also refuted again:** the "exactly 4 unmet criteria" claim these docs once
 carried. AgroLink 4,5,4,3,3; MediSync 3,4,5,4,4.
@@ -1107,46 +888,41 @@ mis-binned**, not missed assertions — the recorded "subject-less fragments"
 diagnosis was a third of the picture. Full record in
 `docs/superpowers/specs/2026-08-07-assertion-classifier-gaps-design.md`.
 
-**What shipped:** abbreviation-safe sentence splitting; `RECOMMENDATION` widened
-to `need(?:s|ed|ing)?` for the model's `Needs:` label form; coordination **scope
+**Shipped:** abbreviation-safe sentence splitting; `RECOMMENDATION` widened to
+`need(?:s|ed|ing)?` for the model's `Needs:` label form; coordination **scope
 inheritance**, where a continuation fragment inherits its governing clause's
 negation/recommendation cues but never its assertion; `CUES` with
-`CLASSIFIER_SOURCE` built from it plus a source scan catching a regex declared
+`CLASSIFIER_SOURCE` built from it, plus a source scan catching a regex declared
 outside it.
 
-**What was refused, and this is the point:** five candidate assertion cues were
-built or specified and then cut — `require`, `existed`, `existing`, `exists`,
-and a whole accompaniment predicate. **The assertion branch is unchanged from
-before this work.** Every cue that could raise the measured rate failed the same
-test: the artifact token turned out to be an attributive modifier rather than
-the head of the phrase, so the cue fired on clauses asserting nothing.
-`"Investor interest exists"` and `"A basic funding plan exists"` are
-structurally identical; the accompaniment predicate false-positived on 14 of 14
-constructed realistic clauses. Both genuine missed assertions are now recorded
-as **known uncaught classes** with tests, which is itself a lower-bound
-statement.
+**Refused, and this is the point:** five candidate assertion cues were built or
+specified and then cut — `require`, `existed`, `existing`, `exists`, and a whole
+accompaniment predicate. **The assertion branch is unchanged.** Every cue that
+could raise the measured rate failed the same test: the artifact token turned
+out to be an attributive modifier rather than the head, so the cue fired on
+clauses asserting nothing. *"Investor interest exists"* and *"A basic funding
+plan exists"* are structurally identical; the accompaniment predicate
+false-positived on 14 of 14 constructed clauses. Both genuine missed assertions
+are recorded as **known uncaught classes** with tests.
 
 **A live counterexample to the lower-bound guarantee was found and removed:**
-`"and maintain an active log of investor pitches conducted."` had been stranded
+*"and maintain an active log of investor pitches conducted."* had been stranded
 from its governing `must` by a comma-and split and scored `asserted` on
 `maintains?`.
 
 **Whole-branch effect over the 330 stored dimension texts:** `unclassified`
-clauses 36 → 2, `asserted` 14 → 11. The instrument got stricter about false
-positives, not more sensitive.
+36 → 2, `asserted` 14 → 11. Stricter about false positives, not more sensitive.
 
 **Fingerprint:** `assertion|baseline` moved `4c1429815dc7` → `529dd55beb2c`, so
-a re-run **cannot pool** with the 2026-08-06 data. That is the guard working; a
-fixed classifier means a fresh experiment.
+a re-run **cannot pool** with 2026-08-06 data. That is the guard working.
 
 ### The 2026-08-09 re-run on the repaired classifier
 
-`results/2026-08-09-supplied-level.json`, 16/16 calls, n=2, `gemini-3.6-flash`,
-54 corpus rows, floor 0.78 — identical to 2026-08-06 in every parameter except
-the classifier. **A separate experiment, not more n:** `--merge` correctly
-refused to pool it into any `assertion|*` or `assertion-inflated|*` group while
-pooling `levels|*`, `rna|*` and `fabrication|*`, whose fingerprints did not
-move. That per-(metric, arm) granularity is the point of the design.
+`results/2026-08-09-supplied-level.json`, 16/16 calls, n=2 — identical to
+2026-08-06 in every parameter except the classifier. **A separate experiment,
+not more n:** `--merge` correctly refused to pool it into any `assertion|*` or
+`assertion-inflated|*` group while pooling `levels|*`, `rna|*` and
+`fabrication|*`, whose fingerprints did not move.
 
 | arm | condition | asserted | mentioned | unclassified |
 |---|---|---|---|---|
@@ -1156,23 +932,21 @@ move. That per-(metric, arm) granularity is the point of the design.
 | `deviation-deterministic` | **inflated** | **3/12 (25%)** | 11/12 | 3/12 |
 
 **The core finding reproduced independently.** Only corpus+inflated fabricates;
-baseline is 0/12 under *both* conditions, so the wrong supplied level alone
-still produces nothing. All three asserted clauses are the same mechanism —
-IRL 3's funding plan asserted as drafted:
+baseline is 0/12 under *both* conditions, so a wrong supplied level alone still
+produces nothing. All three asserted clauses are the same mechanism — IRL 3's
+funding plan asserted as drafted:
 
 > "Currently at IRL 3 with a funding plan drafted"
 > "MediSync Cebu is at IRL 3 with a drafted funding plan covering target raise and use of funds."
 > "Currently at IRL 3 with a drafted funding plan outlining target raise and use-of-funds."
 
-**AgroLink fabricated this time, which closes an open question.** On 2026-08-06
-every fabrication came from MediSync, and the notes recorded it as unresolved
-whether that was a property of the document or of chance. It was chance: the
-first of the three clauses above is AgroLink. The plan's decision *not* to buy
-that answer with extra AgroLink reps was right for the wrong reason — re-running
-the same design answered it for free.
+**AgroLink fabricated this time, closing an open question.** On 2026-08-06 every
+fabrication came from MediSync and it was unresolved whether that was the
+document or chance. It was chance — the first clause above is AgroLink. The
+plan's decision *not* to buy that answer with extra AgroLink reps was right for
+the wrong reason: re-running the same design answered it for free.
 
-**The instrument repair is visible in the clause census, and it is the real
-result of this work:**
+**The instrument repair is visible in the clause census:**
 
 | | 2026-08-06 | 2026-08-09 |
 |---|---|---|
@@ -1182,37 +956,33 @@ result of this work:**
 | `asserted` | 3 | 3 |
 
 **The measured rate rose, 2/12 → 3/12, and the instrument cannot explain it.**
-The classifier's *assertion* branch is byte-identical to before this work — all
-five candidate cues were cut — and every change that did land (`Needs:`
-recognition, scope inheritance) can only move clauses **out of** `asserted`.
-A stricter instrument reading higher is sampling, not measurement drift.
+The assertion branch is byte-identical and every landed change can only move
+clauses **out of** `asserted`. A stricter instrument reading higher is sampling,
+not measurement drift.
 
 **Both pre-registered predictions were wrong, in opposite directions.** The spec
-predicted the cell would read *higher* because of added assertion cues; after
-those cues were cut the prediction was revised to *same or lower*. It read
-higher, and neither reason was the cause. Recorded because the predictions were
-committed in writing before the run, and a prediction that only gets reported
-when it lands is not a prediction.
+predicted higher because of added assertion cues; after those cues were cut the
+prediction was revised to same-or-lower. It read higher, and neither reason was
+the cause. Recorded because a prediction that only gets reported when it lands
+is not a prediction.
 
 **Read the hand count, not the table.** `unclassified` is 3/12 on the cell that
-matters, and the design says not to quote a rate while that column is large.
-Reading all three by hand: **all three are genuine fabrications**, and all three
-fall in the classes deliberately recorded as uncaught —
+matters, and the design says not to quote a rate while that column is large. All
+three are genuine fabrications, and all three fall in the deliberately-uncaught
+classes:
 
 > "At ORL 3, the core team comprises 3 founders (…) **and a first non-founder contributor**." — coordination, no participle
 > "and Joy Tabotabo **along with a first non-founder contributor**." — accompaniment
 > "Currently at RRL 3 with a pending IPOPHL trademark application **and preliminary counsel opinion**." — `with`-coordination
 
-So the by-hand rate is **6/12**, and the reported 3/12 is a floor — which is
-the property the whole probe is built on. The known-uncaught classes are not a
-loose end; they are the reason the floor is trustworthy.
+**The by-hand rate is 6/12, and the reported 3/12 is a floor** — the property
+the probe is built on. The known-uncaught classes are the reason the floor is
+trustworthy.
 
-**Metric 2 (stage-inappropriate recommendations) returned a non-zero reading**
-for the first time: baseline 2/24 (8%), corpus 1/24 (4%), scored on
-truth-condition text with an unchanged `lib/stage-markers.js`. The notes record
-this metric as saturated at 0% since 2026-07-29, so this is worth confirming
-against the earlier files before anyone quotes it — at n=2 and 2 flagged, it is
-a hint, not a result.
+**Metric 2 returned a non-zero reading** for the first time: baseline 2/24 (8%),
+corpus 1/24 (4%), on truth-condition text with an unchanged
+`lib/stage-markers.js`. Recorded as saturated at 0% since 2026-07-29, so confirm
+against the earlier files before quoting — at n=2 and 2 flagged, a hint.
 
 **Limits:** n=2, 16 calls, one model, one window. Three of the four asserted
 observations are MediSync. Inflation is one rung above the ceiling, not two.
@@ -1235,161 +1005,132 @@ hand-driven attempt was interrupted and left a live mutation in the tree.
 | resurrect an accompaniment disjunct | `accompaniment-only assertion is a known uncaught class` |
 | readmit `existing` to `ASSERTION` | `"existing" is refused — an attributive adjective asserts no artifact` |
 
-Two results worth carrying forward:
-
-- **Reverting the `RECOMMENDATION` widening also breaks three of the
-  continuation fixtures.** Those fragments inherit a `Needs:` head, so scope
-  inheritance is only reachable through the widening. The two changes are
-  coupled and the suite now shows it.
+- **Reverting the `RECOMMENDATION` widening also breaks three continuation
+  fixtures.** Those fragments inherit a `Needs:` head, so scope inheritance is
+  only reachable through the widening. The two changes are coupled.
 - **One genuine survivor, recorded not fixed:** removing `CONTINUATION` from
-  `CUES` *and* allowlisting it in the test's `NON_CUES` survives green. Both
-  guards pass — the scan allows the name, and the coverage test iterates `CUES`
-  so it passes vacuously. Closing it would mean guarding against an author who
-  edits the guard to accept its own bypass.
+  `CUES` *and* allowlisting it in the test's `NON_CUES` survives green — the
+  scan allows the name and the coverage test iterates `CUES`, so it passes
+  vacuously. Closing it would mean guarding against an author who edits the
+  guard to accept its own bypass.
+- **Harness caveat:** two mutants first reported as survivors had failed to
+  apply. `String.replace(string, string)` takes only the first occurrence and
+  the doc comment quotes the regex above it, so the mutation edited the comment;
+  and a multi-line anchor used `\n` against a CRLF file. **A mutation that fails
+  to apply reports a green suite, indistinguishable from a decorative guard.**
+  Assert the mutation landed.
+- **Known sensitivity cost, measured:** the widened `RECOMMENDATION` also
+  matches the *noun* "needs", reclassifying one real fabrication in stored data
+  — *"A funding plan has been drafted outlining target capital needs…"*
+  (`2026-07-30-redesign-rep1.json`, MediSync, `deviation-deterministic`) — from
+  `asserted` to `recommended`. Conservative direction, so the lower bound holds,
+  but a detection lost. A clause-initial anchor recovers it and costs two other
+  clauses.
 
-**A harness caveat for anyone repeating this:** two mutants first reported as
-survivors were failures to apply. `String.replace(string, string)` takes only
-the first occurrence, and the doc comment quotes the regex above it — so the
-mutation edited the comment; and a multi-line anchor used `\n` against a CRLF
-file. **A mutation that fails to apply reports a green suite, which is
-indistinguishable from a decorative guard.** Assert the mutation landed.
-
-**Known sensitivity cost, measured:** the widened `RECOMMENDATION` also matches
-the *noun* "needs", which reclassifies one real fabrication in the stored data
-— `"A funding plan has been drafted outlining target capital needs…"`
-(`2026-07-30-redesign-rep1.json`, MediSync, `deviation-deterministic`) — from
-`asserted` to `recommended`. Conservative direction, so the lower bound holds,
-but it is a detection lost, not a free win. A clause-initial anchor recovers it
-and costs two other clauses.
-
-### Metric 6 — redundant-need rate, added 2026-08-23
+## Metric 6 — redundant-need rate, added 2026-08-23
 
 **What it measures.** One binary observation per (call, dimension): does the
-generated RNA state as a **need** an artifact class the source document shows
-the startup **already has**. Reference-free — a property of the document, not
-an adjudicated judgement, so no arm is scored against its own prompt.
+generated RNA state as a **need** an artifact class the source document shows the
+startup **already has**. Reference-free — a property of the document, so no arm
+is scored against its own prompt.
 
-**Why the obvious design was refused.** The obvious metric — "did the RNA name
-the criterion the `L+1` rubric defines" — is circular. `lib/hard-absences.js`
-already records why: an adjudicator reading the document with the rubric
-ladder in view is approximately the `deviation-deterministic` condition, so
-its agreement with that arm proves nothing. It would reproduce the
-vocabulary-reuse metric retired on 2026-07-29.
+**Why the obvious design was refused.** "Did the RNA name the criterion the
+`L+1` rubric defines" is circular: an adjudicator reading the document with the
+rubric ladder in view is approximately the `deviation-deterministic` condition,
+so its agreement with that arm proves nothing (`lib/hard-absences.js` records
+the same reasoning). It would reproduce the vocabulary-reuse metric retired on
+2026-07-29.
 
-**The mechanism.** Not forked from metric 5 — same classifier, opposite input:
+**The mechanism** — not forked from metric 5; same classifier, opposite input:
 
 | | token list | bin read |
 |---|---|---|
 | metric 5 | `absentTokens` — what the document never mentions | `asserted` |
 | metric 6 | `artifactTokens` (`lib/satisfactions.js`) — what the document evidences | `recommended` |
 
-Same segmentation, same scope-inheritance repair. `CLASSIFIER_SOURCE` is
-pinned and stays byte-identical, or metric 5's pooling breaks.
+Same segmentation, same scope-inheritance repair. `CLASSIFIER_SOURCE` is pinned
+byte-identical, or metric 5's pooling breaks. Reported alongside the headline:
+`mentioned` (upper bound) and `unclassified` — a large `unclassified` means the
+classifier cannot read this output and the rate should not be quoted.
 
-Reported alongside the headline `redundant` rate: `mentioned` (upper bound)
-and `unclassified` — the same honesty column metric 5 carries. A large
-`unclassified` means the classifier cannot read this output and the rate
-should not be quoted; without it, a printed `truth 0% (n=6)` is
-indistinguishable from the classifier having read nothing at all.
+**The pilot, reported honestly.** Piloted for free against 96 real observations
+on disk (`2026-08-06-supplied-level.json`, `2026-08-09-supplied-level.json`). As
+first written it fired 10 times, and a hand-read found essentially all 10 false
+positives — the satisfied token was the origin being moved away from
+(*"transition from paper prototype"*, *"beyond paper prototypes"*) or the scope a
+recommendation ranged over (*"across the target market"*). **The uncorrected
+headline would have read baseline 21% vs corpus 0% on `truth` — large,
+quotable, wrong, and favouring the corpus specifically.** This is the most useful
+thing here to remember before trusting any redundancy number.
 
-**The pilot, reported honestly.** Piloted for free against 96 real
-observations already on disk (`results/2026-08-06-supplied-level.json`,
-`results/2026-08-09-supplied-level.json`). As first written it fired 10
-times, and a hand-read found essentially all 10 false positives — the
-satisfied token was the origin being moved away from (`transition from paper
-prototype`, `beyond paper prototypes`) or the scope a recommendation ranged
-over (`across the target market`). **The uncorrected headline would have
-read baseline 21% vs corpus 0% on `truth` — large, quotable, and wrong,** and
-favouring the corpus specifically. This is the most useful thing in this
-section to remember before trusting any redundancy number.
-
-**The correction** (`backend/measurement/lib/redundancy.js`): an acquisition
-requirement — the token must be the direct object of an acquisition verb
-(`identify, define, establish, create, develop, build, secure, obtain,
-acquire, find, determine, conduct`), with no origin/scope preposition
-(`from, beyond, past, across, outside, rather than, versus, for`, anchored
-directly against the token) or progression verb (`transition, move, expand,
-scale, penetrate, grow, further`, same anchoring) governing it — plus a
-broad/narrow token split in `lib/satisfactions.js` mirroring
+**The correction** (`lib/redundancy.js`): an acquisition requirement — the token
+must be the direct object of an acquisition verb (`identify, define, establish,
+create, develop, build, secure, obtain, acquire, find, determine, conduct`) with
+no origin/scope preposition (`from, beyond, past, across, outside, rather than,
+versus, for`, anchored against the token) or progression verb (`transition,
+move, expand, scale, penetrate, grow, further`, same anchoring) governing it —
+plus a broad/narrow token split in `lib/satisfactions.js` mirroring
 `hard-absences.js` (`target market` moved to `notArtifacts`; it was scope in
-every pilot firing, never a genuine ask). After both fixes: **0 firings
-across the same 96 observations.**
+every pilot firing). After both fixes: **0 firings across the same 96
+observations.**
 
-**Direction and named uncaught classes.** Metric 6 is a **lower bound** —
-every ambiguity resolves away from redundancy, matching metric 5's posture.
-Named uncaught classes:
+**Direction and named uncaught classes.** A **lower bound** — every ambiguity
+resolves away from redundancy, matching metric 5's posture. Uncaught:
 
-- **Passive/postposed acquisition** — `"A paper prototype should be created…"`
-  goes silent; the gate requires the verb to precede the token in the string.
+- **Passive/postposed acquisition** — *"A paper prototype should be created…"*
+  goes silent; the gate requires the verb to precede the token.
 - **Acquisition verbs outside the frozen list** — `gather`, `collect`, `run`,
-  `validate`, `engage` are natural acquisition verbs the brief's list omits.
+  `validate`, `engage`.
 
-A lower bound is quotable *because* its uncaught classes are named, not
-because it happens to have none.
+A lower bound is quotable *because* its uncaught classes are named.
 
-**The `deflated` condition — positive control.** `inflated` (2026-08-06)
-manipulates O/R/I upward, truth elsewhere. `deflated` is its mirror: **T/M/A
-→ 1, O/R/I left at truth**, as the within-call control. The split is forced
-by the data: both startups sit at `O2 R1 I1` with no deflation room, while
-MediSync's `T6 M5 A5` has plenty against a document evidencing the
-level-1/2 criteria. Recorded before the run: **if the control fires on
-MediSync and not on AgroLink** (`T2 M3 A3`, thinner document), **that is the
-expected shape, not a defect.**
+**The `deflated` condition — positive control.** `inflated` manipulates O/R/I
+upward; `deflated` is its mirror, **T/M/A → 1, O/R/I at truth**, as the
+within-call control. Forced by the data: both startups sit at `O2 R1 I1` with no
+deflation room, while MediSync's `T6 M5 A5` has plenty against a document
+evidencing the level-1/2 criteria. Recorded before the run: **if the control
+fires on MediSync and not on AgroLink** (`T2 M3 A3`, thinner document), **that is
+the expected shape, not a defect.**
 
 **Two pre-registered predictions, verbatim:**
 
-1. **The control fires.** `deflated` redundancy is substantially above
-   `truth` on every arm. **If this fails the run is void** and reports a
-   detector problem, not a model result.
-2. **The corpus arm scores worse than baseline under `deflated`,** because it
-   is handed level-1/2 criteria as retrieved targets.
+1. **The control fires.** `deflated` redundancy substantially above `truth` on
+   every arm. **If this fails the run is void** and reports a detector problem.
+2. **The corpus arm scores worse than baseline under `deflated`,** being handed
+   level-1/2 criteria as retrieved targets.
 
-Prediction 2 predicts the corpus looks bad, deliberately. Both pre-registered
-predictions on 2026-08-09 turned out wrong in opposite directions — which is
-the only reason that run's result carries weight, and the reason for
-pre-registering these two rather than reporting whichever direction lands.
+Prediction 2 predicts the corpus looks bad, deliberately. Both 2026-08-09
+predictions turned out wrong in opposite directions — the reason for
+pre-registering rather than reporting whichever direction lands.
 
-**The null-control reading rule.** `sdd-semantic` sends a prompt
-byte-identical to `baseline` on the RNA probe — semantic rubric retrieval
-returns zero rows. Re-verified independently for this section: a 2026-08-23
-`--dry-run` of the exact run command below, diffed section-by-section, shows
-the `baseline` and `sdd-semantic` RNA blocks identical for both startups
-(5263 and 5521 characters respectively, `truth`+`deflated` combined, byte
-match) — the only difference anywhere in the two arms' output is the arm-name
-header itself. **Any arm difference smaller than the baseline/`sdd-semantic`
-spread is noise and must not be quoted as an effect.**
+**The null-control reading rule.** `sdd-semantic` sends a byte-identical prompt
+to `baseline` on the RNA probe. Re-verified for this section: a 2026-08-23
+`--dry-run` of the exact command below, diffed section by section, shows the two
+arms' RNA blocks identical for both startups (5263 and 5521 characters,
+`truth`+`deflated` combined, byte match) — the only difference is the arm-name
+header. **Any arm difference smaller than that spread is noise.**
 
-**The methodological sequence, stated explicitly:** pilot on historical data
-→ pre-register → run on **fresh** data. Refining a detector against
-already-collected runs is legitimate pilot work; scoring the *reported* run
-under a rule chosen after seeing it is not. The historical files
-(`2026-08-06-supplied-level.json`, `2026-08-09-supplied-level.json`) were
-pilot input. They must never become the reported result.
+**The methodological sequence:** pilot on historical data → pre-register → run
+on **fresh** data. Refining a detector against collected runs is legitimate
+pilot work; scoring the *reported* run under a rule chosen after seeing it is
+not. `2026-08-06-supplied-level.json` and `2026-08-09-supplied-level.json` were
+pilot input and must never become the reported result.
 
-**Limits to quote:**
-
-- **Directional** — silent on failing to recommend what is missing; catches
-  only recommending what exists.
-- `satisfiedTokens`/`artifactTokens` are **authored, with no external
-  source**.
-- **Lower bound**, with the two classes above named as uncaught.
-- **n=2**, two documents, one model (`gemini-3.6-flash`), one quota window.
-- **`deflated` is a manipulation production does not produce.** Mentors do
-  not systematically under-set levels, so a `deflated` result speaks to a
-  vulnerability, not to shipped RNA quality. Only the `truth` cells speak to
-  what users receive.
+**Limits to quote:** directional (silent on failing to recommend what is
+missing); `satisfiedTokens`/`artifactTokens` **authored with no external
+source**; **lower bound** with the two classes above named; **n=2**, two
+documents, one model, one quota window; **`deflated` is a manipulation
+production does not produce** — only the `truth` cells speak to what users
+receive.
 
 **Metric 6 cannot pool with any pre-2026-08-23 file, by design.** No file in
-`measurement/results/` carries a `redundancy|*` fingerprint — the probe did
-not exist until this task. `--merge` refuses a `(metric, arm)` group unless
-*every* contributing file agrees on its fingerprint, and `refusedKeys` means
-"refused for at least one contributing file" — so running
-`--merge results/*.json` (the workflow this README documents elsewhere) makes
-**every** metric-6 row print `refused`, including the fresh run's own valid
-data, because it gets pooled with files that were never scored on this metric
-at all. This is the refusal logic working correctly, not a bug: read metric 6
-from the single fresh `--out` file directly, never through `--merge`, until a
-second redundancy-fingerprinted file exists to merge it with.
+`results/` carries a `redundancy|*` fingerprint. `--merge` refuses a
+(metric, arm) group unless *every* contributing file agrees on its fingerprint,
+and `refusedKeys` means "refused for at least one contributing file" — so
+`--merge results/*.json` makes **every** metric-6 row print `refused`, including
+the fresh run's own valid data. That is the refusal logic working: read metric 6
+from the single `--out` file directly until a second redundancy-fingerprinted
+file exists.
 
 **The run command:**
 
@@ -1397,111 +1138,89 @@ second redundancy-fingerprinted file exists to merge it with.
 node measurement/measure-grounding.js --only-arm=baseline,sdd-semantic,deviation-deterministic --only-probe=rna --level-condition=truth,deflated --reps=1 --out=measurement/results/<date>-rna-redundancy.json
 ```
 
-**Confirm `--reps=1` at launch, by eye, not by counting printed blocks.** The
-dry-run printer ignores `--only-probe` (it still prints phantom `LEVELS`
-blocks) and does not reflect `--reps`, so the printed prompt-block count is
-not a reliable stand-in for the call count. The correct derivation is
-**3 arms × 2 startups × 2 conditions × reps = 12 calls at reps=1.**
+**Confirm `--reps=1` at launch by eye, not by counting printed blocks.** The
+dry-run printer ignores `--only-probe` (it still prints phantom `LEVELS` blocks)
+and does not reflect `--reps`. The correct
+derivation is **3 arms × 2 startups × 2 conditions × reps = 12 calls at reps=1.**
 
 ### Result, 2026-08-23 — the control did not fire
 
-`measurement/results/2026-08-23-rna-redundancy.json`. 12/12 calls, no 429s,
-no 503s, no retries. Command exactly as pre-registered above.
+`results/2026-08-23-rna-redundancy.json`. 12/12 calls, no 429s, no 503s, no
+retries. Command exactly as pre-registered.
 
-| arm | condition | redundant | mentioned | unclassified | denied | n |
+| arm | condition | redundant | mentioned | unclassified | denied | scoped |
 |---|---|---|---|---|---|---|
-| `baseline` | truth | 0/6 | 2/6 | 2/6 | 0/6 | 6 |
-| `baseline` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
-| `sdd-semantic` | truth | 0/6 | 2/6 | 2/6 | 0/6 | 6 |
-| `sdd-semantic` | deflated | 0/6 | 2/6 | 2/6 | 0/6 | 6 |
-| `deviation-deterministic` | truth | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
-| `deviation-deterministic` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
+| `baseline` | truth | 0/6 | 2/6 | 2/6 | 0/6 | 1 |
+| `baseline` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 1 |
+| `sdd-semantic` | truth | 0/6 | 2/6 | 2/6 | 0/6 | 0 |
+| `sdd-semantic` | deflated | 0/6 | 2/6 | 2/6 | 0/6 | 1 |
+| `deviation-deterministic` | truth | 0/6 | 1/6 | 1/6 | 0/6 | 0 |
+| `deviation-deterministic` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 1 |
 
-`redundantRate` is **0 in every one of the six cells**, `truth` and
-`deflated` alike. `deniedCount` is 0 everywhere.
+`redundantRate` is **0 in every one of the six cells**, `truth` and `deflated`
+alike. `deniedCount` is 0 everywhere.
 
-⚠️ **Corrected 2026-09-04.** This paragraph used to read that no clause was
-binned `recommended` and then rejected by the acquisition gate, and that the
-run therefore could not separate "the model never made this error" from "the
-classifier cannot read these constructions". **Both claims were wrong.**
-Re-scoring the stored text through the same `lib/redundancy.js` reproduces all
-four columns above exactly and shows a fifth the harness never emitted:
-**4 clauses were binned `recommended` and downgraded to `scoped` by the
-acquisition gate** — 1 in `baseline`/truth, and 1 each in the `deflated` cell
-of all three arms; all four AgroLink / Technology, all four the *"needs to move
-**from paper prototype** to…"* shape, all four correct rejections. The same
-run's metric-5 `flaggedClauses` holds 14 clauses classified `recommended`.
-So the classifier does read the model's recommendation register, and the gate
-does act on real verdicts. **The ambiguity resolves in favour of the model
-never making the error.** What is still unproven is only the true-positive
-path. `scoped` is invisible because `scoreRedundantNeeds` computes it and
-nothing aggregates, prints or persists it — see
-`docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`,
-which makes reporting `scopedCount` a prerequisite of the next run.
+⚠️ **The `scoped` column was added 2026-09-04, and it corrects this section.**
+This result used to read that no clause ever reached `recommended`, so the run
+could not separate "the model never made this error" from "the classifier cannot
+read these constructions." **Both claims were wrong.** Re-scoring the stored text
+through the same `lib/redundancy.js` reproduces the other four columns exactly
+and shows **4 clauses binned `recommended` and downgraded to `scoped` by the
+acquisition gate** — all four AgroLink / Technology, all four the *"needs to move
+**from paper prototype** to…"* shape, all four correct rejections. The same run's
+metric-5 `flaggedClauses` holds 14 `recommended` clauses. So the classifier does
+read the model's register and the gate does act on real verdicts; **the ambiguity
+resolves in favour of the model never making the error**, and only the
+true-positive path is unproven. `scoped` was invisible because
+`scoreRedundantNeeds` computes it and nothing aggregates, prints or persists it —
+reporting `scopedCount` is a prerequisite of the next run.
 
 **Verdict, in the order it must be read:**
 
-1. **Prediction 1 failed — the `deflated` control did not fire.** The
-   pre-registration required `deflated` redundancy to sit substantially above
-   `truth` on every arm. It is identical to `truth`: 0 on both, on all three
-   arms. By the rule written before the run, **this voids the run as a model
-   result.**
-2. **Prediction 2 is untestable.** It asked whether the corpus arm scores
-   worse than baseline under `deflated`. Every arm reads 0 under `deflated`.
-   There is no arm difference to compare.
-3. **The pre-registration's own stated inference from a failed control was
-   wrong, and that has to be recorded, not quietly recategorised.** The
+1. **Prediction 1 failed — the `deflated` control did not fire.** It is
+   identical to `truth`: 0 on both, all three arms. By the rule written before
+   the run, **this voids the run as a model result.**
+2. **Prediction 2 is untestable.** Every arm reads 0 under `deflated`; there is
+   no arm difference to compare.
+3. **The pre-registration's own inference from a failed control was wrong.** The
    README said a failed control "reports a detector problem." Reading the
-   generated text shows otherwise. Under a supplied level of 1 on
-   Technology/Market/Acceptance, every arm produced forward-looking
-   recommendations correctly anchored to the source document — never a claim
-   that the startup already has what the deflation removed. Quoted verbatim
-   from the results file:
-   - *"Needs to expand paid subscriptions beyond the initial 6
-     facilities..."* — `sdd-semantic`, MediSync Cebu, deflated, Market.
-   - *"Needs further market penetration across the remaining target
-     facilities."* — `baseline`, MediSync Cebu, deflated, Market.
-   - *"Needs: Convert provisional buyer interest into formal agreements..."*
-     — `deviation-deterministic`, AgroLink PH, deflated, Market.
+   generated text shows otherwise: under a supplied level of 1 on T/M/A, every
+   arm produced forward-looking recommendations correctly anchored to the source
+   document — never a claim that the startup already has what the deflation
+   removed:
+   - *"Needs to expand paid subscriptions beyond the initial 6 facilities…"* — `sdd-semantic`, MediSync, deflated, Market.
+   - *"Needs further market penetration across the remaining target facilities."* — `baseline`, MediSync, deflated, Market.
+   - *"Needs: Convert provisional buyer interest into formal agreements…"* — `deviation-deterministic`, AgroLink, deflated, Market.
 
-   None of these recommends acquiring something the document shows the
-   startup already has. **The manipulation failed to induce the target
-   behaviour — the detector had nothing to catch.** That is a different
-   failure from a blind detector, and the two must not be conflated.
-4. **The honest claim is narrow, and its bounds have to be stated
-   explicitly: "the model did not make this error in these 36
+   **The manipulation failed to induce the target behaviour — the detector had
+   nothing to catch.** A different failure from a blind detector; do not conflate
+   them.
+4. **The honest claim is narrow: "the model did not make this error in these 36
    observations."** Not "the detector works." Not "the model is robust to a
-   deflated supplied level." The two uncaught classes named in the
-   pre-registration — passive/postposed acquisition, and acquisition verbs
-   outside the frozen list — remain completely untested here; a redundancy
-   phrased that way would still have been missed by this instrument, control
-   or no control. And: n=1 rep, 2 documents, 3 arms, one model.
-5. **The void rule itself was the wrong instrument** (2026-09-04). It
-   collapsed two separable questions — *can the detector see the behaviour*
-   (code and register, testable at zero quota) and *does the condition induce
-   it* (model, only testable by spending calls) — so a well-behaved model
-   voided the run. The successor design splits them: a blocking zero-quota
-   detector control, then a manipulation check whose failure reports a narrow
-   model result rather than voiding anything.
-6. **What a future test needs.** The deflation manipulation did not make the
-   model contradict its own source document — the same shape as the
-   2026-08-06 finding that a wrong supplied level alone produces no
-   fabrication in the baseline arm (see metric 5 above). Both documents label
-   every fact (`Target Market:`, `Revenue:`), so the artifact the rubric asks
-   for is signposted and there is nothing to miss; redundancy needs the
-   artifact **evidenced but not salient**, which is a document property, not a
-   level property. Designed and pre-registered 2026-09-04 as an `unlabelled`
+   deflated supplied level." The two uncaught classes remain untested here, and
+   n=1 rep, 2 documents, 3 arms, one model.
+5. **The void rule itself was the wrong instrument** (2026-09-04). It collapsed
+   *can the detector see the behaviour* (code and register, testable at zero
+   quota) with *does the condition induce it* (only testable by spending calls),
+   so a well-behaved model voided the run. The successor design splits them: a
+   blocking zero-quota detector control, then a manipulation check whose failure
+   reports a narrow model result rather than voiding anything.
+6. **What a future test needs.** Deflation did not make the model contradict its
+   own source document — the same shape as the 2026-08-06 finding that a wrong
+   supplied level alone produces no fabrication in the baseline arm. Both
+   documents label every fact (`Target Market:`, `Revenue:`), so the artifact the
+   rubric asks for is signposted and there is nothing to miss; redundancy needs
+   the artifact **evidenced but not salient**, which is a document property, not
+   a level property. Designed and pre-registered 2026-09-04 as an `unlabelled`
    document variant plus a split control and a stopping rule:
    `docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`.
    **Unimplemented and unrun.**
 
-**Also observed, same run — metric 5, not this run's pre-registered
-question, n=1, report as observation only.** `asserted` is 0/6 on every arm
-under both conditions — no run produced a scoreable metric-5 hit either.
-`mentioned` varied on `truth`: baseline 1/6, `sdd-semantic` 2/6,
-`deviation-deterministic` 4/6. Consistent in direction with the corpus arm
-surfacing absent-artifact vocabulary more often, but n=1 and not what this
-run was built to answer — do not read it as a metric-5 result.
+**Also observed, same run — metric 5, n=1, observation only.** `asserted` is 0/6
+on every arm under both conditions. `mentioned` varied on `truth`: baseline 1/6,
+`sdd-semantic` 2/6, `deviation-deterministic` 4/6 — consistent in direction with
+the corpus arm surfacing absent-artifact vocabulary more often, but not what this
+run was built to answer.
 
 ## Reading the output
 
@@ -1514,92 +1233,76 @@ Both generation scripts use `temperature: 0` and the verbatim
 
 ## Caveats
 
-Generation scripts (`measure-models`, `measure-differentiation`):
+**Generation scripts** (`measure-models`, `measure-differentiation`):
 
-- Small N by design (3 repetitions) — free-tier quota is the constraint and
-  429 is the failure mode. Both scripts stop cleanly on quota exhaustion and
-  report partial results; check the `n=` counts before comparing cells.
-- The prompts mirror the production *shape* but are not `createBasePrompt`,
-  so RAG context and startup history are absent.
+- Small N by design (3 repetitions) — free-tier quota is the constraint and 429
+  the failure mode. Both stop cleanly on exhaustion and report partial results;
+  check `n=` before comparing cells.
+- The prompts mirror the production *shape* but are not `createBasePrompt`, so
+  RAG context and startup history are absent.
 - Thinking-enabled models still vary run to run at `temperature: 0`.
 
-Retrieval scripts (`calibrate-similarity`, `measure-retrieval`) — read these
-before quoting the numbers:
+**Retrieval scripts** (`calibrate-similarity`, `measure-retrieval`) — read
+before quoting:
 
 - **The documents are written, not sampled.** Nine descriptions composed for
   this test across three clean domains. Real capsule proposals are longer and
   messier, so this separation is an optimistic case.
-- **Ground truth is domain membership, not human judgement.** Two health
-  startups are assumed useful context for each other. That is coarse — the
-  right answer is sometimes a same-stage startup in another sector. Neither arm
-  sees the labels, which is what keeps it honest.
-- **N is 9 documents / 36 pairs.** Enough to reject a threshold of 0.70; not
-  enough to fine-tune between 0.78 and 0.80.
-- Embeddings are deterministic here, so unlike the generation scripts a re-run
-  reproduces exactly — which also means repetition buys nothing.
+- **Ground truth is domain membership, not human judgement** — coarse; the right
+  answer is sometimes a same-stage startup in another sector. Neither arm sees
+  the labels, which is what keeps it honest.
+- **N is 9 documents / 36 pairs.** Enough to reject a 0.70 threshold; not enough
+  to fine-tune between 0.78 and 0.80.
+- Embeddings are deterministic, so a re-run reproduces exactly — which also
+  means repetition buys nothing.
 
-If you re-run these for the paper, raise `REPS`, record the date and the model
-IDs actually returned by the API that day, and re-check the model list first —
+If re-running these for the paper: raise `REPS`, record the date and the model
+IDs the API actually returned that day, and re-check the model list first —
 `gemini-2.5-flash` disappeared between the checklist being written and the
 measurement being taken.
 
-`measure-grounding.js`:
+**`measure-grounding.js`:**
 
 - **Step A is free of the generation endpoint, not free outright.** It calls
   `embedContent`, which has its own ceiling (`embed_content_free_tier_requests`)
-  — hit once here, independent of `generateContent`, and recovered within a
-  minute. Embeddings are deterministic, so the 12/12 vs 0/12 result reproduces
-  exactly; it is not a small-N number needing more reps.
+  — hit once here, recovered within a minute. Embeddings are deterministic, so
+  12/12 vs 0/12 reproduces exactly; it is not a small-N number needing reps.
 - **Step B's ceiling is a hard daily cap, not `DELAY_MS`.**
   `GenerateRequestsPerDayPerProjectPerModel-FreeTier = 20` for
-  `gemini-3.6-flash`, confirmed from the 429 body. Only fresh quota or a paid
-  tier helps. The window resets at **midnight US Pacific = 15:00 Philippine
-  time**, so a PH-morning run draws on the *previous* window and may find it
-  spent — that is why the 2026-07-29 run got 16 calls, not 18.
-- **N is the binding constraint on every Step B conclusion, and the noise
-  floor is now measured rather than assumed** — ±1.0 differentiation-gap
-  points between two byte-identical prompts (see Step B above). Accumulate at
-  least three reps with `--merge` before treating any between-arm difference
-  in metric 3 as real.
+  `gemini-3.6-flash`, confirmed from the 429 body. The window resets at
+  **midnight US Pacific = 15:00 Philippine time**, so a PH-morning run draws on
+  the *previous* window and may find it spent — that is why the 2026-07-29 run
+  got 16 calls, not 18.
+- **N binds every Step B conclusion, and the noise floor is measured rather than
+  assumed** — ±1.0 gap points between two byte-identical prompts. Accumulate at
+  least three reps with `--merge` before treating any metric-3 difference as real.
 - **Metric 1 replaced the old rubric-term metric**, which measured whether
-  retrieval's exact wording reached the output rather than whether the output
-  was correct. An RNA can contain a `keyTerm` while describing the wrong level,
-  or omit every `keyTerm` and still be an accurate paraphrase. It scored 1/12
-  on 2026-07-29 despite the text being substantively on-target, because the RNA
-  prompt discourages echoing abstract rubric phrasing. Level-placement MAE is
-  scored against seeded ground truth, which paraphrase can neither game nor
-  defeat.
-- **Metrics 1 and 3 exclude dimensions the model dropped.** An omitted
-  `dimension` is skipped (`levelPlacement`'s `typeof assigned !== 'number'`),
-  not scored as an error — a missing field is a schema problem, not a bad
-  placement. This script does not measure schema compliance; watch `n=`.
+  retrieval's exact wording reached the output rather than whether the output was
+  correct. An RNA can contain a `keyTerm` while describing the wrong level, or
+  omit every `keyTerm` and be an accurate paraphrase.
+- **Metrics 1, 2 and 3 exclude dimensions the model dropped.** An omitted
+  `dimension` is skipped by `levelPlacement`, and a missing
+  `readiness_level_type` by `stageAppropriateness` — not scored as an error — a missing field is a schema
+  problem, not a bad placement or an appropriate recommendation. This script does
+  not measure schema compliance; watch `n=`.
 - **Metric 2 word-boundary matches, case-insensitively, against the RNA text —
   not the rubric.** `isStageInappropriate` flags a dimension only when a marker
-  phrase for a level well above the startup's rung appears in the
-  recommendation (`\bphrase\b`, so "ipo" doesn't match inside "IPOPHL"). An
-  advanced action phrased outside the lexicon goes unflagged, under-counting
-  rather than over-counting.
-- **Metric 2 excludes dropped dimensions too.** A missing
-  `readiness_level_type` is a schema gap (`stageAppropriateness` skips it), not
-  evidence the recommendation was stage-appropriate.
+  phrase for a level well above the startup's rung appears (`\bphrase\b`, so
+  "ipo" doesn't match inside "IPOPHL"). An advanced action phrased outside the
+  lexicon goes unflagged — under-counting, not over-counting.
 - **The seeded per-dimension levels are real, not approximated** — from
   `seedDemoStartups` (AgroLink T2/M2/A1/O2/R1/I1, MediSync T5/M4/A3/O4/R3/I3).
   The documents are `measure-differentiation.js`'s verbatim early/mid pair.
 - **The `semantic` mode's Step B query is startup-invariant.** With every
   dimension missing (the normal case for a fresh startup), `retrieveRubrics`
-  queries `dimensions.map(d => d.readinessType).join(' ')` — the same six-word
-  string whatever the startup or level. AgroLink and MediSync therefore receive
-  an *identical* rubric set in that arm. That is production code's property,
-  not a harness artifact, and a second independent reason this substitute
-  cannot deliver a level-appropriate rubric. Still the code's substitute, not
-  SDD §3.2's mechanism.
+  queries the same six-word string whatever the startup or level, so both
+  startups receive an *identical* rubric set in that arm. Production code's
+  property, not a harness artifact, and a second independent reason the
+  substitute cannot deliver a level-appropriate rubric.
 - **The profile-data query's ground truth is deliberately loose.** "Correct"
   means every returned row's key is among the startup's 12 valid
-  `(dimension, current-or-next-level)` pairs across *all six* dimensions, not
-  one targeted dimension — a whole-profile query per SDD §3.2 isn't aimed at
-  a single dimension the way a per-dimension query is. That makes "correct"
-  easier to satisfy than Step A's per-dimension check, not harder, so the 0/2
-  empty result is not an artifact of an unfairly strict bar.
-- **N is 2 startups** for the profile-data query, same as the differentiation
-  arms — enough to check whether the mechanism clears the floor at all, not
-  enough to characterize a partial-hit rate.
+  `(dimension, current-or-next-level)` pairs across *all six* dimensions — easier
+  to satisfy than Step A's per-dimension check, so the 0/2 empty result is not an
+  artifact of an unfairly strict bar.
+- **N is 2 startups** for the profile-data query — enough to check whether the
+  mechanism clears the floor at all, not enough to characterize a partial-hit rate.
