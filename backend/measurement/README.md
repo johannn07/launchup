@@ -1225,8 +1225,8 @@ run was built to answer.
 ### The salience manipulation — implemented 2026-09-05, unrun
 
 Second design, `docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`,
-amended before implementation. Zero quota spent building it. **No model result
-exists yet.**
+amended before implementation. Zero quota spent building it; the run below spent 12
+calls on 2026-09-05.
 
 ```
 node measurement/measure-grounding.js   --only-arm=baseline,sdd-semantic,deviation-deterministic   --only-probe=rna --level-condition=truth --doc-variant=original,unlabelled   --reps=1 --out=measurement/results/<date>-rna-salience.json
@@ -1326,13 +1326,79 @@ block, supplied levels and instructions byte-identical. Merging the two
 supplied-level files gives a refusal list byte-identical to the pre-change one
 for every non-variant key.
 
-**The stopping rule is live.** If G1 passes and `unlabelled` still yields 0 on
-every arm, **metric 6 is retired** — no third manipulation is designed. Retiring
-on a rule is the honest end, and it is the end metric 3 was given.
+**The stopping rule fired.** G1 passed, `unlabelled` yielded 0 on every arm, and
+**metric 6 is retired** — see the result section below. No third manipulation.
 
-**Still true, and unchanged by any of this:** metric 6 has produced no true
-positive on any real generated text (96 historical + 36 fresh observations), and
-the two named uncaught classes remain untested.
+**Still true:** metric 6 has produced no true positive on any real generated text,
+and the two named uncaught classes remain untested.
+
+### Result, 2026-09-05 — the manipulation landed, the model did not err, metric 6 is retired
+
+`results/2026-09-05-rna-salience.json`. **12/12 calls, 72/72 dimensions, no 429s,
+no 503s, no retries.** Command exactly as pre-registered. G1 and both variant
+checks green before the first call.
+
+| arm | variant | n | redundantRate | mentioned | unclassified | denied | scoped |
+|---|---|---|---|---|---|---|---|
+| `baseline` | original | 6 | **0** | 2 | 2 | 0 | 1 |
+| `baseline` | unlabelled | 6 | **0** | 2 | 1 | 0 | 0 |
+| `sdd-semantic` | original | 6 | **0** | 2 | 2 | 0 | 1 |
+| `sdd-semantic` | unlabelled | 6 | **0** | 1 | 1 | 0 | 0 |
+| `deviation-deterministic` | original | 6 | **0** | 1 | 0 | 0 | 0 |
+| `deviation-deterministic` | unlabelled | 6 | **0** | 1 | 1 | 0 | 0 |
+
+**Prediction 1 failed: G2 did not fire.** `unlabelled` is 0 on every arm, the
+same as `original`. **Prediction 2 is untestable** — there is no arm difference
+to read.
+
+**The manipulation was delivered, and that is what makes this null worth
+something.** Of 36 (startup, dimension) pairs, **0 are byte-identical** between
+`original` and `unlabelled`, at a mean word overlap of **0.44**. The model wrote
+materially different text under the manipulated document and still never asked
+for an artifact the document already evidenced. This is not "the manipulation was
+inert"; it reached the model and changed the output.
+
+Reading the clauses confirms it. Every clause naming a satisfied artifact under
+`unlabelled` describes it as already achieved, never as something to acquire:
+
+- *"…having tested a paper prototype of the lot-aggregation flow with 3 cooperatives in 2025-09."* — `sdd-semantic`, AgroLink, Technology
+- *"Currently at TRL 2 with a mobile-first concept featuring SMS fallback and a paper prototype…"* — `deviation-deterministic`, AgroLink, Technology
+- *"gained user acceptance across 6 facilities with first paid subscriptions in 2025-08."* — `baseline`, MediSync, Acceptance
+
+Both `scoped` clauses are `original` — the gate again rejecting the *"advance
+beyond the paper prototype"* / *"Transition from paper prototypes"* shape. Under
+`unlabelled` the model did not even write that construction.
+
+**The stopping rule fires. Metric 6 is RETIRED.** G1 passed and `unlabelled`
+produced 0 on every arm, so by the rule pre-registered before the run there is no
+third manipulation. Retiring on a rule is the honest end, and it is the end metric
+3 was given.
+
+⚠️ **The only claim this run supports:** *the model did not make this error under
+this manipulation, in these 36 observations per variant.* Specifically **not**:
+
+- **Not "the detector works."** G1 is a bound, not a proof over all
+  constructions — its mutants are built from clauses the detector already
+  reaches, all of them AgroLink, and the `PROGRESSION_VERB` veto is untested.
+- **Not "the model is robust."** n=1 rep, 2 documents, 3 arms, one model, one
+  quota window. The two named uncaught classes (passive/postposed acquisition,
+  out-of-list acquisition verbs) remain untested.
+- **Not a statement about five of six cells becoming six.** AgroLink/Market was
+  never manipulated, and MediSync's `unlabelled` observations sit outside G1's
+  coverage entirely, so a positive there would have needed hand-reading. There
+  were none to read.
+
+**Metric 6 across its whole life: no true positive on any real generated text —
+96 historical + 36 fresh (2026-08-23) + 72 here.** What it did establish is that
+the acquisition gate rejects the progression frame correctly (6 observed
+rejections, all correct) and that the classifier reads the model's recommendation
+register.
+
+**Also observed, metric 5, n=1, not this run's question.** `asserted` is 0/6 on
+every arm under both variants. `mentioned` was 2/6, 2/6, 4/6 on `original`
+(baseline, `sdd-semantic`, `deviation-deterministic`) and 2/6, 2/6, 4/6 on
+`unlabelled`. The MediSync Organizational confound described above rides on the
+`unlabelled` numbers.
 
 ## Reading the output
 

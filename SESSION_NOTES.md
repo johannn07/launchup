@@ -314,11 +314,11 @@ study.
 
 ---
 
-## 2026-09-05 — metric 6's second design, built and gated; no quota spent
+## 2026-09-05 — metric 6 built, run, and retired on its own rule
 
-Branch `measure/metric-6-salience`, 6 commits, local and unpushed. **Zero Gemini
-calls.** Everything the 2026-09-04 design pre-registered is implemented and every
-zero-quota gate is green. The 12-call run is not spent.
+Branch `measure/metric-6-salience`, local and unpushed. **12 Gemini calls.**
+Everything the 2026-09-04 design pre-registered was implemented at zero quota,
+every gate came up green, the run was spent — and it retired the metric.
 
 ### What shipped
 
@@ -387,12 +387,35 @@ the audit read documents with `
 `
 `.
 
+### The run, and the retirement
+
+**12/12 calls, 72/72 dimensions, no 429s, no 503s, no retries**
+(`results/2026-09-05-rna-salience.json`). **`redundantRate` is 0 on every arm under
+both `original` and `unlabelled`.** Prediction 1 (G2 fires) failed; prediction 2 is
+untestable as a consequence. **The stopping rule fired: metric 6 is retired.**
+
+**The manipulation was delivered, and that is what makes the null worth having.**
+Of 36 (startup, dimension) pairs, **0 are byte-identical** across variants, mean
+word overlap **0.44**. The model wrote materially different text under the
+manipulated document and still never asked for an artifact the document already
+evidenced — every clause naming a satisfied artifact describes it as achieved
+(*"having tested a paper prototype…"*, *"gained user acceptance across 6
+facilities…"*). Both `scoped` clauses are `original`; under `unlabelled` the model
+did not even write the progression construction the gate exists to reject.
+
+⚠️ **The only sentence this run licenses** is *"the model did not make this error
+under this manipulation, in these 36 observations per variant."* Not "the detector
+works" — G1 is a bound, AgroLink-only, with `PROGRESSION_VERB` untested. Not "the
+model is robust" — n=1 rep, two documents, one model, one quota window, two
+uncaught classes still untested. **Metric 6 produced no true positive on any real
+generated text across its whole life** (96 + 36 + 72 observations). What it did
+establish: the acquisition gate rejects the progression frame correctly, 6 for 6.
+
 ### Next step
 
-**Decide on the 12-call run** (one quota day, window resets 15:00 PHT). The
-stopping rule is live: if `unlabelled` yields 0 on every arm, metric 6 is retired
-rather than re-manipulated. The competing claim on the same weeks is unchanged —
-the SPMP and the traceability matrix.
+Metric 6 is closed, so the measurement track has no open item. The critical path
+is the SPMP and the traceability matrix, which compete for the same weeks as the
+30-user study.
 
 ### Open
 

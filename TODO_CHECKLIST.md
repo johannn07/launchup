@@ -36,7 +36,7 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | **Three-role model — Admin and `Manager as Mentor` removed, logins split, startup IDOR closed, tiers seeded** | PRs #47–#50 (`1400349`) — merged, role branch tested before merge. Closes a spec deviation: SRS §2.3 defines three user classes, SDD §1.4 puts every administrative function behind Manager |
 | Mentor-selectable RNA dimensions — per-dimension AI generation | `feat/rna-dimension-picker` — local, unpushed, live-verified |
 | Vite dev proxy deleted — unshadows the same-origin `/api` route | `a2d5435` — same branch; client-side API calls worked in dev for the first time |
-| Metric 6 salience manipulation — `scopedCount`, G1 detector control, `unlabelled` variants, `--doc-variant`, variant fingerprints | `measure/metric-6-salience` — local, unpushed, zero quota; run not yet spent |
+| Metric 6 salience manipulation — `scopedCount`, G1 control, `unlabelled` variants, `--doc-variant`, variant fingerprints, **and the 12-call run that retired the metric** | `measure/metric-6-salience` — local, unpushed |
 
 ---
 
@@ -44,7 +44,7 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, 4c and SO 4.4 built and measured; 1a, 3a, 3b and 4b partial; 3c and 4a are research tasks, not code. Metric 6's second design is **built and gate-green, awaiting one quota day** |
+| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, 4c and SO 4.4 built and measured; 1a, 3a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule |
 | **Security issues (§1)** | In progress — all P0 closed; 5 P1 open, 1 to confirm and close |
 | **Broken functionality (§2)** | In progress — 10 of 17 fixed; 7 open, one of them a security item |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
@@ -258,7 +258,7 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
 
   Detail in `measurement/README.md`, including the nine-mutant log (nine killed) and a harness caveat: two mutants first read as survivors had silently failed to apply.
 
-- [ ] ⚪ **OBJECTIVE · S · Metric 6 (redundant-need rate) — built, pre-registered, code-reviewed, run 2026-08-23. The control did not fire; the run is void as a model result.**
+- [x] ✅ **OBJECTIVE · S · Metric 6 (redundant-need rate) — RETIRED 2026-09-05 on its own pre-registered stopping rule, after a clean 12/12 run.**
 
   RNA generation quality — the gap every 1b figure above names — needed a metric that scores generated text directly rather than the levels probe. Metric 6 mirrors metric 5's classifier on the opposite bin: does the RNA recommend acquiring an artifact class the source document already evidences (`artifactTokens`, `lib/satisfactions.js`), rather than asserting one that's absent. Reference-free, same segmentation and scope-inheritance repair as metric 5, `CLASSIFIER_SOURCE` untouched.
 
@@ -293,7 +293,13 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   >
   > **Verified without quota:** all 45 stored fingerprints byte-identical (30 variant keys added); re-scoring 2026-08-23 reproduces its six original rows exactly; the `--dry-run` prompts differ in exactly the document lines; the historical merge refusal list is byte-identical to before. 358/358 measurement tests green.
   >
-  > **Remaining: the 12-call run**, one quota day, window resets 15:00 PHT. **The stopping rule is live** — if `unlabelled` yields 0 on every arm, metric 6 is retired, not re-manipulated. Still true: metric 6 has produced no true positive on any real generated text (96 historical + 36 fresh observations), and the two named uncaught classes remain untested.
+  > **Run 2026-09-05 — 12/12 calls, 72/72 dimensions, no 429s/503s/retries** (`measurement/results/2026-09-05-rna-salience.json`). **`redundantRate` is 0 on every arm under both `original` and `unlabelled`.** Prediction 1 (G2 fires) failed; prediction 2 is untestable as a consequence.
+  >
+  > **The manipulation was delivered, which is what makes the null worth something:** of 36 (startup, dimension) pairs, **0 are byte-identical** between variants, at mean word overlap **0.44**. The model wrote materially different text under the manipulated document and still never asked for an artifact the document already evidenced — every clause naming a satisfied artifact describes it as already achieved. Both `scoped` clauses are `original`; under `unlabelled` the model did not even write the progression construction.
+  >
+  > **The stopping rule fired, so metric 6 is retired — no third manipulation.** ⚠️ **The only claim this supports is "the model did not make this error under this manipulation, in these 36 observations per variant."** Not "the detector works" (G1 is a bound: AgroLink-only, `PROGRESSION_VERB` untested). Not "the model is robust" (n=1 rep, 2 documents, one model, one quota window; the two uncaught classes remain untested).
+  >
+  > **Across its whole life metric 6 produced no true positive on any real generated text** — 96 historical + 36 (2026-08-23) + 72 here. What it did establish: the acquisition gate rejects the progression frame correctly (6 observed rejections, all correct), and the classifier reads the model's recommendation register. Full result and read-rules: `measurement/README.md`.
 
 ### Objectives SO 4.2 / SO 4.4 — measured 2026-08-18
 
