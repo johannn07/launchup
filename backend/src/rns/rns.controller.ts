@@ -42,7 +42,7 @@ export class RnsController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     return this.aiRunService.track(
       dto.startup_id,
       'rns',
@@ -80,7 +80,7 @@ export class RnsController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // No startup id is available here: the only route param is the Rns id.
     // We still open the run with startupId: null rather than duplicating a
     // startup lookup the service already performs — RnsService.refineRnsDescription

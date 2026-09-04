@@ -57,7 +57,7 @@
               onclick={async () => {
                 const form = new FormData();
                 await fetch('/logout', { method: 'POST', body: form });
-                window.location.href = '/admin-login';
+                window.location.href = '/manager-login';
               }}
               class="cursor-pointer"
             >

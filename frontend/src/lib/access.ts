@@ -101,6 +101,11 @@ export const access = {
           link: 'applications',
           subModule: []
         },
+        {
+          name: 'Admin',
+          link: 'admin',
+          subModule: []
+        },
         // {
         //   name: 'Analytics',
         //   link: 'analytics',
@@ -119,29 +124,6 @@ export const access = {
             {
               name: 'Role',
               link: 'role', // The link for the manager settings page or section
-              subModule: []
-            }
-          ]
-        }
-      ]
-    },
-    Admin: {
-      // Give Admin the same modules as Manager plus an Admin hub
-      modules: [
-        startupModule,
-        {
-          name: 'Admin',
-          link: 'admin',
-          subModule: []
-        },
-        {
-          name: 'Account',
-          link: 'account',
-          subModule: [
-            ...settingsModule.subModule,
-            {
-              name: 'Role',
-              link: 'role',
               subModule: []
             }
           ]

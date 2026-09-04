@@ -61,7 +61,7 @@ export class InitiativeController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // GenerateInitiativeDto carries no startup id (only rnsId/rnsIds) — the
     // startup is only known once InitiativeService loads the referenced Rns,
     // so the run is opened startup-less and InitiativeService.generateInitiatives
@@ -86,7 +86,7 @@ export class InitiativeController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // No startup id is available here: the only route param is the
     // initiative id. InitiativeService.refineInitiative sets ctx.run.startup
     // itself once it has loaded the initiative's startup, rather than

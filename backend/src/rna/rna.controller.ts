@@ -69,7 +69,7 @@ export class RnaController {
         `Unknown readiness type(s): ${unknown.join(', ')}`,
       );
 
-    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     return this.aiRunService.track(
       id,
       'rna',
@@ -92,7 +92,7 @@ export class RnaController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged = req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // No startup id is available here: the only route param is the RNA id.
     // RnaService.refineRna sets ctx.run.startup itself once it has loaded
     // the RNA's startup, rather than duplicating that lookup here.

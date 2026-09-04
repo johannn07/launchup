@@ -83,8 +83,7 @@ export class StartupController {
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
     const userId = req.user.id;
-    const isPrivileged =
-      req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // Null startupId — create() calls aiRunService.attribute() once it has an id.
     await this.aiRunService.track(
       null,
@@ -120,8 +119,7 @@ export class StartupController {
   ) {
     // Null startupId: parsing happens during application fill-in, before a
     // startup exists to attribute the run to.
-    const isPrivileged =
-      req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     try {
       return await this.aiRunService.track(
         null,

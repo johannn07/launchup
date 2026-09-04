@@ -144,10 +144,8 @@
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
-      case 'Admin':
-        return 'default';
       case 'Manager':
-        return 'secondary';
+        return 'default';
       case 'Mentor':
         return 'outline';
       case 'Startup':
@@ -328,7 +326,6 @@
             <Select.Item value="Startup">Startup</Select.Item>
             <Select.Item value="Mentor">Mentor</Select.Item>
             <Select.Item value="Manager">Manager</Select.Item>
-            <Select.Item value="Admin">Admin</Select.Item>
           </Select.Content>
         </Select.Root>
       </div>
@@ -411,7 +408,6 @@
             <Select.Item value="Startup">Startup</Select.Item>
             <Select.Item value="Mentor">Mentor</Select.Item>
             <Select.Item value="Manager">Manager</Select.Item>
-            <Select.Item value="Admin">Admin</Select.Item>
           </Select.Content>
         </Select.Root>
       </div>

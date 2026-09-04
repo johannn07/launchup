@@ -61,8 +61,7 @@ export class RoadblockController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged =
-      req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // GenerateRoadblocksDto carries a real startupId, so the run can be
     // attributed at open time — unlike the *_refine route below, no
     // service-side backfill is needed.
@@ -86,8 +85,7 @@ export class RoadblockController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const isPrivileged =
-      req.user?.role === Role.Manager || req.user?.role === Role.Admin;
+    const isPrivileged = req.user?.role === Role.Manager;
     // No startup id is available here: the only route param is the
     // roadblock id. RoadblockService.refineRoadblock sets ctx.run.startup
     // itself once it has loaded the roadblock's startup, rather than
