@@ -4,17 +4,20 @@ import { Role } from '../entities/enums/role.enum';
 type Requester = { id?: number; role?: Role | string } | undefined;
 
 /**
- * Who may write a startup's capsule proposal.
+ * Who may see or change a startup's record.
  *
- * The endpoint carried only `JwtGuard`, so any authenticated account — another
- * startup's founder included — could rewrite any proposal. That matters beyond
- * access control: the capsule proposal is the source document the grounding and
- * RNA measurement runs read, and `measurement/` keeps no document versions.
+ * These endpoints carried only `JwtGuard`, so any authenticated account — another
+ * startup's founder included — could read or rewrite any startup, capsule
+ * proposal included. That matters beyond access control on the write path: the
+ * capsule proposal is the source document the grounding and RNA measurement runs
+ * read, and `measurement/` keeps no document versions.
  *
- * Managers are the administrative role and may edit any startup's; a Mentor may
- * edit one they are assigned to; founders may edit their own.
+ * Managers are the administrative role and reach any startup; a Mentor reaches
+ * one they are assigned to; founders and members reach their own. Read and write
+ * share one rule deliberately — there is no startup a user may read but not act
+ * on.
  */
-export function canEditCapsuleProposal(
+export function canAccessStartup(
   startup: Startup,
   user: Requester,
 ): boolean {

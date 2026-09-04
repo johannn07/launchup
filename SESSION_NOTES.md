@@ -944,7 +944,60 @@ not reachable in this data — code-reviewed and typechecked only.
 ### Next step
 
 Unchanged: John tests the branch, then merge and deploy **backend first**. The
-capsule-proposal endpoint is now guarded, but **the rest of the IDOR item is
-still open** — `GET /startups/:id` and the other detail endpoints remain
-`JwtGuard`-only, so any authenticated user can still *read* any startup's full
-record.
+read endpoints were closed immediately after — see below.
+
+---
+
+## 2026-09-04 (last) — the startup module's IDOR, closed
+
+Seventh commit. `canEditCapsuleProposal` generalised to **`canAccessStartup`**
+(`startup/startup-access.ts`) — the rule was already the right one, only the
+name was narrow. Read and write share it deliberately: there is no startup a
+user may read but not act on.
+
+`assertCanAccessStartup` now guards **twelve routes** — `GET :startupId`,
+`:startupId/calculator-final-scores`, the four `:startupId/allow-*` gates,
+`/criterion-answers?startupId=`, `/startup-readiness-level?startupId=`, and the
+capsule-proposal write. The three cross-startup aggregates — `/all` and both
+rankings — moved to `AdminGuard`; `/all`'s only caller was already the
+Manager-only applications page, and neither ranking has a frontend caller at
+all.
+
+`GET /startups/startups` needed nothing: it already scoped rows by role, and
+that switch was always the only thing standing between roles.
+
+### Verified live against Neon, all three roles
+
+- **Founder** (`founder.agrolink`, owns startup 1): own startup, its
+  `allow-rnas` and its readiness levels all **200**; startup 2's equivalents all
+  **403**; `/all` **403**; own list **200**.
+- **Mentor** (assigned to 1, 2, 5, 12): **200** on exactly those four; **403**
+  on 13 and 14, which exist but are not theirs; **404** on ids that do not
+  exist. That id sweep is the cleanest evidence in the session — the boundary
+  falls exactly on the assignment set.
+- **Manager**: 200 everywhere including `/all` and `ranking-by-rubrics`.
+- UI smoke: the Manager applications page still renders its 8 cards (it is
+  `/all`'s only consumer), and a founder's readiness dashboard still loads.
+
+Backend 336/336, frontend check 117/43.
+
+### Known limit, recorded rather than fixed
+
+An unauthorized startup returns **403** and a nonexistent one **404**, so the
+pair still discloses which startup ids exist. Existence is checked first because
+the rule needs the row. Collapsing both to 404 would close the enumeration leak
+at the cost of debuggability — not taken, and noted in `ARCHITECTURE.md` §2.3.
+
+### Still open
+
+- The per-startup reads in `rna`, `rns`, `initiative` and `roadblock` are
+  **unguarded** — scoped out deliberately; they are the pages most likely to
+  break subtly and would need their own verification pass.
+- The generalized `RolesGuard` + `@Roles(...)` decorator the checklist asks for
+  was **not** built. This is a service-level assertion called from controllers,
+  which needs the startup row and so cannot be a plain guard without a lookup.
+
+### Next step
+
+Unchanged and now overdue: **John tests the branch**. Seven commits, none
+pushed, none reviewed. Merge, then deploy backend first.

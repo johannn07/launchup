@@ -111,7 +111,11 @@ Mentor   →  startups where user is in mentors
 Manager  →  findAll()
 ```
 
-This is the real data boundary. Everything else in the startup module is `JwtGuard`-only, meaning **any authenticated user can call `GET /startups/:id` for any startup id** — there is no ownership check on the detail endpoints (`backend/src/startup/startup.controller.ts:135-137`).
+That switch scopes the *list*. As of 2026-09-04 the **detail endpoints are scoped too**: twelve routes in `startup.controller.ts` call `assertCanAccessStartup`, which applies one rule — `canAccessStartup` in `startup/startup-access.ts` — for both reads and writes. Managers reach any startup; a Mentor reaches one they are assigned to; founders and members reach their own. The three cross-startup aggregates (`/all`, `/ranking-by-urat`, `/ranking-by-rubrics`) carry `AdminGuard`, so they are Manager-only.
+
+Before this, every detail endpoint was `JwtGuard`-only and any authenticated user could read or rewrite any startup by changing the id in the URL.
+
+**Known limit:** an unauthorized startup returns 403 and a nonexistent one 404, so the pair still discloses which ids exist. Existence is checked before authorization because the rule needs the row.
 
 ### 2.4 Pipeline gates (not role gates)
 
