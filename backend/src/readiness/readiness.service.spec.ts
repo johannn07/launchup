@@ -13,8 +13,8 @@ const HEALTHTECH_WEIGHTS = {
 function emWith(levels: Array<[ReadinessType, number]>, sector: Sector | null = null) {
   return {
     find: jest.fn(async (entity: any) => {
-      // Second call is for TierConfig; an empty result exercises the fallback
-      // ladder, which is what runs in production (tier_configs has 0 rows).
+      // Second call is for TierConfig; an empty result exercises the fallback,
+      // which reads SEED_TIER_CONFIGS — the same list the seeder writes.
       if (entity?.name === 'TierConfig') return [];
       return levels.map(([readinessType, level]) => ({ readinessLevel: { level, readinessType } }));
     }),
