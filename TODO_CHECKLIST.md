@@ -36,6 +36,7 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | **Three-role model — Admin and `Manager as Mentor` removed, logins split, startup IDOR closed, tiers seeded** | PRs #47–#50 (`1400349`) — merged, role branch tested before merge. Closes a spec deviation: SRS §2.3 defines three user classes, SDD §1.4 puts every administrative function behind Manager |
 | Mentor-selectable RNA dimensions — per-dimension AI generation | `feat/rna-dimension-picker` — local, unpushed, live-verified |
 | Vite dev proxy deleted — unshadows the same-origin `/api` route | `a2d5435` — same branch; client-side API calls worked in dev for the first time |
+| Metric 6 salience manipulation — `scopedCount`, G1 detector control, `unlabelled` variants, `--doc-variant`, variant fingerprints | `measure/metric-6-salience` — local, unpushed, zero quota; run not yet spent |
 
 ---
 
@@ -43,7 +44,7 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, 4c and SO 4.4 built and measured; 1a, 3a, 3b and 4b partial; 3c and 4a are research tasks, not code |
+| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, 4c and SO 4.4 built and measured; 1a, 3a, 3b and 4b partial; 3c and 4a are research tasks, not code. Metric 6's second design is **built and gate-green, awaiting one quota day** |
 | **Security issues (§1)** | In progress — all P0 closed; 5 P1 open, 1 to confirm and close |
 | **Broken functionality (§2)** | In progress — 10 of 17 fixed; 7 open, one of them a security item |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
@@ -280,7 +281,19 @@ Mapped from `Team_07_LaunchUpEnhanced_Software Proposal.pdf` (Part 2) against th
   >
   > **The void rule was itself the wrong instrument.** It collapsed *can the detector see this* (zero quota) with *does the condition induce it* (costs calls), so a well-behaved model voided a run. The successor design splits them, and adds a **stopping rule**: if the detector control passes and the new manipulation still yields 0, metric 6 is **retired** rather than re-manipulated indefinitely.
   >
-  > **Next: implement `docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`** — an `unlabelled` document variant (evidence byte-identical, its field label removed, fact preservation machine-asserted), `scopedCount` reported, and a detector control built from the model's own mutated sentences. **12 calls, one quota day, and nothing runs until the zero-quota gates are green.** Still true: metric 6 has produced no true positive on any real generated text (96 historical + 36 fresh observations), and the two named uncaught classes remain untested.
+  > **Implemented 2026-09-05 (`measure/metric-6-salience`, 6 commits, local, zero quota). Every gate is green; the 12-call run has not been spent.**
+  >
+  > Built: `scopedCount` + persisted `scopedClauses` (the gate's rejections were computed and dropped, which is why the finding above sat unseen for eleven days); **G1**, a blocking zero-quota detector control built from the model's own clauses; the `unlabelled` variants with both machine checks; `--doc-variant`, hard-failing on an unknown value before any network call; and variant-only fingerprint keys.
+  >
+  > **G1 passes: 11/11 pairs mutant-fires / original-silent**, both expected-silent cases silent. Mutation-tested — 4 mutants, 3 killed. The survivor is named, not patched: removing the `PROGRESSION_VERB` veto changes no G1 verdict, because it is the sole silencer on zero cases (the model wrote the origin frame with a preposition every time), so **G1 establishes nothing about that regex**.
+  >
+  > **Amendment 1 to the pre-registration, recorded before any call:** G1's "at least 2 startups" clause is struck — unsatisfiable, because all 11 harvestable clauses are AgroLink PH (MediSync's six are descriptive, never the recommendation register). ⚠️ **The bound travels with every G1 claim: it validates the detector against AgroLink's register only, while half the run's observations are MediSync — whose descriptive register is exactly what `unlabelled` aims to move.** A `redundant` verdict on a MediSync clause is uncovered and must be hand-read.
+  >
+  > ⚠️ **The manipulation reaches five of six cells.** AgroLink/Market's evidence phrase *includes* its own field label, so "byte-identical" and "label deleted" cannot both hold; it stays labelled as an accidental within-document control and must not be read as manipulated. One confound: MediSync's Acceptance evidence shares a sentence with an Organizational fact, so that fact is unlabelled as a side effect — it cannot reach metric 6, but metric 5's `unlabelled` numbers carry it.
+  >
+  > **Verified without quota:** all 45 stored fingerprints byte-identical (30 variant keys added); re-scoring 2026-08-23 reproduces its six original rows exactly; the `--dry-run` prompts differ in exactly the document lines; the historical merge refusal list is byte-identical to before. 358/358 measurement tests green.
+  >
+  > **Remaining: the 12-call run**, one quota day, window resets 15:00 PHT. **The stopping rule is live** — if `unlabelled` yields 0 on every arm, metric 6 is retired, not re-manipulated. Still true: metric 6 has produced no true positive on any real generated text (96 historical + 36 fresh observations), and the two named uncaught classes remain untested.
 
 ### Objectives SO 4.2 / SO 4.4 — measured 2026-08-18
 

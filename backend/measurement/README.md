@@ -1214,13 +1214,125 @@ reporting `scopedCount` is a prerequisite of the next run.
    a level property. Designed and pre-registered 2026-09-04 as an `unlabelled`
    document variant plus a split control and a stopping rule:
    `docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`.
-   **Unimplemented and unrun.**
+   **Implemented 2026-09-05, unrun** — see the next section.
 
 **Also observed, same run — metric 5, n=1, observation only.** `asserted` is 0/6
 on every arm under both conditions. `mentioned` varied on `truth`: baseline 1/6,
 `sdd-semantic` 2/6, `deviation-deterministic` 4/6 — consistent in direction with
 the corpus arm surfacing absent-artifact vocabulary more often, but not what this
 run was built to answer.
+
+### The salience manipulation — implemented 2026-09-05, unrun
+
+Second design, `docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`,
+amended before implementation. Zero quota spent building it. **No model result
+exists yet.**
+
+```
+node measurement/measure-grounding.js   --only-arm=baseline,sdd-semantic,deviation-deterministic   --only-probe=rna --level-condition=truth --doc-variant=original,unlabelled   --reps=1 --out=measurement/results/<date>-rna-salience.json
+```
+
+3 arms x 2 startups x 2 variants x 1 rep = **12 calls**, one quota day.
+
+**G1, the detector control** (`lib/g1-cases.js`, blocking, zero quota). Every
+clause the metric 6 scorer bins `recommended` or `scoped` across the three stored
+result files, each paired with a mutant that swaps the progression frame for an
+acquisition frame and changes nothing else. All 11, not a subset — choosing cases
+after scoring them is how a control gets tuned into passing. Provenance is
+machine-checked: each original must be recoverable from the file, arm, startup,
+condition, rep and dimension it names, and each mutant must name the same
+satisfied token.
+
+**Result: 11/11 pairs score mutant-fires / original-silent**, and both
+expected-silent cases (passive/postposed acquisition, out-of-list verb) stay
+silent. The detector reads the model's own syntax when that syntax carries a
+redundancy.
+
+**Mutation log — 4 mutants against `lib/redundancy.js`, 3 killed:**
+
+| mutant | outcome |
+|---|---|
+| `develop` removed from `ACQUISITION_VERB` | killed (2 tests) |
+| `isAcquisitionRequest` hardwired to `true` | killed (3 tests) |
+| `ORIGIN_OR_SCOPE_PREP` veto removed | killed (2 tests) |
+| `PROGRESSION_VERB` veto removed | **survived** |
+
+The survivor is a genuine coverage gap, recorded rather than patched: of the 11
+originals, 10 are silent for two independent reasons at once (no acquisition verb
+precedes the token *and* the origin/scope preposition vetoes), 1 is silent purely
+for the first, and only 1 is decided by a veto alone. `PROGRESSION_VERB` is the
+sole silencer on **zero** cases, because across 132 historical observations the
+model wrote the origin frame with a preposition every time. **G1 establishes
+nothing about that regex.**
+
+**Amendment 1 (2026-09-05), before any call.** G1's pass rule dropped its "at
+least 2 startups" clause. All 11 harvestable clauses are AgroLink PH: MediSync's
+six classified clauses are descriptive (*"user acceptance is demonstrated by
+expansion to 6 facilities"*), never the recommendation register. AgroLink's
+satisfied artifacts are things the model recommends moving **beyond**;
+MediSync's are things it reports as **done**. Declined alternatives, with
+reasons, are in the design file — chiefly that G1's cases are the model's own
+generated text, so a third document buys nothing until quota is spent generating
+for it, and `common.startups` is hashed into every fingerprint key so adding one
+refuses all historical pooling.
+
+⚠️ **The bound this buys travels with every G1 claim.** G1 validates the detector
+against **AgroLink's register only**. Half the run's observations will come from
+MediSync, whose register G1 never tested — and MediSync's descriptive register is
+exactly what `unlabelled` aims to move. **G1's blind spot sits where the
+manipulation acts.** A `redundant` verdict on a MediSync clause is not covered by
+G1 and must be hand-read before it is quoted.
+
+**The `unlabelled` variants** (`lib/doc-variants.js`). Each evidence phrase stays
+byte-identical; its field label is removed by relocating the phrase into a
+narrative field; nothing else changes. Both blocking checks pass —
+`verifySatisfactions` finds every phrase verbatim, and the fact multiset (dates,
+numbers, capitalised and all-caps tokens, field labels stripped) is unchanged for
+both documents. **No connective words were added**: any prose written into a
+variant is authorial influence on the result. The cost is that relocated timeline
+sentences read as fragments, a validity cost taken deliberately.
+
+⚠️ **Five of six cells.** AgroLink/Market cannot be manipulated — its evidence
+phrase *includes* its own field label (`"Target Market: Rice and vegetable
+cooperatives…"`), so "evidence byte-identical" and "label deleted" cannot both
+hold. Editing `SATISFACTIONS` was declined: out of scope for this design, and it
+is hashed as `satisfactions` material, so changing it would refuse pooling for
+exactly the `original` cells the variant fingerprinting exists to protect.
+Recorded in `UNMANIPULATED_CELLS`. It is an accidental within-document control
+and **must not be read as a manipulated observation**.
+
+⚠️ **One confound, MediSync only.** Its Acceptance evidence shares a sentence with
+an Organizational fact (*"team grew to 3 founders"*), and splitting the sentence
+would be the reordering the rule forbids, so that fact is unlabelled as a side
+effect. Metric 6 scores only T/M/A so it cannot produce a metric 6 observation,
+but metric 5 reads O/R/I and its `unlabelled` numbers carry it. `Revenue:` is
+left labelled by the rule, which weakens the Acceptance manipulation.
+
+**Reporting and pooling.** `scopedCount` is now reported per (arm, variant,
+condition) and the scoped clauses persisted as `scopedClauses` — a gate whose
+rejections cannot be counted cannot be audited, which is why the 2026-08-23
+finding sat unseen for eleven days. Metrics 5 and 6 carry a `variant` column.
+Variant documents are hashed **only** into `assertion-unlabelled*` /
+`redundancy-unlabelled*` keys, never into `common`: 30 new keys, and all 45 keys
+stored in `2026-08-23-rna-redundancy.json` verified byte-identical, so `original`
+cells stay poolable.
+
+**Verified without spending quota.** Re-scoring 2026-08-23 reproduces its six
+original rows exactly; its unlabelled rows read `n=0` with a null rate, not 0%.
+A typo'd `--doc-variant` and an unknown flag both exit 1 before any network call.
+`--dry-run` prints `G1: pass (11 pairs, 2 dimensions, 1 startup). Variant checks:
+pass.` and the two RNA prompts differ in **exactly the document lines** — rubric
+block, supplied levels and instructions byte-identical. Merging the two
+supplied-level files gives a refusal list byte-identical to the pre-change one
+for every non-variant key.
+
+**The stopping rule is live.** If G1 passes and `unlabelled` still yields 0 on
+every arm, **metric 6 is retired** — no third manipulation is designed. Retiring
+on a rule is the honest end, and it is the end metric 3 was given.
+
+**Still true, and unchanged by any of this:** metric 6 has produced no true
+positive on any real generated text (96 historical + 36 fresh observations), and
+the two named uncaught classes remain untested.
 
 ## Reading the output
 
