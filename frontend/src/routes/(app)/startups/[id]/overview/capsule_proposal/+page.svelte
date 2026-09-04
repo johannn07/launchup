@@ -13,8 +13,9 @@
 
   let { data }: { data: PageData } = $props();
 
-  // Check if user is a mentor (readonly mode)
-  const isMentor = $derived(data.role?.includes('Mentor') ?? false);
+  // Mentors review the proposal; founders and Managers edit it. Was a
+  // substring test on the role name, which only excluded Mentor by accident.
+  const readOnly = $derived(data.role === 'Mentor');
 
   const queryResult = useQuery(
     ['startupData', data.startupId],
@@ -123,14 +124,14 @@
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-semibold">Capsule Proposal</h1>
-        {#if isMentor}
+        {#if readOnly}
           <Badge variant="secondary" class="flex items-center gap-1">
             <Eye class="h-3 w-3" />
             Mentor View - Read Only
           </Badge>
         {/if}
       </div>
-      {#if $queryResult.isSuccess && !isMentor}
+      {#if $queryResult.isSuccess && !readOnly}
         <Button onclick={saveCapsuleProposal} disabled={saving}>
           {#if saving}
             <Loader class="mr-2 h-4 w-4 animate-spin" />
@@ -153,7 +154,7 @@
           id="title"
           type="text"
           required
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={title}
         />
       {/if}
@@ -167,7 +168,7 @@
         <Textarea
           id="description"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={description}
           class="text-justify text-base"
         />
@@ -182,7 +183,7 @@
         <Textarea
           id="problemStatement"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={problemStatement}
           class="text-justify text-base"
         />
@@ -197,7 +198,7 @@
         <Textarea
           id="targetMarket"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={targetMarket}
           class="text-justify text-base"
         />
@@ -212,7 +213,7 @@
         <Textarea
           id="solution"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={solution}
           class="text-justify text-base"
         />
@@ -227,7 +228,7 @@
         <Textarea
           id="objectives"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={objectives}
           class="text-justify text-base"
         />
@@ -242,7 +243,7 @@
         <Textarea
           id="scope"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={scope}
           class="text-justify text-base"
         />
@@ -257,7 +258,7 @@
         <Textarea
           id="methodology"
           rows={8}
-          readonly={isMentor}
+          readonly={readOnly}
           bind:value={methodology}
           class="text-justify text-base"
         />

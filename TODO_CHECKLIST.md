@@ -663,7 +663,7 @@ measurement.
   ⚠️ **Raised by deployment (2026-08-25):** this and the admissions item below are no longer behind localhost. Both are reachable from a public URL by any authenticated user.
   `startup.controller.ts:135-137` (`GET /startups/:startupId`) and every sibling route are `JwtGuard`-only. Row-level filtering exists **only** in the list endpoint (`StartupService.getStartups()`).
   **Why it matters:** any logged-in founder can read any other startup's full record — capsule proposal, members, waitlist messages — by changing the id in the URL.
-  **Fix:** a reusable guard or service helper asserting the requester owns / is a member of / mentors the startup, unless Manager.
+  **Fix:** a reusable guard or service helper asserting the requester owns / is a member of / mentors the startup, unless Manager. **Partially done 2026-09-04** — `canEditCapsuleProposal` (`startup/capsule-proposal-access.ts`) implements exactly that rule and guards `PATCH /startups/:id/capsule-proposal`, the one endpoint where a foreign write corrupts measurement ground truth. The read endpoints and the rest of the module are unchanged.
 
 - [ ] 🔒 **SEC · S · Restrict the admissions endpoints to Manager** — *now also bounds SO 4.4's audit trail, see §0*
   `POST /startups/:id/approve-applicant`, `PATCH /:id/waitlist-applicant`, `POST /:id/appoint-mentors`, `PATCH /:id/change-mentor`, `PATCH /:id/mark-complete` are all `JwtGuard`-only (`startup.controller.ts:30`).

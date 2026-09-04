@@ -723,7 +723,7 @@
   <div class="text-2xl font-bold mt-10 text-center">
     {#if data.role === 'Startup'}
       Your mentor has not yet created Readiness and Needs Assessments.
-    {:else if data.role === 'Mentor'}
+    {:else if data.role === 'Mentor' || data.role === 'Manager'}
       Please create Readiness and Needs Assessments for your startup.
     {:else}
       Something went wrong...

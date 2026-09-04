@@ -856,15 +856,13 @@ reader.
 `'Manager as Mentor'` union member, and a commented-out `Role` enum in
 `utils.ts` that still carried it.
 
-### Watch this one on review
+### The capsule-proposal question, raised and then decided
 
-`overview/capsule_proposal/+page.svelte:17` derives
+`overview/capsule_proposal/+page.svelte:17` derived
 `isMentor = data.role?.includes('Mentor')` — a **substring** test that matched
-`'Manager as Mentor'` and does not match `'Manager'`. Behaviour for an
-untoggled Manager is unchanged (they were already in the editable branch), so
-this is not a regression. But it means **a Manager can edit a founder's capsule
-proposal**, which was true before this change and is worth deciding on
-separately. Left alone deliberately.
+`'Manager as Mentor'` and does not match `'Manager'`, so Managers were in the
+editable branch by accident. Raised as a question; **decided the same day** —
+see the follow-up section below.
 
 ### Verified live against Neon
 
@@ -880,5 +878,73 @@ whose message no longer lists the pseudo-role).
 
 ### Next step
 
-Unchanged: John tests the branch, then merge and deploy backend first. Decide
-separately whether a Manager should be able to edit capsule proposals.
+Unchanged: John tests the branch, then merge and deploy backend first.
+
+---
+
+## 2026-09-04 (later still) — Manager is the administrative role, and one IDOR closed
+
+Sixth commit. **Product decision by John: Managers are treated as admins and
+should hold full capabilities.** Where the SRS and SDD say otherwise, the
+documents get revised — SDD's "Startup Capsule Proposal Viewer" specifies a
+"structured **read-only** card" and the SRS has the startup confirm its own
+proposal, with managers and mentors on "review". That deviation is now
+deliberate and recorded in `ARCHITECTURE.md` §2 so nobody "fixes" it back.
+
+### The decision was about Managers, not about everyone
+
+Worth separating, because the endpoint conflated them. `PATCH
+/startups/:startupId/capsule-proposal` carried only `JwtGuard` — **any**
+authenticated account could rewrite **any** startup's capsule proposal,
+including another startup's founder. Granting Managers full access does not
+sanction that, so the endpoint now runs `canEditCapsuleProposal`
+(`startup/capsule-proposal-access.ts`, 8 unit tests): Managers write any
+startup's, mentors write ones they are assigned to, founders and members write
+their own.
+
+This matters past access control. **The capsule proposal is the source document
+the grounding and RNA measurement runs read, and `measurement/` keeps no
+document versions** — a foreign write silently moves ground truth underneath
+every past result.
+
+### Audit of what "full capabilities" actually touched
+
+Managers turned out not to be broadly locked out. Most `role === 'Startup' /
+else if 'Mentor'` chains are **empty-state copy, not capability gates**. Two
+real findings:
+
+- `assessment/+page.svelte:532` gated the **"Rate Readiness Level"** control on
+  `role === 'Mentor'`, so after this session's earlier work a Manager could rate
+  rubrics from `/readiness-level` but not from `/assessment`. Now
+  `canRateReadiness`, closing an inconsistency this session introduced.
+- Four AI-artifact pages showed Managers **"Something went wrong..."** as the
+  empty state, because the branch chain had no Manager arm.
+
+`ReadinessAssessmentForm`'s `isMentor` prop is renamed **`isRater`** — the same
+trap as `isMentor`/`canRateReadiness`, one component deeper.
+
+Also removed: the `console.log` of full request *and* response bodies on every
+capsule-proposal PATCH (checklist §4 — it wrote proposal contents to Render's
+logs), since the method was already being edited.
+
+### Verified live against Neon
+
+Manager: 8 editable fields and Save on the capsule proposal page, and a real
+`PATCH` returned **200** with the title echoed back byte-identical (no content
+change). Foreign founder (`founder.medisync`, owns startup 2) `PATCH`ing startup
+1 got **403 "You do not have access to this capsule proposal"**, their own
+startup 2 got **200**, and startup 1's title was confirmed unchanged afterwards.
+Manager now sees "Rate Readiness Level: Level 2 [Rate]" inside the assessment
+detail view. Backend **336/336** (up 8); frontend check 117/43, unchanged.
+
+**Not verified live:** the empty-state copy fix. Startup 5 renders a different
+empty state ("There are currently no RNAs created…"), so the branch I edited was
+not reachable in this data — code-reviewed and typechecked only.
+
+### Next step
+
+Unchanged: John tests the branch, then merge and deploy **backend first**. The
+capsule-proposal endpoint is now guarded, but **the rest of the IDOR item is
+still open** — `GET /startups/:id` and the other detail endpoints remain
+`JwtGuard`-only, so any authenticated user can still *read* any startup's full
+record.

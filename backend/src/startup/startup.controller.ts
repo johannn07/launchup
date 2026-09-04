@@ -229,24 +229,20 @@ export class StartupController {
     return this.startupService.allowRoadblocks(startupId);
   }
 
+  // The request and response bodies used to be logged in full here, writing
+  // startup proposal contents to the host's logs on every save.
   @Patch(':startupId/capsule-proposal')
   async updateCapsuleProposalFields(
     @Param('startupId', ParseIntPipe) startupId: number,
     @Body() dto: UpdateCapsuleProposalDto,
+    @Req() req: any,
   ) {
-    console.log('=== PATCH /startups/:startupId/capsule-proposal ===');
-    console.log('Startup ID:', startupId);
-    console.log('Request Body:', JSON.stringify(dto, null, 2));
-
-    const result = await this.startupService.updateCapsuleProposalFields(
+    await this.startupService.assertCanEditCapsuleProposal(
       startupId,
-      dto,
+      req.user,
     );
 
-    console.log('Response:', JSON.stringify(result, null, 2));
-    console.log('=== End PATCH /startups/:startupId/capsule-proposal ===');
-
-    return result;
+    return this.startupService.updateCapsuleProposalFields(startupId, dto);
   }
 
   @Patch(':id')

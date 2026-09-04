@@ -57,6 +57,8 @@ Startup | Mentor | Manager
 
 These are the three user classes SRS §2.3 defines. A fourth `Admin` role existed until 2026-09-04; SDD §1.4 puts every administrative function behind Manager, so it was drift and was removed.
 
+**Manager is the administrative role and holds full capabilities** — a product decision taken 2026-09-04. Where the SRS/SDD describe a Manager surface as read-only (SDD's "Startup Capsule Proposal Viewer"), the documents are to be revised, not the code. Recorded here so the deviation reads as deliberate.
+
 New signups **always** get `Role.Startup` — the enum default in `backend/src/entities/user.entity.ts:32` is never overridden by `AuthService.signup` (`backend/src/auth/auth.service.ts:17-34`). **Only a Manager can mint a Mentor or another Manager**, via `POST /admin/users/create-json` (`backend/src/admin/dto/create-user.dto.ts` requires an explicit `role`).
 
 ### 2.1 Where permissions are actually enforced
@@ -95,6 +97,7 @@ Two caveats that matter a great deal:
 | Create users with any role | | | ✅ |
 | Configure scoring tiers | | | ✅ |
 | Review AI bias audits / OCR docs | | | ✅ |
+| Edit a capsule proposal | ✅ (own) | | ✅ (any) |
 
 ¹ Gated by pipeline state, not by role — see §2.4.
 
