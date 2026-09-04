@@ -251,3 +251,83 @@ Backend **336/336**; frontend `pnpm check` **117 errors / 43 files**, below the 
 ### Next step
 
 **Deploy.** Render and Vercel still run the four-role build. The boot conversion handles existing `Admin` rows, but **any JWT already issued with `role: 'Admin'` is refused after deploy** — those sessions must re-authenticate at `/manager-login`. Deploy **backend first**. Then revise the SRS and SDD wording that the capsule-proposal decision now contradicts. The midterm critical path is unchanged: the SPMP and the traceability matrix.
+
+---
+
+## 2026-09-04 (later) — metric 6's void run re-read, and a second design
+
+Branch `docs/metric-6-manipulation-design`. **Zero Gemini calls.** Deployment
+of the three-role build to Render and Vercel was done by John before this
+session.
+
+### The finding: the record was wrong about its own run
+
+The 2026-08-23 metric 6 run was declared void because its `deflated` positive
+control never fired. The README's reading of that was that no clause ever
+reached `recommended`, so the run could not separate "the model never made this
+error" from "the classifier cannot read these constructions."
+
+Re-scoring the stored text through the same `lib/redundancy.js` reproduces all
+four recorded columns exactly — which pins the code — and shows **4 clauses
+binned `recommended` and then downgraded to `scoped` by the acquisition gate**:
+1 in `baseline`/truth and 1 in each arm's `deflated` cell, every one the
+*"needs to move **from paper prototype** to…"* shape, every one a correct
+rejection. The same run's metric-5 output holds 14 `recommended` clauses.
+
+So the classifier reads the model's register and the gate acts on real verdicts.
+**The ambiguity resolves in favour of the model never making the error.** Only
+the true-positive path is still unproven.
+
+**Why nobody saw it:** `scoreRedundantNeeds` computes `scoped` and nothing
+aggregates, prints or persists it. A gate whose rejections cannot be counted
+cannot be audited — reporting `scopedCount` is now a prerequisite of the next
+run.
+
+### The methodological error, named
+
+The void rule collapsed two separable questions: *can the detector see the
+behaviour* (code and register — testable at zero quota) and *does the condition
+induce it* (model — only testable by spending calls). Collapsing them let a
+well-behaved model void a run, and made the pre-registration's own stated
+inference ("reports a detector problem") wrong.
+
+### The second design, pre-registered
+
+`docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`.
+Unimplemented, unrun.
+
+- **Split control.** A blocking zero-quota detector control built from the
+  model's *own* clauses minimally mutated into redundancy — paired, so the
+  mutant must fire and its original must not. Then a manipulation check whose
+  failure reports a narrow model result rather than voiding anything.
+- **`unlabelled` documents, not another level manipulation.** `deflated` failed
+  because the level never overrode the document: both source documents label
+  every fact (`Target Market:`, `Revenue:`), and `Target Market:` names the very
+  artifact the rubric asks for. Redundancy needs the artifact **evidenced but
+  not salient**, which is a document property. The variant keeps each evidence
+  phrase byte-identical, deletes its label, and machine-asserts fact
+  preservation (numerals, dates and proper nouns as a multiset) so the variant
+  cannot be authored into producing the effect.
+- **A stopping rule.** If the detector control passes and `unlabelled` still
+  yields 0 on every arm, metric 6 is **retired** — the end metric 3 was given —
+  rather than re-manipulated indefinitely.
+- **Cost:** 12 calls, one quota day. Nothing runs until the zero-quota gates are
+  green.
+
+### Also this session
+
+`measurement/README.md` compressed (own branch, `docs/trim-measurement-readme`).
+No measurement result, command, caveat or number removed.
+
+### Open
+
+Unchanged from the last session: the per-startup reads in `rna`, `rns`,
+`initiative` and `roadblock` are unguarded; the generalized `RolesGuard` was not
+built; `debug: true` still logs SQL parameter values to Render and the boot
+seeder still re-seeds demo data on every redeploy.
+
+### Next step
+
+Implement the metric 6 design, or take the midterm critical path — the SPMP and
+the traceability matrix — which competes for the same weeks as the 30-user
+study.

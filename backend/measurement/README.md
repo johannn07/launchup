@@ -1418,15 +1418,26 @@ no 503s, no retries. Command exactly as pre-registered above.
 | `deviation-deterministic` | deflated | 0/6 | 1/6 | 1/6 | 0/6 | 6 |
 
 `redundantRate` is **0 in every one of the six cells**, `truth` and
-`deflated` alike. `deniedCount` is 0 everywhere. **`mentioned` and
-`unclassified` are equal in every cell** — every observation that contained
-a satisfied-token clause at all had that clause land in `unclassified`, and
-none ever landed in `recommended`. So no clause was binned `recommended` and
-then rejected by the acquisition gate; the gate never had a `recommended`
-verdict to act on in this run. That is consistent both with the model never
-making this error, and with the classifier being unable to read these
-particular constructions at all — this run cannot separate those two
-readings, and that ambiguity belongs next to the number, not underneath it.
+`deflated` alike. `deniedCount` is 0 everywhere.
+
+⚠️ **Corrected 2026-09-04.** This paragraph used to read that no clause was
+binned `recommended` and then rejected by the acquisition gate, and that the
+run therefore could not separate "the model never made this error" from "the
+classifier cannot read these constructions". **Both claims were wrong.**
+Re-scoring the stored text through the same `lib/redundancy.js` reproduces all
+four columns above exactly and shows a fifth the harness never emitted:
+**4 clauses were binned `recommended` and downgraded to `scoped` by the
+acquisition gate** — 1 in `baseline`/truth, and 1 each in the `deflated` cell
+of all three arms; all four AgroLink / Technology, all four the *"needs to move
+**from paper prototype** to…"* shape, all four correct rejections. The same
+run's metric-5 `flaggedClauses` holds 14 clauses classified `recommended`.
+So the classifier does read the model's recommendation register, and the gate
+does act on real verdicts. **The ambiguity resolves in favour of the model
+never making the error.** What is still unproven is only the true-positive
+path. `scoped` is invisible because `scoreRedundantNeeds` computes it and
+nothing aggregates, prints or persists it — see
+`docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`,
+which makes reporting `scopedCount` a prerequisite of the next run.
 
 **Verdict, in the order it must be read:**
 
@@ -1465,13 +1476,24 @@ readings, and that ambiguity belongs next to the number, not underneath it.
    outside the frozen list — remain completely untested here; a redundancy
    phrased that way would still have been missed by this instrument, control
    or no control. And: n=1 rep, 2 documents, 3 arms, one model.
-5. **What a future test needs.** The deflation manipulation did not make the
+5. **The void rule itself was the wrong instrument** (2026-09-04). It
+   collapsed two separable questions — *can the detector see the behaviour*
+   (code and register, testable at zero quota) and *does the condition induce
+   it* (model, only testable by spending calls) — so a well-behaved model
+   voided the run. The successor design splits them: a blocking zero-quota
+   detector control, then a manipulation check whose failure reports a narrow
+   model result rather than voiding anything.
+6. **What a future test needs.** The deflation manipulation did not make the
    model contradict its own source document — the same shape as the
    2026-08-06 finding that a wrong supplied level alone produces no
-   fabrication in the baseline arm (see metric 5 above). A stronger
-   manipulation, or a document/level pair where the rubric criterion is
-   unambiguously already met, is the next design. **It must be
-   pre-registered before it is run**, the same way this one was.
+   fabrication in the baseline arm (see metric 5 above). Both documents label
+   every fact (`Target Market:`, `Revenue:`), so the artifact the rubric asks
+   for is signposted and there is nothing to miss; redundancy needs the
+   artifact **evidenced but not salient**, which is a document property, not a
+   level property. Designed and pre-registered 2026-09-04 as an `unlabelled`
+   document variant plus a split control and a stopping rule:
+   `docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`.
+   **Unimplemented and unrun.**
 
 **Also observed, same run — metric 5, not this run's pre-registered
 question, n=1, report as observation only.** `asserted` is 0/6 on every arm
