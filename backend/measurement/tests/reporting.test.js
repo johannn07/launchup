@@ -306,3 +306,92 @@ test('rnaTexts carries every generated dimension so a future metric can re-score
     ].sort(),
   );
 });
+
+// ---------------------------------------------------------------------------
+// Required change 1 (design 2026-09-04): the acquisition gate's rejections were
+// computed and dropped. `scoreRedundantNeeds` downgrades a `recommended` clause
+// to `scoped`, and no column, no print and no persisted field carried it — so
+// the gate's entire activity was unobservable from a results file, and the four
+// rejections in the 2026-08-23 run went unseen for eleven days. A gate whose
+// rejections cannot be counted cannot be audited.
+//
+// The fixture is the real shape all four of those clauses had: the satisfied
+// artifact as the origin being left behind. It classifies `recommended` on
+// "Needs to", then ORIGIN_OR_SCOPE_PREP's `from` downgrades it — so it is
+// invisible in every existing column at once (redundant false, unclassified
+// false, denied false).
+const SCOPED_FIXTURE = 'Needs to move from paper prototype testing to full software development.';
+
+function scopedResults() {
+  return {
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          assertionTruthCalls: [{ byDim: { Technology: SCOPED_FIXTURE } }],
+          assertionInflatedCalls: [], assertionDeflatedCalls: [],
+        },
+      },
+    },
+  };
+}
+
+test('metric 6 reports scopedCount, the acquisition gate rejections', () => {
+  const s = H.summarizeResults(scopedResults());
+  const row = s.metric6.find((r) => r.arm === 'baseline' && r.condition === 'truth');
+  assert.equal(row.scopedCount, 1, 'the gate rejected one observation and the row must say so');
+  assert.equal(row.redundantN, 1);
+  assert.equal(row.redundantRate, 0, 'a rejected clause must never reach the headline');
+  assert.equal(row.unclassified, 0, '`scoped` is a gate verdict, not a read failure - never folded into the honesty column');
+});
+
+test('scopedCount is `refused` when metric 6 refused this pool, like every sibling column', () => {
+  // Nothing is merged here, so the value is a number rather than the sentinel;
+  // the assertion that matters is that the key exists on every row printed,
+  // including the conditions a run never populated.
+  const s = H.summarizeResults({});
+  for (const row of s.metric6) {
+    assert.ok('scopedCount' in row, `metric 6 row ${row.arm}/${row.condition} must carry scopedCount`);
+  }
+});
+
+test('scopedClauses persists the gate rejections verbatim, the way flaggedClauses persists metric 5', () => {
+  const rows = H.scopedClauses(scopedResults());
+  assert.equal(rows.length, 1);
+  assert.deepEqual(Object.keys(rows[0]).sort(), [
+    'arm', 'condition', 'dimension', 'klass', 'rep', 'startup', 'text',
+  ]);
+  assert.deepEqual(rows[0], {
+    arm: 'baseline', startup: 'AgroLink PH', condition: 'truth', rep: 0,
+    dimension: 'Technology', klass: 'scoped', text: SCOPED_FIXTURE,
+  });
+});
+
+test('scopedClauses carries only gate rejections, not every classified clause', () => {
+  const rows = H.scopedClauses({
+    baseline: {
+      quotaHit: false,
+      startups: {
+        'AgroLink PH': {
+          retrieved: [], rnaCalls: [], levelCalls: [], hallucCalls: [],
+          // A genuine redundancy: an acquisition verb governs the token, so the
+          // gate keeps the `recommended` verdict and there is nothing to record.
+          assertionTruthCalls: [{ byDim: { Technology: 'Needs to develop a paper prototype of the lot-aggregation flow.' } }],
+          assertionInflatedCalls: [], assertionDeflatedCalls: [],
+        },
+      },
+    },
+  });
+  assert.deepEqual(rows, [], 'a kept `recommended` verdict is metric 6 headline data, not a gate rejection');
+});
+
+// The defect this whole change exists to fix is compute-but-not-persist, so the
+// payload itself is asserted rather than the pure function alone.
+test('the written payload carries both audit trails', () => {
+  const payload = H.resultsPayload(scopedResults());
+  assert.ok(Array.isArray(payload.flaggedClauses), 'metric 5 audit trail');
+  assert.ok(Array.isArray(payload.scopedClauses), 'metric 6 gate audit trail');
+  assert.equal(payload.scopedClauses.length, 1);
+  assert.equal(payload.scopedClauses[0].text, SCOPED_FIXTURE);
+});

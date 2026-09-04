@@ -1321,7 +1321,7 @@ function summarizeResults(results) {
       // Same enforcement as metric 5's loop above, against metric 6's own key
       // family - the two can disagree on the very same pooled field.
       const refused = refusedKeys.has(`${REDUNDANCY_METRIC[condition]}|${arm.name}`);
-      let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0;
+      let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0, scoped = 0;
       for (const [startupName, cell] of Object.entries(armResult.startups)) {
         const spec = SATISFACTIONS[startupName];
         if (!spec) continue;
@@ -1332,6 +1332,12 @@ function summarizeResults(results) {
             if (obs.denied) denied += 1;
             if (obs.mentioned) mentioned += 1;
             if (obs.unclassified) unclassified += 1;
+            // Derived here, not added to the observation: lib/redundancy.js is
+            // hashed byte-for-byte into `redundancy|*` (REDUNDANCY_SOURCE reads
+            // scoreRedundantNeeds.toString()), so adding a field there would
+            // refuse every pool with 2026-08-23 for a reporting change that
+            // alters no verdict.
+            if (isScoped(obs)) scoped += 1;
           }
         }
       }
@@ -1349,6 +1355,13 @@ function summarizeResults(results) {
         mentioned: refused ? 'refused' : mentioned,
         unclassified: refused ? 'refused' : unclassified,
         deniedCount: refused ? 'refused' : denied,
+        // Required change 1 (design 2026-09-04). Per OBSERVATION, like every
+        // sibling column, so the whole row shares redundantN's denominator;
+        // the clause-level count lives in the persisted `scopedClauses`.
+        // Never folded into `unclassified` - that column means the classifier
+        // could not read the clause, and a gate rejection means it read it and
+        // ruled against it.
+        scopedCount: refused ? 'refused' : scoped,
       });
     }
   }
@@ -1389,7 +1402,11 @@ function printReports(results) {
   console.log(' startup already has; `truth` is what users receive, `deflated` is the positive control.');
   console.log(' `mentioned` is an upper bound and `unclassified` the honesty column, same read rule as');
   console.log(' metric 5: a large `unclassified` means the classifier cannot read this output and the');
-  console.log(' rate should not be quoted. `deniedCount` is secondary and never folds into the headline.)\n');
+  console.log(' rate should not be quoted. `deniedCount` is secondary and never folds into the headline.');
+  console.log(' `scopedCount` is the acquisition gate rejections - clauses that read as recommendations');
+  console.log(' but named the artifact as an origin or a scope. An audit column, not a failure column: a');
+  console.log(' high scopedCount beside a 0 rate is what the gate working looks like. Verbatim text is');
+  console.log(' persisted as `scopedClauses`.)\n');
   console.table(s.metric6);
 }
 
@@ -1472,6 +1489,41 @@ function flaggedClauses(results) {
   return out;
 }
 
+/** A gate rejection: classifyClause said `recommended`, the acquisition gate
+ *  overruled it. Read off the clause list because lib/redundancy.js is frozen
+ *  for fingerprint reasons - see the metric 6 loop in summarizeResults. */
+const isScoped = (obs) => (obs.clauses || []).some((c) => c.klass === 'scoped');
+
+/**
+ * Every clause the acquisition gate rejected, verbatim - metric 6's half of the
+ * audit trail flaggedClauses provides for metric 5, and the same seven fields.
+ *
+ * Without it the gate is unfalsifiable from a results file: its rejections are
+ * absent from `redundant`, from `unclassified` and from `denied` alike, so a
+ * run in which the gate fired four times and one in which it never fired print
+ * identically. That is exactly what happened to 2026-08-23.
+ */
+function scopedClauses(results) {
+  const out = [];
+  for (const [armName, armResult] of Object.entries(results)) {
+    for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
+      const spec = SATISFACTIONS[startupName];
+      if (!spec) continue;
+      for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[conditionField(condition)] || []).forEach((c, rep) => {
+          for (const o of scoreRedundantNeeds(c.byDim, spec).observations) {
+            for (const cl of o.clauses) {
+              if (cl.klass !== 'scoped') continue;
+              out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+            }
+          }
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Every generated dimension, flat. The text is already persisted nested under
  * `results` (e.g., `results.baseline.startups['startup'].rnaCalls[].byDim`,
@@ -1499,8 +1551,10 @@ function rnaTexts(results) {
   return rows;
 }
 
-function writeResults(file, results) {
-  const payload = {
+/** Exported so persistence is tested rather than trusted: the defect this
+ *  shape exists to fix was a value computed and never written down. */
+function resultsPayload(results) {
+  return {
     generatedAt: new Date().toISOString(),
     genModel: GEN_MODEL,
     embedModel: EMBED_MODEL,
@@ -1510,7 +1564,12 @@ function writeResults(file, results) {
     fingerprints: currentFingerprints(),
     results,
     flaggedClauses: flaggedClauses(results),
+    scopedClauses: scopedClauses(results),
   };
+}
+
+function writeResults(file, results) {
+  const payload = resultsPayload(results);
   fs.writeFileSync(file, JSON.stringify(payload, null, 2));
   console.log(`\nRaw per-call records written to ${file} (merge later with --merge).`);
 }
@@ -1778,6 +1837,8 @@ module.exports = {
   mergeRuns,
   currentFingerprints,
   flaggedClauses,
+  scopedClauses,
+  resultsPayload,
   rnaTexts,
   validateArgs,
   selectCells,
