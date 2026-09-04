@@ -236,3 +236,82 @@ test('the deflated override is part of redundancy-deflated comparability', () =>
   assert.ok(fps['redundancy|baseline']);
   assert.notEqual(fps['redundancy-deflated|baseline'], fps['redundancy|baseline']);
 });
+
+// ---------------------------------------------------------------------------
+// Required change 3 (design 2026-09-04): the `unlabelled` documents must be
+// hashed ONLY into variant-condition keys.
+//
+// `common.startups` carries the document text, and `common` is material for
+// every key. Folding a variant document into that shared map would move every
+// hash in the file and refuse to pool with every historical run — over a
+// document those runs never saw. The original cells must stay poolable with
+// 2026-08-23; only the unlabelled cells are new.
+// ---------------------------------------------------------------------------
+
+const withProbes = {
+  ...base,
+  sources: { ...base.sources, assertion: 'CLASSIFIER', redundancy: 'REDUNDANCY' },
+  absences: { Investment: {} },
+  satisfactions: { A: { Technology: {} } },
+  inflatedLevels: { A: {} },
+  deflatedLevels: { A: {} },
+};
+
+const withVariants = {
+  ...withProbes,
+  docVariants: { unlabelled: { A: 'the unlabelled document text' } },
+};
+
+test('adding document variants leaves every pre-existing hash byte-identical', () => {
+  const before = fingerprintMap(withProbes);
+  const after = fingerprintMap(withVariants);
+  for (const [key, value] of Object.entries(before)) {
+    assert.equal(after[key], value, `${key} moved — historical files would stop pooling`);
+  }
+});
+
+test('each variant gets its own key per arm and condition', () => {
+  const fp = fingerprintMap(withVariants);
+  const added = Object.keys(fp).filter((k) => !(k in fingerprintMap(withProbes))).sort();
+  assert.deepEqual(added, [
+    'assertion-unlabelled-deflated|baseline', 'assertion-unlabelled-deflated|deviation-deterministic',
+    'assertion-unlabelled-inflated|baseline', 'assertion-unlabelled-inflated|deviation-deterministic',
+    'assertion-unlabelled|baseline', 'assertion-unlabelled|deviation-deterministic',
+    'redundancy-unlabelled-deflated|baseline', 'redundancy-unlabelled-deflated|deviation-deterministic',
+    'redundancy-unlabelled-inflated|baseline', 'redundancy-unlabelled-inflated|deviation-deterministic',
+    'redundancy-unlabelled|baseline', 'redundancy-unlabelled|deviation-deterministic',
+  ]);
+});
+
+test('editing a variant document moves only that variant\'s keys', () => {
+  const changed = clone(withVariants);
+  changed.docVariants.unlabelled.A = 'a different unlabelled document';
+  const before = fingerprintMap(withVariants);
+  const after = fingerprintMap(changed);
+  for (const key of Object.keys(before)) {
+    if (key.includes('-unlabelled')) {
+      assert.notEqual(after[key], before[key], `${key} must move when its document changes`);
+    } else {
+      assert.equal(after[key], before[key], `${key} must not move — it does not use the variant document`);
+    }
+  }
+});
+
+test('the variant keys do not collide with each other', () => {
+  const fp = fingerprintMap(withVariants);
+  const keys = Object.keys(fp).filter((k) => k.includes('unlabelled'));
+  assert.equal(new Set(keys.map((k) => fp[k])).size, keys.length, 'two variant conditions collided onto the same hash');
+});
+
+test('a variant key differs from its own original counterpart', () => {
+  const fp = fingerprintMap(withVariants);
+  // Existence first: notEqual against undefined would pass on a key that was
+  // never emitted, which is exactly the bug this test is meant to catch.
+  for (const k of ['redundancy|baseline', 'redundancy-unlabelled|baseline',
+    'assertion-deflated|baseline', 'assertion-unlabelled-deflated|baseline']) {
+    assert.match(fp[k] ?? '', /^[0-9a-f]{12}$/, `${k} was not emitted`);
+  }
+  // Same arm, same condition, same everything except the document.
+  assert.notEqual(fp['redundancy|baseline'], fp['redundancy-unlabelled|baseline']);
+  assert.notEqual(fp['assertion-deflated|baseline'], fp['assertion-unlabelled-deflated|baseline']);
+});

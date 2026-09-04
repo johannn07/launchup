@@ -300,6 +300,26 @@ function docVariantField(variant, condition) {
   return field;
 }
 
+/** Condition suffix on a fingerprint key family. `truth` is the bare key,
+ *  because it was the only condition when these families were introduced and
+ *  renaming it would orphan every stored hash. */
+const CONDITION_SUFFIX = { truth: '', inflated: '-inflated', deflated: '-deflated' };
+
+/**
+ * The fingerprint key a reported row must consult before printing a number.
+ *
+ * Total, and throws: a key composed from an unknown variant or condition would
+ * name a hash nothing emits, so `refusedKeys.has(...)` would quietly answer
+ * false and the row would print over a pool whose comparability was never
+ * established. That is the failure this whole key family exists to prevent.
+ */
+function metricKey(base, variant, condition) {
+  if (!ALL_DOC_VARIANTS.includes(variant)) throw new Error(`metricKey: unknown document variant "${variant}"`);
+  const suffix = CONDITION_SUFFIX[condition];
+  if (suffix === undefined) throw new Error(`metricKey: unknown condition "${condition}"`);
+  return variant === 'original' ? `${base}${suffix}` : `${base}-${variant}${suffix}`;
+}
+
 /**
  * Exact names or a comma list. No prefix matching and no aliases — two values
  * do not need either, and both could silently select the wrong one. An
@@ -1355,13 +1375,13 @@ function summarizeResults(results) {
     // mentions, asserted at run time by verifyAbsences rather than trusted. One
     // binary observation per (call, dimension) — counting tokens would reward
     // verbosity, and the corpus arm writes longer RNAs.
-    for (const condition of ALL_LEVEL_CONDITIONS) {
-      const field = conditionField(condition);
+    for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = docVariantField(variant, condition);
       // A pooled field's own union rule (see mergeRuns) can admit data whose
       // comparability THIS metric's own fingerprint key refused, on another
       // sharing key's authority. `refused` overrides the row rather than
       // computing a number over a pool this metric never agreed to.
-      const refused = refusedKeys.has(`${ASSERTION_METRIC[condition]}|${arm.name}`);
+      const refused = refusedKeys.has(`${metricKey('assertion', variant, condition)}|${arm.name}`);
       let asserted = 0, mentioned = 0, unclassified = 0, obs = 0;
       for (const [, cell] of Object.entries(armResult.startups)) {
         for (const c of cell[field] || []) {
@@ -1375,6 +1395,7 @@ function summarizeResults(results) {
       }
       metric5.push({
         arm: arm.name,
+        variant,
         condition,
         asserted: refused ? 'refused' : `${asserted}/${obs}`,
         'asserted %': refused ? 'refused' : obs ? `${((asserted / obs) * 100).toFixed(0)}%` : 'n/a',
@@ -1392,11 +1413,11 @@ function summarizeResults(results) {
     // Keyed by condition rather than folded together: `truth` is what users
     // receive and `deflated` is the positive control, and averaging the two
     // would report neither.
-    for (const condition of ALL_LEVEL_CONDITIONS) {
-      const field = conditionField(condition);
+    for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+      const field = docVariantField(variant, condition);
       // Same enforcement as metric 5's loop above, against metric 6's own key
       // family - the two can disagree on the very same pooled field.
-      const refused = refusedKeys.has(`${REDUNDANCY_METRIC[condition]}|${arm.name}`);
+      const refused = refusedKeys.has(`${metricKey('redundancy', variant, condition)}|${arm.name}`);
       let n = 0, redundant = 0, denied = 0, mentioned = 0, unclassified = 0, scoped = 0;
       for (const [startupName, cell] of Object.entries(armResult.startups)) {
         const spec = SATISFACTIONS[startupName];
@@ -1419,6 +1440,7 @@ function summarizeResults(results) {
       }
       metric6.push({
         arm: arm.name,
+        variant,
         condition,
         redundantN: refused ? 'refused' : n,
         // null, never 0, at n=0 - 0/0 is undefined and reading it as a clean
@@ -1482,7 +1504,11 @@ function printReports(results) {
   console.log(' `scopedCount` is the acquisition gate rejections - clauses that read as recommendations');
   console.log(' but named the artifact as an origin or a scope. An audit column, not a failure column: a');
   console.log(' high scopedCount beside a 0 rate is what the gate working looks like. Verbatim text is');
-  console.log(' persisted as `scopedClauses`.)\n');
+  console.log(' persisted as `scopedClauses`.');
+  console.log(' `variant` says which document was sent. `original` is what users receive;');
+  console.log(' `unlabelled` is the salience manipulation and is deliberately NOT production-like,');
+  console.log(' so only original rows speak to production. Never read a difference across variants');
+  console.log(' without checking it against the baseline / sdd-semantic null-control spread first.)\n');
   console.table(s.metric6);
 }
 
@@ -1539,6 +1565,12 @@ function currentFingerprints() {
     inflatedLevels: INFLATED_OVERRIDE,
     satisfactions: SATISFACTIONS,
     deflatedLevels: DEFLATED_OVERRIDE,
+    // Variant documents, hashed only into variant-condition keys. Never folded
+    // into `common` above: that would move every hash in the file over a
+    // document no historical run ever saw. See lib/fingerprint.js.
+    docVariants: Object.fromEntries(
+      ALL_DOC_VARIANTS.filter((v) => v !== 'original').map((v) => [v, variantDocs(v)]),
+    ),
   });
 }
 
@@ -1551,11 +1583,11 @@ function flaggedClauses(results) {
   const out = [];
   for (const [armName, armResult] of Object.entries(results)) {
     for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
-      for (const condition of ALL_LEVEL_CONDITIONS) {
-        (cell[conditionField(condition)] || []).forEach((c, rep) => {
+      for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[docVariantField(variant, condition)] || []).forEach((c, rep) => {
           for (const o of scoreAssertedAbsences(c.byDim, HARD_ABSENCES).observations) {
             for (const cl of o.clauses) {
-              out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+              out.push({ arm: armName, startup: startupName, variant, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
             }
           }
         });
@@ -1585,12 +1617,12 @@ function scopedClauses(results) {
     for (const [startupName, cell] of Object.entries(armResult.startups || {})) {
       const spec = SATISFACTIONS[startupName];
       if (!spec) continue;
-      for (const condition of ALL_LEVEL_CONDITIONS) {
-        (cell[conditionField(condition)] || []).forEach((c, rep) => {
+      for (const variant of ALL_DOC_VARIANTS) for (const condition of ALL_LEVEL_CONDITIONS) {
+        (cell[docVariantField(variant, condition)] || []).forEach((c, rep) => {
           for (const o of scoreRedundantNeeds(c.byDim, spec).observations) {
             for (const cl of o.clauses) {
               if (cl.klass !== 'scoped') continue;
-              out.push({ arm: armName, startup: startupName, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
+              out.push({ arm: armName, startup: startupName, variant, condition, rep, dimension: o.dimension, klass: cl.klass, text: cl.text });
             }
           }
         });
@@ -1709,6 +1741,17 @@ function mergeRuns(files, arms) {
     redundancy: 'assertionTruthCalls',
     'redundancy-inflated': 'assertionInflatedCalls',
     'redundancy-deflated': 'assertionDeflatedCalls',
+    // Variant pools, derived rather than restated so a new variant cannot be
+    // added to the axis and silently dropped by the merge - which would read
+    // as a clean pool of zero rather than as lost data.
+    ...Object.fromEntries(
+      ALL_DOC_VARIANTS.filter((v) => v !== 'original').flatMap((v) =>
+        ALL_LEVEL_CONDITIONS.flatMap((c) => [
+          [metricKey('assertion', v, c), docVariantField(v, c)],
+          [metricKey('redundancy', v, c), docVariantField(v, c)],
+        ]),
+      ),
+    ),
   };
 
   for (const { file, data } of days) {
@@ -1764,6 +1807,10 @@ function mergeRuns(files, arms) {
               retrieved: cell.retrieved,
               rnaCalls: [], levelCalls: [], hallucCalls: [],
               assertionTruthCalls: [], assertionInflatedCalls: [], assertionDeflatedCalls: [],
+              ...Object.fromEntries(
+                ALL_DOC_VARIANTS.filter((v) => v !== 'original')
+                  .flatMap((v) => ALL_LEVEL_CONDITIONS.map((c) => [docVariantField(v, c), []])),
+              ),
             });
           // Defensive: a file carrying an assertion fingerprint but no assertion
           // array (hand-edited, or written by a partial run) must not throw.
@@ -1967,6 +2014,7 @@ module.exports = {
   selectLevelConditions,
   selectDocVariants,
   docVariantField,
+  metricKey,
   ALL_DOC_VARIANTS,
   levelsForCondition,
   conditionField,

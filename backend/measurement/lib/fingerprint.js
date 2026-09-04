@@ -60,6 +60,7 @@ function fingerprintMap(spec) {
     inflatedLevels,
     satisfactions,
     deflatedLevels,
+    docVariants = {},
   } = spec;
 
   // Content hash, not the row count mergeRuns' envKey already checks — editing
@@ -159,6 +160,44 @@ function fingerprintMap(spec) {
       // conditions, so the inflated row needs its own key too.
       out[`redundancy-inflated|${arm.name}`] = hash({ ...redundancyMaterial, inflatedLevels });
       out[`redundancy-deflated|${arm.name}`] = hash({ ...redundancyMaterial, deflatedLevels });
+    }
+
+    // Document variants (required change 3, design 2026-09-04). The variant
+    // documents are hashed ONLY here, never into `common`.
+    //
+    // `common.startups` carries the document text and `common` is material for
+    // every key above, so folding a variant into it would move every hash in
+    // the file and refuse to pool with every historical run - over a document
+    // those runs never saw and whose cells they do not contain. Original cells
+    // must stay poolable with 2026-08-23; only variant cells are new.
+    //
+    // Additive, like the two blocks above: a new KEY cannot change an existing
+    // one's material, and JSON.stringify drops undefined.
+    for (const [variantName, variantDocs] of Object.entries(docVariants)) {
+      const variantMaterial = {
+        src: sources.rna,
+        readinessLevelBlockSrc: sources.readinessLevelBlock,
+        renderRubricBlockSrc: sources.renderRubricBlock,
+        common,
+        scope: rnaScope,
+        rubricMode: arm.rubricMode,
+        corpusHash: corpusHashForArm,
+        // What makes this a different measurement from its original
+        // counterpart: a different document reached the prompt.
+        docVariant: { name: variantName, docs: variantDocs },
+      };
+      if (sources.assertion) {
+        const m = { ...variantMaterial, classifierSrc: sources.assertion, absences };
+        out[`assertion-${variantName}|${arm.name}`] = hash(m);
+        out[`assertion-${variantName}-inflated|${arm.name}`] = hash({ ...m, inflatedLevels });
+        out[`assertion-${variantName}-deflated|${arm.name}`] = hash({ ...m, deflatedLevels });
+      }
+      if (sources.redundancy) {
+        const m = { ...variantMaterial, redundancySrc: sources.redundancy, satisfactions };
+        out[`redundancy-${variantName}|${arm.name}`] = hash(m);
+        out[`redundancy-${variantName}-inflated|${arm.name}`] = hash({ ...m, inflatedLevels });
+        out[`redundancy-${variantName}-deflated|${arm.name}`] = hash({ ...m, deflatedLevels });
+      }
     }
   }
   return out;
