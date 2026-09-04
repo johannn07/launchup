@@ -17,7 +17,7 @@ import {
 import { AiService } from 'src/ai/ai.service';
 import { AiRunService } from 'src/ai/ai-run.service';
 import { StartupService } from './startup.service';
-import { JwtGuard } from 'src/auth/guard';
+import { AdminGuard, JwtGuard } from 'src/auth/guard';
 import { GetUser } from 'src/auth/decorator';
 import { ApproveApplicantDto } from './dto';
 import { Role } from 'src/entities/enums/role.enum';
@@ -49,28 +49,37 @@ export class StartupController {
   @Get('/criterion-answers')
   async getReadinessLevelCriterionAnswers(
     @Query('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
   ) {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return this.startupService.getReadinessLevelCriterionAnswers(startupId);
   }
 
   @Get('/startup-readiness-level')
   async getStartupReadinessLevel(
     @Query('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
   ) {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return this.startupService.getStartupReadinessLevel(startupId);
   }
 
+  // Cross-startup aggregates. The only caller is the Manager-only
+  // applications page; AdminGuard keeps the API honest about that.
+  @UseGuards(AdminGuard)
   @Get('/all')
   async getAllStartups(): Promise<any[]> {
     return await this.startupService.getAllStartups();
   }
 
   // Deprecated, kept for backward compatibility.
+  @UseGuards(AdminGuard)
   @Get('/ranking-by-urat')
   async getStartupsByUrat() {
     return await this.startupService.getPendingStartupsRankingByUrat();
   }
 
+  @UseGuards(AdminGuard)
   @Get('/ranking-by-rubrics')
   async getStartupsByRubrics() {
     return await this.startupService.getQualifiedStartupsRankingByRubrics();
@@ -148,12 +157,20 @@ export class StartupController {
   }
 
   @Get(':startupId')
-  async getStartupById(@Param('startupId', ParseIntPipe) startupId: number) {
+  async getStartupById(
+    @Param('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
+  ) {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return await this.startupService.getStartupById(startupId);
   }
 
   @Get(':startupId/calculator-final-scores')
-  async getCalculatorFinalScores(@Param('startupId') startupId: number) {
+  async getCalculatorFinalScores(
+    @Param('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
+  ) {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return await this.startupService.getCalculatorFinalScores(startupId);
   }
 
@@ -204,28 +221,38 @@ export class StartupController {
   }
 
   @Get(':startupId/allow-rnas')
-  async allowRNAs(@Param('startupId') startupId: number): Promise<boolean> {
+  async allowRNAs(
+    @Param('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
+  ): Promise<boolean> {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return this.startupService.allowRNAs(startupId);
   }
 
   @Get(':startupId/allow-tasks')
   async allowTasks(
     @Param('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
   ): Promise<boolean> {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return this.startupService.allowTasks(startupId);
   }
 
   @Get(':startupId/allow-initiatives')
   async allowInitiatives(
     @Param('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
   ): Promise<boolean> {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return this.startupService.allowInitiatives(startupId);
   }
 
   @Get(':startupId/allow-roadblocks')
   async allowRoadblocks(
     @Param('startupId', ParseIntPipe) startupId: number,
+    @Req() req: any,
   ): Promise<boolean> {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return this.startupService.allowRoadblocks(startupId);
   }
 
@@ -237,10 +264,7 @@ export class StartupController {
     @Body() dto: UpdateCapsuleProposalDto,
     @Req() req: any,
   ) {
-    await this.startupService.assertCanEditCapsuleProposal(
-      startupId,
-      req.user,
-    );
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
 
     return this.startupService.updateCapsuleProposalFields(startupId, dto);
   }

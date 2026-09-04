@@ -10,7 +10,7 @@ import { EntityManager } from '@mikro-orm/core';
 import { Startup } from 'src/entities/startup.entity';
 import { User } from 'src/entities/user.entity';
 import { Role } from 'src/entities/enums/role.enum';
-import { canEditCapsuleProposal } from './capsule-proposal-access';
+import { canAccessStartup } from './startup-access';
 import { StartupCriterionAnswer } from 'src/entities/startup-criterion-answer.entity';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
@@ -1512,10 +1512,10 @@ export class StartupService {
   }
 
   /**
-   * Throws unless the requester may write this startup's capsule proposal.
+   * Throws unless the requester may reach this startup at all.
    * Lives here rather than in a guard because the rule needs the startup row.
    */
-  async assertCanEditCapsuleProposal(
+  async assertCanAccessStartup(
     startupId: number,
     user: { id?: number; role?: Role | string } | undefined,
   ): Promise<void> {
@@ -1529,10 +1529,8 @@ export class StartupService {
       throw new NotFoundException(`Startup with ID ${startupId} not found`);
     }
 
-    if (!canEditCapsuleProposal(startup, user)) {
-      throw new ForbiddenException(
-        'You do not have access to this capsule proposal',
-      );
+    if (!canAccessStartup(startup, user)) {
+      throw new ForbiddenException('You do not have access to this startup');
     }
   }
 
