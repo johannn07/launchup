@@ -101,6 +101,19 @@ export const access = {
           link: 'applications',
           subModule: []
         },
+        {
+          name: 'Admin',
+          link: 'admin',
+          subModule: [
+            { name: 'Dashboard', link: '', subModule: [] },
+            { name: 'Users', link: 'users', subModule: [] },
+            { name: 'Startups', link: 'startups', subModule: [] },
+            { name: 'Assessments', link: 'assessments', subModule: [] },
+            { name: 'Tiers', link: 'tiers', subModule: [] },
+            { name: 'OCR', link: 'ocr-documents', subModule: [] },
+            { name: 'AI Bias', link: 'ai/bias-audits', subModule: [] }
+          ]
+        },
         // {
         //   name: 'Analytics',
         //   link: 'analytics',
@@ -111,58 +124,7 @@ export const access = {
         // 	link: 'cohorts',
         // 	subModule: []
         // },
-        {
-          name: 'Account',
-          link: 'account',
-          subModule: [
-            ...settingsModule.subModule, // Spread the predefined settingsModule submodules
-            {
-              name: 'Role',
-              link: 'role', // The link for the manager settings page or section
-              subModule: []
-            }
-          ]
-        }
-      ]
-    },
-    Admin: {
-      // Give Admin the same modules as Manager plus an Admin hub
-      modules: [
-        startupModule,
-        {
-          name: 'Admin',
-          link: 'admin',
-          subModule: []
-        },
-        {
-          name: 'Account',
-          link: 'account',
-          subModule: [
-            ...settingsModule.subModule,
-            {
-              name: 'Role',
-              link: 'role',
-              subModule: []
-            }
-          ]
-        }
-      ]
-    },
-    'Manager as Mentor': {
-      modules: [
-        startupModule,
-        {
-          name: 'Account',
-          link: 'account',
-          subModule: [
-            ...settingsModule.subModule, // Spread the predefined settingsModule submodules
-            {
-              name: 'Role',
-              link: 'role', // The link for the manager settings page or section
-              subModule: []
-            }
-          ]
-        }
+        settingsModule
       ]
     }
   }

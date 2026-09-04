@@ -31,7 +31,7 @@ const protectedRoutes = [
   '/startups',
   '/admin'
 ];
-const publicOnlyRoutes = ['/login', '/register', '/admin-login'];
+const publicOnlyRoutes = ['/login', '/register', '/manager-login'];
 
 export const handle: Handle = async ({ event, resolve }) => {
   let accessToken = event.cookies.get('Access');
@@ -44,14 +44,13 @@ export const handle: Handle = async ({ event, resolve }) => {
   const isPublicOnlyRoute = publicOnlyRoutes.some(
     (route) => pathname === route || pathname.startsWith(route + '/')
   );
-  const isAdminLogin = pathname.startsWith('/admin-login');
 
   if (!accessToken) {
     if (isProtectedRoute) {
       if (pathname.startsWith('/admin')) {
         throw redirect(
           302,
-          `/admin-login?redirectTo=${encodeURIComponent(pathname)}`
+          `/manager-login?redirectTo=${encodeURIComponent(pathname)}`
         );
       }
       throw redirect(302, `/login?redirectTo=${encodeURIComponent(pathname)}`);
@@ -79,9 +78,6 @@ export const handle: Handle = async ({ event, resolve }) => {
     };
 
     if (isPublicOnlyRoute) {
-      if (event.locals.user.role === 'Admin') {
-        throw redirect(302, '/admin');
-      }
       throw redirect(302, '/startups');
     }
   } catch (error) {
@@ -95,7 +91,7 @@ export const handle: Handle = async ({ event, resolve }) => {
       if (pathname.startsWith('/admin')) {
         throw redirect(
           302,
-          `/admin-login?redirectTo=${encodeURIComponent(pathname)}`
+          `/manager-login?redirectTo=${encodeURIComponent(pathname)}`
         );
       }
       throw redirect(302, `/login?redirectTo=${encodeURIComponent(pathname)}`);

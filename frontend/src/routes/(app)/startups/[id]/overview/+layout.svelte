@@ -21,7 +21,7 @@
   );
 
   const modules = $derived((() => {
-    const userRole = data.user?.role as 'Startup' | 'Mentor' | 'Manager' | 'Manager as Mentor';
+    const userRole = data.user?.role as 'Startup' | 'Mentor' | 'Manager';
     const roleModules = access.roles[userRole]?.modules ?? [];
     
     // Looked up by name because the module list is role-dependent.

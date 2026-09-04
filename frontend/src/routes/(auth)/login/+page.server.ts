@@ -5,6 +5,7 @@ import { dev } from '$app/environment';
 import { message, setError, superValidate } from 'sveltekit-superforms';
 import { zod } from 'sveltekit-superforms/adapters';
 import { fail, redirect, isRedirect } from '@sveltejs/kit';
+import { verifyAccessToken } from '$lib/server/auth';
 import type { PageServerLoad } from './$types.js';
 
 const loginSchema = z.object({
@@ -46,6 +47,16 @@ export const actions = {
 
       if (response.status === 201) {
         const data = await response.json();
+
+        // Managers sign in at /manager-login instead, so the two entry points
+        // stay separate. Never set the cookie before this check.
+        const claims = await verifyAccessToken(data.access_token);
+        if (!claims) {
+          return setError(form, 'email', 'Invalid Credentials');
+        }
+        if (claims.role === 'Manager') {
+          return setError(form, 'email', 'Managers sign in at /manager-login');
+        }
 
         cookies.set('Access', data.access_token, {
           path: '/',

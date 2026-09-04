@@ -30,26 +30,6 @@ export enum ReadinessType {
   Investment = 'Investment'
 }
 
-// export enum Role {
-//   Manager = 'Manager',
-//   Mentor = 'Mentor',
-//   Startup = 'Startup',
-//   ManagerAsMentor = 'Manager as Mentor'
-// }
-
-// export const getRole = (
-//   role: Role
-// ) => {
-//   const roles = {
-//     Manager: 'Manager',
-//     Mentor: 'Mentor',
-//     Startup: 'Startup',
-//     ManagerAsMentor: 'Manager as Mentor'
-//   };
-//
-//   return roles[`${role}`];
-// };
-
 export const setLocal = (name: string, value: any) => {
   if (browser) {
     localStorage.setItem(name, value);
@@ -207,8 +187,10 @@ export const getAllowedTabs = (name: string) => {
   return [name, `ai-${name}`];
 };
 
-export const isMentor = (role: Role) => {
-  return ['Mentor', 'Manager as Mentor'].includes(role);
+// Managers rate rubrics too — ARCHITECTURE.md 2.2 marks them so — and used to
+// reach it by flipping a cookie into a 'Manager as Mentor' pseudo-role.
+export const canRateReadiness = (role: Role) => {
+  return ['Mentor', 'Manager'].includes(role);
 };
 
 export const getSelectedTab = (name: string): string => {

@@ -9,6 +9,7 @@ import {
   UsePipes,
   ValidationPipe,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -102,9 +103,9 @@ export class AdminController {
   }
 
   @Post('users/delete-json/:id')
-  async deleteUserJson(@Param('id', ParseIntPipe) id: number) {
+  async deleteUserJson(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     try {
-      await this.adminService.deleteUser(id);
+      await this.adminService.deleteUser(id, req.user?.id);
       return { message: 'User deleted' };
     } catch (e: any) {
       if (e instanceof BadRequestException) {

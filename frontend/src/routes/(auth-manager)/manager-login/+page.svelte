@@ -27,8 +27,8 @@
   $effect(() => {
     if ($message && !$submitting) {
       toast.dismiss();
-      toast.success('Admin login successful');
-      goto('/admin');
+      toast.success('Manager login successful');
+      goto('/startups');
     }
     if ($errors.email && !$submitting) {
       toast.dismiss();
@@ -38,7 +38,7 @@
 </script>
 
 <svelte:head>
-  <title>Admin Login</title>
+  <title>Manager Login</title>
 </svelte:head>
 
 <div class="grid min-h-screen lg:grid-cols-[1.08fr_0.92fr]">
@@ -51,7 +51,7 @@
     <div class="relative z-10 flex items-center justify-between px-10 py-8">
       <div class="flex items-center gap-2">
         <Rocket class="h-5 w-5 text-[#6366f1]" />
-        <a href="/" class="text-xl font-black tracking-tight text-slate-950 dark:text-white">LaunchUp Admin</a>
+        <a href="/" class="text-xl font-black tracking-tight text-slate-950 dark:text-white">LaunchUp Manager</a>
       </div>
       <div class="flex items-center gap-3">
         <button
@@ -74,7 +74,7 @@
     <!-- Content -->
     <div class="relative z-10 flex flex-1 items-center px-10 pb-10">
       <div class="max-w-xl space-y-6">
-        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-white/60">Administrator</p>
+        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-white/60">Manager</p>
         <h1 class="text-5xl font-black tracking-[-0.05em] text-slate-950 dark:text-white">
           Manage the LaunchUp ecosystem.
         </h1>
@@ -106,7 +106,7 @@
   <!-- RIGHT PANEL -->
   <div class="relative flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.08),transparent_36%),linear-gradient(to_bottom,#ffffff,#f7f9ff)] px-6 py-10 dark:bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_36%),linear-gradient(to_bottom,#020617,#050816)]">
     <div class="absolute left-6 top-6 lg:hidden">
-      <a href="/" class="text-xl font-black tracking-tight">LaunchUp Admin</a>
+      <a href="/" class="text-xl font-black tracking-tight">LaunchUp Manager</a>
     </div>
     <form
       method="post"
@@ -115,10 +115,10 @@
     >
       <div class="absolute -inset-0.5 -z-10 rounded-[2.5rem] bg-gradient-to-br from-[#6366f1]/20 via-transparent to-[#0ea5e9]/20 blur-xl dark:from-[#6366f1]/10 dark:to-[#0ea5e9]/10"></div>
       <div class="space-y-3 text-center">
-        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-[#6366f1]">Admin</p>
+        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-[#6366f1]">Manager</p>
         <h1 class="text-4xl font-black tracking-tight text-slate-950 dark:text-white">Welcome back</h1>
         <p class="text-balance text-base leading-7 text-slate-600 dark:text-slate-300">
-          Enter your admin credentials to continue.
+          Enter your manager credentials to continue.
         </p>
       </div>
       <div class="mt-8 grid gap-5">
@@ -128,7 +128,7 @@
             name="email"
             id="email"
             type="email"
-            placeholder="admin@example.com"
+            placeholder="manager@example.com"
             required
             bind:value={$form.email}
             class="h-12 rounded-2xl border-white/50 bg-white/70 shadow-sm transition-all focus-visible:border-[#6366f1]/50 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#6366f1]/10 focus-visible:ring-offset-0 dark:border-white/10 dark:bg-white/5 dark:focus-visible:border-[#6366f1]/50 dark:focus-visible:bg-white/10"

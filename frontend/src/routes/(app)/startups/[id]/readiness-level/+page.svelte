@@ -2,7 +2,7 @@
   import { RatedRubric, Stepper } from '$lib/components/startups/readiness';
   import * as Tabs from '$lib/components/ui/tabs/index.js';
   import { useQueries } from '@sveltestack/svelte-query';
-  import { getData, isMentor } from '$lib/utils';
+  import { getData, canRateReadiness } from '$lib/utils';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
   import { Button } from '$lib/components/ui/button/index.js';
   import Rubric from '$lib/components/startups/readiness/rubric.svelte';
@@ -218,7 +218,7 @@
     {@render error()}
   {:else if isRated()}
     {@render rated()}
-  {:else if isMentor(role)}
+  {:else if canRateReadiness(role)}
     {@render mentor()}
   {:else}
     <div class="mt-10 text-center text-2xl font-bold">
@@ -246,7 +246,7 @@
 
 {#snippet rated()}
   <div class="flex h-full flex-col gap-3">
-    {#if isMentor(role)}
+    {#if canRateReadiness(role)}
       {#if revising}
         {@render mentor(true)}
       {:else}
@@ -257,7 +257,7 @@
         </div>
       {/if}
     {/if}
-    <Can role={['Mentor', 'Manager as Mentor']} userRole={role}>
+    <Can role={['Mentor', 'Manager']} userRole={role}>
       <div class="flex justify-between">
         <div class="flex h-fit justify-between rounded-lg bg-background"></div>
         {#if selectedTab === 'detailed'}

@@ -4,11 +4,11 @@ import { redirect } from '@sveltejs/kit';
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   // Require login
   if (!locals.user) {
-    throw redirect(302, `/admin-login?redirectTo=${encodeURIComponent(url.pathname)}`);
+    throw redirect(302, `/manager-login?redirectTo=${encodeURIComponent(url.pathname)}`);
   }
   const role = locals.user.role;
 
-  if (role !== 'Admin') {
+  if (role !== 'Manager') {
     throw redirect(302, '/startups');
   }
   return { user: locals.user, role };

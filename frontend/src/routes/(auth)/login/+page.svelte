@@ -26,7 +26,7 @@
   $effect(() => {
     if ($errors.email && !$submitting) {
       toast.dismiss();
-      toast.error('Login failed');
+      toast.error($errors.email as unknown as string);
     }
   });
 </script>
@@ -153,7 +153,7 @@
           </div>
         </div>
         {#if $errors.email}
-          <p class="text-sm font-medium text-rose-500">Invalid credentials</p>
+          <p class="text-sm font-medium text-rose-500">{$errors.email}</p>
         {/if}
         <Button
           type="submit"

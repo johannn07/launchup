@@ -100,7 +100,6 @@ async function seedLocalDemoData(orm: MikroORM) {
   ) => ensureUser(em, demoPasswordHash, email, firstName, lastName, role);
 
   await ensure('demo@launchup.local', 'Demo', 'Founder', Role.Startup);
-  await ensure('admin@launchup.local', 'Demo', 'Admin', Role.Admin);
   await ensure('manager@launchup.local', 'Demo', 'Manager', Role.Manager);
   const mentorUser = await ensure(
     'mentor@launchup.local',
@@ -359,6 +358,30 @@ async function backfillRagEmbeddings(app: NestExpressApplication) {
   }
 }
 
+/**
+ * Convert leftover Admin accounts before the schema sync tightens
+ * users_role_check to the three roles the SRS defines.
+ *
+ * updateSchema() runs on every boot against whatever branch DB_HOST points at,
+ * and adding the constraint fails while a role='Admin' row survives — so this
+ * has to run first, and stays because each developer's branch reaches it at a
+ * different time. A no-op once converted.
+ */
+async function retireAdminRole(orm: MikroORM) {
+  try {
+    const rows = await orm.em
+      .getConnection()
+      .execute(`update "users" set "role" = 'Manager' where "role" = 'Admin'`);
+    const converted = Array.isArray(rows) ? rows.length : 0;
+    if (converted > 0) {
+      console.log(`Converted ${converted} Admin account(s) to Manager`);
+    }
+  } catch {
+    // A DB with no users table yet has no Admin rows to convert; updateSchema
+    // creates it cleanly a moment later.
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useGlobalPipes(
@@ -385,6 +408,7 @@ async function bootstrap() {
   });
 
   const orm = app.get(MikroORM);
+  await retireAdminRole(orm);
   await orm.getSchemaGenerator().updateSchema();
   await seedWeightProfiles(orm);
   await seedTierConfigs(orm);

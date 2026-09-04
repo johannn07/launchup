@@ -19,6 +19,7 @@ import { ActivityLog } from '../entities/activity-log.entity';
 import { AiBiasAudit } from '../entities/ai-bias-audit.entity';
 import { OcrDocument } from '../entities/ocr-document.entity';
 import { TierConfig } from '../entities/tier-config.entity';
+import { Role } from '../entities/enums/role.enum';
 
 @Injectable()
 export class AdminService {
@@ -129,8 +130,22 @@ export class AdminService {
     }
   }
 
-  async deleteUser(id: number): Promise<void> {
+  async deleteUser(id: number, requesterId: number): Promise<void> {
     const user = await this.getUserById(id);
+
+    if (id === requesterId) {
+      throw new BadRequestException('You cannot delete your own account');
+    }
+
+    // Managers are the only role that can create users, so removing the last
+    // one leaves nobody able to restore it.
+    if (user.role === Role.Manager) {
+      const managers = await this.em.count(User, { role: Role.Manager });
+      if (managers <= 1) {
+        throw new BadRequestException('Cannot delete the last Manager account');
+      }
+    }
+
     await this.userService.remove(id);
     await this.log('Admin', `Deleted user ${user.email}`, 'admin');
   }

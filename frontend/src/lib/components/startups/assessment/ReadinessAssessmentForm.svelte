@@ -13,7 +13,7 @@
     access: string;
     startupId: string;
     assessment: Assessment;
-    isMentor?: boolean;
+    isRater?: boolean;
     onclose?: () => void;
     onsubmit?: (detail: {
       assessmentId: number;
@@ -29,7 +29,7 @@
     access,
     startupId,
     assessment,
-    isMentor = false,
+    isRater = false,
     onclose,
     onsubmit,
     onstatusChanged
@@ -50,7 +50,7 @@
 
   // Mentor view only — founders don't see the current level.
   $effect(() => {
-    if (isMentor && assessment?.assessment?.assessmentType && startupId) {
+    if (isRater && assessment?.assessment?.assessmentType && startupId) {
       fetchCurrentReadinessLevel();
     }
   });
@@ -155,7 +155,7 @@
     <Dialog.Title class="text-2xl font-semibold">
       {assessment.assessment.name}
     </Dialog.Title>
-    {#if isMentor}
+    {#if isRater}
       <Dialog.Description>
         Mentor View - Assessment Type: {assessment.assessment.assessmentType}
       </Dialog.Description>
@@ -168,13 +168,13 @@
         <ShortAnswerField
           description={assessment.assessment.name}
           bind:value={answerValue}
-          isReadOnly={isMentor}
+          isReadOnly={isRater}
         />
       {:else if assessment.assessment.answerType === 'LongAnswer'}
         <LongAnswerField
           description={assessment.assessment.name}
           bind:value={answerValue}
-          isReadOnly={isMentor}
+          isReadOnly={isRater}
         />
       {:else if assessment.assessment.answerType === 'File'}
         <FileUploadField
@@ -182,7 +182,7 @@
           description={assessment.assessment.name}
           fileUrl={assessment.response?.fileUrl || ''}
           bind:value={answerValue}
-          isReadOnly={isMentor}
+          isReadOnly={isRater}
           {access}
           {startupId}
           assessmentId={assessment.assessment.id.toString()}
@@ -196,7 +196,7 @@
   <div class="flex justify-end gap-3">
     <Button variant="outline" onclick={() => onclose?.()}>Close</Button>
 
-    {#if isMentor}
+    {#if isRater}
       <div class="flex items-center gap-3">
         <Select.Root type="single" bind:value={readinessLevel}>
           <Select.Trigger class="w-[180px]">

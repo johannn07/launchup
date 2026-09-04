@@ -330,7 +330,7 @@
   <div class="mt-10 text-center text-2xl font-bold">
     {#if data.role === 'Startup'}
       Your mentor has not yet rated your startup's readiness levels.
-    {:else if data.role === 'Mentor'}
+    {:else if data.role === 'Mentor' || data.role === 'Manager'}
       Please rate your startup's readiness levels to access the Readiness and
       Needs Assessment.
     {:else}

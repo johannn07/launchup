@@ -8,7 +8,11 @@
   import ReadinessAssessmentForm from '$lib/components/startups/assessment/ReadinessAssessmentForm.svelte';
   import type { Assessment } from '$lib/types/assessment.types';
   import Loading from '$lib/components/startup/Loading.svelte';
-  import { getReadinessTypes, getReadinessStyles } from '$lib/utils';
+  import {
+    getReadinessTypes,
+    getReadinessStyles,
+    canRateReadiness
+  } from '$lib/utils';
   import ShortAnswerField from '$lib/components/startups/assessment/AssessmentTypes/ShortAnswerField.svelte';
   import LongAnswerField from '$lib/components/startups/assessment/AssessmentTypes/LongAnswerField.svelte';
   import FileUploadField from '$lib/components/startups/assessment/AssessmentTypes/FileUploadField.svelte';
@@ -479,13 +483,13 @@
                     <ShortAnswerField
                       description={assessmentData.assessment.name}
                       bind:value={assessmentAnswers[assessmentId]}
-                      isReadOnly={data.role === 'Mentor' || !assessmentData.isApplicable}
+                      isReadOnly={canRateReadiness(data.role) || !assessmentData.isApplicable}
                     />
                   {:else if assessmentData.assessment.answerType === 'LongAnswer'}
                     <LongAnswerField
                       description={assessmentData.assessment.name}
                       bind:value={assessmentAnswers[assessmentId]}
-                      isReadOnly={data.role === 'Mentor' || !assessmentData.isApplicable}
+                      isReadOnly={canRateReadiness(data.role) || !assessmentData.isApplicable}
                     />
                   {:else if assessmentData.assessment.answerType === 'File'}
                     <FileUploadField
@@ -493,7 +497,7 @@
                       description={assessmentData.assessment.name}
                       fileUrl={assessmentData.response?.fileUrl || ''}
                       bind:value={assessmentAnswers[assessmentId]}
-                      isReadOnly={data.role === 'Mentor' || !assessmentData.isApplicable}
+                      isReadOnly={canRateReadiness(data.role) || !assessmentData.isApplicable}
                       {access}
                       {startupId}
                       assessmentId={assessmentId.toString()}
@@ -529,7 +533,7 @@
       </div>
 
       <div class="flex items-center justify-between gap-3 border-t pt-4">
-        {#if data.role === 'Mentor'}
+        {#if canRateReadiness(data.role)}
           {@const typeAssessments = selectedReadinessType
             ? assessmentsByType()[selectedReadinessType] || []
             : []}
@@ -582,7 +586,7 @@
           onclose={toggleAssessmentForm}
           onsubmit={handleAssessmentSubmit}
           onstatusChanged={() => $assessmentQuery.refetch()}
-          isMentor={data.role === 'Mentor'}
+          isRater={canRateReadiness(data.role)}
         />
       {/if}
     </Dialog.Content>

@@ -16,7 +16,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **`mikro-orm.config.ts` hardcodes `entities: ['./dist/**/*.entity.js']`.** A build emitted anywhere else still loads **stale** entities from `dist/`, silently. Any probe compiled to a scratch dir must override `entities`, or it is measuring the last build — this produced a convincing false negative once (a new property read as "not in metadata").
 - **To browser-test as any role without the login form:** `POST /auth/signin` for a token, then set it as the `Access` cookie via `javascript_tool` (`document.cookie`). `hooks.server.ts` verifies that cookie locally with `jose`, so no backend round-trip and no form automation is needed. The form itself still resists automation.
 - **Dark mode is class-based** (`html.dark`, mode-watcher) — `prefers-color-scheme` does not drive it, so a devtools colour-scheme toggle proves nothing. Toggle the class.
-- **`pnpm lint` runs `eslint --fix`** and rewrites the whole tree over a CRLF/prettier conflict (checklist §4). Check `git status` before committing after anyone runs it.
+- **`pnpm lint` runs `eslint --fix`, and `pnpm format` runs `prettier --write .`** — either rewrites the whole tree over a CRLF/prettier conflict (checklist §4). `pnpm format` cost an hour on 2026-09-04: 106 files reformatted for real, ~300 more churned to LF. **Format named files, never the tree**, and check `git status` before committing after anyone runs either. Prettier also reformats previously-unformatted files it legitimately touches, inflating a 6-line change to 115 — revert that churn and re-apply the small edit by hand.
 - **A fired scheduled task is not evidence it ran.** One fired, started its MCP servers, and never ran the command. Check for the artifact.
 - **Use Node, not PowerShell, for storage probes.** PS 5.1's `Invoke-WebRequest` reported a *successful* Supabase PUT as failed with no status code.
 - **`node inspect-prompt.js <startupId> [--dimension T]`** prints a real assembled prompt and stops before `sendToGemini` — zero quota.
@@ -458,56 +458,9 @@ refusal, and a null-dimension guard proved load-bearing by mutation.
 
 ---
 
-## 2026-08-23 (evening) — the run, and prediction 1 failed
+## Compressed — 2026-08-23 (evening, metric 6 run)
 
-`measurement/results/2026-08-23-rna-redundancy.json`. 12/12 calls, no 429s,
-no 503s, no retries.
-
-**`redundantRate` is 0 in all six arm × condition cells** — `truth` and
-`deflated` alike, every arm. `deniedCount` 0 everywhere. `mentioned` and
-`unclassified` are equal in every cell (baseline truth/deflated 2/6, 1/6;
-sdd-semantic 2/6, 2/6; deviation-deterministic 1/6, 1/6): every clause that
-mentioned a satisfied token landed in `unclassified`, none in `recommended`
-— so the acquisition gate never had a `recommended` verdict to act on. That
-is consistent both with the model never making this error and with the
-classifier being unable to read these constructions at all; this run can't
-tell those two apart.
-
-**Prediction 1 — the pre-registered rule that `deflated` must read
-substantially above `truth` or the run is void — failed.** `deflated` reads
-identical to `truth`: 0 everywhere. By the rule written before the run, this
-voids it as a model result. Prediction 2 (corpus arm worse than baseline
-under `deflated`) is untestable as a consequence — there is no arm
-difference to read when every arm is 0.
-
-**The pre-registration's own inference from a failed control turned out to
-be wrong, and that's now recorded in `measurement/README.md` rather than
-quietly revised.** The README said a failed control "reports a detector
-problem." Reading the actual generated text under the deflated condition
-shows the opposite: every arm produced forward-looking recommendations
-correctly anchored to the source document, never a claim that the startup
-already has what the deflation removed — e.g. *"Needs further market
-penetration across the remaining target facilities"* (`baseline`, MediSync,
-deflated). The manipulation didn't induce the target behaviour, so the
-detector had nothing to catch. Different failure from a blind detector; the
-two must not be conflated.
-
-**The honest claim this run supports is narrow: the model did not make this
-error in these 36 observations.** Not "the detector works," not "the model
-is robust to a deflated supplied level." The two uncaught classes named in
-the pre-registration (passive/postposed acquisition; acquisition verbs
-outside the frozen list) are completely untested by this run. n=1 rep, 2
-documents, 3 arms, one model.
-
-**Also observed, not this run's question, n=1:** metric 5's `asserted` is
-0/6 on every arm both conditions; `mentioned` on `truth` varied — baseline
-1/6, `sdd-semantic` 2/6, `deviation-deterministic` 4/6.
-
-Full arm × condition table and the complete verdict live in
-`measurement/README.md`'s metric 6 "Result, 2026-08-23" subsection. Next
-step: a stronger manipulation or a document/level pair where the rubric
-criterion is unambiguously already met — pre-registered before it runs, same
-as this one was.
+`measurement/results/2026-08-23-rna-redundancy.json`; 12/12 calls, clean. **`redundantRate` 0 in all six arm × condition cells**, `deniedCount` 0 everywhere; `mentioned` and `unclassified` equal in every cell, so no clause ever reached a `recommended` verdict for the acquisition gate to act on — consistent both with the model never making this error and with the classifier being unable to read these constructions, and this run cannot separate those. **Pre-registered prediction 1 failed** (`deflated` must read substantially above `truth`; it read identical), which by the rule written beforehand **voids the run as a model result**; prediction 2 became untestable as a consequence. **The pre-registration's own inference from a failed control was itself wrong and was corrected in `measurement/README.md` rather than quietly revised:** the README said a failed control "reports a detector problem", but the generated text shows every arm producing forward-looking recommendations correctly anchored to the source (e.g. *"Needs further market penetration across the remaining target facilities"* — baseline, MediSync, deflated). The manipulation never induced the target behaviour, so the detector had nothing to catch — a different failure from a blind detector, and the two must not be conflated. **The narrow claim this supports: the model did not make this error in these 36 observations** — not that the detector works. The two uncaught classes named in the pre-registration (passive/postposed acquisition; acquisition verbs outside the frozen list) remain untested. n=1 rep, 2 documents, 3 arms. Also observed, n=1, not this run's question: metric 5's `asserted` 0/6 on every arm both conditions, `mentioned` on `truth` varying baseline 1/6, `sdd-semantic` 2/6, `deviation-deterministic` 4/6. Full table in `measurement/README.md` metric 6. **Next:** a stronger manipulation, or a document/level pair whose rubric criterion is unambiguously already met — pre-registered before it runs.
 
 ---
 
@@ -761,3 +714,237 @@ John tests `feat/rna-dimension-picker` locally; the vite fix is what makes that
 possible at all. If it holds, merge (fast-forward) and deploy **backend first**.
 Then close the two production-hygiene items before a second account exists. The
 midterm critical path is unchanged: the SPMP and the traceability matrix.
+
+---
+
+## 2026-09-04 — the Admin role was never in the spec
+
+Branch `feat/remove-admin-role`, three commits, local and unpushed, rebased
+onto `c80280d`.
+
+### The finding that drove everything
+
+John asked whether Admin could be folded into Manager. The capstone documents
+already say it should be: **SRS §2.3 defines three user classes** (Startups,
+Mentors, Managers) and calls Managers *"Administrators overseeing the platform
+and the incubation program"*, and **SDD §1.4 requires *"Manager role
+requirement for all administrative functions"*** with *"Role-based access
+control for Manager users only"*. The fourth role was drift inherited from the
+prior team. Removing it **closes** a spec deviation rather than creating one —
+and it contradicted a stored memory claiming four roles were intended, which
+has been corrected.
+
+Manager already had most of it: ten `isPrivileged` sites read `Manager ||
+Admin`, and the row-visibility switch fell `Admin` through to `Manager`. The
+genuinely Admin-only surface was three controllers plus three assessment
+writes.
+
+### What shipped
+
+**`9a33776` — role removal.** `Role.Admin` deleted; `AdminGuard` gates on
+`Role.Manager` and keeps its name (it is named for the `/admin` surface, and
+the checklist wants it generalized into a `RolesGuard` later). The two logins
+are mutually exclusive: Managers sign in at `/manager-login` (renamed from
+`/admin-login`), and `/login` turns them away. Both now verify the JWT
+signature with `jose` through a shared `lib/server/auth.ts`, **closing the
+unverified-`atob()` item in checklist §1**. The login page rendered a
+hardcoded "Invalid credentials" over every error, so the new message could
+never have reached a user; it now shows the real one. Added the two missing
+`deleteUser` guards — no self-delete, and the last Manager cannot be removed —
+because every Manager can now reach that endpoint.
+
+**`ea2b6c6` — navigation.** The landing choice in the first commit (Managers
+→ `/admin`) was wrong and John caught it: `(app)/+layout.svelte` swapped the
+main header out on `/admin/*` for an admin-only bar with no link to
+Applications, Startups or Account, so a Manager started every session on a
+page with no route back to their own work. **The admissions feature was never
+broken — approve and waitlist both worked — only unreachable.** Admin pages
+are now declared once as the Admin module's `subModule` in `access.ts`,
+`admin-header.svelte` is deleted, the main header renders everywhere, and
+Managers land on `/startups`.
+
+**`4be84a6` — tier seeding.** `tier_configs` had no seeder at all; the only
+writer was Save Configs in the UI, so **every database had zero rows** while
+`/admin/tiers` showed "No tiers configured" and scoring silently applied a
+hardcoded fallback ladder. Ladder and seed list are now one constant,
+`SEED_TIER_CONFIGS`. Seeder is **create-only, not upsert** — a Manager's
+edited thresholds must survive a reboot.
+
+### Two traps worth not repeating
+
+**`pnpm format` reformatted the entire repo.** 106 files with real formatting
+changes, ~300 with CRLF churn — this is the checklist §4 item, and it fires on
+`pnpm format` as well as `pnpm lint`. A lint failure then broke a command
+chain before its `git stash pop`, leaving the real work stashed and tangled
+with the noise. Recovered by resetting and re-applying ~18 edits by hand.
+**Format named files, never the tree.** Prettier also reformats
+previously-unformatted files it touches, inflating a 6-line change to 115 —
+revert that churn and re-apply the small edit.
+
+**`header.svelte`'s submodule branch builds startup-scoped hrefs**
+(`/module/:startup/:link`), so putting the admin links under `subModule`
+produced `/admin/undefined/users` and crowded them into the main bar on deep
+admin routes. Predicted before starting, then walked into anyway. `admin` is
+now excluded from that branch the way `account` already was.
+
+### Verified live against Neon
+
+`admin@launchup.local` converted to Manager on boot (`main.ts` runs the
+`UPDATE` before `updateSchema()`, because auto-sync — not the migration — is
+what shapes these databases, and tightening `users_role_check` fails while an
+Admin row survives). Manager reaches `/admin` and the admin API; Manager
+refused at `/login`; Startup refused at `/manager-login`; Startup gets
+`403 "Managers only"` and is redirected off `/admin`. Tier rows seeded and
+rendered. Backend 328/328; frontend typecheck at master's 119/44 baseline.
+
+### Open
+
+- Branch is **unpushed and unreviewed**; John tests before anything reaches
+  master.
+- **Deployment needs care.** Render/Vercel still run the four-role build. The
+  boot conversion handles existing `Admin` rows, but any JWT already issued
+  with `role: 'Admin'` is refused after deploy — those sessions must
+  re-authenticate at `/manager-login`. Deploy backend first.
+- ~~`Manager as Mentor` still exists~~ — **removed later the same day**, see
+  the follow-up section below.
+- The `/admin/*` route paths are unchanged by choice; only the copy changed.
+- Both production-hygiene items from 2026-08-25 remain untouched (`debug: true`
+  logging SQL parameters, boot seeder re-seeding on every redeploy) — and the
+  tier seeder is a third thing that now runs on every boot, though it
+  self-skips.
+
+### Next step
+
+John tests `feat/remove-admin-role` locally — all three roles' logins, the
+admissions flow end to end, and the admin section. If it holds, merge and
+deploy **backend first**, warning anyone holding a session that they will be
+logged out. The midterm critical path is unchanged: the SPMP and the
+traceability matrix.
+
+---
+
+## 2026-09-04 (later) — `Manager as Mentor` follows Admin out
+
+Fifth commit on `feat/remove-admin-role`. Same argument as the Admin role: a
+role the spec does not define, invented by the prior team.
+
+### It was not only cosmetic
+
+The pseudo-role read like a UI convenience — ARCHITECTURE.md §2.5 called it
+"presentation-only", and that was true of the *JWT*, which always said
+`Manager`. But it was **the only route by which a Manager reached two real
+capabilities**, because the gates named the pseudo-role rather than the role:
+
+- rubric rating — `isMentor()` in `utils.ts` (`['Mentor', 'Manager as Mentor']`),
+  used at two points on the readiness page, plus a third `<Can>` block
+- member management — three gates on the overview members page
+
+So deleting the role naively would have silently stripped both from every
+Manager. `docs/ARCHITECTURE.md` §2.2 already marked Manager ✅ for "Rate
+readiness levels (rubrics)" — the matrix described the *toggled* state without
+saying so. The gates now name `Manager` directly and the capability is
+unconditional, which is what the matrix always claimed.
+
+`isMentor` was renamed **`canRateReadiness`** — with Manager in the list, a
+predicate called `isMentor` returning true for a Manager is a trap for the next
+reader.
+
+### Also removed
+
+`/account/role` (the toggle page), its `isMentorRole` cookie, the override in
+`(app)/+layout.server.ts`, the `Role` entry in Manager's Account submodule, the
+`'Manager as Mentor'` union member, and a commented-out `Role` enum in
+`utils.ts` that still carried it.
+
+### The capsule-proposal question, raised and then decided
+
+`overview/capsule_proposal/+page.svelte:17` derived
+`isMentor = data.role?.includes('Mentor')` — a **substring** test that matched
+`'Manager as Mentor'` and does not match `'Manager'`, so Managers were in the
+editable branch by accident. Raised as a question; **decided the same day** —
+see the follow-up section below.
+
+### Verified live against Neon
+
+Plain Manager, no `isMentorRole` cookie: "Revise baseline scores" renders on
+`/startups/1/readiness-level`, and Invite Member / Contracted member render on
+the members page — neither of which an untoggled Manager could reach before.
+Mentor unaffected (same page, same button). `/account/role` 404s; the Account
+submenu is Profile | Appearance. Backend 328/328. Frontend `pnpm check` **117
+errors / 43 files, down from the 119/44 baseline** — the two removals came from
+the deleted route, and an error-text diff against `master` confirms nothing new
+(the one apparent addition is the pre-existing `access.roles` indexing error,
+whose message no longer lists the pseudo-role).
+
+### Next step
+
+Unchanged: John tests the branch, then merge and deploy backend first.
+
+---
+
+## 2026-09-04 (later still) — Manager is the administrative role, and one IDOR closed
+
+Sixth commit. **Product decision by John: Managers are treated as admins and
+should hold full capabilities.** Where the SRS and SDD say otherwise, the
+documents get revised — SDD's "Startup Capsule Proposal Viewer" specifies a
+"structured **read-only** card" and the SRS has the startup confirm its own
+proposal, with managers and mentors on "review". That deviation is now
+deliberate and recorded in `ARCHITECTURE.md` §2 so nobody "fixes" it back.
+
+### The decision was about Managers, not about everyone
+
+Worth separating, because the endpoint conflated them. `PATCH
+/startups/:startupId/capsule-proposal` carried only `JwtGuard` — **any**
+authenticated account could rewrite **any** startup's capsule proposal,
+including another startup's founder. Granting Managers full access does not
+sanction that, so the endpoint now runs `canEditCapsuleProposal`
+(`startup/capsule-proposal-access.ts`, 8 unit tests): Managers write any
+startup's, mentors write ones they are assigned to, founders and members write
+their own.
+
+This matters past access control. **The capsule proposal is the source document
+the grounding and RNA measurement runs read, and `measurement/` keeps no
+document versions** — a foreign write silently moves ground truth underneath
+every past result.
+
+### Audit of what "full capabilities" actually touched
+
+Managers turned out not to be broadly locked out. Most `role === 'Startup' /
+else if 'Mentor'` chains are **empty-state copy, not capability gates**. Two
+real findings:
+
+- `assessment/+page.svelte:532` gated the **"Rate Readiness Level"** control on
+  `role === 'Mentor'`, so after this session's earlier work a Manager could rate
+  rubrics from `/readiness-level` but not from `/assessment`. Now
+  `canRateReadiness`, closing an inconsistency this session introduced.
+- Four AI-artifact pages showed Managers **"Something went wrong..."** as the
+  empty state, because the branch chain had no Manager arm.
+
+`ReadinessAssessmentForm`'s `isMentor` prop is renamed **`isRater`** — the same
+trap as `isMentor`/`canRateReadiness`, one component deeper.
+
+Also removed: the `console.log` of full request *and* response bodies on every
+capsule-proposal PATCH (checklist §4 — it wrote proposal contents to Render's
+logs), since the method was already being edited.
+
+### Verified live against Neon
+
+Manager: 8 editable fields and Save on the capsule proposal page, and a real
+`PATCH` returned **200** with the title echoed back byte-identical (no content
+change). Foreign founder (`founder.medisync`, owns startup 2) `PATCH`ing startup
+1 got **403 "You do not have access to this capsule proposal"**, their own
+startup 2 got **200**, and startup 1's title was confirmed unchanged afterwards.
+Manager now sees "Rate Readiness Level: Level 2 [Rate]" inside the assessment
+detail view. Backend **336/336** (up 8); frontend check 117/43, unchanged.
+
+**Not verified live:** the empty-state copy fix. Startup 5 renders a different
+empty state ("There are currently no RNAs created…"), so the branch I edited was
+not reachable in this data — code-reviewed and typechecked only.
+
+### Next step
+
+Unchanged: John tests the branch, then merge and deploy **backend first**. The
+capsule-proposal endpoint is now guarded, but **the rest of the IDOR item is
+still open** — `GET /startups/:id` and the other detail endpoints remain
+`JwtGuard`-only, so any authenticated user can still *read* any startup's full
+record.

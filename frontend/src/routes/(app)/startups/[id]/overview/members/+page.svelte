@@ -188,7 +188,7 @@
     </div>
   {:else}
     {#if $queryResult.isSuccess}
-      {#if data.role === 'Mentor' || data.role === 'Manager as Mentor' || data.user.id === $queryResult.data.user_id}
+      {#if data.role === 'Mentor' || data.role === 'Manager' || data.user.id === $queryResult.data.user_id}
         <h1 class="text-xl font-semibold">Invite Member</h1>
         <div class="flex items-center space-x-2">
           <Switch id="airplane-mode" bind:checked={outsideMember} />
@@ -263,7 +263,7 @@
                   >
                   <Table.Cell class="">Member</Table.Cell>
                   <Table.Cell class="">
-                    {#if data.role === 'Mentor' || data.role === 'Manager as Mentor' || data.user.id === $queryResult.data.user_id}
+                    {#if data.role === 'Mentor' || data.role === 'Manager' || data.user.id === $queryResult.data.user_id}
                       <button
                         onclick={() => {
                           open = true;
@@ -283,7 +283,7 @@
                 >
                 <Table.Cell class="">Contracted Member</Table.Cell>
                 <Table.Cell class="">
-                  {#if data.role === 'Mentor' || data.role === 'Manager as Mentor' || data.user.id === $queryResult.data.user_id}
+                  {#if data.role === 'Mentor' || data.role === 'Manager' || data.user.id === $queryResult.data.user_id}
                     <button
                       onclick={() => {
                         open = true;
