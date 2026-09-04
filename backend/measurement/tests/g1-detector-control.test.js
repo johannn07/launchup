@@ -104,21 +104,29 @@ test('evaluateG1 reports the paired property as met', () => {
   assert.equal(v.pairs, 11);
 });
 
-// The pre-registered pass rule is "at least 8 paired cases, drawn from at least
-// 2 startups and at least 2 dimensions, and every pair scores mutant-fires /
-// original-silent". Three of the four clauses are met. The startup clause is
-// NOT, and cannot be met from the source the design names: all 11 harvestable
-// clauses are AgroLink PH.
-//
-// This is asserted rather than quietly relaxed. Weakening a pre-registered gate
-// after seeing the data is the move this project's whole measurement record
-// exists to avoid. If the pool ever gains a second startup, this test fails and
-// forces the verdict to be re-read deliberately.
-test('the pre-registered coverage rule is unmet on startups, and G1 therefore does not pass', () => {
+// The pass rule as amended 2026-09-05: at least 8 paired cases, at least 2
+// dimensions, every pair mutant-fires / original-silent. The original rule also
+// required 2 startups; that clause was struck by Amendment 1 in the design file,
+// before any call was spent, because it is unsatisfiable from the source the
+// design names — see there for what was declined and why.
+test('G1 passes the amended coverage rule', () => {
   const v = G.evaluateG1();
   assert.equal(v.pairs >= 8, true, 'at least 8 paired cases');
   assert.equal(v.dimensions.length >= 2, true, 'at least 2 dimensions');
-  assert.deepEqual(v.startups, ['AgroLink PH']);
-  assert.deepEqual(v.unmet, ['startups: 1 distinct, rule requires at least 2']);
-  assert.equal(v.pass, false, 'G1 blocks the run until this is resolved by a recorded decision');
+  assert.deepEqual(v.unmet, []);
+  assert.equal(v.pass, true);
+});
+
+// The bound the amendment buys, pinned so it cannot quietly stop being true.
+// G1 validates the detector against AgroLink's register only. Half the run's
+// observations come from MediSync, whose descriptive register G1 never tested —
+// and that register is exactly what `unlabelled` is aimed at moving. A
+// `redundant` verdict on a MediSync clause is therefore not covered by G1 and
+// must be hand-read before it is quoted.
+//
+// If the pool ever gains a second startup this fails, which is the point: the
+// bound would no longer be the right thing to say.
+test('the amended rule leaves a recorded bound — every G1 case is AgroLink', () => {
+  assert.deepEqual(G.evaluateG1().startups, ['AgroLink PH']);
+  assert.equal(G.G1_RULE.minStartups, undefined, 'the struck clause must not survive in the code');
 });

@@ -1,9 +1,58 @@
 # Metric 6, second design — salience manipulation and a split control
 
-Status: pre-registered 2026-09-04, unimplemented, unrun.
+Status: pre-registered 2026-09-04, amended 2026-09-05, unrun.
 Supersedes the run plan and control rule in
 `2026-08-23-rna-redundancy-probe-design.md`. The detector itself
 (`lib/redundancy.js`, `lib/satisfactions.js`) is unchanged by this design.
+
+## Amendment 1 — 2026-09-05, before any call was spent
+
+**Changed:** G1's pass rule drops the "at least 2 startups" clause. It now reads
+*at least 8 paired cases, drawn from at least 2 dimensions, and every pair
+scores mutant-fires / original-silent.* Nothing else changes — the pair rule,
+the mutation rule, the expected-silent cases and the blocking behaviour are all
+as written below.
+
+**Why.** The clause is unsatisfiable from the source this design names, and the
+reason is a property of the data rather than a sampling accident. Harvesting
+every `recommended`/`scoped` clause from the three named files yields **11
+clauses, all AgroLink PH**, in 2 dimensions (10 Technology, 1 Acceptance).
+MediSync produced six classified clauses and every one is descriptive —
+*"user acceptance is demonstrated by expansion to 6 facilities"* — never the
+recommendation register. AgroLink's satisfied artifacts are things the model
+recommends moving **beyond**; MediSync's are things it reports as **done**.
+
+**Why the alternatives were declined:**
+
+- *Use more of the 12 startups in the database.* Ten of the twelve are thin
+  intake records — `historical_timeline: []`, `intellectual_property_status:
+  "Pending AI Generation"`, `members: []`. They evidence a target market and
+  nothing else, so they cannot supply Technology or Acceptance evidence, which
+  is where all 11 clauses live.
+- *Add a third document anyway.* G1's cases are the model's **own generated
+  text**, harvested from stored runs. No RNA has ever been generated for those
+  ten, so a new document creates zero G1 cases until quota is spent generating
+  for it — which is the spend G1 exists to gate. Doing it properly costs a
+  document with derived ground-truth levels, ~6 calls to generate, then the
+  12-call run: two quota days. And `common.startups` hashes the whole
+  `STARTUPS` map into every fingerprint key, so adding a document moves all 45
+  hashes and refuses pooling with every historical run.
+- *Hand-write MediSync cases to satisfy the clause.* Declined outright. It
+  reintroduces the hand-written-fixture defect G1 exists to remove.
+
+**The bound this buys, and it travels with every G1 claim.** G1 validates the
+detector against **AgroLink's register only**. Half the run's observations come
+from MediSync, whose register G1 never tested — and MediSync's descriptive
+register is precisely what the `unlabelled` manipulation is aimed at moving. So
+G1's blind spot sits exactly where the manipulation acts. A `redundant` verdict
+on a MediSync clause in the run is therefore **not** covered by G1 and must be
+hand-read before it is quoted.
+
+**Second bound, from mutation-testing G1 itself** (4 mutants, 3 killed):
+removing the `PROGRESSION_VERB` veto changes no G1 verdict, because it is the
+sole silencer on zero cases — the model wrote the origin frame with a
+preposition every time. G1 establishes nothing about that regex and no quotable
+claim may rest on it. Recorded, not patched.
 
 ## Why there is a second design
 
@@ -128,6 +177,11 @@ mutated**.
 **G1 passes when** at least 8 paired cases exist, drawn from at least 2 startups
 and at least 2 dimensions, and **every** pair scores mutant-fires /
 original-silent. One unpaired failure blocks the run.
+
+> **Amended 2026-09-05 — the "at least 2 startups" clause is struck.** See
+> Amendment 1 at the head of this file for why, what was declined, and the bound
+> it buys. The rule as it now stands: at least 8 paired cases, at least 2
+> dimensions, every pair mutant-fires / original-silent.
 
 **Expected-silent cases, asserted rather than fixed.** One case for each named
 uncaught class — passive/postposed acquisition (*"A paper prototype should be

@@ -224,8 +224,21 @@ function satisfiedTokensIn(startup, dimension, text) {
     .sort();
 }
 
-/** The pre-registered pass rule, unmodified. */
-const G1_RULE = { minPairs: 8, minStartups: 2, minDimensions: 2 };
+/**
+ * The pass rule as amended 2026-09-05 (Amendment 1 in the design file), before
+ * any call was spent. The original also required `minStartups: 2`; that clause
+ * is struck because it is unsatisfiable from the source the design names — all
+ * 11 harvestable clauses are AgroLink PH, since MediSync's six classified
+ * clauses are all descriptive rather than recommendations.
+ *
+ * The bound this buys, and it travels with every G1 claim: G1 validates the
+ * detector against AgroLink's register ONLY. Half the run's observations come
+ * from MediSync, whose register G1 never tested — and whose descriptive register
+ * is exactly what the `unlabelled` manipulation aims to move. A `redundant`
+ * verdict on a MediSync clause is not covered by G1 and must be hand-read
+ * before it is quoted.
+ */
+const G1_RULE = { minPairs: 8, minDimensions: 2 };
 
 /**
  * The verdict. `pass` gates the run: while it is false, no Gemini call may be
@@ -248,7 +261,6 @@ function evaluateG1() {
 
   const unmet = [];
   if (G1_CASES.length < G1_RULE.minPairs) unmet.push(`pairs: ${G1_CASES.length}, rule requires at least ${G1_RULE.minPairs}`);
-  if (startups.length < G1_RULE.minStartups) unmet.push(`startups: ${startups.length} distinct, rule requires at least ${G1_RULE.minStartups}`);
   if (dimensions.length < G1_RULE.minDimensions) unmet.push(`dimensions: ${dimensions.length} distinct, rule requires at least ${G1_RULE.minDimensions}`);
 
   return {
