@@ -422,3 +422,85 @@ is the SPMP and the traceability matrix, which compete for the same weeks as the
 Unchanged: the per-startup reads in `rna`, `rns`, `initiative` and `roadblock` are
 unguarded; no generalized `RolesGuard`; `debug: true` still logs SQL parameter
 values to Render; the boot seeder still re-seeds on every redeploy.
+
+---
+## 2026-09-05 (later) — objective 3a's threshold measured, and it fails
+
+Branch `measure/ocr-accuracy`, local and unpushed. **12 Gemini calls**, 10
+documents, across two quota windows.
+
+### The corpus, and why the reference had to be typed
+
+10 photographed pages, 2 writers, 5 each, hand-copied from AI-generated
+proposals. John confirmed the split and the labels.
+
+**The AI source text is gone, and it would have been the wrong reference even
+had it survived.** CER scores the model against *the page*; the writers
+introduced their own errors — `RxScan` misspells "Handwriten" in its own title —
+and charging a correct read as a model error inflates CER for a reason that has
+nothing to do with the model. A grep across Downloads/Documents/Desktop returned
+zero matches, so the question was settled twice.
+
+A model-produced reference was also ruled out: scoring Gemini against a
+transcription Claude wrote correlates the errors and flatters the number.
+
+### Stage 1 — measured, and negative for the shipped value
+
+80 human-labelled (document, field) observations — 54 grounded, 26 invented —
+scored with production's own `supportRatio`, imported rather than reimplemented.
+
+**`SUPPORT_THRESHOLD = 0.5` has specificity 30.8%: it badges 18 of 26 invented
+fields as green "Verified".** Specificity is measured directly on the invented
+class, so this finding does not depend on the confound below. Production is
+telling Managers to trust content the page never contained.
+
+**No replacement ships.** The pooled best (0.7879, sens 83.3%, spec 100%,
+J 0.833) passes the pre-registered gate; the confound-free arm fails it
+(J 0.438, spec 43.8%).
+
+⚠️ **The diagnosis is more useful than a threshold would have been.** Per-field
+means: `title` grounded 1.000, `problem_statement` 0.976 — but `methodology`
+grounded 0.575 against invented 0.468, and **an invented `scope` (0.632)
+outscores a grounded `methodology` (0.575)**. The classes cross *between*
+fields. `supportRatio` has a field-dependent baseline, because `title` reuses
+page words verbatim while `methodology` is written in the model's own register
+whether grounded or not. A single global threshold compares quantities that are
+not comparable, and the pooled sweep looks strong only because five fields are
+grounded on all ten pages and cluster near 1.0.
+
+Per-field thresholds are the obvious next hypothesis and are **not** tested —
+only `scope` and `methodology` carry both classes, and fitting on this run then
+reporting the fit is the forbidden move.
+
+### Two process points worth keeping
+
+**The pre-registration underspecified "at chance."** It said a strong pooled
+result beside a confound-free result "at chance" means pooled is the artifact,
+but never defined it numerically. J = 0.438 is above chance yet fails the gate.
+Resolved by requiring **both** arms to pass — and the harness now prints that
+conjunction itself, so a writeup cannot round a PASS/FAIL pair into a pass.
+
+**The confound check was worth building before knowing the answer.** It is the
+only thing standing between this run and a shipped 0.7879 that would have been
+sorting field types.
+
+### Quota, and the resume that paid for itself
+
+Metric 6's run had already spent 12 of the window's 20 calls 42 minutes earlier.
+The run got exactly 8 documents through before 429 — predicted to the call.
+Because failures are per-document and the result file is written after every
+row, the eight survived; the retry after the 15:00 reset cost **2 calls**, not
+10. The original design would have discarded all eight.
+
+The completed run did **not** rescue the confound arm: J moved 0.429 → 0.438
+with the two added documents, which carried half its positive class.
+
+### Still owed
+
+**CER.** Harness built, gated and tested; the 10 reference spans are drawn by
+seed and **untyped**. `--score` produces the number with no further quota once
+`measurement/data/ocr-reference-spans.md` is filled in. Predictions 1 and 2
+(pooled CER < 0.15; Writer A worse than Writer B) remain untested.
+
+**390/390 measurement tests.** `GoldChain.jpg` contains a proposal titled
+ColdChain Guard — the filename is wrong, not the transcription.

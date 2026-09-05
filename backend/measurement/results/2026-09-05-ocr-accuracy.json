@@ -1,6 +1,6 @@
 {
-  "started": "2026-09-04T19:02:18.692Z",
-  "finished": "2026-09-04T19:06:11.646Z",
+  "started": "2026-09-05T08:14:21.505Z",
+  "finished": "2026-09-05T08:15:07.699Z",
   "seed": 20260905,
   "config": {
     "model": "gemini-3.6-flash",
@@ -14,7 +14,7 @@
     "scoreNormalization": true,
     "adversarialSummary": true
   },
-  "apiCalls": 10,
+  "apiCalls": 2,
   "rows": [
     {
       "file": "Agritrack.jpg",
@@ -219,18 +219,52 @@
     {
       "file": "GoldChain.jpg",
       "writer": "B",
-      "status": "failed",
-      "reason": "got status: 429 Too Many Requests. {\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-",
+      "status": "ok",
+      "imageSha256": "5e83344d4afa2210cca25088174d72155ce0795ffb12192d23b236b8a9f96526",
+      "imageBytes": 260623,
+      "transcription": "1. Overview\nProject Name : ColdChain Guard (IoT Fleet Temperature Logger)\nOrganization: FleetLogix Systems\nProposal Date : August 10, 2024\nFunding Required: PHP 1,750,000.00\nTerm : 9 Months\n\n2. Context & Problem\nRefrigerated transport trucks carrying vaccines and fresh meat lack verifiable temperature logs during transit.\nTemperatures spikes often go unnoticed until delivery destination inspection, resulting in high cargo rejection rates.\n\n3. Proposed Solution\nA tamper-evident hardware logger that attaches to refrigerated containers. It records temperature and humidity every 30 seconds onto a local cryptographic ledger, syncing to cloud dashboards when cellular connection is restored.\n\n4. Pilot Scope\nRegional cold-chain logistics providers operating refrigerated trucks along the Pan-Philippine Highway route between Luzon and Visayas.\n\n5. Performance Indicators\n• 100% data fidelity during offline transit segments\n• Immediate real-time alerts for temp deviations exceeding 2 degrees Celcius\n• Adoption across 30 long-haul transport vehicles during pilot phase",
+      "fields": {
+        "title": "ColdChain Guard (IoT Fleet Temperature Logger)",
+        "startup_description": "FleetLogix Systems is an IoT-driven supply chain technology startup specializing in cold-chain fleet integrity and environmental monitoring. The organization requires PHP 1,750,000.00 for a 9-month proposal starting August 10, 2024 to deploy tamper-evident IoT hardware loggers across long-haul logistics fleets.",
+        "problem_statement": "Refrigerated transport trucks carrying vaccines and fresh meat lack verifiable temperature logs during transit. Temperature spikes often go unnoticed until delivery destination inspection, resulting in high cargo rejection rates and significant economic losses.",
+        "target_market": "Regional cold-chain logistics providers, pharmaceutical distributors, agricultural producers, and commercial refrigerated fleet operators along major transport routes in the Philippines, starting with the Pan-Philippine Highway corridor.",
+        "solution_description": "A tamper-evident hardware logger that attaches directly to refrigerated containers. It records temperature and humidity every 30 seconds onto a local cryptographic ledger, syncing to cloud dashboards when cellular connection is restored to provide continuous data fidelity.",
+        "objectives": "The primary objective is to secure PHP 1,750,000.00 in funding for a 9-month pilot phase to achieve 100% data fidelity during offline segments, enable immediate real-time alerts for temperature deviations exceeding 2 degrees Celsius, and achieve adoption across 30 long-haul transport vehicles.",
+        "scope": "The pilot scope focuses on regional cold-chain logistics providers operating refrigerated trucks along the Pan-Philippine Highway route between Luzon and Visayas, covering deployment across 30 long-haul transport vehicles over a 9-month project timeline.",
+        "methodology": "The team will manufacture and install tamper-evident IoT loggers on 30 target fleet vehicles, integrate local cryptographic logging for offline data retention, configure automated cloud syncing via cellular connectivity, and evaluate performance using continuous 30-second temperature logs and real-time threshold alert tracking."
+      },
       "apiCalls": 1,
-      "latencyMs": 283
+      "latencyMs": 34967,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 672,
+        "recorded": true
+      }
     },
     {
       "file": "RxScan.jpg",
       "writer": "B",
-      "status": "failed",
-      "reason": "got status: 429 Too Many Requests. {\"error\":{\"code\":429,\"message\":\"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-",
+      "status": "ok",
+      "imageSha256": "c0c053efc84a1f1e8736d263e39dfbf3401711813ff88d2f7f23b669e5aa14ff",
+      "imageBytes": 282941,
+      "transcription": "Project Identifier : PRJ-2026-MED09\nProject Title : RxScan : Automated Handwritten Prescription Digitization\nApplicant : HealthByte Software\nRequested Capital : PHP 2,500,000.00\nTimeline : 12 months\n\n1) Operational Deficit\nPharmacy staff spend an average of 45 seconds per order deciphering handwritten doctor prescriptions, leading to fulfillment delays and a 4.2% rate of medication dispensing errors in community pharmacies.\n\n2) System Architecture\nRxScan utilizes a fine tuned vision-language model trained on medical shorthand and doctor handwriting styles. Pharmacy technicians capture a photo of the paper prescription; the system extracts drug names, dosages, and frequencies, cross-checking them against an integrated pharmaceutical database for dosage safety.\n\n3) Target Deployment\nIndependent community pharmacies and hospital outpatient dispensaries in Metro Cebu, targeting 50 operational pilot counters.\n\n4) Quantifiable Targets\n• Target 1: Achieve 94% OCR accuracy on handwritten prescription scans\n• Target 2: Reduce average prescription verification time to under 10 seconds\n• Target 3: Process over 50,000 prescriptions during the 6-month trial phase without critical dosage error.",
+      "fields": {
+        "title": "RxScan: Automated Handwritten Prescription Digitization",
+        "startup_description": "HealthByte Software is a healthcare technology applicant requesting PHP 2,500,000.00 in capital over a 12-month timeline to develop and deploy RxScan, an automated AI-driven solution for digitizing handwritten medical prescriptions.",
+        "problem_statement": "Pharmacy staff spend an average of 45 seconds per order deciphering handwritten doctor prescriptions, leading to fulfillment delays and a 4.2% rate of medication dispensing errors in community pharmacies.",
+        "target_market": "Independent community pharmacies and hospital outpatient dispensaries in Metro Cebu, targeting 50 operational pilot counters.",
+        "solution_description": "RxScan utilizes a fine-tuned vision-language model trained on medical shorthand and doctor handwriting styles. Pharmacy technicians capture a photo of the paper prescription; the system extracts drug names, dosages, and frequencies, cross-checking them against an integrated pharmaceutical database for dosage safety.",
+        "objectives": "Achieve 94% OCR accuracy on handwritten prescription scans, reduce average prescription verification time to under 10 seconds, and process over 50,000 prescriptions during the 6-month trial phase without critical dosage errors.",
+        "scope": "A 12-month implementation project funded at PHP 2,500,000.00 focused on model fine-tuning, software integration, database setup, and deployment across 50 pilot pharmacy counters in Metro Cebu.",
+        "methodology": "Train and fine-tune a vision-language AI model on medical shorthand, integrate with pharmaceutical safety databases, deploy captured photo workflows to pharmacy technicians, and conduct a 6-month trial processing 50,000 prescriptions."
+      },
       "apiCalls": 1,
-      "latencyMs": 213
+      "latencyMs": 11217,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 645,
+        "recorded": true
+      }
     }
   ]
 }
