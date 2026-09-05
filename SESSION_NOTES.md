@@ -179,58 +179,60 @@ untouched lines inside edited files. Use `npx eslint --no-fix src/<path>`, judge
 against a baseline of ~291 errors on an untouched file, not zero.
 
 ---
-## 2026-09-04 — LaunchUp has three roles
+## Compressed — 2026-09-04 (three roles, IDOR, tier seeding)
 
-**Merged as PRs #47–#50.** Role branch tested by John before merge. Started as "can we remove the Admin role", ended with the role model matching the spec and the startup module's access rules made real.
+**PRs #47–#50, tested by John before merge.** Admin removed and the
+`Manager as Mentor` pseudo-role deleted, which **closed** a spec deviation
+rather than creating one: SRS §2.3 defines three user classes and SDD §1.4 puts
+every administrative function behind Manager. `AdminGuard` gates on
+`Role.Manager` and keeps its name; `/manager-login` replaces `/admin-login`; both
+logins verify the JWT with `jose` through `lib/server/auth.ts`, closing checklist
+§1's unverified-`atob()` item. The pseudo-role was **not** presentation-only as
+ARCHITECTURE.md claimed — it was the only route by which a Manager reached rubric
+rating and member management, so deleting it naively would have stripped both;
+the gates now name `Manager` directly (`isMentor` → `canRateReadiness`).
+**Managers hold full capabilities** — John's product decision; where the SRS/SDD
+describe a read-only Manager surface the documents get revised, recorded in
+ARCHITECTURE.md §2.
 
-### The finding that drove it
+**The startup module's IDOR closed.** Every detail endpoint had been
+`JwtGuard`-only, so any authenticated account could read or rewrite any startup
+by changing a URL id; `canAccessStartup` now guards twelve routes. This matters
+past access control: **the capsule proposal is the source document the grounding
+and RNA measurement runs read, and `measurement/` keeps no document versions**,
+so a foreign write moves ground truth under every past result. **Tier seeding**
+added — `tier_configs` was empty on every database while `/admin/tiers` showed
+"No tiers configured" and scoring silently used a hardcoded fallback ladder; the
+seeder is create-only, so Manager edits survive a reboot.
 
-The capstone documents already said Admin should not exist. **SRS §2.3 defines three user classes** — Startups, Mentors, Managers — and calls Managers *"Administrators overseeing the platform and the incubation program"*. **SDD §1.4 requires *"Manager role requirement for all administrative functions"***. The fourth role was drift inherited from the prior team, so removing it **closed** a spec deviation rather than creating one. It also contradicted a stored memory claiming four roles were intended, since corrected. Manager already had most of it: ten `isPrivileged` sites read `Manager || Admin`, and the genuinely Admin-only surface was three controllers plus three assessment writes.
+**Citable:** backend **336/336**; frontend `pnpm check` **117 errors / 43 files**
+(below the 119/44 baseline). The mentor id sweep is the cleanest evidence — 200
+on exactly the four startups they are assigned to, **403 on two that exist but
+are not theirs**, 404 where nothing exists.
 
-### What shipped
+**Process lessons, now permanent elsewhere:** `pnpm format` reformats the entire
+repo, not just changed files (checklist §4 — format named files, never the tree),
+and the branch drifted out of scope by consent, which is why CLAUDE.md now
+carries the branch-scope rule.
 
-**Admin removed.** `AdminGuard` gates on `Role.Manager` and keeps its name — it is named for the `/admin` surface, and the checklist wants it generalized into a `RolesGuard` later. `/manager-login` replaces `/admin-login`, `/login` turns Managers away, and both verify the JWT signature with `jose` through a shared `lib/server/auth.ts` — **closing the unverified-`atob()` item in checklist §1**. Added the two missing `deleteUser` guards (no self-delete, last Manager protected) because every Manager can now reach that endpoint.
+### Still open from that session
 
-**`Manager as Mentor` removed.** ARCHITECTURE.md called it "presentation-only", which was true of the JWT — but it was **the only route by which a Manager reached rubric rating and member management**, because those gates named the pseudo-role rather than the role, so deleting it naively would have stripped both from every Manager. The gates now name `Manager` directly. `isMentor` became **`canRateReadiness`**, and `ReadinessAssessmentForm`'s `isMentor` prop became **`isRater`**.
-
-**Managers hold full capabilities** — John's product decision. Where the SRS and SDD describe a Manager surface as read-only, as SDD's "Startup Capsule Proposal Viewer" does, the documents get revised rather than the code. Recorded in ARCHITECTURE.md §2 so the deviation reads as deliberate.
-
-**The startup module's IDOR, closed.** Every detail endpoint was `JwtGuard`-only: any authenticated account could read or rewrite any startup by changing the id in the URL. `canAccessStartup` (`startup/startup-access.ts`) now guards twelve routes; `/all` and both rankings moved to `AdminGuard`. Read and write share one rule deliberately — there is no startup a user may read but not act on. This matters past access control: **the capsule proposal is the source document the grounding and RNA measurement runs read, and `measurement/` keeps no document versions**, so a foreign write moves ground truth under every past result.
-
-**Tier seeding.** `tier_configs` had no seeder at all — every database held zero rows while `/admin/tiers` showed "No tiers configured" and scoring silently applied a hardcoded fallback ladder. Ladder and seed list are now one constant, `SEED_TIER_CONFIGS`; the seeder is **create-only**, so a Manager's edited thresholds survive a reboot.
-
-### Verified live against Neon
-
-`admin@launchup.local` converted to Manager on boot — `main.ts` runs the `UPDATE` before `updateSchema()`, because auto-sync rather than the migration is what shapes these databases, and tightening `users_role_check` fails while an Admin row survives. Manager refused at `/login`; Startup refused at `/manager-login`; Startup gets 403 from the admin API. A plain Manager with no cookie reaches rubric rating and member management. Tier rows seeded and rendered.
-
-**The mentor id sweep is the session's cleanest evidence:** 200 on exactly the four startups they are assigned to, **403 on two that exist but are not theirs**, 404 where nothing exists — the boundary falls precisely on the assignment set.
-
-Backend **336/336**; frontend `pnpm check` **117 errors / 43 files**, below the previous 119/44 baseline on master.
-
-### Three process failures worth not repeating
-
-**`pnpm format` reformatted the entire repo** — 106 files changed for real, ~300 more churned to LF. This is checklist §4, and it fires on `pnpm format` as well as `pnpm lint`. A lint failure then broke a command chain before its `git stash pop`, leaving the real work stashed and tangled with the noise; recovered by resetting and re-applying ~18 edits by hand. **Format named files, never the tree.**
-
-**Predicted a trap and walked into it anyway.** `header.svelte`'s submodule branch builds startup-scoped hrefs (`/module/:startup/:link`); that was flagged before starting, then the `subModule` key was used regardless, producing `/admin/undefined/users`. `admin` is now excluded from that branch the way `account` already was.
-
-**The branch drifted out of scope by consent.** `feat/remove-admin-role` accumulated tier seeding and IDOR remediation — every step approved, none of it about the Admin role. John caught it, not Claude. Split into four branches afterwards, and `docs/branch-scope-rule` adds the rule to CLAUDE.md: permission to do a thing is not permission to do it *here*.
-
-### Known limits, recorded rather than fixed
-
-- An unauthorized startup returns **403** and a nonexistent one **404**, so the pair still discloses which startup ids exist. Existence is checked before authorization because the rule needs the row.
-- The empty-state copy fix — Managers saw "Something went wrong..." on four AI-artifact pages — is **code-reviewed only**. The branch was not reachable in this data.
-- `b73caef` stayed mixed through the split: its capsule-proposal write guard is security work sitting inside a role-branch commit.
-
-### Still open
-
-- The per-startup reads in `rna`, `rns`, `initiative` and `roadblock` are **unguarded** — deliberately scoped out; they are the pages most likely to break subtly and need their own verification pass.
-- The generalized **`RolesGuard` + `@Roles(...)`** the checklist asks for was not built. What exists is a service-level assertion called from controllers, because the rule needs the startup row before it can decide.
-- **A Manager can edit a founder's capsule proposal** — now deliberate, but the SRS and SDD still say read-only and need revising to match.
-- Both production-hygiene items from 2026-08-25 remain: `debug: true` logging SQL parameter values to Render, and the boot seeder re-seeding demo data on every redeploy. The tier seeder is a third boot-time writer, though it self-skips.
-
-### Next step
-
-**Deploy.** Render and Vercel still run the four-role build. The boot conversion handles existing `Admin` rows, but **any JWT already issued with `role: 'Admin'` is refused after deploy** — those sessions must re-authenticate at `/manager-login`. Deploy **backend first**. Then revise the SRS and SDD wording that the capsule-proposal decision now contradicts. The midterm critical path is unchanged: the SPMP and the traceability matrix.
+- **Not yet deployed.** Render and Vercel still run the four-role build. Deploy
+  **backend first** — any JWT already issued with `role: 'Admin'` is refused
+  after deploy, and those sessions must re-authenticate at `/manager-login`.
+- Per-startup reads in `rna`, `rns`, `initiative` and `roadblock` remain
+  **unguarded** — deliberately scoped out; they need their own verification pass.
+- The generalized **`RolesGuard` + `@Roles(...)`** was not built; what exists is
+  a service-level assertion, because the rule needs the startup row to decide.
+- **A Manager can edit a founder's capsule proposal** — deliberate, but the SRS
+  and SDD still say read-only and need revising to match.
+- 403-vs-404 still discloses which startup ids exist; existence is checked before
+  authorization because the rule needs the row.
+- The empty-state copy fix (Managers saw "Something went wrong..." on four AI
+  artifact pages) is **code-reviewed only** — the branch was unreachable in this
+  data.
+- `b73caef` stayed mixed through the split: a capsule-proposal write guard
+  sitting inside a role-branch commit.
 
 ---
 
@@ -539,9 +541,42 @@ asset: whoever picks 3c up spends transcription time, not build time or quota.
 **390/390 measurement tests.** `GoldChain.jpg` contains a proposal titled
 ColdChain Guard — the filename is wrong, not the transcription.
 
+### Branch state — `measure/ocr-accuracy`, 7 commits, local and unpushed
+
+**Mergeable, clean fast-forward.** `master` and `origin/master` are both
+`3a89708` and an ancestor of HEAD. Backend **336/336** (33 suites), measurement
+**390/390**. 11 files, **all `backend/measurement/` and docs — no production
+`src` touched**, so no schema and no runtime impact.
+
+Two things to know before merging:
+
+- **One commit strays from the branch name.** `4a2286c` corrects a stale
+  `TODO_CHECKLIST.md` line that called metric 6 "local, unpushed" when it had
+  merged as PR #53. A one-line staleness fix in a file this branch was already
+  editing — named rather than buried, given this repo's history with
+  drift-by-consent.
+- **The corpus images are not in the repo.** The harness reads them from
+  `Downloads/sample proposals` via `OCR_IMAGE_DIR`, and the stored run records
+  each image's SHA-256 so a future run can be verified against the exact files —
+  but **a fresh clone cannot reproduce the run without the photos.** Deliberate
+  (they are photographs of a teammate's handwriting, and committing them is
+  John's call), and a real limit on citing this as reproducible. Adding the 10
+  JPEGs is ~2.8 MB and belongs on its own branch.
+
 ### Next step
 
-The measurement track is closed again. The critical path is unchanged and
-unstarted: **the SPMP and the traceability matrix**, competing for the same
-weeks as the 30-user study. The one thing that could pull work back here is the
-`SUPPORT_THRESHOLD` defect, which is demo-visible and undecided.
+**Merge this branch** (fast-forward, no production code), then the critical path
+is unchanged and still unstarted: **the SPMP and the traceability matrix**,
+competing for the same weeks as the 30-user study.
+
+Two decisions are queued behind that, neither urgent enough to displace it:
+
+1. **`SUPPORT_THRESHOLD`** — evidenced, unfixed, **demo-visible**, and *not*
+   fixable by raising the number. Needs its own pre-registered design on new
+   data if it is to be fixed at all rather than disclosed.
+2. **The 2026-09-04 deploy still has not happened.** Render and Vercel run the
+   four-role build. Backend first; Admin-role JWTs are refused after deploy.
+
+⚠️ Item 2 is the older debt and has been carried on "next step" lines since
+2026-09-04 without moving. It is the one most likely to be discovered by a
+reviewer opening the live site rather than by us.
