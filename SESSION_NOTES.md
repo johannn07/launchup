@@ -495,12 +495,53 @@ row, the eight survived; the retry after the 15:00 reset cost **2 calls**, not
 The completed run did **not** rescue the confound arm: J moved 0.429 → 0.438
 with the two added documents, which carried half its positive class.
 
-### Still owed
 
-**CER.** Harness built, gated and tested; the 10 reference spans are drawn by
-seed and **untyped**. `--score` produces the number with no further quota once
-`measurement/data/ocr-reference-spans.md` is filled in. Predictions 1 and 2
-(pooled CER < 0.15; Writer A worse than Writer B) remain untested.
+### The scope decision — CER is out, and 3a closes without it
+
+John's call, made after seeing stage 1: **declare the accuracy measurement out
+of scope explicitly.** 3a goes 🟢 on implementation, CER moves to 3c, and the
+spans stay untyped.
+
+**The wording is load-bearing.** Say *"we scoped the accuracy measurement out"*,
+never *"3a is complete"* — a panel hears the difference, and *"how accurate is
+your OCR?"* is the most predictable question an objective named "OCR of
+handwritten text" attracts. The defensible answer is that the harness exists,
+the run is stored, and the transcription pass was a cost we chose not to pay.
+
+⚠️ **Stage 1 does not substitute.** It measures the field-confidence layer,
+which sits *downstream* of the OCR. Nothing measures how accurately the model
+reads handwriting.
+
+Amendment recorded in the design file — post-run, unlike metric 6's, which is
+why it is flagged as such. It changes no analysis: stage 2 was never computed,
+and stage 1's arms and gates are exactly as pre-registered. It costs a claim,
+not a number.
+
+**Re-opening costs 30–50 minutes and zero quota**: fill in
+`measurement/data/ocr-reference-spans.md`, run `--score`.
+
+### What must not get buried by 3a turning green
+
+**`SUPPORT_THRESHOLD = 0.5` is now an evidenced, unfixed production defect**,
+tracked in `TODO_CHECKLIST.md` §2 rather than inside a closed objective. It
+badges 18 of 26 invented fields "Verified", and it is **visible in the demo** —
+a reviewer who uploads a sparse page sees green badges on invented content.
+
+Do not fix it by raising the number. Per-field thresholds are the untested
+hypothesis and need their own pre-registered design on new data.
+
+### Parked, not owed
+
+**CER** now sits with 3c by decision. Predictions 1 and 2 (pooled CER < 0.15;
+Writer A worse than Writer B) are untested and stay that way. The harness is the
+asset: whoever picks 3c up spends transcription time, not build time or quota.
 
 **390/390 measurement tests.** `GoldChain.jpg` contains a proposal titled
 ColdChain Guard — the filename is wrong, not the transcription.
+
+### Next step
+
+The measurement track is closed again. The critical path is unchanged and
+unstarted: **the SPMP and the traceability matrix**, competing for the same
+weeks as the 30-user study. The one thing that could pull work back here is the
+`SUPPORT_THRESHOLD` defect, which is demo-visible and undecided.

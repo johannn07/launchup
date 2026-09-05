@@ -1420,7 +1420,15 @@ field? Drafted from the photographs, **confirmed by John 2026-09-05**. Scored
 with production's own `supportRatio`, imported, never reimplemented.
 
 **Stage 2** scores CER against human-typed spans, one section per document drawn
-by seed `20260905`, typed blind. **Not yet run — the spans are untyped.**
+by seed `20260905`, typed blind. **Scoped out on 2026-09-05 — a decision, not an
+omission.** The harness is built, gated and tested and the run is stored; the
+reference spans were never typed, which is the only missing input. Ownership
+moved to 3c. Re-opening it costs **30–50 minutes of transcription and zero
+quota**: fill in `data/ocr-reference-spans.md` and run `--score`.
+
+⚠️ **Do not describe 3a as "complete" on the strength of stage 1.** Stage 1
+measures the field-confidence layer, which sits *downstream* of the OCR. Nothing
+here measures how accurately the model reads handwriting.
 
 ### Result, 2026-09-05 — the shipped threshold is too permissive, and no replacement ships
 

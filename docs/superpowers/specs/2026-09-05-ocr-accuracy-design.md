@@ -2,6 +2,21 @@
 
 **Pre-registered 2026-09-05, before any Gemini call.** Branch `measure/ocr-accuracy`.
 
+> ## Amendment 1 — stage 2 scoped out, 2026-09-05 (after the run)
+>
+> **Stage 1 ran and is reported. Stage 2 (CER) was scoped out by John** rather
+> than executed: the run is stored and the harness is gated and tested, but the
+> reference spans were never typed.
+>
+> Recorded here because the amendment is *post-run*, unlike metric 6's. It
+> changes no analysis and cannot flatter any result — stage 2 was never
+> computed, and stage 1's arms, gate and confound check are exactly as
+> pre-registered below. What it costs is a claim, not a number: **predictions 1
+> and 2 are untested, and nothing in this document licenses a statement about
+> how accurately the pipeline reads handwriting.**
+>
+> Re-opening costs 30–50 minutes of transcription and zero quota.
+
 Objective 3a is 🟡 for one reason: the code is done and the *numbers* are owed.
 Two of them, and the checklist conflates them.
 
