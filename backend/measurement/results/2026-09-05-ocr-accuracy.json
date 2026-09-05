@@ -1,0 +1,270 @@
+{
+  "started": "2026-09-05T08:14:21.505Z",
+  "finished": "2026-09-05T08:15:07.699Z",
+  "seed": 20260905,
+  "config": {
+    "model": "gemini-3.6-flash",
+    "temperature": 0,
+    "grounding": true,
+    "rag": true,
+    "ragStrategy": "semantic",
+    "ragCorpus": true,
+    "rubricMode": "deterministic",
+    "biasReview": true,
+    "scoreNormalization": true,
+    "adversarialSummary": true
+  },
+  "apiCalls": 2,
+  "rows": [
+    {
+      "file": "Agritrack.jpg",
+      "writer": "A",
+      "status": "ok",
+      "imageSha256": "196a3bea4ee90e9b3e8e89823fead9313303704f45adc7ef02ac0c0698e8688d",
+      "imageBytes": 315197,
+      "transcription": "1. AgriTrack\nI. General Information Project Title: AgriTrack: A low-cost soil moisture and irrigation alert system for smallholder vegetable farmers\nStartup Name: Bukid Insights Co. Date Established: January 15, 2024.\nTotal Funding Requested: PHP 620,000.00 Project Duration: 8 months\n\nII. Problem Smallholder vegetable farmers in the uplands of Balamban rely on guesswork for watering schedules, leading to crop loss. A 2025 municipal agriculture survey found 48% of highland vegetable plots suffered yield loss from over- or under-watering in the past cropping season.\n\nIII. Solution AgriTrack is a solar-powered soil sensor paired with a lightweight SMS alert system, requiring no smart phone or data plan, that texts farmers when soil moisture drops below or rises above the safe threshold for their planted crop.\n\nIV. Target Market Smallholder vegetable farmers in the highland barangays of Balamban and Asturias, starting with the 85 farmer-members of the Balamban Vegetable Growers Cooperative.\n\nV. Objectives 1.) Deploy 50 sensor units across pilot farms by Month 3\n2.) Reduce reported over/under-watering incidents among pilot farms by 40% by Month 6. 3.) Onboard 200 farmer accounts by Month 8.",
+      "fields": {
+        "title": "AgriTrack: A low-cost soil moisture and irrigation alert system for smallholder vegetable farmers",
+        "startup_description": "Bukid Insights Co. is an agritech startup established on January 15, 2024, focusing on affordable smart farming technologies for smallholder vegetable farmers.",
+        "problem_statement": "Smallholder vegetable farmers in the uplands of Balamban rely on guesswork for watering schedules, leading to crop loss. A 2025 municipal agriculture survey found 48% of highland vegetable plots suffered yield loss from over- or under-watering in the past cropping season.",
+        "target_market": "Smallholder vegetable farmers in the highland barangays of Balamban and Asturias, starting with the 85 farmer-members of the Balamban Vegetable Growers Cooperative.",
+        "solution_description": "AgriTrack is a solar-powered soil sensor paired with a lightweight SMS alert system, requiring no smartphone or data plan, that texts farmers when soil moisture drops below or rises above the safe threshold for their planted crop.",
+        "objectives": "1.) Deploy 50 sensor units across pilot farms by Month 3. 2.) Reduce reported over/under-watering incidents among pilot farms by 40% by Month 6. 3.) Onboard 200 farmer accounts by Month 8.",
+        "scope": "This 8-month project funded at PHP 620,000.00 encompasses hardware production, local field testing, SMS platform rollout, and community onboarding across pilot farms in Balamban and Asturias.",
+        "methodology": "The team will assemble and deploy 50 solar sensor units in partner cooperative farms, monitor moisture data in real time via automated SMS alerts, evaluate irrigation accuracy, and expand farmer onboarding to 200 accounts over eight months."
+      },
+      "apiCalls": 1,
+      "latencyMs": 22120,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 685,
+        "recorded": true
+      }
+    },
+    {
+      "file": "Mediqueue.jpg",
+      "writer": "A",
+      "status": "ok",
+      "imageSha256": "929ce8d7356949f1d43888dc079df028f985c569158235836c1d529d1c521520",
+      "imageBytes": 297310,
+      "transcription": "2. Mediqueue\nI. General Information Project Title: MediQueue: A mobile queuing and teleconsult scheduling app for rural health units, Startup Name: Barangay Health Tech Inc. Date Established: August 10, 2025; Total Funding Requested: PHP 980,000.00 Project duration: 10 months\n\nII. Problem: Patients at rural health units in Liloan wait an average of 3 hours in physical lines for consultations, with no way to check queue status remotely. RHU staff reported that in 2025 walk-in overcrowding cause 1 in 4 patients to leave before being seen.\n\nIII. Solution: MediQueue lets patients reserve a queue number via SMS or an app, view estimated wait time, and opt into a video teleconsult slot for follow-up cases that don't require a physical exam.\n\nIV. Target Market: Rural health unit patients and staff in Liloan, beginning with the two RHUs in Barangay Catarman & Barangay Yati, where a 6-month pilot is already run.\n\nV. Objectives: 1.) Expand from 2-to-8 RHUs across northern Cebu by month 6 2.) Cut average physical queue wait time by 50% across partner RHUs by month 8 3.) Reach 5,000 registered patients accounts by month 10.",
+      "fields": {
+        "title": "MediQueue: A mobile queuing and teleconsult scheduling app for rural health units",
+        "startup_description": "Barangay Health Tech Inc. is a healthcare technology startup established on August 10, 2025, seeking PHP 980,000.00 funding over a 10-month project duration to streamline healthcare access in rural health units through digital innovation.",
+        "problem_statement": "Patients at rural health units in Liloan wait an average of 3 hours in physical lines for consultations, with no way to check queue status remotely. RHU staff reported that in 2025 walk-in overcrowding cause 1 in 4 patients to leave before being seen.",
+        "target_market": "Rural health unit patients and staff in Liloan, beginning with the two RHUs in Barangay Catarman & Barangay Yati, where a 6-month pilot is already run, expanding across northern Cebu.",
+        "solution_description": "MediQueue lets patients reserve a queue number via SMS or an app, view estimated wait time, and opt into a video teleconsult slot for follow-up cases that don't require a physical exam.",
+        "objectives": "1.) Expand from 2-to-8 RHUs across northern Cebu by month 6. 2.) Cut average physical queue wait time by 50% across partner RHUs by month 8. 3.) Reach 5,000 registered patients accounts by month 10.",
+        "scope": "The 10-month project involves expanding digital queue management and teleconsult services from 2 initial pilot RHUs in Liloan to 8 RHUs in northern Cebu, targeting 5,000 registered patient accounts and substantial wait-time reductions.",
+        "methodology": "The methodology includes leveraging the existing 6-month pilot learnings in Liloan, deploying SMS and app integration across 8 northern Cebu RHUs by Month 6, training local RHU staff, conducting patient onboarding campaigns, and continuously tracking patient queue duration to ensure a 50% decrease in wait time by Month 8."
+      },
+      "apiCalls": 1,
+      "latencyMs": 25253,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 772,
+        "recorded": true
+      }
+    },
+    {
+      "file": "Sakayscan.jpg",
+      "writer": "A",
+      "status": "ok",
+      "imageSha256": "fc638b08f07e6928bd9334acc1c7f80d4c738f1736d53656899795b1c89a8607",
+      "imageBytes": 328697,
+      "transcription": "3. SakayScan\nI. General Information: Project Title: SakayScan: A QR-based fare & route tracking system for public utility jeepneys Startup name: Ruta Digital Solutions, Date Established: June 2026, Total funding Requested: 340,000 PHP Duration: 6 months\n\nII Problem: Commuters in Cebu City have no reliable way to track jeepney routes or verify correct fares under the new distance-based fare matrix, leading to frequent disputes between riders & drivers.\n\nIII Solution: SakayScan is a QR sticker placed at the jeepney entry & exit points that commuters scan to log boarding and alighting stops, and auto calculating the correct fare and giving drivers a digital route log.\n\nIV Target Market: Commuters and jeepney operators along Cebu City South Bus Terminal-Talisay route, starting with 1 operator cooperative that has expressed willingness to test.\n\nV Objectives: 1) Complete a feasibility and willingness-to-pay study with 3 jeepney cooperatives by Month 2 2) Build & test a working QR prototype in 5 jeepney units by Month 4. 3) Secure a signed pilot agreement with at least 1 cooperative by Month 6.",
+      "fields": {
+        "title": "SakayScan: A QR-based fare & route tracking system for public utility jeepneys",
+        "startup_description": "Ruta Digital Solutions is a transportation technology startup established in June 2026. Requesting 340,000 PHP in funding for a 6-month project duration, the startup aims to modernize public transport fare calculation and route logging.",
+        "problem_statement": "Commuters in Cebu City have no reliable way to track jeepney routes or verify correct fares under the new distance-based fare matrix, leading to frequent disputes between riders & drivers.",
+        "target_market": "Commuters and jeepney operators along the Cebu City South Bus Terminal - Talisay route, starting with 1 operator cooperative that has expressed willingness to test.",
+        "solution_description": "SakayScan is a QR sticker placed at the jeepney entry & exit points that commuters scan to log boarding and alighting stops, auto-calculating the correct fare and giving drivers a digital route log.",
+        "objectives": "1) Complete a feasibility and willingness-to-pay study with 3 jeepney cooperatives by Month 2. 2) Build & test a working QR prototype in 5 jeepney units by Month 4. 3) Secure a signed pilot agreement with at least 1 cooperative by Month 6.",
+        "scope": "The 6-month scope encompasses user research across 3 cooperatives, system design and deployment of 5 QR prototype units on the Cebu City South Bus Terminal to Talisay route, and finalizing a formal pilot agreement.",
+        "methodology": "The team will conduct market and feasibility surveys with jeepney cooperatives in Months 1-2, develop and deploy software/QR sticker prototypes across 5 jeepney units in Months 3-4, and validate real-world usage to secure a signed pilot partnership by Month 6."
+      },
+      "apiCalls": 1,
+      "latencyMs": 40145,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 660,
+        "recorded": true
+      }
+    },
+    {
+      "file": "BalikBasura.jpg",
+      "writer": "A",
+      "status": "ok",
+      "imageSha256": "b3cb4f18691cacdbefe617e9630297a5074d426031db453cf20419dc89a07cd3",
+      "imageBytes": 299577,
+      "transcription": "4. Balik Basura\n\nI. General Information: Project Title: Balik Basura: A waste segregation and junk shop marketplace app, Startup Name: Greenloop Mandaue, Date Established: March 2025, Total Funding Requested: PHP 1,750,000.00, Project Duration: 12 Months.\n\nII. Problem: Households in Mandaue struggle to find reliable junk buyers for segregated recyclables - an estimated 55% of recyclable waste still ends up in general garbage collection, per a 2024 city ENRO waste audit.\n\nIII. Solution: Balik Basura connects households to nearby junk shops through an app showing live buying prices per material type, schedules pickup, and lets junk shops manage inventory & route their collectors more efficiently.\n\nIV. Target Market: Households and junk shop operators in Mandaue City, currently active in 6 barangays with 300 registered households and 4 subscribing junk shops.\n\nV. Objectives: 1) Expand to 15 barangays and 1,000 registered households by Month 6 2.) Grow subscribing junk shop partners from 4 to 20 by Month 9. 3.) Reach break-even on junk shop subscription.",
+      "fields": {
+        "title": "Balik Basura: A waste segregation and junk shop marketplace app",
+        "startup_description": "Greenloop Mandaue is an environmental technology startup established in March 2025. The company is developing 'Balik Basura,' a waste segregation and junk shop marketplace platform operating in Mandaue City, seeking PHP 1,750,000.00 in funding for a 12-month execution period.",
+        "problem_statement": "Households in Mandaue struggle to find reliable junk buyers for segregated recyclables. As a result, an estimated 55% of recyclable waste still ends up in general garbage collection, according to a 2024 city ENRO waste audit.",
+        "target_market": "Households and junk shop operators in Mandaue City. The startup is currently active in 6 barangays with 300 registered households and 4 subscribing junk shops, aiming for broader urban coverage.",
+        "solution_description": "Balik Basura connects households directly to nearby junk shops through a mobile application that displays real-time buying prices per material type, facilitates scheduled pickups, and allows junk shop owners to manage inventory and optimize collector routes efficiently.",
+        "objectives": "1) Expand service coverage to 15 barangays and reach 1,000 registered households by Month 6. 2) Increase subscribing junk shop partners from 4 to 20 by Month 9. 3) Reach financial break-even through junk shop subscription revenue streams.",
+        "scope": "The 12-month project encompasses platform development and scaling operations across Mandaue City, transitioning from 6 to 15 barangays, acquiring 20 junk shop partners, and building sustainable marketplace logistics.",
+        "methodology": "The project will be executed over a 12-month timeline utilizing the requested PHP 1,750,000.00 funding to enhance the digital app platform, execute community onboarding initiatives across targeted barangays, and partner with local junk shop operators to digitize recyclable waste collection."
+      },
+      "apiCalls": 1,
+      "latencyMs": 22791,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 715,
+        "recorded": true
+      }
+    },
+    {
+      "file": "EskwelaKo.jpg",
+      "writer": "A",
+      "status": "ok",
+      "imageSha256": "a43bda0754e3a9ef6093faf701e7a13b58c06628a15eb740c21edaf048ab239a",
+      "imageBytes": 317577,
+      "transcription": "5. Eskwela Ko\n\nI. General Information: Project Title: Eskwela Ko: An Offline-First Supplementary Learning App for Public Elementary Students in Far-Flung Barangays; Startup Name: Aprende Learning Systems Date Established: Nov 2025, Total Funding Requested: 780,000 PHP, Duration: 9 months.\n\nII. Problem: Public Elementary students in far-flung mountainous barangays of Cebu province have unreliable or no internet access, limiting them to physical modules for supplementary learning. Teachers report widening grade-level reading gaps since the shift back to in-person classes.\n\nIII. Solution: Eskwela Ko is an android app pre-loaded with grade-appropriate reading & math exercises via SD card or occasional school Wi-Fi sync, tracking student progress offline and syncing results to teacher dashboards when connectivity is available.\n\nIV. Target Market: Public elementary schools in the mountain barangays of Asturias & Balamban, starting with 3 partner schools identified through the DepEd division office.\n\nV. Objectives: 1) Finalize content mapping to the DepEd MELCs for Grade 3-5 by Month 3 2) Deploy a working prototype to 3 pilot schools by Month 6 3) Reach 300 active student users with measurable progress tracking by Month 9.",
+      "fields": {
+        "title": "Eskwela Ko: An Offline-First Supplementary Learning App for Public Elementary Students in Far-Flung Barangays",
+        "startup_description": "Aprende Learning Systems is an educational technology startup established in November 2025. The company is seeking 780,000 PHP in funding over a 9-month project duration to develop and deploy Eskwela Ko, an offline-first supplementary learning platform for public elementary students in remote communities.",
+        "problem_statement": "Public elementary students in far-flung mountainous barangays of Cebu province have unreliable or no internet access, limiting them to physical modules for supplementary learning. Teachers report widening grade-level reading gaps since the shift back to in-person classes.",
+        "target_market": "Public elementary schools in the mountain barangays of Asturias and Balamban in Cebu province, starting with 3 partner schools identified through the DepEd division office.",
+        "solution_description": "Eskwela Ko is an Android application pre-loaded with grade-appropriate reading and math exercises delivered via SD card or occasional school Wi-Fi sync, tracking student progress offline and syncing results to teacher dashboards when connectivity is available.",
+        "objectives": "1) Finalize content mapping to the DepEd MELCs for Grade 3-5 by Month 3. 2) Deploy a working prototype to 3 pilot schools by Month 6. 3) Reach 300 active student users with measurable progress tracking by Month 9.",
+        "scope": "The 9-month project with a budget of 780,000 PHP encompasses DepEd MELCs curriculum mapping for Grade 3-5 reading and math, offline Android application development with SD card distribution and local Wi-Fi sync mechanisms, teacher dashboard integration, and pilot deployment serving 300 active students across 3 partner schools in Asturias and Balamban, Cebu.",
+        "methodology": "The project will execute across three key phases: Phase 1 (Months 1-3) focuses on curriculum alignment with DepEd MELCs and software development for offline tracking. Phase 2 (Months 4-6) involves prototype deployment and field installation across 3 pilot schools in target barangays. Phase 3 (Months 7-9) encompasses onboarding 300 student users, offline-to-online teacher dashboard syncing, continuous progress tracking, and project evaluation."
+      },
+      "apiCalls": 1,
+      "latencyMs": 30708,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 793,
+        "recorded": true
+      }
+    },
+    {
+      "file": "Anilink.jpg",
+      "writer": "B",
+      "status": "ok",
+      "imageSha256": "477598994403ca36ae1ca996e8e1df70335da368da502a43f4d3c6b44d18d8d7",
+      "imageBytes": 235690,
+      "transcription": "I. General Information\nProject Title : AgriLink: Direct-to-Consumer Agricultural Marketplace\nStartup Name : AgriTech Innovations Inc.\nDate Established: May 12, 2020\nTotal Funding Requested : PHP 2,200,000.00\nProject Duration : 12 months\n\nII. Problem\nSmallholder vegetable farmers in Benguet lose up to 35% of their potential income to middleman markup and post-harvest spoilage.\nCurrent cooperative logbooks are handwritten, making crop yield forecasting inaccurate and lead times unpredictable.\n\nIII. Solution\nAgriLink is a hybrid USSD and Android marketplace that lets farmers log harvested crops via simple SMS or app interface. Algorithms aggregate supply in real time and match produce directly with commercial buyer orders in urban centers.\n\nIV. Target Market\nCommercial kitchens, restaurant chains, and wholesale vendors across Metro Manila, sourcing directly from 400 registered farmers in La Trinidad.\n\nV. Objectives\n1.) Onboard 200 active farming households within the first 6 months.\n2.) Reduce average post-harvest delivery transit delays by 40%.\n3.) Facilitate PHP 5,000,000 in direct crop transactions by Month 12.",
+      "fields": {
+        "title": "AgriLink: Direct-to-Consumer Agricultural Marketplace",
+        "startup_description": "AgriTech Innovations Inc., established on May 12, 2020, is an agritech company focused on connecting agricultural producers directly to commercial markets. The company is seeking PHP 2,200,000.00 in funding for a 12-month project to deploy the AgriLink platform.",
+        "problem_statement": "Smallholder vegetable farmers in Benguet lose up to 35% of their potential income to middleman markup and post-harvest spoilage. Current cooperative logbooks are handwritten, making crop yield forecasting inaccurate and lead times unpredictable.",
+        "target_market": "Commercial kitchens, restaurant chains, and wholesale vendors across Metro Manila, sourcing directly from 400 registered farmers in La Trinidad.",
+        "solution_description": "AgriLink is a hybrid USSD and Android marketplace that lets farmers log harvested crops via simple SMS or app interface. Algorithms aggregate supply in real time and match produce directly with commercial buyer orders in urban centers.",
+        "objectives": "1.) Onboard 200 active farming households within the first 6 months.\n2.) Reduce average post-harvest delivery transit delays by 40%.\n3.) Facilitate PHP 5,000,000 in direct crop transactions by Month 12.",
+        "scope": "The 12-month project focuses on onboarding 200 active farming households in La Trinidad, Benguet, implementing the hybrid USSD/Android marketplace platform, establishing real-time supply aggregation algorithms, and building direct commercial supply linkages to kitchens, restaurant chains, and wholesale buyers across Metro Manila.",
+        "methodology": "The methodology involves deploying a dual-access USSD/Android interface for low-friction data entry by farmers, establishing cloud-based aggregation algorithms for real-time inventory matching, direct engagement and onboarding of farming households in Benguet, and coordinating streamlined transport logistics to shorten delivery transit times to commercial buyers in Metro Manila."
+      },
+      "apiCalls": 1,
+      "latencyMs": 28013,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 711,
+        "recorded": true
+      }
+    },
+    {
+      "file": "AquaSense.jpg",
+      "writer": "B",
+      "status": "ok",
+      "imageSha256": "d63f6d9c43b5068aeb667ac1d5277eaebf60ffd0b67a537f958d2ea9fcf8fe3c",
+      "imageBytes": 241183,
+      "transcription": "A. Project Metadata\nTitle: AquaSense: Smart Water Quality Monitoring for Milkfish Aquaculture\nLead Organization: BioAqua Sensor Labs\nFiling Date: June 18, 2026\nBudget Allocation: PHP 1,450,000.00\nExecution Period: 8 months\n\nB. Problem Statement\nFish kill incidents in Pangasinan cause millions in losses annually due to sudden drops in dissolved oxygen levels. Manual water testing is conducted only once daily, failing to alert fish cage operators to dangerous nocturnal oxygen shifts.\n\nC. Technical Proposal\nDeploy floating solar-powered IoT sensor buoys that measure pH, temperature, and dissolved oxygen continuously. Sensor data transmits via LoRaWAN to a local server, pushing automated SMS alarms to cage managers when levels cross critical thresholds.\n\nD. Beneficiary Group\nCommercial tilapia and milkfish cage operators in Bolinao and Dagupan, targeting an initial cohort of 45 licensed aquaculture farms.\n\nE. Project Milestones\n• M1 (Month 2): Hardware prototype assembly and waterproof enclosure testing\n• M2 (Month 5): Deployment of 15 pilot sensor buoys across 3 test zones.\n• M3 (Month 8): Zero unalerted oxygen crash events reported in pilot cages",
+      "fields": {
+        "title": "AquaSense: Smart Water Quality Monitoring for Milkfish Aquaculture",
+        "startup_description": "BioAqua Sensor Labs is an innovative aquaculture technology startup developing IoT-enabled water monitoring solutions. Their flagship project, AquaSense, utilizes solar-powered sensor buoys to protect aquaculture investments through real-time telemetry and automated alerting.",
+        "problem_statement": "Fish kill incidents in Pangasinan cause millions in losses annually due to sudden drops in dissolved oxygen levels. Manual water testing is conducted only once daily, failing to alert fish cage operators to dangerous nocturnal oxygen shifts.",
+        "target_market": "Commercial tilapia and milkfish cage operators in Bolinao and Dagupan, targeting an initial cohort of 45 licensed aquaculture farms.",
+        "solution_description": "Deploy floating solar-powered IoT sensor buoys that measure pH, temperature, and dissolved oxygen continuously. Sensor data transmits via LoRaWAN to a local server, pushing automated SMS alarms to cage managers when levels cross critical thresholds.",
+        "objectives": "The project aims to assemble and test waterproof IoT sensor prototypes, deploy 15 pilot sensor buoys across 3 test zones within 5 months, and achieve zero unalerted oxygen crash events in pilot cages over an 8-month period supported by a PHP 1,450,000.00 budget.",
+        "scope": "The scope includes hardware prototyping, waterproof testing, LoRaWAN server setup, SMS alert system integration, and pilot deployment of 15 buoys serving 45 licensed aquaculture farms in Bolinao and Dagupan over an 8-month execution period.",
+        "methodology": "The methodology follows a phased hardware-software development lifecycle: Month 2 focuses on hardware prototype assembly and enclosure testing; Month 5 involves field deployment across 3 test zones; and Month 8 validates continuous telemetry to eliminate unalerted nocturnal oxygen depletion events."
+      },
+      "apiCalls": 1,
+      "latencyMs": 11590,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 697,
+        "recorded": true
+      }
+    },
+    {
+      "file": "BarangayPass.jpg",
+      "writer": "B",
+      "status": "ok",
+      "imageSha256": "45a826b28805c329941e042a98743eb8244afa01ac1a1195a8ecc72a6e9e2ae5",
+      "imageBytes": 236468,
+      "transcription": "Field Name | Data Input\nProject Name | Barangay Pass: Digital Resident Identity & Gate Pass\nDeveloper / Entity | CivicPulse Solutions\nCreation Date | July 04, 2026\nGrant Target | PHP 250,000.00\nTimeline | 6 months\n\nProblem Summary\nBarangay clearance issuance relies on physical logbooks and paper receipts, resulting in long queues during peak hours. Records verification requires manual cross-checking against physical filing cabinets.\n\nProposed System Workflow\n1. Registration: Residents generate a dynamic QR code profile via a lightweight web app or community kiosk.\n2. Verification: Barangay staff scan the QR code to verify identity against an encrypted local database.\n3. Issuance: Automated printing of certificates with digital cryptographic signatures.\n\nTarget Users\nBarangay administrative staff and over 15,000 residents across Barangay Luz and Barangay Lahug.\n\nExpected Outcomes\n• Reduce physical document processing time from 25 minutes down to 3 minutes.\n• Eliminate paper file loss across pilot barangay halls.\n• Achieve 80% resident adoption within 5 months of rollout.",
+      "fields": {
+        "title": "Barangay Pass: Digital Resident Identity & Gate Pass",
+        "startup_description": "CivicPulse Solutions is a civic-tech entity developing 'Barangay Pass: Digital Resident Identity & Gate Pass' created on July 04, 2026, backed by a grant target of PHP 250,000.00 across a 6-month project timeline.",
+        "problem_statement": "Barangay clearance issuance relies on physical logbooks and paper receipts, resulting in long queues during peak hours. Records verification requires tedious manual cross-checking against physical filing cabinets.",
+        "target_market": "Barangay administrative staff and over 15,000 residents across pilot locations in Barangay Luz and Barangay Lahug.",
+        "solution_description": "A streamlined digital workflow where residents generate dynamic QR codes via web app or kiosks, staff scan codes against an encrypted local database, and automated systems print certificates with digital cryptographic signatures.",
+        "objectives": "1. Reduce document processing time from 25 minutes to 3 minutes.\n2. Eliminate paper file loss in pilot barangay halls.\n3. Achieve 80% resident adoption within 5 months of rollout.",
+        "scope": "Deployment of dynamic QR code registration, local database verification, and cryptographic certificate issuance across Barangay Luz and Barangay Lahug over a 6-month period under a PHP 250,000.00 grant target.",
+        "methodology": "Deploy lightweight web apps and community kiosks for digital onboarding, establish local encrypted databases for staff verification, and implement cryptographic digital signatures for automated certificate printing."
+      },
+      "apiCalls": 1,
+      "latencyMs": 51814,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 597,
+        "recorded": true
+      }
+    },
+    {
+      "file": "GoldChain.jpg",
+      "writer": "B",
+      "status": "ok",
+      "imageSha256": "5e83344d4afa2210cca25088174d72155ce0795ffb12192d23b236b8a9f96526",
+      "imageBytes": 260623,
+      "transcription": "1. Overview\nProject Name : ColdChain Guard (IoT Fleet Temperature Logger)\nOrganization: FleetLogix Systems\nProposal Date : August 10, 2024\nFunding Required: PHP 1,750,000.00\nTerm : 9 Months\n\n2. Context & Problem\nRefrigerated transport trucks carrying vaccines and fresh meat lack verifiable temperature logs during transit.\nTemperatures spikes often go unnoticed until delivery destination inspection, resulting in high cargo rejection rates.\n\n3. Proposed Solution\nA tamper-evident hardware logger that attaches to refrigerated containers. It records temperature and humidity every 30 seconds onto a local cryptographic ledger, syncing to cloud dashboards when cellular connection is restored.\n\n4. Pilot Scope\nRegional cold-chain logistics providers operating refrigerated trucks along the Pan-Philippine Highway route between Luzon and Visayas.\n\n5. Performance Indicators\n• 100% data fidelity during offline transit segments\n• Immediate real-time alerts for temp deviations exceeding 2 degrees Celcius\n• Adoption across 30 long-haul transport vehicles during pilot phase",
+      "fields": {
+        "title": "ColdChain Guard (IoT Fleet Temperature Logger)",
+        "startup_description": "FleetLogix Systems is an IoT-driven supply chain technology startup specializing in cold-chain fleet integrity and environmental monitoring. The organization requires PHP 1,750,000.00 for a 9-month proposal starting August 10, 2024 to deploy tamper-evident IoT hardware loggers across long-haul logistics fleets.",
+        "problem_statement": "Refrigerated transport trucks carrying vaccines and fresh meat lack verifiable temperature logs during transit. Temperature spikes often go unnoticed until delivery destination inspection, resulting in high cargo rejection rates and significant economic losses.",
+        "target_market": "Regional cold-chain logistics providers, pharmaceutical distributors, agricultural producers, and commercial refrigerated fleet operators along major transport routes in the Philippines, starting with the Pan-Philippine Highway corridor.",
+        "solution_description": "A tamper-evident hardware logger that attaches directly to refrigerated containers. It records temperature and humidity every 30 seconds onto a local cryptographic ledger, syncing to cloud dashboards when cellular connection is restored to provide continuous data fidelity.",
+        "objectives": "The primary objective is to secure PHP 1,750,000.00 in funding for a 9-month pilot phase to achieve 100% data fidelity during offline segments, enable immediate real-time alerts for temperature deviations exceeding 2 degrees Celsius, and achieve adoption across 30 long-haul transport vehicles.",
+        "scope": "The pilot scope focuses on regional cold-chain logistics providers operating refrigerated trucks along the Pan-Philippine Highway route between Luzon and Visayas, covering deployment across 30 long-haul transport vehicles over a 9-month project timeline.",
+        "methodology": "The team will manufacture and install tamper-evident IoT loggers on 30 target fleet vehicles, integrate local cryptographic logging for offline data retention, configure automated cloud syncing via cellular connectivity, and evaluate performance using continuous 30-second temperature logs and real-time threshold alert tracking."
+      },
+      "apiCalls": 1,
+      "latencyMs": 34967,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 672,
+        "recorded": true
+      }
+    },
+    {
+      "file": "RxScan.jpg",
+      "writer": "B",
+      "status": "ok",
+      "imageSha256": "c0c053efc84a1f1e8736d263e39dfbf3401711813ff88d2f7f23b669e5aa14ff",
+      "imageBytes": 282941,
+      "transcription": "Project Identifier : PRJ-2026-MED09\nProject Title : RxScan : Automated Handwritten Prescription Digitization\nApplicant : HealthByte Software\nRequested Capital : PHP 2,500,000.00\nTimeline : 12 months\n\n1) Operational Deficit\nPharmacy staff spend an average of 45 seconds per order deciphering handwritten doctor prescriptions, leading to fulfillment delays and a 4.2% rate of medication dispensing errors in community pharmacies.\n\n2) System Architecture\nRxScan utilizes a fine tuned vision-language model trained on medical shorthand and doctor handwriting styles. Pharmacy technicians capture a photo of the paper prescription; the system extracts drug names, dosages, and frequencies, cross-checking them against an integrated pharmaceutical database for dosage safety.\n\n3) Target Deployment\nIndependent community pharmacies and hospital outpatient dispensaries in Metro Cebu, targeting 50 operational pilot counters.\n\n4) Quantifiable Targets\n• Target 1: Achieve 94% OCR accuracy on handwritten prescription scans\n• Target 2: Reduce average prescription verification time to under 10 seconds\n• Target 3: Process over 50,000 prescriptions during the 6-month trial phase without critical dosage error.",
+      "fields": {
+        "title": "RxScan: Automated Handwritten Prescription Digitization",
+        "startup_description": "HealthByte Software is a healthcare technology applicant requesting PHP 2,500,000.00 in capital over a 12-month timeline to develop and deploy RxScan, an automated AI-driven solution for digitizing handwritten medical prescriptions.",
+        "problem_statement": "Pharmacy staff spend an average of 45 seconds per order deciphering handwritten doctor prescriptions, leading to fulfillment delays and a 4.2% rate of medication dispensing errors in community pharmacies.",
+        "target_market": "Independent community pharmacies and hospital outpatient dispensaries in Metro Cebu, targeting 50 operational pilot counters.",
+        "solution_description": "RxScan utilizes a fine-tuned vision-language model trained on medical shorthand and doctor handwriting styles. Pharmacy technicians capture a photo of the paper prescription; the system extracts drug names, dosages, and frequencies, cross-checking them against an integrated pharmaceutical database for dosage safety.",
+        "objectives": "Achieve 94% OCR accuracy on handwritten prescription scans, reduce average prescription verification time to under 10 seconds, and process over 50,000 prescriptions during the 6-month trial phase without critical dosage errors.",
+        "scope": "A 12-month implementation project funded at PHP 2,500,000.00 focused on model fine-tuning, software integration, database setup, and deployment across 50 pilot pharmacy counters in Metro Cebu.",
+        "methodology": "Train and fine-tune a vision-language AI model on medical shorthand, integrate with pharmaceutical safety databases, deploy captured photo workflows to pharmacy technicians, and conduct a 6-month trial processing 50,000 prescriptions."
+      },
+      "apiCalls": 1,
+      "latencyMs": 11217,
+      "tokens": {
+        "promptTokens": 1577,
+        "completionTokens": 645,
+        "recorded": true
+      }
+    }
+  ]
+}

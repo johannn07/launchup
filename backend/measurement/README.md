@@ -1400,6 +1400,104 @@ every arm under both variants. `mentioned` was 2/6, 2/6, 4/6 on `original`
 `unlabelled`. The MediSync Organizational confound described above rides on the
 `unlabelled` numbers.
 
+## `measure-ocr-accuracy.js` — objective 3a, added 2026-09-05
+
+Two numbers 3a owed, from one stored run of 10 vision calls. Pre-registered in
+`docs/superpowers/specs/2026-09-05-ocr-accuracy-design.md` **before any call**.
+
+**Corpus.** 10 photographed pages, **2 writers, 5 each**, hand-copied from
+AI-generated proposals. The source text is gone and would have been the wrong
+reference anyway: the writers introduced their own misspellings (`RxScan` says
+"Handwriten" in its own title), and scoring a correct read as an error inflates
+CER for a reason unrelated to the model. Section schemas vary deliberately —
+six pages use `I.`–`V.`, the other four each use their own. `GoldChain.jpg`
+contains a proposal titled **ColdChain Guard**; the filename is wrong, not the
+transcription.
+
+**Stage 1** calibrates `SUPPORT_THRESHOLD` against 80 human-labelled
+(document, field) observations — does the page carry a section supplying this
+field? Drafted from the photographs, **confirmed by John 2026-09-05**. Scored
+with production's own `supportRatio`, imported, never reimplemented.
+
+**Stage 2** scores CER against human-typed spans, one section per document drawn
+by seed `20260905`, typed blind. **Scoped out on 2026-09-05 — a decision, not an
+omission.** The harness is built, gated and tested and the run is stored; the
+reference spans were never typed, which is the only missing input. Ownership
+moved to 3c. Re-opening it costs **30–50 minutes of transcription and zero
+quota**: fill in `data/ocr-reference-spans.md` and run `--score`.
+
+⚠️ **Do not describe 3a as "complete" on the strength of stage 1.** Stage 1
+measures the field-confidence layer, which sits *downstream* of the OCR. Nothing
+here measures how accurately the model reads handwriting.
+
+### Result, 2026-09-05 — the shipped threshold is too permissive, and no replacement ships
+
+**10/10 documents, 12 calls across two quota windows** (8, then 429, then 2
+after the 15:00 reset — the harness resumes stored `ok` rows and retries only
+failures).
+
+| threshold | sensitivity | specificity | Youden's J |
+|---|---|---|---|
+| **0.5 (shipped)** | 100.0% | **30.8%** | 0.308 |
+| 0.7879 (pooled best) | 83.3% | 100.0% | 0.833 |
+
+**The finding that stands: `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented
+fields as green "Verified".** Specificity is measured directly on the invented
+class, so this does not depend on the confound below. The field-confidence layer
+is currently telling a Manager to trust content the page never contained.
+
+**No new threshold ships.** The pooled best passes the pre-registered gate
+(spec >= 0.80, sens >= 0.50); the confound-free arm does not — **J 0.438,
+specificity 43.8%**, on the full 20 observations. The harness states the
+conjunction itself rather than leaving it to prose.
+
+**Why, from the per-field means:**
+
+| field | label | n | mean | range |
+|---|---|---|---|---|
+| title | grounded | 10 | 1.000 | 1.000–1.000 |
+| problem_statement | grounded | 10 | 0.976 | 0.893–1.000 |
+| objectives | grounded | 10 | 0.927 | 0.714–1.000 |
+| target_market | grounded | 10 | 0.916 | 0.522–1.000 |
+| solution_description | grounded | 10 | 0.908 | 0.548–1.000 |
+| **scope** | **grounded** | **1** | **0.800** | — |
+| startup_description | invented | 10 | 0.649 | 0.464–0.760 |
+| **scope** | **invented** | **9** | **0.632** | 0.450–0.783 |
+| **methodology** | **grounded** | **3** | **0.575** | 0.500–0.625 |
+| **methodology** | **invented** | **7** | **0.468** | 0.425–0.517 |
+
+**An invented `scope` (0.632) outscores a grounded `methodology` (0.575).** The
+classes cross *between* fields. `supportRatio` has a field-dependent baseline —
+`title` reuses page words verbatim, `methodology` is written in the model's own
+register whether or not the page supports it — so a single global threshold is
+comparing quantities that are not comparable. The pooled sweep looks strong
+because five fields are grounded on all ten pages and cluster near 1.0; it is
+sorting field types, not detecting grounding.
+
+**Per-field thresholds are the obvious hypothesis and are NOT tested here.**
+Only `scope` (1 vs 9) and `methodology` (3 vs 7) have both classes, and fitting
+on this run then reporting the fit is the forbidden move. It needs its own
+pre-registered design on new data.
+
+**Confirmed pre-registered prediction 3** — the shipped 0.5 is too permissive.
+Predictions 1 and 2 are stage 2's and remain untested.
+
+### Caveats
+
+- **n = 2 writers, 1 model, 10 pages, one page each.** Per-writer CER will be
+  reportable; "Gemini reads handwriting at X%" will not.
+- **The run spans two quota windows** (8 calls, then 2 twelve hours later).
+  Model pinned to `gemini-3.6-flash` at `temperature: 0`, so the risk is low,
+  but it is not a single-window run.
+- **Stage 1's labels are section-presence, not content-level grounding.** A
+  field can have a section on the page and still contain invented content
+  within it. This calibrates against fabrication-from-nothing.
+- The confound-free arm is **4 grounded / 16 invented**. It failed the gate at
+  both 8 documents (J 0.429) and 10 (J 0.438), so completing the run did not
+  rescue it — but it remains underpowered.
+- Nothing here touches **3b** (sketch/canvas mapping, still absent) or the
+  **SUS** half of 3c.
+
 ## Reading the output
 
 Trust the **gap and its direction**, not the absolute levels — there is no
