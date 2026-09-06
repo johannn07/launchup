@@ -99,23 +99,20 @@
       };
     }
 
+    // Ascending, because the endpoint returns insertion order and the levels
+    // rendered 9, 6, 5, 7, 3 down the page.
+    const forType = (type: string) =>
+      query.data
+        .filter((r: any) => r.readinessType === type)
+        .sort((a: any, b: any) => a.level - b.level);
+
     return {
-      technology: query.data.filter(
-        (r: any) => r.readinessType === 'Technology'
-      ),
-      market: query.data.filter((r: any) => r.readinessType === 'Market'),
-      acceptance: query.data.filter(
-        (r: any) => r.readinessType === 'Acceptance'
-      ),
-      organizational: query.data.filter(
-        (r: any) => r.readinessType === 'Organizational'
-      ),
-      regulatory: query.data.filter(
-        (r: any) => r.readinessType === 'Regulatory'
-      ),
-      investment: query.data.filter(
-        (r: any) => r.readinessType === 'Investment'
-      )
+      technology: forType('Technology'),
+      market: forType('Market'),
+      acceptance: forType('Acceptance'),
+      organizational: forType('Organizational'),
+      regulatory: forType('Regulatory'),
+      investment: forType('Investment')
     };
   });
 
@@ -269,7 +266,21 @@
     {/if}
     <Can role={['Mentor', 'Manager']} userRole={role}>
       <div class="flex justify-between">
-        <div class="flex h-fit justify-between rounded-lg bg-background"></div>
+        <div class="flex h-fit justify-between rounded-lg bg-background">
+          <Tabs.Root value={selectedTab}>
+            <Tabs.List class="bg-flutter-gray/20 border">
+              <Tabs.Trigger value="chart" onclick={() => updateTab('chart')}>
+                Dashboard
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="detailed"
+                onclick={() => updateTab('detailed')}
+              >
+                Levels
+              </Tabs.Trigger>
+            </Tabs.List>
+          </Tabs.Root>
+        </div>
         {#if selectedTab === 'detailed'}
           <div class="flex h-fit justify-between rounded-lg bg-background">
             <Tabs.Root value={selectedReadinessTab}>
