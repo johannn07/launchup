@@ -8,6 +8,7 @@
   import type { Assessment } from '$lib/types/assessment.types';
   import axiosInstance from '$lib/axios';
   import { toast } from 'svelte-sonner';
+  import { ReadinessLevelGuide } from '$lib/components/startups/readiness';
 
   interface Props {
     access: string;
@@ -41,6 +42,7 @@
   let fileUploadComponent: FileUploadField | undefined = $state(undefined);
   let readinessLevel = $state('1');
   let isLoadingReadinessLevel = $state(false);
+  let rubrics = $state<any[]>([]);
 
   $effect(() => {
     if (assessment?.response) {
@@ -52,8 +54,23 @@
   $effect(() => {
     if (isRater && assessment?.assessment?.assessmentType && startupId) {
       fetchCurrentReadinessLevel();
+      fetchRubrics();
     }
   });
+
+  async function fetchRubrics() {
+    if (rubrics.length > 0) return;
+
+    try {
+      const response = await axiosInstance.get(`/readinesslevel/rubrics`, {
+        headers: { Authorization: `Bearer ${access}` }
+      });
+      rubrics = response.data ?? [];
+    } catch (error) {
+      // The guide is supplementary — the picker still works without it.
+      console.error('Error fetching readiness rubrics:', error);
+    }
+  }
 
   async function fetchCurrentReadinessLevel() {
     if (isLoadingReadinessLevel) return; // Prevent duplicate calls
@@ -192,6 +209,14 @@
       {/if}
     </div>
   </div>
+
+  {#if isRater}
+    <ReadinessLevelGuide
+      readinessType={assessment.assessment.assessmentType}
+      {rubrics}
+      selectedLevel={Number(readinessLevel)}
+    />
+  {/if}
 
   <div class="flex justify-end gap-3">
     <Button variant="outline" onclick={() => onclose?.()}>Close</Button>
