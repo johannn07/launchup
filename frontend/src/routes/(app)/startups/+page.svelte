@@ -10,6 +10,7 @@
   import { useQuery } from '@sveltestack/svelte-query';
   import { getData } from '$lib/utils.js';
   import * as Dialog from '$lib/components/ui/dialog';
+  import * as AlertDialog from '$lib/components/ui/alert-dialog';
   import Application from '$lib/components/startup/Application.svelte';
   import { page } from '$app/stores';
   import { toast } from 'svelte-sonner';
@@ -128,11 +129,29 @@
 
   let showApplicationForm = $state(false);
   let selectedStartup = $state(null);
-  const toggleApplicationForm = () => {
-    showApplicationForm = !showApplicationForm;
-    if (!showApplicationForm) {
-      selectedStartup = null;
+  let showDiscardConfirm = $state(false);
+
+  const openApplicationForm = () => {
+    showApplicationForm = true;
+  };
+
+  // Nothing in the application is persisted — the answers live only in this
+  // page's component tree, so any reload or navigation loses them. Confirm
+  // before closing so a stray click outside can't dismiss a part-filled form.
+  // controlledOpen makes bits-ui ask to close instead of closing on its own.
+  const handleApplicationOpenChange = (open: boolean) => {
+    if (open) {
+      showApplicationForm = true;
+      return;
     }
+
+    showDiscardConfirm = true;
+  };
+
+  const closeApplicationForm = () => {
+    showDiscardConfirm = false;
+    showApplicationForm = false;
+    selectedStartup = null;
   };
 
   $effect(() => {
@@ -214,7 +233,7 @@
     <Can role={['Startup']} userRole={role}>
       <div class="flex gap-5">
         <button
-          onclick={toggleApplicationForm}
+          onclick={openApplicationForm}
           class="group relative flex items-center gap-2.5 overflow-hidden rounded-xl bg-[#6366f1] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(99,102,241,0.55)] active:translate-y-0 active:shadow-[0_2px_10px_rgba(99,102,241,0.3)]"
         >
           <!-- animated shimmer -->
@@ -462,7 +481,7 @@
     <Can role={['Startup']} userRole={role}>
       <Button
         class="gap-2 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)]"
-        onclick={toggleApplicationForm}
+        onclick={openApplicationForm}
       >
         <RocketIcon class="h-4 w-4" /> Apply Now
       </Button>
@@ -470,8 +489,30 @@
   </div>
 {/if}
 
-<Dialog.Root open={showApplicationForm} onOpenChange={toggleApplicationForm}>
+<Dialog.Root
+  controlledOpen
+  open={showApplicationForm}
+  onOpenChange={handleApplicationOpenChange}
+>
   <Dialog.Content class="flex flex-col h-[90vh] max-w-4xl rounded-3xl border-slate-200/70 bg-white/95 p-6 shadow-[0_32px_80px_rgba(15,23,42,0.2)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
     <Application access={data.access!} startup={selectedStartup} />
   </Dialog.Content>
 </Dialog.Root>
+
+<AlertDialog.Root bind:open={showDiscardConfirm}>
+  <AlertDialog.Content>
+    <AlertDialog.Header>
+      <AlertDialog.Title>Close the application form?</AlertDialog.Title>
+      <AlertDialog.Description>
+        Your answers have not been submitted. Reopening the form on this page
+        brings them back, but reloading or leaving the page loses them.
+      </AlertDialog.Description>
+    </AlertDialog.Header>
+    <AlertDialog.Footer>
+      <AlertDialog.Cancel>Keep editing</AlertDialog.Cancel>
+      <AlertDialog.Action onclick={closeApplicationForm}
+        >Close form</AlertDialog.Action
+      >
+    </AlertDialog.Footer>
+  </AlertDialog.Content>
+</AlertDialog.Root>
