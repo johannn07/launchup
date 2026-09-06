@@ -24,9 +24,11 @@
 </script>
 
 {#if rubric}
+  <!-- No title: the radio label above already renders it as
+       "Level {level} - {name}" once readiness_levels.name is backfilled from
+       this same corpus row. -->
   <div class="rounded-md border bg-background p-3 text-sm">
-    <p class="font-semibold">{rubric.title}</p>
-    <p class="mt-1 text-muted-foreground">{rubric.content}</p>
+    <p class="text-muted-foreground">{rubric.content}</p>
     <p class="mt-2 text-xs text-muted-foreground">
       <span class="font-semibold">{PROVENANCE_LABEL[rubric.provenance]}</span>
       {#if rubric.citation}
