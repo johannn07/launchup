@@ -6,7 +6,8 @@ import {
   ServiceUnavailableException,
   ForbiddenException,
 } from '@nestjs/common';
-import { EntityManager } from '@mikro-orm/core';
+import { EntityManager, RequiredEntityData } from '@mikro-orm/core';
+import { createHash } from 'crypto';
 import { Startup } from 'src/entities/startup.entity';
 import { User } from 'src/entities/user.entity';
 import { Role } from 'src/entities/enums/role.enum';
@@ -229,10 +230,36 @@ export class StartupService {
     });
   }
 
+  /**
+   * One row per distinct upload. Re-parsing the same bytes refreshes that row
+   * instead of leaving another orphan behind — nothing links these to a startup
+   * at parse time, since parsing happens before the startup exists.
+   */
+  private async upsertOcrDocument(
+    contentHash: string,
+    data: Omit<RequiredEntityData<OcrDocument>, 'contentHash'>,
+  ) {
+    const existing = await this.em.findOne(OcrDocument, { contentHash });
+
+    if (existing) {
+      // createdAt stays the first-seen time.
+      const { createdAt: _ignored, ...rest } = data;
+      this.em.assign(existing, rest);
+      await this.em.flush();
+      return existing;
+    }
+
+    const created = this.em.create(OcrDocument, { ...data, contentHash });
+    await this.em.persistAndFlush(created);
+    return created;
+  }
+
   async parseCapsuleProposal(file: Express.Multer.File, ctx: AiRunContext) {
     if (!file) {
       throw new BadRequestException('No file uploaded');
     }
+
+    const contentHash = createHash('sha256').update(file.buffer).digest('hex');
 
     const legibility = file.mimetype.startsWith('image/')
       ? await this.ocrService.checkLegibility(file.buffer, file.originalname)
@@ -259,19 +286,17 @@ export class StartupService {
         Object.keys(failedReview).map((key) => [key, 'failed']),
       ) as Record<string, 'verified' | 'low' | 'failed'>;
 
-      await this.em.persistAndFlush(
-        this.em.create(OcrDocument, {
-          originalFilename: file.originalname,
-          extractedText: '',
-          processingStatus: 'processed',
-          legibilityStatus: 'failed',
-          fieldConfidence: Object.fromEntries(
-            Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
-          ),
-          sourcePath: undefined,
-          createdAt: new Date(),
-        }),
-      );
+      await this.upsertOcrDocument(contentHash, {
+        originalFilename: file.originalname,
+        extractedText: '',
+        processingStatus: 'processed',
+        legibilityStatus: 'failed',
+        fieldConfidence: Object.fromEntries(
+          Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+        ),
+        sourcePath: undefined,
+        createdAt: new Date(),
+      });
 
       return {
         ...failedReview,
@@ -361,19 +386,17 @@ export class StartupService {
           Object.keys(failedReview).map((key) => [key, 'failed']),
         ) as Record<string, 'verified' | 'low' | 'failed'>;
 
-        await this.em.persistAndFlush(
-          this.em.create(OcrDocument, {
-            originalFilename: file.originalname,
-            extractedText: '',
-            processingStatus: 'failed',
-            legibilityStatus: 'failed',
-            fieldConfidence: Object.fromEntries(
-              Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
-            ),
-            sourcePath: undefined,
-            createdAt: new Date(),
-          }),
-        );
+        await this.upsertOcrDocument(contentHash, {
+          originalFilename: file.originalname,
+          extractedText: '',
+          processingStatus: 'failed',
+          legibilityStatus: 'failed',
+          fieldConfidence: Object.fromEntries(
+            Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+          ),
+          sourcePath: undefined,
+          createdAt: new Date(),
+        });
 
         return {
           ...failedReview,
@@ -451,24 +474,22 @@ export class StartupService {
       visionSucceeded ? 'vision' : 'derived',
     );
 
-    await this.em.persistAndFlush(
-      this.em.create(OcrDocument, {
-        originalFilename: file.originalname,
-        extractedText: transcription,
-        processingStatus: 'processed',
-        fieldConfidence: Object.fromEntries(
-          Object.entries(confidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
-        ),
-        sourcePath: undefined,
-        createdAt: new Date(),
-        legibilityStatus: legibility.isLegible ? 'verified' : 'failed',
-        sketchDetected: sketchInfo.sketchDetected,
-        sketchConfidence: sketchInfo.sketchConfidence,
-        visionLabels: visionLabels,
-        imageWidth: legibility.width ?? undefined,
-        imageHeight: legibility.height ?? undefined,
-      }),
-    );
+    await this.upsertOcrDocument(contentHash, {
+      originalFilename: file.originalname,
+      extractedText: transcription,
+      processingStatus: 'processed',
+      fieldConfidence: Object.fromEntries(
+        Object.entries(confidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+      ),
+      sourcePath: undefined,
+      createdAt: new Date(),
+      legibilityStatus: legibility.isLegible ? 'verified' : 'failed',
+      sketchDetected: sketchInfo.sketchDetected,
+      sketchConfidence: sketchInfo.sketchConfidence,
+      visionLabels: visionLabels,
+      imageWidth: legibility.width ?? undefined,
+      imageHeight: legibility.height ?? undefined,
+    });
 
     return {
       ...reviewFields,
