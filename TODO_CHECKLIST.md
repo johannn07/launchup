@@ -37,6 +37,9 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | Mentor-selectable RNA dimensions — per-dimension AI generation | `feat/rna-dimension-picker` — local, unpushed, live-verified |
 | Vite dev proxy deleted — unshadows the same-origin `/api` route | `a2d5435` — same branch; client-side API calls worked in dev for the first time |
 | Metric 6 salience manipulation — `scopedCount`, G1 control, `unlabelled` variants, `--doc-variant`, variant fingerprints, **and the 12-call run that retired the metric** | PR #53 (`3a89708`) — merged |
+| **Application modal no longer discards a part-filled form** — confirm on outside click / `Esc` / ✕, via bits-ui `controlledOpen` | `fix/application-modal-close-confirm` — pushed, live-verified, PR not opened |
+| **OCR documents deduped by content hash + boot-time prune of unattached rows** (`OCR_RETENTION_DAYS`, default 30) | `fix/ocr-document-dedupe` — pushed, live-verified on Neon, PR not opened |
+| **Mentors can read what each readiness level means** — `GET /readinesslevel/rubrics` over the 54 corpus rows + per-dimension provenance | `feat/readiness-level-guide` — pushed, live-verified, PR not opened |
 | **3a OCR accuracy harness — 10-page/2-writer corpus, 80 labelled observations, threshold sweep with a confound-free arm, CER primitives, zero-quota gates, and the 12-call run** | `measure/ocr-accuracy` — local, unpushed. Threshold measured (negative, now a §2 defect); **CER scoped out to 3c** — harness built and parked, needs only typed spans |
 
 ---
@@ -47,10 +50,10 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified" — now tracked in §2 and **unfixed** |
 | **Security issues (§1)** | In progress — all P0 closed; 5 P1 open, 1 to confirm and close |
-| **Broken functionality (§2)** | In progress — 10 of 18 fixed; 8 open, one a security item and one the newly measured `SUPPORT_THRESHOLD` defect |
+| **Broken functionality (§2)** | In progress — 10 of 20 fixed; 10 open, one a security item, one the measured `SUPPORT_THRESHOLD` defect, and **two readiness-data defects found 2026-09-06** (`level_criteria` empty; placeholder `readiness_levels.name`) |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
-| **Cleanup / tech debt (§4)** | In progress — 7 of 25 done, 18 open |
-| **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 6 open — 3 production-hygiene/quota, 3 deferred design calls |
+| **Cleanup / tech debt (§4)** | In progress — 7 of 27 done, 20 open (two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`) |
+| **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota, 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06) |
 
 ---
 
@@ -858,6 +861,13 @@ Each verified by reading **both** sides of the call.
 - [x] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows** — **FIXED & live-verified**
   Added the missing `roadblocks.push(roadblock)` after `persistAndFlush`.
 
+- [ ] 🐞 **BUG · M · `level_criteria` is empty, so every URAT criteria table renders nothing** — *found 2026-09-06*
+  `GET /readinesslevel/criterion` returns **0 rows** against Neon, and `/readiness-levels` returns all 54 levels with `criteria: []`. `criteria-table.svelte` and `rated-criteria-table.svelte` render an Excellent/Good/Fair/Poor/Very&nbsp;Poor header over an empty body, and `rubric.svelte` renders a radio per questionnaire with no criteria beneath it.
+  Nothing seeds `LevelCriterion` — `main.ts` seeds `ReadinessLevel` only. **Decide before building:** the entity carries five prose descriptions per criterion, so populating it is authoring work, not a code fix. The 2026-09-06 rubric endpoint deliberately sources from `rag_contexts` instead, so this blocks only the URAT criteria UI, not the mentor level guide.
+
+- [ ] 🐞 **BUG · S · `readiness_levels.name` holds placeholder strings** — *found 2026-09-06*
+  Live values are `Technology Readiness Level 9` and, from `ensureReadinessLevelExists`, `Seeded {type} level {n}`. Anything rendering `name` as a descriptor shows a restatement of the number. Real descriptor text exists in `backend/data/rag-corpus/readiness-rubrics.json` (54 rows, provenance-tagged) and is now served by `GET /readinesslevel/rubrics` — either backfill `name` from it or stop treating the column as meaningful.
+
 ---
 
 ## 3. Incomplete features — decisions made 2026-08-07
@@ -1027,6 +1037,13 @@ Each verified by reading **both** sides of the call.
   **Deliberately creation-only** — the `if (existing)` guard stays, so branches seeded by the old code keep the wrong shape until `node seed-demo-full.js` is run. Verified on a genuinely cold throwaway Neon DB: all three assertions (non-`Startup` owners / self-mentoring / mentorless) returned 0.
   *Related: setting `qualificationStatus = QUALIFIED` directly anywhere skips `approve-applicant` → `appoint-mentors`, which is where the mentor is normally attached.*
 
+- [ ] 🧹 **DEBT · S · `ReadinessAssessmentForm` is unreachable dead UI** — *found 2026-09-06*
+  `openAssessment()` (`assessment/+page.svelte:274`) is the only function that sets `selectedAssessment`, and **nothing calls it**, so the "Original Assessment Form Modal" can never open. The other `toggleAssessmentForm()` call site only runs *after* a submit, i.e. closes it.
+  **Decide: wire it up or delete it.** The 2026-09-06 readiness guide was added to it for consistency and is type-checked but not live-verified — that change is dead alongside the component until this is resolved.
+
+- [ ] 🧹 **DEBT · S · `CLAUDE.md` claims file storage is unconfigured — it is not** — *found 2026-09-06*
+  The architecture section states `upload.service.ts` reads five `S3_*` vars, "none are set, so `enabled = false` and all uploads 503". **All five are set** in `backend/.env`, pointing at Supabase Storage (`launchup` bucket, `ap-southeast-1`, path-style), and `UploadService` enables on config presence. The claim sent one session down the wrong path before being checked. Correct the paragraph; note that config presence was verified but a live bucket round-trip was not (`testConnection()` exists for that).
+
 ---
 
 ## 5. Infrastructure decisions (open questions)
@@ -1114,6 +1131,12 @@ Neither the SRS nor the SDD names a storage vendor, a model version, or Docker �
   `docker-compose.yml` only ever provided local Postgres, and `backend/.env` points at Neon. **Neither the SRS nor the SDD mentions Docker** — there is no requirement to satisfy, nothing in the remaining work is containerization-shaped, and Vercel/Render don't build from a compose file.
   **But fix the real problem it masks:** `main.ts:292` runs `updateSchema()` and seeds demo data on every boot, and everyone points at the *same* Neon database — so every `pnpm dev` mutates shared schema. Use **Neon branching** (one branch per developer, free tier supports it), combined with gating the auto-sync behind `NODE_ENV !== 'production'` (§4).
   **Then:** delete `docker-compose.yml` or mark it unused, and correct `README.md` / `CLAUDE.md` (`docs/ARCHITECTURE.md` no longer documents local setup).
+  ⚠️ **New evidence, 2026-09-06 — the shared-schema problem destroys data, not just schema.** `updateSchema()` syncs the database *to the checked-out entities*, so checking out a branch whose entities lack a column **drops that column** on boot. Observed live: `content_hash` was added by `fix/ocr-document-dedupe`, dropped when a branch without it was checked out, and re-added empty on merge — the hashes on two rows were gone. On a shared Neon branch this means one developer's branch switch silently deletes another's column and its data. This raises the priority of per-developer Neon branches from hygiene to data safety.
+
+- [ ] ❓ **SCOPE · M · OCR extraction cache and proposal-image storage** — *deferred 2026-09-06*
+  `fix/ocr-document-dedupe` stops the duplicate **row**, not the duplicate Gemini Vision call. Two follow-ups were deliberately left out of it:
+  1. **Extraction cache.** The extracted fields (`title`, `problem_statement`, …) are never persisted — only `extractedText` is — so a hash hit cannot reproduce the endpoint's response without a new column. This is where the quota saving is (a re-upload currently costs a full vision call plus ~780 thinking tokens). **The cache key must include the resolved pipeline config, not just the bytes**, or it serves a result produced under a different arm and corrupts the baseline-vs-enhanced attribution `ai_generation_runs` exists to provide.
+  2. **Image storage.** `OcrDocument.sourcePath` is still never written, so the handwritten proposal itself is stored nowhere. `UploadService.uploadSingle` already names "OCR intake" as an intended caller and Supabase is configured — the missing piece is that `StartupModule` does not import `UploadModule`. Watch the 10&nbsp;MB cap and MIME allowlist in `validateUpload`: `checkLegibility` demands ≥1200×900, so these are deliberately large photos.
 
 ---
 
