@@ -145,18 +145,30 @@
   }
 
   async function removeMember(memberId: number) {
-    const res = await axiosInstance.delete(`/startups/remove-member/${memberId}/`, {
-      headers: {
-        Authorization: `Bearer ${access}`
-      },
-      data: {
-        startupId
-      }
-    });
+    try {
+      // Mirrors addMember: the backend is POST /startups/remove-member reading
+      // userId and startupId from the body. This called DELETE against
+      // /startups/remove-member/:id, which no route exposes.
+      const { data: responseData } = await axiosInstance.post(
+        '/startups/remove-member',
+        {
+          userId: memberId,
+          startupId: startupId
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${access}`
+          }
+        }
+      );
 
-    if (res.status === 200) {
-      toast.success('Successfully removed member');
-      $queryResult.refetch();
+      if (responseData) {
+        toast.success('Successfully removed member');
+        $queryResult.refetch();
+      }
+    } catch (error) {
+      toast.error('Failed to remove member');
+      console.error('Remove member error:', error);
     }
   }
 

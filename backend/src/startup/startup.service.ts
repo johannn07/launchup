@@ -773,6 +773,12 @@ export class StartupService {
 
     startup.members.remove(user);
     await this.em.flush();
+
+    // Mirrors addMemberToStartup: the caller has no other way to tell a
+    // successful removal from a no-op.
+    return {
+      message: `User with ID ${userId} has been removed from Startup ID ${startupId}.`,
+    };
   }
 
   async addMemberToStartup(dto: any) {
