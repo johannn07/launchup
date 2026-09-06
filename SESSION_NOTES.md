@@ -236,83 +236,31 @@ carries the branch-scope rule.
 
 ---
 
-## 2026-09-04 (later) — metric 6's void run re-read, and a second design
+## Compressed — 2026-09-04 (later, metric 6 re-read and second design)
 
-Branch `docs/metric-6-manipulation-design`. **Zero Gemini calls.** Deployment
-of the three-role build to Render and Vercel was done by John before this
-session.
-
-### The finding: the record was wrong about its own run
-
-The 2026-08-23 metric 6 run was declared void because its `deflated` positive
-control never fired. The README's reading of that was that no clause ever
-reached `recommended`, so the run could not separate "the model never made this
-error" from "the classifier cannot read these constructions."
-
-Re-scoring the stored text through the same `lib/redundancy.js` reproduces all
-four recorded columns exactly — which pins the code — and shows **4 clauses
-binned `recommended` and then downgraded to `scoped` by the acquisition gate**:
-1 in `baseline`/truth and 1 in each arm's `deflated` cell, every one the
-*"needs to move **from paper prototype** to…"* shape, every one a correct
-rejection. The same run's metric-5 output holds 14 `recommended` clauses.
-
-So the classifier reads the model's register and the gate acts on real verdicts.
-**The ambiguity resolves in favour of the model never making the error.** Only
-the true-positive path is still unproven.
-
-**Why nobody saw it:** `scoreRedundantNeeds` computes `scoped` and nothing
-aggregates, prints or persists it. A gate whose rejections cannot be counted
-cannot be audited — reporting `scopedCount` is now a prerequisite of the next
-run.
-
-### The methodological error, named
-
-The void rule collapsed two separable questions: *can the detector see the
-behaviour* (code and register — testable at zero quota) and *does the condition
-induce it* (model — only testable by spending calls). Collapsing them let a
-well-behaved model void a run, and made the pre-registration's own stated
-inference ("reports a detector problem") wrong.
-
-### The second design, pre-registered
-
-`docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`.
-Unimplemented, unrun.
-
-- **Split control.** A blocking zero-quota detector control built from the
-  model's *own* clauses minimally mutated into redundancy — paired, so the
-  mutant must fire and its original must not. Then a manipulation check whose
-  failure reports a narrow model result rather than voiding anything.
-- **`unlabelled` documents, not another level manipulation.** `deflated` failed
-  because the level never overrode the document: both source documents label
-  every fact (`Target Market:`, `Revenue:`), and `Target Market:` names the very
-  artifact the rubric asks for. Redundancy needs the artifact **evidenced but
-  not salient**, which is a document property. The variant keeps each evidence
-  phrase byte-identical, deletes its label, and machine-asserts fact
-  preservation (numerals, dates and proper nouns as a multiset) so the variant
-  cannot be authored into producing the effect.
-- **A stopping rule.** If the detector control passes and `unlabelled` still
-  yields 0 on every arm, metric 6 is **retired** — the end metric 3 was given —
-  rather than re-manipulated indefinitely.
-- **Cost:** 12 calls, one quota day. Nothing runs until the zero-quota gates are
-  green.
-
-### Also this session
-
-`measurement/README.md` compressed (own branch, `docs/trim-measurement-readme`).
-No measurement result, command, caveat or number removed.
-
-### Open
-
-Unchanged from the last session: the per-startup reads in `rna`, `rns`,
-`initiative` and `roadblock` are unguarded; the generalized `RolesGuard` was not
-built; `debug: true` still logs SQL parameter values to Render and the boot
-seeder still re-seeds demo data on every redeploy.
-
-### Next step
-
-Implement the metric 6 design, or take the midterm critical path — the SPMP and
-the traceability matrix — which competes for the same weeks as the 30-user
-study.
+Branch `docs/metric-6-manipulation-design`, zero Gemini calls. **The record was
+wrong about its own run.** Re-scoring the stored 2026-08-23 text through the same
+`lib/redundancy.js` reproduced all four recorded columns exactly and showed **4
+clauses binned `recommended`, then correctly downgraded to `scoped` by the
+acquisition gate** — so the classifier reads the model's register and the gate
+acts on real verdicts. The void verdict resolves **in favour of the model never
+making the error**; only the true-positive path stayed unproven. Nobody saw it
+because `scoreRedundantNeeds` computes `scoped` and nothing aggregates, prints or
+persists it — *a gate whose rejections cannot be counted cannot be audited* —
+which made reporting `scopedCount` a prerequisite of any next run. **The named
+methodological error:** the void rule collapsed two separable questions — can the
+detector see the behaviour (code and register, testable at zero quota) versus
+does the condition induce it (model, costs calls) — which let a well-behaved
+model void a run. A second design was pre-registered at
+`docs/superpowers/specs/2026-09-04-metric-6-salience-manipulation-design.md`
+(zero-quota detector control from paired mutants, `unlabelled` document variants
+with machine-asserted fact preservation, an explicit retirement stopping rule, 12
+calls) — **that design was executed and metric 6 retired the next day.**
+`measurement/README.md` was compressed on its own branch with no result, command,
+caveat or number removed. Open and carried forward: per-startup reads in `rna`,
+`rns`, `initiative` and `roadblock` are unguarded, the generalized `RolesGuard`
+was never built, `debug: true` still logs SQL parameter values to Render, and the
+boot seeder still re-seeds demo data on every redeploy.
 
 ---
 
@@ -580,3 +528,132 @@ Two decisions are queued behind that, neither urgent enough to displace it:
 ⚠️ Item 2 is the older debt and has been carried on "next step" lines since
 2026-09-04 without moving. It is the one most likely to be discovered by a
 reviewer opening the live site rather than by us.
+
+---
+
+## 2026-09-06 — three reported UI/data issues, fixed on three branches
+
+Zero Gemini calls. No measurement. Three issues John reported, each scoped to its
+own branch off `master`, each verified live against Neon and a real browser
+before hand-off. All three tested by John and **pushed**; PRs not opened (below).
+
+### 1. Application modal discarded on a stray click — `fix/application-modal-close-confirm`
+
+An outside click or `Esc` dismissed the multi-step application with no warning.
+Every close path now routes through a confirmation. `Dialog.Root` needed
+`controlledOpen`: without it bits-ui **mutates its own copy** of `open` and only
+notifies the parent, which is also why the existing `onOpenChange` handler — a
+blind toggle that ignored the boolean it is passed — had drifted out of sync.
+`controlledOpen` also catches the ✕ button, which never goes through
+`onInteractOutside`.
+
+**The reported symptom did not reproduce, and the fix is not what the report
+implied.** Testing the *original* code with a sentinel DOM node: bits-ui keeps
+`Dialog.Content` mounted, the whole application renders as one tree with steps
+hidden by CSS, and reopening returns the identical node with its value intact.
+Closing never destroyed anything within the page. What is true is that **nothing
+is persisted anywhere**, so a reload or navigation still loses everything —
+`useApplicationStore.svelte.ts` is a 0-byte file. The dialog copy therefore says
+the answers have not been *submitted*, not that they will be lost. A real draft
+feature is unbuilt; its cost is dominated by lifting step state out of the child
+components, not by choosing storage.
+
+### 2. Duplicate OCR rows — `fix/ocr-document-dedupe`
+
+`parseCapsuleProposal` inserted an `OcrDocument` on **every** call across all
+three paths, so each retry left another orphan. Rows are now keyed on a sha256 of
+the uploaded bytes (nullable + unique, so pre-existing rows keep NULL and
+Postgres permits many NULLs), and a repeat upload refreshes the existing row.
+Unattached rows past `OCR_RETENTION_DAYS` (default 30) are pruned once per boot —
+the app has no scheduler; a malformed or negative value falls back rather than
+widening the delete, and `0` disables it.
+
+**Live on Neon:** schema sync issued the column plus unique constraint, the boot
+prune ran with `startup_id is null and created_at < cutoff`, three uploads of an
+identical file produced **one** row, a different file produced its own.
+
+**Deliberately excluded, both real follow-ups.** Dedupe stops the duplicate row,
+not the duplicate Gemini Vision call — the extracted fields are never stored, so
+a cache hit cannot reproduce the response. **Any such cache must key on the
+resolved pipeline config as well as the bytes**, or it serves a result produced
+under a different arm and corrupts the attribution `ai_generation_runs` exists
+for. Image storage is the other half: `sourcePath` is still never written.
+
+**Doc correction:** `CLAUDE.md` says file storage is unconfigured and uploads
+503. **False as of this session** — all five `S3_*` vars are set in
+`backend/.env`, pointing at Supabase Storage (`launchup` bucket,
+`ap-southeast-1`), and `UploadService` enables on config presence. `uploadSingle`
+even names "OCR intake" as an intended caller. Config verified; not a live
+round-trip to the bucket.
+
+### 3. Mentors could not tell what a readiness level meant — `feat/readiness-level-guide`
+
+Every level picker was a bare `Level 1-9` select. `GET /readinesslevel/rubrics`
+flattens the 54 rubric rows already sitting in `rag_contexts` (9 levels × 6
+dimensions), and `ReadinessLevelGuide` expands to all nine descriptors for its
+dimension with the selected one highlighted. Not gated on
+`AI_RAG_CORPUS_ENABLED` — that flag decides what the *model* sees, not what a
+mentor may read; renders nothing when the corpus is unseeded.
+
+**Provenance is stated per dimension because it is not uniform** (verified from
+the corpus, not assumed): TRL transcribed from EU Horizon Europe / ISO
+16290:2013, four dimensions derived from BRLa, IRL authored with no external
+source. Presenting all 54 identically would lend authored text a standard's
+authority.
+
+**Three pre-existing defects found while building it, none fixed here:**
+
+- **`level_criteria` is empty (0 rows).** This is why the URAT criteria tables
+  render nothing, and why the rubric endpoint could not be sourced from there.
+- **`readiness_levels.name` holds placeholders** seeded by `main.ts` — "Seeded
+  Technology level 4", "Technology Readiness Level 9". Not usable as descriptors.
+- **`ReadinessAssessmentForm` is unreachable.** `openAssessment` is the only
+  function that sets `selectedAssessment` and **nothing calls it**. The guide was
+  added there too and is type-checked but *not* live-verified.
+
+### Two gotchas worth the standing-notes entry
+
+**Switching branches silently drops columns.** `updateSchema()` syncs the schema
+*to the entities*, so checking out a branch whose entities lack a column **drops
+it** from shared Neon on boot; merging back re-adds it empty. This wiped the
+`content_hash` values on two rows mid-session. Harmless there, live hazard on a
+shared branch.
+
+**The `pnpm lint` trap fired again.** It is already in these notes, and it still
+cost a cleanup pass: `eslint --fix` reformatted ~120 files over the CRLF/prettier
+conflict, mixing churn into the four files the change actually touched. The tree
+had to be reverted and the edits re-applied onto pristine files. **Verify with
+`npx eslint --no-fix <paths>`** — never `pnpm lint` — and read `git diff --stat`
+before staging.
+
+### Branch state — all three pushed, no PRs
+
+| Branch | Commits | Verified |
+|---|---|---|
+| `fix/application-modal-close-confirm` | 1 | Live: outside click, `Esc`, ✕ |
+| `fix/ocr-document-dedupe` | 2 | Live on Neon; backend 351/351 |
+| `feat/readiness-level-guide` | 2 | Live as mentor; backend 342/342 |
+
+Merged together on a throwaway `test/all-three` (clean, disjoint files) and
+click-tested by John — all three pass. `svelte-check` held at its 117-error
+baseline throughout, none in touched files. Backend tests were written first and
+watched fail in both backend branches.
+
+### Next step
+
+**Open the three PRs** — blocked on tooling, not on the work: `gh` is not
+installed on this machine and the GitHub MCP server failed to connect this
+session (`Authorization header is badly formatted`). `winget install --id
+GitHub.cli` then `gh auth login` unblocks it. Bodies are drafted and were handed
+to John. **Merge `fix/ocr-document-dedupe` first** — its schema sync adds
+`content_hash`, and anyone booting a branch without it drops the column again.
+
+Then the critical path is unchanged and still unstarted: **the SPMP and the
+traceability matrix**, competing for the same weeks as the 30-user study.
+`SUPPORT_THRESHOLD` remains evidenced, demo-visible and unfixed.
+
+⚠️ **These notes contradict themselves about the deployment.** The 2026-09-04
+(later) entry records the three-role deploy to Render and Vercel as *done by John
+before that session*; the 2026-09-05 (later) entry carries "the 2026-09-04 deploy
+still has not happened" as its oldest debt. Both cannot be true — resolve against
+the live site before either line is cited.
