@@ -36,6 +36,12 @@ export class ReadinesslevelController {
     return await this.readinessLevelService.getReadinessLevels();
   }
 
+  @UseGuards(JwtGuard)
+  @Get('/rubrics')
+  async getReadinessRubrics() {
+    return await this.readinessLevelService.getReadinessRubrics();
+  }
+
   @Get('/criterion')
   async getReadinessLevelCriterion() {
     return await this.readinessLevelService.getReadinessLevelCriterion();

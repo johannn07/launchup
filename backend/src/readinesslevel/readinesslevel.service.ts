@@ -14,6 +14,25 @@ import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { LevelCriterion } from 'src/entities/level-criterion.entity';
 import { StartupCriterionAnswer } from 'src/entities/startup-criterion-answer.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
+import { RagContext } from 'src/entities/rag-context.entity';
+import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
+import {
+  CorpusRowMetadata,
+  RUBRIC_SOURCE_TYPE,
+} from '../ai/rag-corpus.types';
+
+/** What each readiness level means, for the mentor picking one. */
+export interface ReadinessRubric {
+  readinessType: ReadinessType;
+  level: number;
+  title: string;
+  content: string;
+  provenance: CorpusRowMetadata['provenance'];
+  citation: string | null;
+  sourceUrl?: string;
+}
+
+const DIMENSION_ORDER = Object.values(ReadinessType);
 
 @Injectable()
 export class ReadinesslevelService {
@@ -53,6 +72,41 @@ export class ReadinesslevelService {
 
   async getReadinessLevels() {
     return await this.em.findAll(ReadinessLevel, { populate: ['criteria'] });
+  }
+
+  /**
+   * The rubric text behind each level, read from the verified corpus. Not gated
+   * on AI_RAG_CORPUS_ENABLED: that flag decides what the model is shown, not
+   * what a mentor may read. Empty when the corpus has not been seeded.
+   */
+  async getReadinessRubrics(): Promise<ReadinessRubric[]> {
+    const rows = await this.em.find(RagContext, {
+      sourceType: RUBRIC_SOURCE_TYPE,
+    });
+
+    return rows
+      .map((row) => {
+        const metadata = row.metadata as Partial<CorpusRowMetadata> | undefined;
+        if (!metadata?.readinessType || !metadata?.level) {
+          return null;
+        }
+
+        return {
+          readinessType: metadata.readinessType,
+          level: metadata.level,
+          title: row.title,
+          content: row.content,
+          provenance: metadata.provenance,
+          citation: metadata.citation ?? null,
+          sourceUrl: metadata.sourceUrl,
+        } as ReadinessRubric;
+      })
+      .filter((rubric): rubric is ReadinessRubric => rubric !== null)
+      .sort(
+        (a, b) =>
+          DIMENSION_ORDER.indexOf(a.readinessType) -
+            DIMENSION_ORDER.indexOf(b.readinessType) || a.level - b.level,
+      );
   }
 
   async getReadinessLevelCriterion() {
