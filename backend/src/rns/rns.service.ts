@@ -249,12 +249,17 @@ async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
   const createdRns: Rns[] = [];
   let currentPriorityNumber = dto.startPriorityNumber || 1;
 
-  const existingRns = await this.em.find(Rns, { startup: startup }, { orderBy: { priorityNumber: 'ASC' } });
-  for (const rns of existingRns) {
-    rns.priorityNumber += (dto.no_of_tasks_to_create || 1) * rnasToGenerateFrom.length;
-    this.em.persist(rns);
+  const debugPrompts: string[] = [];
+
+  // Renumbering is a write, so a dry run must not reach it.
+  if (!dto.debug) {
+    const existingRns = await this.em.find(Rns, { startup: startup }, { orderBy: { priorityNumber: 'ASC' } });
+    for (const rns of existingRns) {
+      rns.priorityNumber += (dto.no_of_tasks_to_create || 1) * rnasToGenerateFrom.length;
+      this.em.persist(rns);
+    }
+    await this.em.flush();
   }
-  await this.em.flush();
 
   const targetReadinessLevel: Record<string, number> = {
     T: trl,
@@ -353,6 +358,11 @@ Requirement note:
       `;
     }
 
+      if (dto.debug) {
+        debugPrompts.push(prompt);
+        continue;
+      }
+
       const aiTasks = await this.aiService.generateTasksFromPrompt(ctx, prompt);
 
       if (!aiTasks || !Array.isArray(aiTasks) || aiTasks.length === 0) {
@@ -449,7 +459,7 @@ Requirement note:
     await this.em.flush(); // Flush all new RNS after the loop
 
   if (dto.debug) {
-    return { prompt: 'See console for prompts if multiple RNS were generated.' };
+    return { prompts: debugPrompts };
   } else {
     return createdRns.map((r: Rns) => ({
       id: r.id,

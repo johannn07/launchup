@@ -58,6 +58,8 @@ export class RnaController {
       new ParseArrayPipe({ items: String, separator: ',', optional: true }),
     )
     readinessTypes?: string[],
+    // Dry run: assemble and return the prompt, spending no generation quota.
+    @Query('debug') debug?: string,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
     const selected = readinessTypes?.map((type) => type.trim()).filter(Boolean);
@@ -76,7 +78,12 @@ export class RnaController {
       pipelineConfig,
       isPrivileged,
       (ctx) =>
-        this.rnaService.generateRNA(id, ctx, selected as ReadinessType[]),
+        this.rnaService.generateRNA(
+          id,
+          ctx,
+          selected as ReadinessType[],
+          debug === 'true',
+        ),
     );
   }
 

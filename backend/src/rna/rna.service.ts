@@ -127,6 +127,7 @@ export class RnaService {
     id: number,
     ctx: AiRunContext,
     readinessTypes?: ReadinessType[],
+    debug = false,
   ) {
     const startup = await this.em.findOne(
       Startup,
@@ -222,6 +223,10 @@ export class RnaService {
       prompt = `${basePrompt}\n\nTASK: Generate a Readiness and Needs Assessment (RNA) for: ${targetReadinessLevels
         .map((srl) => srl.readinessLevel.readinessType)
         .join(', ')}.\nRespond with a JSON array: [{"readiness_level_type": (string), "rna": (string, max ${RNA_MAX_LENGTH} chars)}]`;
+    }
+
+    if (debug) {
+      return { prompts: [prompt] };
     }
 
     const generatedRNAs = await this.aiService.generateRNAsFromPrompt(ctx, prompt);

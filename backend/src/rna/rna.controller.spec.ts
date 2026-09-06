@@ -22,10 +22,12 @@ describe('RnaController.generateTasks dimension selection', () => {
 
     await controller.generateTasks(1, mentor, ['Market', 'Technology']);
 
-    expect(rnaService.generateRNA).toHaveBeenCalledWith(1, expect.anything(), [
-      'Market',
-      'Technology',
-    ]);
+    expect(rnaService.generateRNA).toHaveBeenCalledWith(
+      1,
+      expect.anything(),
+      ['Market', 'Technology'],
+      false,
+    );
   });
 
   it('forwards undefined when no types are selected, preserving gap-fill', async () => {
@@ -37,6 +39,7 @@ describe('RnaController.generateTasks dimension selection', () => {
       1,
       expect.anything(),
       undefined,
+      false,
     );
   });
 
