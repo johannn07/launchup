@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { RatedRubric, Stepper } from '$lib/components/startups/readiness';
+  import {
+    RatedRubric,
+    ReadinessLevelGuide,
+    Stepper
+  } from '$lib/components/startups/readiness';
   import * as Tabs from '$lib/components/ui/tabs/index.js';
   import { useQueries } from '@sveltestack/svelte-query';
   import { getData, canRateReadiness } from '$lib/utils';
@@ -45,6 +49,10 @@
           `/startups/startup-readiness-level?startupId=${startupId}`,
           access!
         )
+    },
+    {
+      queryKey: ['readinessRubrics'],
+      queryFn: () => getData(`/readinesslevel/rubrics`, access!)
     }
   ]);
   const { isLoading, isError } = $derived(
@@ -52,6 +60,8 @@
   );
 
   const readinessTypeOptions = READINESS_TYPES;
+
+  const levelRubrics = $derived($readinessLevelQueries[4]?.data ?? []);
 
   let baselineScores = $state(unratedBaseline());
   let savingBaselineScores = $state(false);
@@ -395,6 +405,11 @@
               <option value={level}>Level {level}</option>
             {/each}
           </select>
+          <ReadinessLevelGuide
+            {readinessType}
+            rubrics={levelRubrics}
+            selectedLevel={baselineScores[readinessType]}
+          />
         </label>
       {/each}
     </div>

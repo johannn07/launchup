@@ -19,6 +19,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import * as Select from '$lib/components/ui/select';
+  import { ReadinessLevelGuide } from '$lib/components/startups/readiness';
   import { Checkbox } from '$lib/components/ui/checkbox';
   import { CircleCheck, Info } from 'lucide-svelte';
   import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
@@ -47,6 +48,18 @@
           }
         }
       );
+      return response.data;
+    }
+  });
+
+  const rubricsQuery = useQuery({
+    queryKey: ['readinessRubrics'],
+    queryFn: async () => {
+      const response = await axiosInstance.get(`/readinesslevel/rubrics`, {
+        headers: {
+          Authorization: `Bearer ${access}`
+        }
+      });
       return response.data;
     }
   });
@@ -529,6 +542,14 @@
               No assessments found for {selectedReadinessType}
             </p>
           </div>
+        {/if}
+
+        {#if canRateReadiness(data.role) && selectedReadinessType}
+          <ReadinessLevelGuide
+            readinessType={selectedReadinessType}
+            rubrics={$rubricsQuery.data ?? []}
+            selectedLevel={Number(readinessLevel)}
+          />
         {/if}
       </div>
 
