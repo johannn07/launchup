@@ -19,6 +19,7 @@ import { SEED_TIER_CONFIGS } from './readiness/readiness.tiers';
 import { Sector } from './entities/enums/sector.enum';
 import { DEMO_READINESS_LEVELS, SEEDED_LEVEL_REMARK } from './demo-readiness-levels';
 import { seedAssessmentQuestions } from './seed-assessment-questions';
+import { seedReadinessLevelNames } from './seed-readiness-level-names';
 
 async function ensureUser(
   em: EntityManager,
@@ -413,6 +414,17 @@ async function bootstrap() {
   await seedWeightProfiles(orm);
   await seedTierConfigs(orm);
   await seedLocalDemoData(orm);
+
+  // After seedLocalDemoData, not before: ensureReadinessLevelExists writes
+  // "Seeded {type} level {n}" for any level it has to create, and this is what
+  // corrects it.
+  const names = await seedReadinessLevelNames(orm.em.fork());
+  if (names.updated) {
+    console.log(
+      `Renamed readiness levels from the corpus: ${names.updated} updated, ` +
+        `${names.unchanged} unchanged, ${names.missing} with no corpus row`,
+    );
+  }
 
   // The URAT and calculator banks. Empty on every DB made after the 2026-07-26
   // wipe, which rendered both application steps blank with no error.
