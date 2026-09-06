@@ -27,6 +27,11 @@ export class OcrDocument {
   @Property({ type: 'text', nullable: true })
   sourcePath?: string;
 
+  // sha256 of the uploaded bytes. Nullable so rows predating dedupe stay valid;
+  // Postgres allows many NULLs under a unique index.
+  @Property({ length: 64, nullable: true, unique: true })
+  contentHash?: string;
+
   @Property({ nullable: true })
   sketchDetected?: boolean;
 

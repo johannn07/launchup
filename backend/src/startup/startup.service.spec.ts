@@ -7,6 +7,7 @@ import { OcrDocument } from 'src/entities/ocr-document.entity';
 import { ActivityLog } from 'src/entities/activity-log.entity';
 import { QualificationStatus } from 'src/entities/enums/qualification-status.enum';
 import { ConflictException } from '@nestjs/common';
+import { createHash } from 'crypto';
 
 /**
  * First spec for src/startup/. Scoped to the summary path only — the service is
@@ -346,6 +347,14 @@ function buildOcr(opts: { tesseractText: string; visionJson: string; visionError
       return row;
     }),
     persistAndFlush: jest.fn().mockResolvedValue(undefined),
+    flush: jest.fn().mockResolvedValue(undefined),
+    assign: jest.fn((row: Record<string, unknown>, data: Record<string, unknown>) =>
+      Object.assign(row, data),
+    ),
+    findOne: jest.fn(async (entity: unknown, where: { contentHash?: string }) => {
+      if (entity !== OcrDocument) return null;
+      return ocrDocs.find((doc) => doc.contentHash === where?.contentHash) ?? null;
+    }),
   };
 
   const ocrService = {
@@ -484,5 +493,52 @@ describe('StartupService.parseCapsuleProposal — when Gemini Vision is unavaila
     // the fields are extracted from the same text they are scored against.
     expect(ocrDocs).toHaveLength(1);
     expect(Object.values(ocrDocs[0].fieldConfidence)).not.toContain(1);
+  });
+});
+
+/**
+ * Every parse used to insert an OcrDocument unconditionally, so a founder
+ * retrying the same scan left a new orphan row behind each time.
+ */
+describe('StartupService.parseCapsuleProposal — duplicate uploads', () => {
+  it('records a content hash of the uploaded bytes', async () => {
+    const { service, ocrDocs } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(ocrDocs[0].contentHash).toBe(
+      createHash('sha256').update(imageFile.buffer).digest('hex'),
+    );
+  });
+
+  it('reuses the existing row when the same file is uploaded again', async () => {
+    const { service, ocrDocs } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(ocrDocs).toHaveLength(1);
+  });
+
+  it('keeps a separate row for a different file', async () => {
+    const { service, ocrDocs } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+    const otherFile = { ...imageFile, buffer: Buffer.from('a-different-image') };
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+    await service.parseCapsuleProposal(otherFile, ctx);
+
+    expect(ocrDocs).toHaveLength(2);
+  });
+
+  it('refreshes the stored transcription on a re-upload', async () => {
+    const { service, ocrDocs } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+
+    await service.parseCapsuleProposal(imageFile, ctx);
+    ocrDocs[0].extractedText = 'stale';
+    await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(ocrDocs[0].extractedText).toBe(
+      'AgriTrace: An IoT-Enabled Cold Chain Monitoring System',
+    );
   });
 });
