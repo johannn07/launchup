@@ -1,13 +1,12 @@
 <script lang="ts">
   import { RadioButton } from '$lib/components/ui/radio';
-  import { RatedCriteriaTable } from '.';
+  import { LevelRubricPanel } from '.';
 
-  const { questionnaires, type, current, scores } = $props();
+  const { questionnaires, type, current } = $props();
 </script>
 
 <div class="flex flex-col gap-3" class:hidden={type !== current}>
   {#each questionnaires as questionnaire, index}
-    {@const criterias = questionnaire.level_criteria}
     <div class="flex flex-col gap-1">
       <div class="flex gap-3">
         <div>
@@ -21,7 +20,7 @@
           />
         </div>
       </div>
-      <RatedCriteriaTable {criterias} {questionnaire} {type} {scores} {index} />
+      <LevelRubricPanel rubric={questionnaire.rubric} />
     </div>
   {/each}
 </div>

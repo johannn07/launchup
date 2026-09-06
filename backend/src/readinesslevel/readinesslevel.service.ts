@@ -70,8 +70,50 @@ export class ReadinesslevelService {
     return res;
   }
 
+  /**
+   * Levels carry the corpus descriptor, not their own criteria rows.
+   * `level_criteria` has never held a row on any database, so the rating
+   * screen rendered an empty graded table under every level. The rubric text
+   * is sourced and provenance-tagged; five graded descriptions per level
+   * would have to be invented.
+   *
+   * Returns plain objects, not entities: a property assigned onto a MikroORM
+   * entity is dropped by its serialization, so the route answered without
+   * `rubric` while the unit test — which stubs findAll with POJOs — passed.
+   */
   async getReadinessLevels() {
-    return await this.em.findAll(ReadinessLevel, { populate: ['criteria'] });
+    const [levels, rubrics] = await Promise.all([
+      this.em.findAll(ReadinessLevel, { populate: ['criteria'] }),
+      this.getReadinessRubrics(),
+    ]);
+
+    // Keyed on both, because level alone collides across the six dimensions.
+    const byDimensionAndLevel = new Map(
+      rubrics.map((rubric) => [`${rubric.readinessType}:${rubric.level}`, rubric]),
+    );
+
+    return levels.map((level) => {
+      const match = byDimensionAndLevel.get(
+        `${level.readinessType}:${level.level}`,
+      );
+
+      return {
+        id: level.id,
+        level: level.level,
+        name: level.name,
+        readinessType: level.readinessType,
+        criteria: level.criteria.getItems(),
+        rubric: match
+          ? {
+              title: match.title,
+              content: match.content,
+              provenance: match.provenance,
+              citation: match.citation,
+              sourceUrl: match.sourceUrl,
+            }
+          : null,
+      };
+    });
   }
 
   /**
