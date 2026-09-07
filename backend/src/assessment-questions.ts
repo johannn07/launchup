@@ -43,6 +43,21 @@ export const URAT_QUESTIONS: { question: string; category: ReadinessType }[] =
     },
     {
       question:
+        'Are you aware of the regulatory requirements relevant to your product or service?',
+      category: ReadinessType.R,
+    },
+    {
+      question:
+        'Have you begun planning or implementing compliance strategies?',
+      category: ReadinessType.R,
+    },
+    {
+      question:
+        'How do you manage and stay updated with changes in regulatory requirements?',
+      category: ReadinessType.R,
+    },
+    {
+      question:
         'Have you received feedback from potential users or stakeholders about your product/service?',
       category: ReadinessType.A,
     },
@@ -69,21 +84,6 @@ export const URAT_QUESTIONS: { question: string; category: ReadinessType }[] =
       question:
         'What strategies do you have in place for team development and operational efficiency?',
       category: ReadinessType.O,
-    },
-    {
-      question:
-        'Are you aware of the regulatory requirements relevant to your product or service?',
-      category: ReadinessType.R,
-    },
-    {
-      question:
-        'Have you begun planning or implementing compliance strategies?',
-      category: ReadinessType.R,
-    },
-    {
-      question:
-        'How do you manage and stay updated with changes in regulatory requirements?',
-      category: ReadinessType.R,
     },
     {
       question:
