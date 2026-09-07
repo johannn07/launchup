@@ -17,6 +17,7 @@ import {
 import { ReadinesslevelService } from './readinesslevel.service';
 import { JwtGuard } from 'src/auth/guard';
 
+@UseGuards(JwtGuard)
 @Controller('readinesslevel')
 export class ReadinesslevelController {
   constructor(private readinessLevelService: ReadinesslevelService) {}
@@ -36,7 +37,6 @@ export class ReadinesslevelController {
     return await this.readinessLevelService.getReadinessLevels();
   }
 
-  @UseGuards(JwtGuard)
   @Get('/rubrics')
   async getReadinessRubrics() {
     return await this.readinessLevelService.getReadinessRubrics();
@@ -47,13 +47,11 @@ export class ReadinesslevelController {
     return await this.readinessLevelService.getReadinessLevelCriterion();
   }
 
-  @UseGuards(JwtGuard)
   @Post('/urat-question-answers/create')
   async createUratQuestionAnswers(@Body() dto: UratQuestionAnswerDto) {
     return await this.readinessLevelService.createUratQuestionAnswers(dto);
   }
 
-  @UseGuards(JwtGuard)
   @Post('/calculator-question-answers/create')
   async createCalculatorQuestionAnswers(
     @Body() dto: CalculatorQuestionAnswerDto,
@@ -63,13 +61,11 @@ export class ReadinesslevelController {
     );
   }
 
-  @UseGuards(JwtGuard)
   @Get('urat-question-answers')
   async getUratQuestionAnswers(@Query('startupId') startupId: number) {
     return await this.readinessLevelService.getUratQuestionAnswers(startupId);
   }
 
-  @UseGuards(JwtGuard)
   @Get('readiness-level')
   async getStartupReadinessLevels(
     @Query('startupId', ParseIntPipe) startupId: number,
@@ -77,7 +73,6 @@ export class ReadinesslevelController {
     return await this.readinessLevelService.getStartupReadinessLevel(startupId);
   }
 
-  @UseGuards(JwtGuard)
   @Patch('/urat-question-answers/:id')
   async updateUratQuestionAnswer(
     @Param('id', ParseIntPipe) id: number,
@@ -86,7 +81,6 @@ export class ReadinesslevelController {
     return await this.readinessLevelService.updateUratQuestionAnswer(id, dto);
   }
 
-  @UseGuards(JwtGuard)
   @Patch('/calculator-question-answers/:id')
   async updateCalculatorQuestionAnswer(
     @Param('id', ParseIntPipe) id: number,
@@ -98,7 +92,6 @@ export class ReadinesslevelController {
     );
   }
 
-  @UseGuards(JwtGuard)
   @Post('startup/:startupId/rate')
   async rateStartupReadinessLevel(
     @Param('startupId', ParseIntPipe) startupId: number,
