@@ -32,6 +32,8 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **A scripted edit that silently fails to apply looks exactly like success**, because the follow-up test run goes green either way. Assert the anchor matched (`assert s.count(old) == 1`) and, for mutations, that behaviour *changed* — a mutant whose anchor no longer exists reports KILLED for the wrong reason.
 - **Backticks inside a double-quoted bash string are command substitution.** `"the \`foo\` thing"` runs `foo` and substitutes its output, silently deleting the word. Use quoted heredocs (`<<'EOF'`) for any text containing backticks.
 - **A missing `populate` is invisible to every mocked test.** `em.findOne(Startup, {id})` loads a relation as an **id-only reference** — the SQL selects `c1.id` and nothing else — so `startup.capsuleProposal.aiAnalysisSummary` reads `undefined`. A mock that returns a fully-formed object passes regardless. This shipped a gate that silently never fired, past four green unit tests, and one live request caught it. **Any feature reading a relation off a `findOne` needs a live check, not a test.**
+- **A property assigned onto a MikroORM entity is dropped by its serialization.** `Object.assign(level, { rubric })` then returning the entity gives a route that answers *without* `rubric`, while a unit test stubbing `findAll` with plain objects passes. Same shape as the `populate` note above: the mock cannot see the serializer. Return an explicit projection, and check the live endpoint before believing the test.
+- **The same-origin `/api` proxy authenticates bare fetches.** `routes/api/[...path]/+server.ts` swaps the httpOnly `Access` cookie for a Bearer header, so a `fetch('/api/...')` with no headers *is* authenticated. Any diagnosis of the form "this caller sends no credentials, so guarding the route will break it" must be re-checked against this — one such warning in `TODO_CHECKLIST.md` had been stale since `5a453d2`.
 - **`JSON.stringify(obj, replacerArray)` filters keys at EVERY level, including the root.** A guard comparing `{1: {...}, 2: {...}}` this way strips `1` and `2` and compares `{}` to `{}` — it passes for correct and corrupted data alike. Another instance of *a check that cannot fail is not a check*; use a recursive sorted-key canonicaliser, and prove the comparator rejects a deliberately wrong value before trusting it.
 - **Neon holds three startups, not two.** 1 AgroLink and 2 MediSync (both rated, both measurement ground truth), plus **5 "Tindahanap", PENDING and unrated** — created through the apply flow during the 2026-08-22 OCR session. Earlier notes saying "exactly two startups and both are rated" are stale. Startup 5's real summary scores `ratio 1.000` (not flagged), which makes it a usable balanced control.
 - **`node -e "..."` cannot be given `--flag=value` arguments** — node parses them as its own options and exits. Probing a harness that reads `process.argv` needs a real script file.
@@ -264,114 +266,35 @@ boot seeder still re-seeds demo data on every redeploy.
 
 ---
 
-## 2026-09-05 — metric 6 built, run, and retired on its own rule
+## Compressed — 2026-09-05 (metric 6 built, run, retired)
 
-Branch `measure/metric-6-salience`, local and unpushed. **12 Gemini calls.**
-Everything the 2026-09-04 design pre-registered was implemented at zero quota,
-every gate came up green, the run was spent — and it retired the metric.
+`measure/metric-6-salience`, local and unpushed. **12 Gemini calls.** Everything
+the 2026-09-04 design pre-registered was built at zero quota, every gate came up
+green, the run was spent — and it retired the metric on its own stopping rule.
+Shipped: `scopedCount` + persisted `scopedClauses` (the acquisition gate's
+rejections had been computed and dropped, which is why the 2026-08-23 finding sat
+unseen for eleven days), the G1 zero-quota detector control, `unlabelled`
+variants, `--doc-variant`, and variant-only fingerprint keys.
 
-### What shipped
+**Citable, with its bounds.** G1: 11/11 pairs mutant-fires / original-silent,
+both expected-silent cases silent; 4 mutants, **3 killed** — the survivor
+(removing the `PROGRESSION_VERB` veto) is recorded, not patched, so G1
+establishes nothing about that regex. Amendment 1, recorded before any call,
+struck the "at least 2 startups" clause: all 11 harvestable clauses are AgroLink
+PH, so ⚠️ **G1 validates the detector against AgroLink's register only** while
+half the observations are MediSync, whose descriptive register is what
+`unlabelled` aimed to move. The acquisition gate rejects the progression frame
+correctly, **6 for 6**.
 
-- **`scopedCount` + persisted `scopedClauses`.** The acquisition gate's rejections
-  were computed and dropped, which is exactly why the 2026-08-23 finding sat unseen
-  for eleven days. Derived in the harness rather than added to `lib/redundancy.js`,
-  whose source is hashed — a field there would have refused every historical pool
-  for a reporting change that alters no verdict.
-- **G1**, a blocking zero-quota detector control (`lib/g1-cases.js`): every clause
-  the scorer bins `recommended`/`scoped` across three stored runs, each paired with
-  a mutant swapping the progression frame for an acquisition frame. Provenance is
-  machine-checked against the result files; mutants must name the same token.
-- **`unlabelled` variants** with both machine checks, **`--doc-variant`** hard-
-  failing before any network call, and **variant-only fingerprint keys**.
+⚠️ **The only sentence this run licenses:** *"the model did not make this error
+under this manipulation, in these 36 observations per variant."* Not "the
+detector works", not "the model is robust" — n=1 rep, two documents, one model,
+one quota window. **Metric 6 produced no true positive on any real generated text
+across its whole life** (96 + 36 + 72 observations).
 
-### G1 passes, with two bounds that must be quoted with it
-
-11/11 pairs mutant-fires / original-silent; both expected-silent cases silent.
-Mutation-tested: 4 mutants, **3 killed**. The survivor is recorded, not patched —
-removing the `PROGRESSION_VERB` veto changes no G1 verdict because it is the sole
-silencer on zero cases, the model having written the origin frame with a
-preposition every time. G1 establishes nothing about that regex.
-
-**Amendment 1**, recorded in the design file before any call: the "at least 2
-startups" clause is struck. All 11 harvestable clauses are AgroLink PH — MediSync's
-six are descriptive (*"acceptance is demonstrated by…"*), never the recommendation
-register. ⚠️ **G1 therefore validates the detector against AgroLink's register only,
-while half the run's observations will be MediSync — whose descriptive register is
-precisely what `unlabelled` aims to move.** G1's blind spot sits where the
-manipulation acts.
-
-### The database has 12 startups; the harness uses 2, and that is right
-
-John asked why. Ten of the twelve are thin intake records — `historical_timeline:
-[]`, `intellectual_property_status: "Pending AI Generation"`, `members: []`. They
-evidence a target market and nothing else, so they cannot supply the Technology or
-Acceptance evidence all 11 G1 clauses live in. And G1's cases are the model's *own
-generated text*: a new document yields zero cases until quota is spent generating
-for it. Adding one also moves all 45 fingerprints, since `common.startups` is
-hashed into every key. Two quota days and forfeited pooling — declined, recorded.
-
-### Five of six cells
-
-⚠️ AgroLink/Market cannot be manipulated: its evidence phrase *includes* its own
-field label, so "byte-identical" and "label deleted" are mutually exclusive. It
-stays labelled as an accidental within-document control and must not be read as a
-manipulated observation. One confound: MediSync's Acceptance evidence shares a
-sentence with an Organizational fact, so that fact is unlabelled as a side effect —
-it cannot reach metric 6, but metric 5's `unlabelled` numbers carry it.
-
-### Verified without quota
-
-All 45 stored fingerprints byte-identical (30 variant keys added). Re-scoring
-2026-08-23 reproduces its six original rows exactly. The historical merge refusal
-list is byte-identical to before. `--dry-run` prints `G1: pass` and the two RNA
-prompts differ in exactly the document lines. A typo'd `--doc-variant` exits 1
-before any network call. **358/358** measurement tests.
-
-### Also worth knowing
-
-A doc de-duplication fell out of this: both documents now live once, in
-`ORIGINAL_DOCS`. `audit-ground-truth.js` used to regex-scrape the template literal
-out of the harness source — which also returned *raw* source, so on a CRLF checkout
-the audit read documents with `
-` while the harness parsed the same literal to
-`
-`.
-
-### The run, and the retirement
-
-**12/12 calls, 72/72 dimensions, no 429s, no 503s, no retries**
-(`results/2026-09-05-rna-salience.json`). **`redundantRate` is 0 on every arm under
-both `original` and `unlabelled`.** Prediction 1 (G2 fires) failed; prediction 2 is
-untestable as a consequence. **The stopping rule fired: metric 6 is retired.**
-
-**The manipulation was delivered, and that is what makes the null worth having.**
-Of 36 (startup, dimension) pairs, **0 are byte-identical** across variants, mean
-word overlap **0.44**. The model wrote materially different text under the
-manipulated document and still never asked for an artifact the document already
-evidenced — every clause naming a satisfied artifact describes it as achieved
-(*"having tested a paper prototype…"*, *"gained user acceptance across 6
-facilities…"*). Both `scoped` clauses are `original`; under `unlabelled` the model
-did not even write the progression construction the gate exists to reject.
-
-⚠️ **The only sentence this run licenses** is *"the model did not make this error
-under this manipulation, in these 36 observations per variant."* Not "the detector
-works" — G1 is a bound, AgroLink-only, with `PROGRESSION_VERB` untested. Not "the
-model is robust" — n=1 rep, two documents, one model, one quota window, two
-uncaught classes still untested. **Metric 6 produced no true positive on any real
-generated text across its whole life** (96 + 36 + 72 observations). What it did
-establish: the acquisition gate rejects the progression frame correctly, 6 for 6.
-
-### Next step
-
-Metric 6 is closed, so the measurement track has no open item. The critical path
-is the SPMP and the traceability matrix, which compete for the same weeks as the
-30-user study.
-
-### Open
-
-Unchanged: the per-startup reads in `rna`, `rns`, `initiative` and `roadblock` are
-unguarded; no generalized `RolesGuard`; `debug: true` still logs SQL parameter
-values to Render; the boot seeder still re-seeds on every redeploy.
+**Open, unchanged:** the per-startup reads in `rna`, `rns`, `initiative` and
+`roadblock` are unguarded; no generalized `RolesGuard`; `debug: true` still logs
+SQL parameter values to Render; the boot seeder still re-seeds on every redeploy.
 
 ---
 ## 2026-09-05 (later) — objective 3a's threshold measured, and it fails
@@ -657,3 +580,86 @@ traceability matrix**, competing for the same weeks as the 30-user study.
 before that session*; the 2026-09-05 (later) entry carries "the 2026-09-04 deploy
 still has not happened" as its oldest debt. Both cannot be true — resolve against
 the live site before either line is cited.
+
+---
+## 2026-09-07 — five defects fixed on five branches, three diagnoses corrected
+
+Zero Gemini generation calls. No measurement. Started from a quota question, ended
+with five branches off `master`, each verified live against Neon and a real browser.
+All local, none pushed.
+
+### What started it
+
+John asked whether the 10-startups-per-day ceiling was real. It is, and it is not an
+OCR limit: `gemini-3.6-flash` free tier is **20 `generateContent` calls/day**
+(quotaId `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, per model per project),
+and adding a startup from a photo costs **2** — the Vision extract on
+`/parse-capsule-proposal` plus `generateStartupAnalysisSummary` on `/apply`. Scanning
+alone is 1, so 20 scans/day if you never submit.
+
+**A full 6-dimension workflow costs ~23 calls and does not fit in a day.** RNA 1
+(all six in one prompt), RNS 12 (6 generations + 6 bias reviews at 1 task each),
+Initiatives 6 (one per RNS), Roadblocks 4 (1 + 3 bias reviews). 23 is the floor —
+every JSON call retries once on a bad parse, and generating RNA per-dimension adds 5.
+`AI_BIAS_REVIEW_ENABLED=false` drops it to 14, which fits, at the cost of objective
+4b. Embeddings have their own bucket and were separately exhausted on 2026-07-28.
+
+### The five branches
+
+| Branch | Defect | Verified |
+|---|---|---|
+| `fix/generation-debug-dry-run` | `debug` flags spent full quota anyway | Runs 42/43/44 null tokens vs 2731/117 real; 0 rows written |
+| `fix/level-criteria-from-corpus` | Empty criteria table under every level | Live as mentor; svelte-check 113 vs master 117 |
+| `fix/readiness-level-names` | 49/54 names restated their own number | 54 updated, 0 placeholders left, second run 0/54 |
+| `fix/remove-member-verb` | Remove member always 404'd | Old call 404, new 201, full UI path |
+| `fix/guard-readinesslevel-controller` | 4 routes answered unauthenticated | All five 401 without token, 200 with |
+
+### Three diagnoses in `TODO_CHECKLIST.md` were wrong, each caught by one check
+
+- **Reachability (defect 1).** "Every URAT criteria table renders nothing… a mentor
+  sees a broken rating screen" — true of the code, false of the app. `RatedRubric`
+  sits behind `selectedTab === 'detailed'` and `updateTab`
+  (`readiness-level/+page.svelte:169`) was **defined and never called**; the
+  non-rated `Rubric` had no importer at all. Nobody had ever seen the empty table.
+  **Sixth instance** of this project's recurring shape: the symptom is real and the
+  reachability was never checked.
+- **Scope (defect 4).** The wrong verb was one of **three** faults in the same
+  function, and either of the others would have kept it silent after a verb fix:
+  `res.status === 200` against a POST that answers 201, and
+  `removeMemberFromStartup` returning nothing at all.
+- **Risk (defect 5).** "Guarding it will break the application flow" is **stale**.
+  It predates the same-origin proxy: `routes/api/[...path]/+server.ts` swaps the
+  httpOnly `Access` cookie for a Bearer header, so `Application.svelte`'s bare
+  fetches have been authenticated since `5a453d2`. Verified: through the proxy those
+  calls return 200/18 rows; anonymous, `/apply` is 302'd to `/` by the `(app)` layout
+  before the component mounts, so no real user meets the new 401.
+
+### Two findings worth carrying
+
+**A property assigned onto a MikroORM entity is dropped by serialization.**
+`getReadinessLevels` did `Object.assign(level, { rubric })`; the unit test stubbed
+`findAll` with POJOs and passed, and the live route answered without `rubric`.
+Only the live check caught it. Same class as the existing `populate` note — see
+standing notes.
+
+**The `/api` proxy authenticates bare fetches.** Worth knowing before writing another
+"this caller sends no credentials" diagnosis: through `/api/...` it does.
+
+### Left undone, deliberately
+
+`SUPPORT_THRESHOLD` is untouched and stays §2's open defect. Raising the number
+trades one wrong answer for another — an invented `scope` scores 0.632 against a
+grounded `methodology` at 0.575, so no single global threshold separates the
+classes. It needs a pre-registered design on new data, not a code change.
+
+### Merge order
+
+`fix/level-criteria-from-corpus` and `fix/readiness-level-names` **want to land
+together**: the names are only visible through the toggle the first adds, and the
+first's panel assumes the second's backfill. The other three are independent.
+
+### Neon was written to this session
+
+All 54 `readiness_levels.name` values were rewritten, and a member was added then
+removed on startup 1 (membership left exactly as found). Anyone on the same Neon
+branch sees the renames.
