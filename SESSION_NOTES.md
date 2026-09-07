@@ -586,7 +586,7 @@ the live site before either line is cited.
 
 Zero Gemini generation calls. No measurement. Started from a quota question, ended
 with six branches off `master`, each verified live against Neon and a real browser.
-All local, none pushed.
+All six tested by John and **merged to `master` (`b8a091e`)**, which John pushed.
 
 ### What started it
 
@@ -688,3 +688,65 @@ and `ProjectDetails.svelte`, none of which the other five touch.
 All 54 `readiness_levels.name` values were rewritten, and a member was added then
 removed on startup 1 (membership left exactly as found). Anyone on the same Neon
 branch sees the renames.
+
+### Outcome — tested, merged, landed
+
+John tested all six on the branches before anything reached `master`, which is
+the rule this project keeps and the reason nothing was merged on my say-so.
+Two throwaway branches carried the coupled pairs so they could be tested in one
+pass each — `test/readiness-pair` and `test/guard-and-confidence` — both deleted
+after, local and remote, having held nothing but their own merge commits.
+
+Test fixtures made for the pass, in the scratchpad rather than the repo: a
+1300x1060 sample capsule proposal (**HarvestLink PH**, deliberately missing its
+Scope and Methodology sections so both must badge "Not on the page"), and 18
+matching URAT answers written to a deliberately early-but-real profile. ⚠️ **The
+proposal is a font render, not handwriting** — your own note records that the one
+synthetic render ever tested behaved unlike real handwriting on sketch
+detection, so it proves the badge logic and nothing about OCR on real writing.
+
+Merged in dependency order — the readiness pair first, then the four
+independents, docs last. `master` at `b8a091e`: **375/375 backend tests**,
+`svelte-check` **113 errors against the 117 it started at**.
+
+⚠️ **`master` now renames readiness levels on boot.** `seedReadinessLevelNames`
+rewrites all 54 `readiness_levels.name` values the first time any developer boots
+off `master`. Idempotent, and it logs what it did, but a teammate on their own
+Neon branch will see the rename happen to them.
+
+### Found during testing, unfixed — the URAT dimension order
+
+John noticed the apply flow steps **TRL → MRL → RRL → ARL → ORL → IRL**, putting
+Regulatory third. It is worse than one wrong array: **three places in the
+codebase disagree, and none of them matches another.**
+
+| Source | Order |
+|---|---|
+| `ReadinessType` enum, and the seeded `URAT_QUESTIONS` bank | T, M, **A, O, R**, I |
+| Apply flow — `Application.svelte:71` (steps) and `:280` (markup) | T, M, **R, A, O**, I |
+| `READINESS_TYPES`, driving the readiness-level tabs | T, **A, M**, O, R, I |
+
+The apply flow has it in two places that agree with each other, so it reads as
+deliberate rather than a typo. The `READINESS_TYPES` swap of Acceptance and
+Market is a third instance nobody has reported, probably because that page prints
+the dimension name beside each tab.
+
+**Blocked on the SDD, not on effort.** `CLAUDE.md` contradicts itself here —
+it writes the acronyms "TRL/MRL/RRL/ARL/ORL/IRL" and then names them Technology,
+Market, Acceptance, Organizational, Regulatory, Investment in the same sentence —
+and the authoritative documents are the PDFs outside the repo. Read the SDD
+before changing anything: if it really does put Regulatory third, the enum and
+the question bank are what is wrong, and that is a far larger change than the
+apply flow. Tracked in `TODO_CHECKLIST.md` §2.
+
+### Next step
+
+1. **Settle the dimension order against the SDD**, then decide whether to fix
+   only the apply flow or make one order canonical and derive the other two from
+   it. The disagreement is the defect; the visible symptom is one instance.
+2. **`supportRatio` stays §2's open measurement problem.** The false "Verified"
+   badge is gone without touching the threshold, so it is no longer demo-visible,
+   but the metric still cannot separate grounded from invented above the line.
+   Per-field thresholds need their own pre-registered design on new data.
+3. **The critical path is unchanged and still unstarted:** the SPMP and the
+   traceability matrix, competing for the same weeks as the 30-user study.

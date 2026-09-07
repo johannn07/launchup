@@ -41,9 +41,9 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | **OCR documents deduped by content hash + boot-time prune of unattached rows** (`OCR_RETENTION_DAYS`, default 30) | `fix/ocr-document-dedupe` — pushed, live-verified on Neon, PR not opened |
 | **Mentors can read what each readiness level means** — `GET /readinesslevel/rubrics` over the 54 corpus rows + per-dimension provenance | `feat/readiness-level-guide` — pushed, live-verified, PR not opened |
 | **3a OCR accuracy harness — 10-page/2-writer corpus, 80 labelled observations, threshold sweep with a confound-free arm, CER primitives, zero-quota gates, and the 12-call run** | `measure/ocr-accuracy` — local, unpushed. Threshold measured (negative, now a §2 defect); **CER scoped out to 3c** — harness built and parked, needs only typed spans |
-| **Generation `debug` flags made real dry runs** — RNA/RNS/Initiatives declared the flag and spent full quota anyway; only roadblocks short-circuited. All four now return `{ prompts }` before any AI call, and the renumbering writes are guarded too | `fix/generation-debug-dry-run` — local, live-verified (runs 42/43/44 null tokens vs 2731/117 for a real run, 0 rows written) |
-| **Four §2 defects fixed on four branches** — empty criteria table, placeholder level names, remove-member, unguarded controller. Three carried a wrong diagnosis (impact, scope, risk) | local, all live-verified — see `SESSION_NOTES.md` 2026-09-07 |
-| **The extraction review stopped claiming fields are "Verified"** — vocabulary is now unsupported / unverified / failed, the threshold untouched; also deletes the `length < 40` rule that was still tinting every card green | `fix/field-confidence-claim` — local, verified against a stubbed response at zero quota |
+| **Generation `debug` flags made real dry runs** — RNA/RNS/Initiatives declared the flag and spent full quota anyway; only roadblocks short-circuited. All four now return `{ prompts }` before any AI call, and the renumbering writes are guarded too | `fix/generation-debug-dry-run` — **merged `b8a091e`**, live-verified (runs 42/43/44 null tokens vs 2731/117 for a real run, 0 rows written) |
+| **Four §2 defects fixed on four branches** — empty criteria table, placeholder level names, remove-member, unguarded controller. Three carried a wrong diagnosis (impact, scope, risk) | **merged to `master` `b8a091e`** after John tested each branch — see `SESSION_NOTES.md` 2026-09-07 |
+| **The extraction review stopped claiming fields are "Verified"** — vocabulary is now unsupported / unverified / failed, the threshold untouched; also deletes the `length < 40` rule that was still tinting every card green | `fix/field-confidence-claim` — **merged `b8a091e`**; verified against a stubbed response at zero quota, then by John on a real upload |
 
 ---
 
@@ -53,7 +53,7 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified". **The badge was removed 2026-09-07** (the claim changed, the threshold did not); the underlying metric stays open in §2 |
 | **Security issues (§1)** | In progress — all P0 closed; the unguarded `readinesslevel` controller closed 2026-09-07 (`fix/guard-readinesslevel-controller`); 4 P1 open, 1 to confirm and close |
-| **Broken functionality (§2)** | In progress — 14 of 20 fixed, four of them 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller). **6 open, none now demo-visible** — the `supportRatio` defect stays open as a measurement problem, but its false "Verified" badge was removed 2026-09-07 without touching the threshold. Three of the four fixed carried a wrong diagnosis: impact, scope and risk respectively; see `SESSION_NOTES.md` 2026-09-07 |
+| **Broken functionality (§2)** | In progress — **14 of 21 fixed and merged to `master` 2026-09-07** (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller), all four tested by John first. **7 open, none demo-visible.** The `supportRatio` defect stays open as a measurement problem, its false "Verified" badge removed without touching the threshold. **One added 2026-09-07:** three places disagree on the readiness dimension order, blocked on the SDD. Three of the four fixed carried a wrong diagnosis — impact, scope and risk; see `SESSION_NOTES.md` 2026-09-07 |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
 | **Cleanup / tech debt (§4)** | In progress — 7 of 27 done, 20 open (two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`) |
 | **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota, 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06). **Quota is now costed** (2026-09-07): 2 calls per startup intake, ~23 per 6-dimension workflow, against a hard 20/day — see §5 |
@@ -720,6 +720,19 @@ measurement.
 ---
 
 ## 2. Broken functionality
+
+- [ ] 🐞 **BUG · S→M · Three places disagree on the readiness dimension order** — *found 2026-09-07 by John, blocked on the SDD*
+  The apply flow steps **TRL → MRL → RRL → ARL → ORL → IRL**, putting Regulatory third. Not one wrong array — nothing in the codebase agrees:
+
+  | Source | Order |
+  |---|---|
+  | `ReadinessType` enum, and the seeded `URAT_QUESTIONS` bank | T, M, **A, O, R**, I |
+  | Apply flow — `Application.svelte:71` (steps) and `:280` (markup) | T, M, **R, A, O**, I |
+  | `READINESS_TYPES`, driving the readiness-level tabs | T, **A, M**, O, R, I |
+
+  The apply flow has it in two places that agree with each other, so it reads as deliberate. The `READINESS_TYPES` swap of Acceptance and Market is a third instance **nobody has reported** — likely because that page prints the dimension name beside each tab.
+  ⚠️ **Do not fix before reading the SDD.** `CLAUDE.md` contradicts itself — it writes the acronyms "TRL/MRL/RRL/ARL/ORL/IRL" then names them Technology, Market, Acceptance, Organizational, Regulatory, Investment in the same sentence. If the spec really puts Regulatory third, the enum and the question bank are wrong, which is a far larger change than the apply flow.
+  **Then decide the scope:** patch the apply flow only, or make one order canonical and derive the other two from it. The disagreement is the defect; the visible symptom is one instance of it.
 
 - [ ] 🐞 **BUG · M · `supportRatio` cannot separate grounded from invented fields** — *measured 2026-09-05; the false claim removed 2026-09-07 (`fix/field-confidence-claim`), the metric still open*
   **Narrowed, not closed.** The UI no longer says "Verified" about anything. The threshold is unchanged at 0.5, but read directionally the measurement licenses only the negative claim — below the line no grounded field was observed, at or above it 18 of 26 invented fields also land — so the states became `unsupported` / `unverified` / `failed` and only `unsupported` ("Not on the page") asserts anything. **No longer demo-visible:** a reviewer uploading a sparse page now sees neutral badges and one amber warning, not green endorsements.
