@@ -18,7 +18,7 @@
     objectives: string;
     scope: string;
     methodology: string;
-    fieldConfidence?: Record<string, 'verified' | 'low' | 'failed'>;
+    fieldConfidence?: Record<string, 'unsupported' | 'unverified' | 'failed'>;
     legibilityStatus?: 'verified' | 'failed';
     legibilityReason?: string | null;
     sketchDetected?: boolean;
@@ -114,41 +114,31 @@
     information = undefined as never;
   }
 
-  function getReviewStatus(value: string | undefined) {
-    if (!value || !value.trim()) {
-      return {
-        label: 'Failed',
-        tone: 'border-rose-200 bg-rose-50 text-rose-700'
-      };
-    }
-
-    if (value.trim().length < 40) {
-      return {
-        label: 'Low',
-        tone: 'border-amber-200 bg-amber-50 text-amber-700'
-      };
-    }
-
-    return {
-      label: 'Verified',
-      tone: 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    };
+  // No green, and no "Verified". Measured 2026-09-05: at the shipped threshold
+  // 18 of 26 invented fields cleared it, so a high support ratio cannot claim
+  // grounding. A ratio below it can — no grounded field fell there — so
+  // 'unsupported' is the only badge that asserts anything.
+  // Absent means unchecked, not confirmed.
+  function getConfidenceLabel(fieldKey: keyof typeof information.fieldConfidence | string) {
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'unverified';
+    if (confidence === 'failed') return 'Not extracted';
+    if (confidence === 'unsupported') return 'Not on the page';
+    return 'Unverified';
   }
 
-  // Absent means unchecked, not confirmed. Defaulting to 'verified' rendered a
-  // green badge for a field the backend never scored.
-  function getConfidenceLabel(fieldKey: keyof typeof information.fieldConfidence | string) {
-    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'low';
-    if (confidence === 'failed') return 'Failed';
-    if (confidence === 'low') return 'Low';
-    return 'Verified';
+  function getConfidenceHint(fieldKey: keyof typeof information.fieldConfidence | string) {
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'unverified';
+    if (confidence === 'failed') return 'Nothing was extracted for this field.';
+    if (confidence === 'unsupported')
+      return 'The uploaded page does not contain this wording. The model composed it — check it against your document before submitting.';
+    return 'Not checked against the page. Read it before submitting.';
   }
 
   function getConfidenceTone(fieldKey: keyof typeof information.fieldConfidence | string) {
-    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'low';
+    const confidence = information?.fieldConfidence?.[fieldKey] ?? 'unverified';
     if (confidence === 'failed') return 'border-rose-200 bg-rose-50 text-rose-700';
-    if (confidence === 'low') return 'border-amber-200 bg-amber-50 text-amber-700';
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (confidence === 'unsupported') return 'border-amber-200 bg-amber-50 text-amber-700';
+    return 'border-slate-200 bg-slate-50 text-slate-600';
   }
 
   $: if (files) {
@@ -253,8 +243,7 @@
 
         <div class="mt-4 grid gap-3 md:grid-cols-2">
           {#each reviewFields as field}
-            {@const status = getReviewStatus(information[field.key])}
-            <div class={`rounded-xl border p-4 ${status.tone}`}>
+            <div class={`rounded-xl border p-4 ${getConfidenceTone(field.key)}`}>
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <p class="text-xs font-semibold uppercase tracking-[0.18em] opacity-70">{field.label}</p>
@@ -265,7 +254,10 @@
                     placeholder="No text extracted yet"
                   ></textarea>
                 </div>
-                <span class={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${getConfidenceTone(field.key)}`}>
+                <span
+                  class={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${getConfidenceTone(field.key)}`}
+                  title={getConfidenceHint(field.key)}
+                >
                   {getConfidenceLabel(field.key)}
                 </span>
               </div>

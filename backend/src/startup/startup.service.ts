@@ -41,7 +41,11 @@ import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { CreateStartupDto } from '../admin/dto/create-startup.dto';
 import { OcrService } from 'src/ocr/ocr.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
-import { scoreFields } from 'src/ocr/field-confidence';
+import {
+  confidenceScore,
+  scoreFields,
+  type FieldConfidence,
+} from 'src/ocr/field-confidence';
 import { isQuotaError, isServiceFailure } from '../ai/retry-transient';
 
 // OcrService returns this sentinel instead of throwing when no engine resolves.
@@ -284,7 +288,7 @@ export class StartupService {
 
       const failedConfidence = Object.fromEntries(
         Object.keys(failedReview).map((key) => [key, 'failed']),
-      ) as Record<string, 'verified' | 'low' | 'failed'>;
+      ) as Record<string, FieldConfidence>;
 
       await this.upsertOcrDocument(contentHash, {
         originalFilename: file.originalname,
@@ -292,7 +296,7 @@ export class StartupService {
         processingStatus: 'processed',
         legibilityStatus: 'failed',
         fieldConfidence: Object.fromEntries(
-          Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+          Object.entries(failedConfidence).map(([key, value]) => [key, confidenceScore(value)]),
         ),
         sourcePath: undefined,
         createdAt: new Date(),
@@ -384,7 +388,7 @@ export class StartupService {
 
         const failedConfidence = Object.fromEntries(
           Object.keys(failedReview).map((key) => [key, 'failed']),
-        ) as Record<string, 'verified' | 'low' | 'failed'>;
+        ) as Record<string, FieldConfidence>;
 
         await this.upsertOcrDocument(contentHash, {
           originalFilename: file.originalname,
@@ -392,7 +396,7 @@ export class StartupService {
           processingStatus: 'failed',
           legibilityStatus: 'failed',
           fieldConfidence: Object.fromEntries(
-            Object.entries(failedConfidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+            Object.entries(failedConfidence).map(([key, value]) => [key, confidenceScore(value)]),
           ),
           sourcePath: undefined,
           createdAt: new Date(),
@@ -479,7 +483,7 @@ export class StartupService {
       extractedText: transcription,
       processingStatus: 'processed',
       fieldConfidence: Object.fromEntries(
-        Object.entries(confidence).map(([key, value]) => [key, value === 'verified' ? 1 : value === 'low' ? 0.5 : 0]),
+        Object.entries(confidence).map(([key, value]) => [key, confidenceScore(value)]),
       ),
       sourcePath: undefined,
       createdAt: new Date(),

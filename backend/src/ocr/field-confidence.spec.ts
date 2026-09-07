@@ -1,4 +1,9 @@
-import { classifyField, scoreFields, supportRatio } from './field-confidence';
+import {
+  classifyField,
+  confidenceScore,
+  scoreFields,
+  supportRatio,
+} from './field-confidence';
 
 // Abridged from the AgriTrace sample capsule proposal, so the fixtures behave
 // like a real page rather than like text written to pass.
@@ -14,37 +19,6 @@ transport lead to rapid food spoilage.
 V. Target Market
 Small-to-medium agricultural cooperatives and cold-chain trucking services in
 Luzon and Visayas.`;
-
-describe('classifyField', () => {
-  it('reports a field with no text as failed', () => {
-    expect(classifyField('', PAGE, 'vision')).toBe('failed');
-    expect(classifyField('   ', PAGE, 'vision')).toBe('failed');
-  });
-
-  it('verifies a field whose wording comes off the page', () => {
-    const target = 'Small-to-medium agricultural cooperatives and cold-chain trucking services in Luzon and Visayas';
-    expect(classifyField(target, PAGE, 'vision')).toBe('verified');
-  });
-
-  // The bug this whole rule exists to catch. `scope` has no section in either
-  // sample proposal, so the model invents one — and the prompt orders it to
-  // write at least 40 characters, which is precisely what the old rule rewarded.
-  it('does not verify a long field the page does not support', () => {
-    const invented =
-      'The engagement encompasses discovery workshops, stakeholder alignment sessions and a phased quality assurance programme across all deliverables';
-    expect(invented.length).toBeGreaterThan(40);
-    expect(classifyField(invented, PAGE, 'vision')).toBe('low');
-  });
-
-  it('does not verify anything when there is no transcription to check against', () => {
-    const target = 'Small-to-medium agricultural cooperatives and cold-chain trucking services in Luzon';
-    expect(classifyField(target, '', 'vision')).toBe('low');
-  });
-
-  it('does not verify a field made only of function words', () => {
-    expect(classifyField('the of and to', PAGE, 'vision')).toBe('low');
-  });
-});
 
 describe('supportRatio', () => {
   it('returns null rather than 1 when the field has nothing to check', () => {
@@ -68,7 +42,11 @@ describe('scoreFields', () => {
       'vision',
     );
 
-    expect(result).toEqual({ title: 'verified', scope: 'low', methodology: 'failed' });
+    expect(result).toEqual({
+      title: 'unverified',
+      scope: 'unsupported',
+      methodology: 'failed',
+    });
   });
 });
 
@@ -83,24 +61,78 @@ describe('classifyField — circular evidence', () => {
     expect(supportRatio(garbage, garbage)).toBe(1);
   });
 
-  it('refuses to verify a field derived from the text it is checked against', () => {
-    expect(classifyField(garbage, garbage, 'derived')).toBe('low');
+  it('makes no claim about a field derived from the text it is checked against', () => {
+    expect(classifyField(garbage, garbage, 'derived')).toBe('unverified');
   });
 
-  it('still verifies when the transcription is independent evidence', () => {
-    expect(classifyField(garbage, garbage, 'vision')).toBe('verified');
+  it('reaches the same unverified answer on independent evidence, since a high ratio proves nothing', () => {
+    expect(classifyField(garbage, garbage, 'vision')).toBe('unverified');
+  });
+
+  // What source still decides: a non-match is a finding about the page only
+  // when the transcription did not produce the field.
+  it('reports a non-match as unsupported on vision, and withholds it on derived', () => {
+    const absent = 'quantum entanglement satellite uplink calibration procedures';
+    expect(classifyField(absent, PAGE, 'vision')).toBe('unsupported');
+    expect(classifyField(absent, PAGE, 'derived')).toBe('unverified');
   });
 
   it('still reports an empty derived field as failed', () => {
     expect(classifyField('', garbage, 'derived')).toBe('failed');
   });
 
-  it('caps every derived field at low, however well it matches', () => {
+  it('withholds a claim on every derived field, however well it matches', () => {
     const result = scoreFields(
       { title: garbage, scope: garbage, methodology: '' },
       garbage,
       'derived',
     );
-    expect(result).toEqual({ title: 'low', scope: 'low', methodology: 'failed' });
+    expect(result).toEqual({
+      title: 'unverified',
+      scope: 'unverified',
+      methodology: 'failed',
+    });
+  });
+});
+
+/**
+ * The claim change, 2026-09-07. The threshold is unchanged; what the states
+ * assert is not. Measured on 80 labelled observations: at 0.5 sensitivity is
+ * 100% and specificity 30.8%, so a ratio below the line is informative (no
+ * grounded field fell there) and a ratio above it is not (18 of 26 invented
+ * fields did). Nothing may claim verification off this metric.
+ */
+describe('classifyField — what each state claims', () => {
+  it('calls a field the page does not support unsupported, the one measured claim', () => {
+    const invented =
+      'The engagement encompasses discovery workshops, stakeholder alignment sessions and a phased quality assurance programme across all deliverables';
+    expect(classifyField(invented, PAGE, 'vision')).toBe('unsupported');
+  });
+
+  it('never claims verification, however well the field matches', () => {
+    const target =
+      'Small-to-medium agricultural cooperatives and cold-chain trucking services in Luzon and Visayas';
+    expect(classifyField(target, PAGE, 'vision')).toBe('unverified');
+  });
+
+  it('reports an unverifiable field as unverified, not unsupported', () => {
+    // No evidence is not evidence of absence: these must not read as a finding
+    // about the page.
+    const target = 'Small-to-medium agricultural cooperatives and cold-chain trucking';
+    expect(classifyField(target, '', 'vision')).toBe('unverified');
+    expect(classifyField(target, PAGE, 'derived')).toBe('unverified');
+    expect(classifyField('the of and to', PAGE, 'vision')).toBe('unverified');
+  });
+
+  it('still reports an empty field as failed', () => {
+    expect(classifyField('', PAGE, 'vision')).toBe('failed');
+  });
+});
+
+describe('confidenceScore', () => {
+  it('encodes the three states distinctly for the stored telemetry column', () => {
+    expect(confidenceScore('unverified')).toBe(0.5);
+    expect(confidenceScore('unsupported')).toBe(0.25);
+    expect(confidenceScore('failed')).toBe(0);
   });
 });
