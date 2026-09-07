@@ -439,13 +439,17 @@ describe('StartupService.parseCapsuleProposal — which transcription is stored'
 describe('StartupService.parseCapsuleProposal — field confidence', () => {
   // The old rule was `text.length < 40`, so a short honest title scored `low`
   // and 60 characters of invention scored `verified`. Both are backwards.
+  //
+  // Since 2026-09-07 nothing claims verification: the supported title is
+  // `unverified` (a high ratio proves nothing) and only the unsupported scope
+  // carries a finding.
   it('labels by support from the page, not by length', async () => {
     const { service } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
 
     const result: any = await service.parseCapsuleProposal(imageFile, ctx);
 
-    expect(result.fieldConfidence.title).toBe('verified');
-    expect(result.fieldConfidence.scope).toBe('low');
+    expect(result.fieldConfidence.title).toBe('unverified');
+    expect(result.fieldConfidence.scope).toBe('unsupported');
   });
 });
 
