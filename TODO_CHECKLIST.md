@@ -41,6 +41,9 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | **OCR documents deduped by content hash + boot-time prune of unattached rows** (`OCR_RETENTION_DAYS`, default 30) | `fix/ocr-document-dedupe` — pushed, live-verified on Neon, PR not opened |
 | **Mentors can read what each readiness level means** — `GET /readinesslevel/rubrics` over the 54 corpus rows + per-dimension provenance | `feat/readiness-level-guide` — pushed, live-verified, PR not opened |
 | **3a OCR accuracy harness — 10-page/2-writer corpus, 80 labelled observations, threshold sweep with a confound-free arm, CER primitives, zero-quota gates, and the 12-call run** | `measure/ocr-accuracy` — local, unpushed. Threshold measured (negative, now a §2 defect); **CER scoped out to 3c** — harness built and parked, needs only typed spans |
+| **Generation `debug` flags made real dry runs** — RNA/RNS/Initiatives declared the flag and spent full quota anyway; only roadblocks short-circuited. All four now return `{ prompts }` before any AI call, and the renumbering writes are guarded too | `fix/generation-debug-dry-run` — local, live-verified (runs 42/43/44 null tokens vs 2731/117 for a real run, 0 rows written) |
+| **Four §2 defects fixed on four branches** — empty criteria table, placeholder level names, remove-member, unguarded controller. Three carried a wrong diagnosis (impact, scope, risk) | local, all live-verified — see `SESSION_NOTES.md` 2026-09-07 |
+| **The extraction review stopped claiming fields are "Verified"** — vocabulary is now unsupported / unverified / failed, the threshold untouched; also deletes the `length < 40` rule that was still tinting every card green | `fix/field-confidence-claim` — local, verified against a stubbed response at zero quota |
 
 ---
 
@@ -48,12 +51,12 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified" — now tracked in §2 and **unfixed** |
-| **Security issues (§1)** | In progress — all P0 closed; 5 P1 open, 1 to confirm and close |
-| **Broken functionality (§2)** | In progress — 10 of 20 fixed; 10 open, one a security item, one the measured `SUPPORT_THRESHOLD` defect, and **two readiness-data defects found 2026-09-06** (`level_criteria` empty; placeholder `readiness_levels.name`) |
+| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified". **The badge was removed 2026-09-07** (the claim changed, the threshold did not); the underlying metric stays open in §2 |
+| **Security issues (§1)** | In progress — all P0 closed; the unguarded `readinesslevel` controller closed 2026-09-07 (`fix/guard-readinesslevel-controller`); 4 P1 open, 1 to confirm and close |
+| **Broken functionality (§2)** | In progress — 14 of 20 fixed, four of them 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller). **6 open, none now demo-visible** — the `supportRatio` defect stays open as a measurement problem, but its false "Verified" badge was removed 2026-09-07 without touching the threshold. Three of the four fixed carried a wrong diagnosis: impact, scope and risk respectively; see `SESSION_NOTES.md` 2026-09-07 |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
 | **Cleanup / tech debt (§4)** | In progress — 7 of 27 done, 20 open (two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`) |
-| **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota, 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06) |
+| **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota, 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06). **Quota is now costed** (2026-09-07): 2 calls per startup intake, ~23 per 6-dimension workflow, against a hard 20/day — see §5 |
 
 ---
 
@@ -718,7 +721,10 @@ measurement.
 
 ## 2. Broken functionality
 
-- [ ] 🐞 **BUG · M · `SUPPORT_THRESHOLD = 0.5` badges invented fields as "Verified"** — *measured 2026-09-05, unfixed*
+- [ ] 🐞 **BUG · M · `supportRatio` cannot separate grounded from invented fields** — *measured 2026-09-05; the false claim removed 2026-09-07 (`fix/field-confidence-claim`), the metric still open*
+  **Narrowed, not closed.** The UI no longer says "Verified" about anything. The threshold is unchanged at 0.5, but read directionally the measurement licenses only the negative claim — below the line no grounded field was observed, at or above it 18 of 26 invented fields also land — so the states became `unsupported` / `unverified` / `failed` and only `unsupported` ("Not on the page") asserts anything. **No longer demo-visible:** a reviewer uploading a sparse page now sees neutral badges and one amber warning, not green endorsements.
+  **Also deleted in that branch:** `getReviewStatus` in `ProjectDetails.svelte`, the pre-2026-08-22 `length < 40` rule that was still tinting every field card green because the card tone never followed the backend fix.
+  **What remains open is the metric itself**, and the warning below still stands in full — do not "fix" it by raising the number.
   Not a guess any more. Across 80 labelled observations on 10 real handwritten
   pages, the shipped 0.5 has **specificity 30.8% — 18 of 26 fields the page
   never supported render as green "Verified"**. The extraction prompt *orders*
@@ -784,7 +790,9 @@ measurement.
   **Limit:** the guard is emptiness, so it will not repair a *partial* deletion —
   deliberate edits to question text are not clobbered, which is the trade wanted.
 
-- [ ] 🔒 **SEC · S · `readinesslevel` controller has no guard**
+- [x] 🔒 **SEC · S · `readinesslevel` controller has no guard** — *fixed 2026-09-07 (`fix/guard-readinesslevel-controller`)*
+  **Four** routes, not three — `/criterion` too. Guard moved to the class; the 8 redundant per-method decorators removed. The spec asserts the whole handler set, so a route added later without a guard fails there too.
+  ⚠️ **The risk recorded below is stale and did not materialise.** It predates the same-origin proxy: `routes/api/[...path]/+server.ts` swaps the httpOnly `Access` cookie for a Bearer header, so the bare fetches in `Application.svelte` have been authenticated since `5a453d2`. Verified: 200/18 rows through the proxy; anonymous, `/apply` is 302d to `/` by the `(app)` layout before the component mounts.
   Found while diagnosing the above. `@Controller('readinesslevel')` carries no
   class-level `@UseGuards`, so `/readinesslevel/urat-questions`,
   `/calculator-questions` and `/readiness-levels` answer **unauthenticated**
@@ -804,7 +812,8 @@ Each verified by reading **both** sides of the call.
   Also removed the orphaned `let form: HTMLFormElement` at `+page.svelte:241` — the vestige of the deleted `<form>`, declared and never bound.
   **A latent second defect, now moot:** `throw redirect(302, …)` sat *inside* the `try`, and SvelteKit signals redirects by throwing — so the empty `catch` would have swallowed the redirect too. Even a fully working version would have silently done nothing visible.
 
-- [ ] 🐞 **BUG · S · Removing a team member uses the wrong verb and payload shape**
+- [x] 🐞 **BUG · S · Removing a team member uses the wrong verb and payload shape** — *fixed 2026-09-07 (`fix/remove-member-verb`)*
+  **Three faults, not one**, and either of the other two would have kept it silent after a verb fix: `res.status === 200` against a POST that answers 201, and `removeMemberFromStartup` returning nothing, so there was no success signal to check. Remove now mirrors add. Live: old call 404, new call 201, and the full UI path — confirm dialog, `POST /api/startups/remove-member` 201, toast, row gone.
   `.../overview/members/+page.svelte:155` calls `axiosInstance.delete('/startups/remove-member/:memberId/')` with `{startupId}` in the body; the backend is `@Post('remove-member')` reading `userId` **and** `startupId` from the body (`startup.controller.ts:97-103`). Removing a member always fails.
   **Fix:** `axiosInstance.post('/startups/remove-member', { userId: memberId, startupId })`.
 
@@ -861,11 +870,14 @@ Each verified by reading **both** sides of the call.
 - [x] 🐞 **BUG · S · `generateRoadblocks` always returns `[]` despite persisting rows** — **FIXED & live-verified**
   Added the missing `roadblocks.push(roadblock)` after `persistAndFlush`.
 
-- [ ] 🐞 **BUG · M · `level_criteria` is empty, so every URAT criteria table renders nothing** — *found 2026-09-06*
+- [x] 🐞 **BUG · M · `level_criteria` is empty, so every URAT criteria table renders nothing** — *found 2026-09-06, resolved 2026-09-07 (`fix/level-criteria-from-corpus`)*
+  **Not populated — replaced.** Filling it as designed meant authoring 270 prose strings (54 levels x 5 grades) with no source, in a project whose headline claim is reducing fabrication. `getReadinessLevels` now attaches the provenance-tagged corpus descriptor per level and `LevelRubricPanel` renders it; both criteria tables are deleted.
+  ⚠️ **The impact recorded below was wrong.** Neither render path was reachable: `RatedRubric` sat behind `selectedTab === 'detailed'` and `updateTab` (`readiness-level/+page.svelte:169`) was defined and never called; the non-rated `Rubric` had no importer. Nobody had seen the empty table. The same branch adds the missing Dashboard/Levels toggle, which is what makes the screen reachable at all.
   `GET /readinesslevel/criterion` returns **0 rows** against Neon, and `/readiness-levels` returns all 54 levels with `criteria: []`. `criteria-table.svelte` and `rated-criteria-table.svelte` render an Excellent/Good/Fair/Poor/Very&nbsp;Poor header over an empty body, and `rubric.svelte` renders a radio per questionnaire with no criteria beneath it.
   Nothing seeds `LevelCriterion` — `main.ts` seeds `ReadinessLevel` only. **Decide before building:** the entity carries five prose descriptions per criterion, so populating it is authoring work, not a code fix. The 2026-09-06 rubric endpoint deliberately sources from `rag_contexts` instead, so this blocks only the URAT criteria UI, not the mentor level guide.
 
-- [ ] 🐞 **BUG · S · `readiness_levels.name` holds placeholder strings** — *found 2026-09-06*
+- [x] 🐞 **BUG · S · `readiness_levels.name` holds placeholder strings** — *found 2026-09-06, fixed 2026-09-07 (`fix/readiness-level-names`)*
+  Worse than recorded: **49 of 54**, not just the `Seeded` ones — 41 as "{Type} Readiness Level {n}", 8 from `ensureReadinessLevelExists`, plus 5 "baseline" labels from `seedLocalDemoData` that were no more descriptive. `seedReadinessLevelNames` reconciles the column against the corpus on boot, stripping the "TRL 1 — " prefix `radio.svelte` already supplies. Live: 54 updated, 0 placeholders left, second run 0 updated / 54 unchanged. **Lands with `fix/level-criteria-from-corpus`** — the names only render through that branch toggle.
   Live values are `Technology Readiness Level 9` and, from `ensureReadinessLevelExists`, `Seeded {type} level {n}`. Anything rendering `name` as a descriptor shows a restatement of the number. Real descriptor text exists in `backend/data/rag-corpus/readiness-rubrics.json` (54 rows, provenance-tagged) and is now served by `GET /readinesslevel/rubrics` — either backfill `name` from it or stop treating the column as meaningful.
 
 ---
@@ -1055,6 +1067,13 @@ Neither the SRS nor the SDD names a storage vendor, a model version, or Docker �
   **The backend cannot go on Vercel.** `main.ts:379` calls `app.listen()` rather than exporting a handler, boot runs a schema sync plus four seeders plus an embedding backfill, Gemini calls take ~6.5 s on thinking tokens, and Tesseract spawns a worker — all hostile to serverless.
   **Two build settings are load-bearing:** `pnpm install --prod=false` (Render sets `NODE_ENV=production`, so pnpm drops `@nestjs/cli` and `nest build` vanishes), and the RAG corpus seed appended to the build command, because **Render's free tier has no shell** — safe only because the seeder is idempotent.
   **Limits to plan around:** free instances spin down after 15 min with a ~1 min cold start (750 instance-hours/month), and have no persistent disk, so Tesseract re-fetches `eng.traineddata` after each spin-down.
+
+- [ ] ⚠️ **INFRA · M · A full workflow does not fit in a free-tier day** — *costed 2026-09-07*
+  `gemini-3.6-flash` free tier is a hard **20 `generateContent` calls/day** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, per model per project, resets 15:00 PH). Measured against the code, not estimated:
+  - **Startup intake: 2 calls** — Vision extract on `/parse-capsule-proposal` plus `generateStartupAnalysisSummary` on `/apply`. Hence the 10-startups-per-day ceiling John hit. Scanning without submitting is 1, so 20/day.
+  - **6-dimension workflow: ~23 calls** — RNA 1, RNS 12 (6 generations + 6 bias reviews at one task each), Initiatives 6, Roadblocks 4. **Zero complete workflows per day.** 23 is the floor: every JSON call retries once on a bad parse, and per-dimension RNA adds 5.
+  **Levers, both env-only.** `AI_BIAS_REVIEW_ENABLED=false` drops the workflow to 14, which fits, at the cost of objective 4b — do not do this on a run you intend to cite. `GEMINI_MODEL=gemini-3.5-flash-lite` gets a separate 20, since the quota is per model, at the cost of thinking tokens. Neither actually fixes it; a billing-enabled project does.
+  **Related, and the cheaper half:** `fix/generation-debug-dry-run` makes `debug` a real dry run on all four generators, so the mentor and manager screens can be clicked through at zero quota. It produces no rows, so it exercises the screens and permissions, not a walkable RNA→RNS→Initiatives chain — seeded fixtures are the answer to that and are undecided.
 
 - [ ] ⚠️ **INFRA · S · The RNA picker removed an accidental Gemini quota ceiling** — *raised 2026-08-25*
   The old Generate button disabled itself once all six dimensions had an RNA, so a mentor could not spend further calls on a completed startup. Per-dimension regeneration is now always available, against a free tier of roughly **20 calls/day**. This is the approved design, not a regression — but it removes the only thing that was capping spend per startup.
