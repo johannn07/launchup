@@ -634,7 +634,7 @@ describe('RnaService.generateRNA dimension selection', () => {
   it('generates only the requested dimension, even when it already has an RNA', async () => {
     const { service, ctx } = buildFixture();
 
-    const created = await service.generateRNA(1, ctx, ['Market'] as any);
+    const created = (await service.generateRNA(1, ctx, ['Market'] as any)) as any[];
 
     expect(created.map((r: any) => r.readinessLevel.readinessType)).toEqual([
       'Market',
@@ -665,10 +665,97 @@ describe('RnaService.generateRNA dimension selection', () => {
   it('still fills every gap when no dimensions are requested', async () => {
     const { service, ctx } = buildFixture();
 
-    const created = await service.generateRNA(1, ctx);
+    const created = (await service.generateRNA(1, ctx)) as any[];
 
     expect(created.map((r: any) => r.readinessLevel.readinessType)).toEqual([
       'Technology',
     ]);
+  });
+});
+
+describe('RnaService.generateRNA debug dry run', () => {
+  it('returns the assembled prompt without calling the AI or persisting rows', async () => {
+    const persisted: any[] = [];
+
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+
+    const readinessLevel = { id: 100, readinessType: 'Technology', level: 3 };
+    const startupReadinessLevel = { id: 200, readinessLevel };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([]);
+        if (entity === StartupReadinessLevel)
+          return Promise.resolve([startupReadinessLevel]);
+        return Promise.resolve([]);
+      }),
+      persist: jest.fn((entity) => {
+        persisted.push(entity);
+        return entity;
+      }),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const aiService = {
+      generateRNAsFromPrompt: jest.fn(),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+    };
+
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnaService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    const result: any = await service.generateRNA(1, ctx, undefined, true);
+
+    expect(aiService.generateRNAsFromPrompt).not.toHaveBeenCalled();
+    expect(aiService.recordAiRecommendation).not.toHaveBeenCalled();
+    expect(result.prompts).toHaveLength(1);
+    expect(result.prompts[0]).toContain('Technology');
+    expect(persisted).toHaveLength(0);
   });
 });

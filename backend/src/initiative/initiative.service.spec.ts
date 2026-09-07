@@ -96,10 +96,10 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     const { aiRunService, forkedEm } = buildAiRunService();
     const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
-    const result = await service.generateInitiatives(
+    const result = (await service.generateInitiatives(
       { rnsIds: [10], no_of_initiatives_to_create: 1 } as any,
       ctx,
-    );
+    )) as Initiative[];
 
     expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, rns.startup, em);
     expect(aiService.generateInitiativesFromPrompt).toHaveBeenCalledWith(ctx, expect.any(String));
@@ -137,10 +137,10 @@ describe('InitiativeService.generateInitiatives provenance', () => {
     const { aiRunService, forkedEm } = buildAiRunService();
     const service = new InitiativeService(em as any, aiService as any, aiRunService);
 
-    const result = await service.generateInitiatives(
+    const result = (await service.generateInitiatives(
       { rnsId: 20, no_of_initiatives_to_create: 1 } as any,
       ctx,
-    );
+    )) as Initiative[];
 
     expect(aiService.createBasePrompt).toHaveBeenCalledWith(ctx, rns.startup, em);
     expect(aiService.generateInitiativesFromPrompt).toHaveBeenCalledWith(ctx, expect.any(String));
@@ -304,5 +304,84 @@ describe('InitiativeService.refineInitiative provenance', () => {
       { startup: 1 },
     );
     expect(result.refinedDescription).toBe('New, sharper description');
+  });
+});
+
+describe('InitiativeService.generateInitiatives debug dry run', () => {
+  const buildRns = () =>
+    ({
+      id: 10,
+      priorityNumber: 1,
+      readinessType: 'Technology',
+      status: 1,
+      targetLevel: { level: 3 },
+      description: 'Existing RNS description',
+      startup: {
+        id: 1,
+        name: 'AgroLink',
+        user: { id: 5 },
+        capsuleProposal: { title: 't' },
+      },
+    }) as any;
+
+  it('returns the assembled prompts without calling the AI or renumbering existing initiatives', async () => {
+    const rns = buildRns();
+    const created: any[] = [];
+
+    // A pre-existing row whose initiativeNumber the batch branch shifts before
+    // it generates. A dry run must leave it alone.
+    const existingInitiative = { id: 90, initiativeNumber: 1 };
+
+    const em = {
+      find: jest.fn((entity: any) => {
+        if (entity === Initiative) return Promise.resolve([existingInitiative]);
+        return Promise.resolve([]);
+      }),
+      count: jest.fn().mockResolvedValue(0),
+      findOneOrFail: jest.fn((entity: any, where: any) => {
+        if (entity === Rns && where.id === 10) return Promise.resolve(rns);
+        return Promise.reject(new Error('Unexpected findOneOrFail'));
+      }),
+      persistAndFlush: jest.fn((entity) => {
+        created.push(entity);
+        return Promise.resolve(undefined);
+      }),
+    };
+
+    const aiService = {
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+      generateInitiativesFromPrompt: jest.fn(),
+    };
+
+    const ctx = {
+      runId: 77,
+      run: {} as any,
+      tokens: { promptTokens: 0, completionTokens: 0, recorded: false },
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new InitiativeService(
+      em as any,
+      aiService as any,
+      buildAiRunService().aiRunService,
+    );
+
+    const result: any = await service.generateInitiatives(
+      { rnsIds: [10], no_of_initiatives_to_create: 1, debug: true } as any,
+      ctx,
+    );
+
+    expect(aiService.generateInitiativesFromPrompt).not.toHaveBeenCalled();
+    expect(result.prompts).toHaveLength(1);
+    expect(result.prompts[0]).toContain('Technology');
+    expect(existingInitiative.initiativeNumber).toBe(1);
+    expect(created).toHaveLength(0);
   });
 });

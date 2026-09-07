@@ -152,6 +152,7 @@ export class InitiativeService {
   }
 
   async generateInitiatives(dto: GenerateInitiativeDto, ctx: AiRunContext) {
+    const debugPrompts: string[] = [];
     if (dto.rnsIds && dto.rnsIds.length > 0) {
       const initiatives: Initiative[] = [];
 
@@ -201,9 +202,11 @@ export class InitiativeService {
       if (minInitiativeNumber > 1) minInitiativeNumber = 1;
 
       // Shift existing rows up so the new initiatives can take the low numbers.
-      for (const initiative of existingInitiatives) {
-        initiative.initiativeNumber += dto.rnsIds.length;
-        await this.em.persistAndFlush(initiative);
+      if (!dto.debug) {
+        for (const initiative of existingInitiatives) {
+          initiative.initiativeNumber += dto.rnsIds.length;
+          await this.em.persistAndFlush(initiative);
+        }
       }
 
       for (let i = 0; i < rnsList.length; i++) {
@@ -239,6 +242,11 @@ export class InitiativeService {
             - measures, targets, and remarks max 150
             `;
 
+        if (dto.debug) {
+          debugPrompts.push(prompt);
+          continue;
+        }
+
         const resultText =
           await this.aiService.generateInitiativesFromPrompt(ctx, prompt);
 
@@ -262,6 +270,8 @@ export class InitiativeService {
           initiatives.push(initiative);
         }
       }
+
+      if (dto.debug) return { prompts: debugPrompts };
 
       return initiatives;
     } else if (dto.rnsId) {
@@ -294,9 +304,11 @@ export class InitiativeService {
           : 1;
       if (minInitiativeNumber > 1) minInitiativeNumber = 1;
 
-      for (const initiative of existingInitiatives) {
-        initiative.initiativeNumber += 1;
-        await this.em.persistAndFlush(initiative);
+      if (!dto.debug) {
+        for (const initiative of existingInitiatives) {
+          initiative.initiativeNumber += 1;
+          await this.em.persistAndFlush(initiative);
+        }
       }
 
       const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
@@ -325,6 +337,10 @@ export class InitiativeService {
             - description max 400
             - measures, targets, and remarks max 150
             `;
+
+      if (dto.debug) {
+        return { prompts: [prompt] };
+      }
 
       const resultText =
         await this.aiService.generateInitiativesFromPrompt(ctx, prompt);

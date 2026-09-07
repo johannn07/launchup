@@ -725,3 +725,102 @@ describe('RnsService.getStartupRns verdict join (Task 5)', () => {
     expect(result.validationStatus).toBe('flagged');
   });
 });
+
+describe('RnsService.generateTasks debug dry run', () => {
+  it('returns the assembled prompts without calling the AI or renumbering existing RNS', async () => {
+    const persisted: any[] = [];
+
+    const startup = {
+      id: 1,
+      name: 'AgroLink',
+      user: { id: 7 },
+      capsuleProposal: {
+        title: 't',
+        description: 'd',
+        problemStatement: 'p',
+        targetMarket: 'm',
+        solutionDescription: 's',
+        objectives: 'o',
+        scope: 'sc',
+        methodology: 'me',
+      },
+    };
+
+    const rna = {
+      id: 10,
+      rna: 'Validate demand with 10 customer interviews.',
+      readinessLevel: { readinessType: 'Technology', level: 3 },
+    };
+
+    // A pre-existing row whose priorityNumber generateTasks shifts before it
+    // generates. A dry run must leave it alone — reordering a mentor's board is
+    // exactly the side effect the debug flag exists to avoid.
+    const existingRns = { id: 55, priorityNumber: 1 };
+
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve([rna]);
+        if (entity === StartupReadinessLevel) return Promise.resolve([]);
+        if (entity === Rns) return Promise.resolve([existingRns]);
+        return Promise.resolve([]);
+      }),
+      create: jest.fn((_e, data) => data),
+      persist: jest.fn((entity) => {
+        persisted.push(entity);
+        return entity;
+      }),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+      flush: jest.fn().mockResolvedValue(undefined),
+      getReference: jest.fn((_e, id) => ({ id })),
+    };
+
+    const aiService = {
+      generateTasksFromPrompt: jest.fn(),
+      reviewBiasScore: jest.fn(),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      recordBiasAudit: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue({ lowConfidence: true }),
+    };
+
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({
+        model: 'gemini-2.5-flash-lite',
+        temperature: 0,
+        grounding: true,
+        rag: true,
+        biasReview: true,
+        scoreNormalization: true,
+      }),
+    } as any;
+
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    const result: any = await service.generateTasks(
+      { startup_id: 1, rnaIds: [10], no_of_tasks_to_create: 1, debug: true } as any,
+      ctx,
+    );
+
+    expect(aiService.generateTasksFromPrompt).not.toHaveBeenCalled();
+    expect(aiService.reviewBiasScore).not.toHaveBeenCalled();
+    expect(result.prompts).toHaveLength(1);
+    expect(result.prompts[0]).toContain('Technology');
+    expect(existingRns.priorityNumber).toBe(1);
+    expect(persisted).toHaveLength(0);
+  });
+});
