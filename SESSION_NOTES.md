@@ -582,10 +582,10 @@ still has not happened" as its oldest debt. Both cannot be true — resolve agai
 the live site before either line is cited.
 
 ---
-## 2026-09-07 — five defects fixed on five branches, three diagnoses corrected
+## 2026-09-07 — five defects fixed, a sixth reframed, three diagnoses corrected
 
 Zero Gemini generation calls. No measurement. Started from a quota question, ended
-with five branches off `master`, each verified live against Neon and a real browser.
+with six branches off `master`, each verified live against Neon and a real browser.
 All local, none pushed.
 
 ### What started it
@@ -604,7 +604,7 @@ every JSON call retries once on a bad parse, and generating RNA per-dimension ad
 `AI_BIAS_REVIEW_ENABLED=false` drops it to 14, which fits, at the cost of objective
 4b. Embeddings have their own bucket and were separately exhausted on 2026-07-28.
 
-### The five branches
+### The six branches
 
 | Branch | Defect | Verified |
 |---|---|---|
@@ -613,6 +613,7 @@ every JSON call retries once on a bad parse, and generating RNA per-dimension ad
 | `fix/readiness-level-names` | 49/54 names restated their own number | 54 updated, 0 placeholders left, second run 0/54 |
 | `fix/remove-member-verb` | Remove member always 404'd | Old call 404, new 201, full UI path |
 | `fix/guard-readinesslevel-controller` | 4 routes answered unauthenticated | All five 401 without token, 200 with |
+| `fix/field-confidence-claim` | The review screen claimed invented fields were Verified | Stubbed render, zero quota: 0 emerald cards, correct badges |
 
 ### Three diagnoses in `TODO_CHECKLIST.md` were wrong, each caught by one check
 
@@ -645,18 +646,42 @@ standing notes.
 **The `/api` proxy authenticates bare fetches.** Worth knowing before writing another
 "this caller sends no credentials" diagnosis: through `/api/...` it does.
 
-### Left undone, deliberately
+### `SUPPORT_THRESHOLD` — the claim changed, the metric did not
 
-`SUPPORT_THRESHOLD` is untouched and stays §2's open defect. Raising the number
-trades one wrong answer for another — an invented `scope` scores 0.632 against a
-grounded `methodology` at 0.575, so no single global threshold separates the
-classes. It needs a pre-registered design on new data, not a code change.
+The number stays 0.5. What the UI asserts off it does not, and the change needs
+no new data because the existing measurement already licenses it.
+
+Read directionally, 100% sensitivity and 30.8% specificity give **one sound
+claim and one unusable one**: below 0.5 no grounded field was observed, at or
+above it 18 of 26 invented fields also land. So the vocabulary is now
+`unsupported` / `unverified` / `failed`, and nothing says "verified".
+`unsupported` — rendered "Not on the page" — is the only badge that asserts
+anything. A high ratio and an unrunnable check share one state deliberately:
+both mean no finding, and splitting them invites reading the first as a result.
+
+**A second source of the same false claim, found while doing it.**
+`getReviewStatus` in `ProjectDetails.svelte` was still the pre-2026-08-22
+`length < 40` rule, driving the *card* tint. The backend replaced that rule in
+August; the card tone never followed, so every field card rendered green — and
+since the prompt mandates 40 characters, that meant every card, always. It was
+more visually dominant than the badge sitting on it. Deleted.
+
+⚠️ **This does not fix the metric, and §2 stays open.** `supportRatio` still
+cannot separate grounded from invented above the line. Raising the number
+remains the wrong move: the classes cross *between* fields — an invented `scope`
+averages 0.632 against a grounded `methodology`'s 0.575 — because the ratio has
+a field-dependent baseline. Per-field thresholds are the open hypothesis and
+need a pre-registered design on new data. What changed is that the product no
+longer tells a Manager to trust content the page never carried.
 
 ### Merge order
 
 `fix/level-criteria-from-corpus` and `fix/readiness-level-names` **want to land
 together**: the names are only visible through the toggle the first adds, and the
-first's panel assumes the second's backfill. The other three are independent.
+first's panel assumes the second's backfill. The other four are independent.
+
+`fix/field-confidence-claim` touches `ocr/field-confidence.ts`, `startup.service.ts`
+and `ProjectDetails.svelte`, none of which the other five touch.
 
 ### Neon was written to this session
 

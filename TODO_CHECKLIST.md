@@ -43,6 +43,7 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | **3a OCR accuracy harness — 10-page/2-writer corpus, 80 labelled observations, threshold sweep with a confound-free arm, CER primitives, zero-quota gates, and the 12-call run** | `measure/ocr-accuracy` — local, unpushed. Threshold measured (negative, now a §2 defect); **CER scoped out to 3c** — harness built and parked, needs only typed spans |
 | **Generation `debug` flags made real dry runs** — RNA/RNS/Initiatives declared the flag and spent full quota anyway; only roadblocks short-circuited. All four now return `{ prompts }` before any AI call, and the renumbering writes are guarded too | `fix/generation-debug-dry-run` — local, live-verified (runs 42/43/44 null tokens vs 2731/117 for a real run, 0 rows written) |
 | **Four §2 defects fixed on four branches** — empty criteria table, placeholder level names, remove-member, unguarded controller. Three carried a wrong diagnosis (impact, scope, risk) | local, all live-verified — see `SESSION_NOTES.md` 2026-09-07 |
+| **The extraction review stopped claiming fields are "Verified"** — vocabulary is now unsupported / unverified / failed, the threshold untouched; also deletes the `length < 40` rule that was still tinting every card green | `fix/field-confidence-claim` — local, verified against a stubbed response at zero quota |
 
 ---
 
@@ -50,9 +51,9 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 
 | Objective | Status |
 |---|---|
-| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified" — now tracked in §2 and **unfixed** |
+| **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified". **The badge was removed 2026-09-07** (the claim changed, the threshold did not); the underlying metric stays open in §2 |
 | **Security issues (§1)** | In progress — all P0 closed; the unguarded `readinesslevel` controller closed 2026-09-07 (`fix/guard-readinesslevel-controller`); 4 P1 open, 1 to confirm and close |
-| **Broken functionality (§2)** | In progress — 14 of 20 fixed, four of them 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller). **6 open, and `SUPPORT_THRESHOLD` is the only demo-visible one** — it is not a code change, see §2. Three of the four fixed carried a wrong diagnosis: impact, scope and risk respectively; see `SESSION_NOTES.md` 2026-09-07 |
+| **Broken functionality (§2)** | In progress — 14 of 20 fixed, four of them 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller). **6 open, none now demo-visible** — the `supportRatio` defect stays open as a measurement problem, but its false "Verified" badge was removed 2026-09-07 without touching the threshold. Three of the four fixed carried a wrong diagnosis: impact, scope and risk respectively; see `SESSION_NOTES.md` 2026-09-07 |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
 | **Cleanup / tech debt (§4)** | In progress — 7 of 27 done, 20 open (two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`) |
 | **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota, 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06). **Quota is now costed** (2026-09-07): 2 calls per startup intake, ~23 per 6-dimension workflow, against a hard 20/day — see §5 |
@@ -720,7 +721,10 @@ measurement.
 
 ## 2. Broken functionality
 
-- [ ] 🐞 **BUG · M · `SUPPORT_THRESHOLD = 0.5` badges invented fields as "Verified"** — *measured 2026-09-05, unfixed*
+- [ ] 🐞 **BUG · M · `supportRatio` cannot separate grounded from invented fields** — *measured 2026-09-05; the false claim removed 2026-09-07 (`fix/field-confidence-claim`), the metric still open*
+  **Narrowed, not closed.** The UI no longer says "Verified" about anything. The threshold is unchanged at 0.5, but read directionally the measurement licenses only the negative claim — below the line no grounded field was observed, at or above it 18 of 26 invented fields also land — so the states became `unsupported` / `unverified` / `failed` and only `unsupported` ("Not on the page") asserts anything. **No longer demo-visible:** a reviewer uploading a sparse page now sees neutral badges and one amber warning, not green endorsements.
+  **Also deleted in that branch:** `getReviewStatus` in `ProjectDetails.svelte`, the pre-2026-08-22 `length < 40` rule that was still tinting every field card green because the card tone never followed the backend fix.
+  **What remains open is the metric itself**, and the warning below still stands in full — do not "fix" it by raising the number.
   Not a guess any more. Across 80 labelled observations on 10 real handwritten
   pages, the shipped 0.5 has **specificity 30.8% — 18 of 26 fields the page
   never supported render as green "Verified"**. The extraction prompt *orders*
