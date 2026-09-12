@@ -10,7 +10,7 @@
 <div class="grid gap-2">
   <!-- <AssessmentLabel description={description} /> -->
   <Textarea
-    rows={6}
+    rows={4}
     placeholder={isReadOnly ? "No answer provided yet" : "Enter your answer"}
     bind:value
     readonly={isReadOnly}

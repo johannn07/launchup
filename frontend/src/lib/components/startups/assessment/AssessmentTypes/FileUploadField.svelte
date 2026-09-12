@@ -4,6 +4,7 @@
   import X from 'lucide-svelte/icons/x';
   import Download from 'lucide-svelte/icons/download';
   import ExternalLink from 'lucide-svelte/icons/external-link';
+  import CloudUpload from 'lucide-svelte/icons/cloud-upload';
   import AssessmentLabel from './AssessmentLabel.svelte';
   import axiosInstance from '$lib/axios';
   import { toast } from 'svelte-sonner';
@@ -362,9 +363,10 @@
           <span class="text-sm">Uploading files...</span>
         </div>
       {:else}
-        <div class="text-center">
+        <div class="flex flex-col items-center gap-2 text-center">
+          <CloudUpload class="h-6 w-6 text-gray-400 dark:text-gray-500" />
           <p>Drop multiple files here or click to upload</p>
-          <p class="mt-1 text-xs text-gray-500">
+          <p class="text-xs text-gray-500">
             You can upload multiple files at once
           </p>
         </div>
