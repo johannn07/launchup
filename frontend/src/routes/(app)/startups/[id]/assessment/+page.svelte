@@ -21,7 +21,7 @@
   import * as Select from '$lib/components/ui/select';
   import { ReadinessLevelGuide } from '$lib/components/startups/readiness';
   import { Checkbox } from '$lib/components/ui/checkbox';
-  import { CircleCheck, Info } from 'lucide-svelte';
+  import { CircleCheck, Info, Loader } from 'lucide-svelte';
   import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
 
   const { data } = $props();
@@ -290,15 +290,20 @@
       }) || []
     );
   });
-  const typeConfig: Record<string, { icon: any; accent: string; ring: string; bar: string }> = {
-    Technology:     { icon: Cpu,          accent: 'text-indigo-400 bg-indigo-500/10',  ring: 'group-hover:border-indigo-500/50',  bar: 'bg-indigo-400' },
-    Market:         { icon: TrendingUp,   accent: 'text-blue-400 bg-blue-500/10',      ring: 'group-hover:border-blue-500/50',    bar: 'bg-blue-400' },
-    Acceptance:     { icon: CheckCircle2, accent: 'text-emerald-400 bg-emerald-500/10',ring: 'group-hover:border-emerald-500/50', bar: 'bg-emerald-400' },
-    Organizational: { icon: Building2,    accent: 'text-violet-400 bg-violet-500/10',  ring: 'group-hover:border-violet-500/50',  bar: 'bg-violet-400' },
-    Regulatory:     { icon: ShieldCheck,  accent: 'text-rose-400 bg-rose-500/10',      ring: 'group-hover:border-rose-500/50',    bar: 'bg-rose-400' },
-    Investment:     { icon: Wallet,       accent: 'text-amber-400 bg-amber-500/10',    ring: 'group-hover:border-amber-500/50',   bar: 'bg-amber-400' }
+  const typeConfig: Record<string, { icon: any; accent: string }> = {
+    Technology:     { icon: Cpu,          accent: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' },
+    Market:         { icon: TrendingUp,   accent: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400' },
+    Acceptance:     { icon: CheckCircle2, accent: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
+    Organizational: { icon: Building2,    accent: 'border-violet-500/20 bg-violet-500/10 text-violet-600 dark:text-violet-400' },
+    Regulatory:     { icon: ShieldCheck,  accent: 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400' },
+    Investment:     { icon: Wallet,       accent: 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400' }
   };
   const readinessTypes = getReadinessTypes();
+
+  const selectedTypeConfig = $derived(
+    typeConfig[selectedReadinessType ?? ''] ?? typeConfig['Technology']
+  );
+  const ModalTypeIcon = $derived(selectedTypeConfig.icon);
 
   // Group assessments by readiness type
   const assessmentsByType = $derived(() => {
@@ -362,40 +367,39 @@
       ? Math.round((completedCount / applicableAssessments.length) * 100)
       : 0}
     {@const config = typeConfig[type.name] ?? typeConfig['Technology']}
+    {@const Icon = config.icon}
 
     <Card.Root
-      class={`group cursor-pointer border border-zinc-800 bg-zinc-900/60 backdrop-blur-sm transition-all hover:bg-zinc-900 hover:shadow-lg hover:-translate-y-0.5 ${config.ring}`}
+      class="group cursor-pointer overflow-hidden rounded-xl border border-border/50 bg-card/60 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md"
       onclick={() => openTypeModal(type.name)}
     >
       <Card.Content class="p-5">
-        <div class="mb-4 flex items-start justify-between">
-          <div class="flex items-center gap-3">
-            <div class={`flex h-10 w-10 items-center justify-center rounded-lg ${config.accent}`}>
-              <svelte:component this={config.icon} class="h-5 w-5" />
-            </div>
-            <div>
-              <h3 class="text-base font-semibold text-white">{type.name}</h3>
-              {#if currentLevel}
-                <span class="text-xs font-medium text-zinc-400">Readiness Level {currentLevel}</span>
-              {:else}
-                <span class="text-xs font-medium text-zinc-500">Not yet rated</span>
-              {/if}
-            </div>
+        <div class="mb-4 flex items-center gap-3">
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 transition-colors group-hover:bg-primary/20">
+            <Icon class="h-5 w-5 text-primary" />
+          </div>
+          <div class="min-w-0">
+            <h3 class="truncate text-base font-semibold text-foreground transition-colors group-hover:text-primary">{type.name}</h3>
+            {#if currentLevel}
+              <span class="text-xs font-medium text-muted-foreground">Readiness Level {currentLevel}</span>
+            {:else}
+              <span class="text-xs font-medium text-muted-foreground/70">Not yet rated</span>
+            {/if}
           </div>
         </div>
 
         <div class="mb-3 flex items-center justify-between text-sm">
-          <span class="text-zinc-400">{assessments.length} assessment{assessments.length === 1 ? '' : 's'}</span>
+          <span class="text-muted-foreground">{assessments.length} assessment{assessments.length === 1 ? '' : 's'}</span>
           {#if assessments.length > 0}
-            <div class="flex gap-1.5">
+            <div class="flex items-center gap-3">
               {#if pendingCount > 0}
-                <span class="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
-                  {pendingCount} Pending
+                <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>{pendingCount} Pending
                 </span>
               {/if}
               {#if completedCount > 0}
-                <span class="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-300">
-                  {completedCount} Done
+                <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>{completedCount} Done
                 </span>
               {/if}
             </div>
@@ -403,9 +407,9 @@
         </div>
 
         {#if applicableAssessments.length > 0}
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
+          <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
-              class={`h-full rounded-full ${config.bar} transition-all`}
+              class="h-full rounded-full bg-primary transition-all"
               style={`width: ${progress}%`}
             ></div>
           </div>
@@ -418,22 +422,29 @@
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
     <Dialog.Content class="max-h-[85vh] max-w-[900px]">
-      <Dialog.Header>
-        <Dialog.Title class="text-2xl font-semibold">
-          {selectedReadinessType} Assessments
-        </Dialog.Title>
-        <Dialog.Description>
-          {#if data.role === 'Startup'}
-            Complete all assessments below to improve your readiness level
-          {:else}
-            View and rate the startup's assessment responses
-          {/if}
-        </Dialog.Description>
+      <Dialog.Header class="text-left">
+        <div class="flex items-center gap-3">
+          <div class={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${selectedTypeConfig.accent}`}>
+            <ModalTypeIcon class="h-5 w-5" />
+          </div>
+          <div>
+            <Dialog.Title class="text-xl font-semibold leading-snug">
+              {selectedReadinessType} Assessments
+            </Dialog.Title>
+            <Dialog.Description>
+              {#if data.role === 'Startup'}
+                Complete all assessments below to improve your readiness level
+              {:else}
+                View and rate the startup's assessment responses
+              {/if}
+            </Dialog.Description>
+          </div>
+        </div>
       </Dialog.Header>
 
-      <div class="max-h-[calc(85vh-180px)] overflow-y-auto px-4">
+      <div class="assessment-scroll max-h-[calc(85vh-180px)] overflow-y-auto px-4">
         {#if selectedReadinessType && assessmentsByType()[selectedReadinessType]?.length > 0}
-          <div class="flex flex-col gap-6">
+          <div class="flex flex-col gap-5">
             {#each assessmentsByType()[selectedReadinessType] as assessmentData, index}
               {@const assessmentId = assessmentData.assessment.id}
               {@const isSubmitting =
@@ -446,9 +457,9 @@
               {@const isToggling =
                 togglingApplicable[assessmentData.id] || false}
 
-              <div class="rounded-lg border p-4">
+              <div class="rounded-lg border border-border/60 bg-muted/10 p-4">
                 <!-- Assessment Header -->
-                <div class="mb-4 flex items-start justify-between gap-3">
+                <div class="mb-3 flex items-start justify-between gap-3">
                   <div class="flex flex-1 items-start gap-3">
                     <div class="flex items-center pt-1">
                       <Checkbox
@@ -462,16 +473,18 @@
                         aria-label="Toggle assessment applicability"
                       />
                     </div>
-                    <div class="flex-1">
-                      <h3 class="text-lg font-semibold">
-                        {assessmentData.assessment.name}
-                      </h3>
-                      <p class="text-sm text-muted-foreground">
-                        Type: {assessmentData.assessment.answerType}
-                      </p>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <h3 class="text-base font-semibold leading-snug">
+                          {assessmentData.assessment.name}
+                        </h3>
+                        <Badge variant="secondary" class="shrink-0 text-[10px] font-medium">
+                          {assessmentData.assessment.answerType}
+                        </Badge>
+                      </div>
                       {#if !assessmentData.isApplicable}
                         <p
-                          class="mt-1 text-xs text-orange-600 dark:text-orange-400"
+                          class="mt-1.5 text-xs text-orange-600 dark:text-orange-400"
                         >
                           Not applicable to this startup
                         </p>
@@ -481,9 +494,9 @@
                   {#if assessmentData.isApplicable}
                     <Badge
                       variant={isCompleted ? 'default' : 'secondary'}
-                      class={isCompleted 
-                        ? 'bg-emerald-600/90 text-emerald-100 border border-emerald-500/30' 
-                        : 'bg-amber-600/90 text-amber-100 border border-amber-500/30'}
+                      class={isCompleted
+                        ? 'shrink-0 border border-emerald-500/30 bg-emerald-600/90 text-emerald-100'
+                        : 'shrink-0 border border-amber-500/30 bg-amber-600/90 text-amber-100'}
                     >
                       {isCompleted ? 'Completed' : 'Pending'}
                     </Badge>
@@ -491,7 +504,7 @@
                 </div>
 
                 <!-- Assessment Field Based on Type -->
-                <div class="mb-4">
+                <div class="mb-3">
                   {#if assessmentData.assessment.answerType === 'ShortAnswer'}
                     <ShortAnswerField
                       description={assessmentData.assessment.name}
@@ -526,10 +539,17 @@
                     <Button
                       variant="default"
                       size="sm"
+                      class="gap-1.5"
                       disabled={isSubmitting || !assessmentData.isApplicable}
                       onclick={() => submitSingleAssessment(assessmentData)}
                     >
-                      {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
+                      {#if isSubmitting}
+                        <Loader class="h-3.5 w-3.5 animate-spin" />
+                        Submitting...
+                      {:else}
+                        <CircleCheck class="h-3.5 w-3.5" />
+                        Submit Assessment
+                      {/if}
                     </Button>
                   </div>
                 {/if}
@@ -634,3 +654,27 @@
 {#snippet error()}
   ERROR
 {/snippet}
+
+<style>
+  .assessment-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .assessment-scroll::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .assessment-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .assessment-scroll::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 9999px;
+  }
+
+  .assessment-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+</style>
