@@ -322,6 +322,19 @@
 
     return grouped;
   });
+
+  const modalProgress = $derived(() => {
+    const typeAssessments = selectedReadinessType
+      ? assessmentsByType()[selectedReadinessType] || []
+      : [];
+    const applicable = typeAssessments.filter((a: any) => a.isApplicable);
+    if (applicable.length === 0) return 0;
+    const completed = applicable.filter((a: any) => {
+      const hasAnswer = a.response?.answerValue && String(a.response.answerValue).trim() !== '';
+      return a.status === 'Completed' && hasAnswer;
+    }).length;
+    return Math.round((completed / applicable.length) * 100);
+  });
 </script>
 
 {#if isLoading}
@@ -421,28 +434,33 @@
 
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
-    <Dialog.Content class="max-h-[85vh] max-w-[900px]">
-      <Dialog.Header class="text-left">
+    <Dialog.Content class="flex max-h-[85vh] max-w-[900px] flex-col rounded-2xl">
+      <Dialog.Header class="mb-1 shrink-0 text-left">
         <div class="flex items-center gap-3">
-          <div class={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${selectedTypeConfig.accent}`}>
+          <div class={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${selectedTypeConfig.accent}`}>
             <ModalTypeIcon class="h-5 w-5" />
           </div>
           <div>
-            <Dialog.Title class="text-xl font-semibold leading-snug">
-              {selectedReadinessType} Assessments
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#6366f1]">
+              {selectedReadinessType} Readiness
+            </p>
+            <Dialog.Title class="text-xl font-black tracking-tight text-slate-950 dark:text-white">
+              Assessments
             </Dialog.Title>
-            <Dialog.Description>
-              {#if data.role === 'Startup'}
-                Complete all assessments below to improve your readiness level
-              {:else}
-                View and rate the startup's assessment responses
-              {/if}
-            </Dialog.Description>
           </div>
         </div>
+        <Dialog.Description class="mt-2 text-xs text-slate-500 dark:text-white/50">
+          {#if data.role === 'Startup'}
+            Complete all assessments below to improve your readiness level
+          {:else}
+            View and rate the startup's assessment responses
+          {/if}
+        </Dialog.Description>
       </Dialog.Header>
 
-      <div class="assessment-scroll max-h-[calc(85vh-180px)] overflow-y-auto px-4">
+      <div
+        class="assessment-scroll min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-200/70 bg-white/50 p-5 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/40"
+      >
         {#if selectedReadinessType && assessmentsByType()[selectedReadinessType]?.length > 0}
           <div class="flex flex-col gap-5">
             {#each assessmentsByType()[selectedReadinessType] as assessmentData, index}
@@ -457,9 +475,9 @@
               {@const isToggling =
                 togglingApplicable[assessmentData.id] || false}
 
-              <div class="rounded-lg border border-border/60 bg-muted/10 p-4">
+              <div class="rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.03]">
                 <!-- Assessment Header -->
-                <div class="mb-3 flex items-start justify-between gap-3">
+                <div class="mb-3 flex items-start justify-between gap-3 border-b border-slate-200/50 pb-3 dark:border-white/10">
                   <div class="flex flex-1 items-start gap-3">
                     <div class="flex items-center pt-1">
                       <Checkbox
@@ -474,14 +492,12 @@
                       />
                     </div>
                     <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <h3 class="text-base font-semibold leading-snug">
-                          {assessmentData.assessment.name}
-                        </h3>
-                        <Badge variant="secondary" class="shrink-0 text-[10px] font-medium">
-                          {assessmentData.assessment.answerType}
-                        </Badge>
-                      </div>
+                      <h3 class="text-base font-bold leading-snug text-slate-900 dark:text-white">
+                        {assessmentData.assessment.name}
+                      </h3>
+                      <p class="text-xs text-slate-500 dark:text-white/50">
+                        {assessmentData.assessment.answerType}
+                      </p>
                       {#if !assessmentData.isApplicable}
                         <p
                           class="mt-1.5 text-xs text-orange-600 dark:text-orange-400"
@@ -537,9 +553,8 @@
                 {#if data.role === 'Startup'}
                   <div class="flex justify-end">
                     <Button
-                      variant="default"
                       size="sm"
-                      class="gap-1.5"
+                      class="gap-1.5 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
                       disabled={isSubmitting || !assessmentData.isApplicable}
                       onclick={() => submitSingleAssessment(assessmentData)}
                     >
@@ -573,7 +588,7 @@
         {/if}
       </div>
 
-      <div class="flex items-center justify-between gap-3 border-t pt-4">
+      <div class="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200/60 pt-4 dark:border-white/10">
         {#if canRateReadiness(data.role)}
           {@const typeAssessments = selectedReadinessType
             ? assessmentsByType()[selectedReadinessType] || []
@@ -597,8 +612,8 @@
               </Select.Content>
             </Select.Root>
             <Button
-              variant="default"
               size="sm"
+              class="gap-1.5 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
               disabled={isRatingAssessment || !hasApplicableAssessments}
               onclick={rateAssessmentType}
             >
@@ -610,8 +625,21 @@
               </span>
             {/if}
           </div>
+        {:else}
+          <div></div>
         {/if}
-        <Button variant="outline" onclick={closeTypeModal}>Close</Button>
+
+        <span class="hidden text-xs font-medium text-slate-500 dark:text-white/50 sm:block">
+          {modalProgress()}% complete
+        </span>
+
+        <Button
+          variant="outline"
+          class="rounded-xl border-slate-200 bg-white/60 backdrop-blur dark:border-white/10 dark:bg-white/5"
+          onclick={closeTypeModal}
+        >
+          Close
+        </Button>
       </div>
     </Dialog.Content>
   </Dialog.Root>
