@@ -1,9 +1,9 @@
 <script lang="ts">
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
-  import { cn, getData } from '$lib/utils';
+  import { getData } from '$lib/utils';
   import { useQueries } from '@sveltestack/svelte-query';
   import { RnaCard, RnaCreateDialog } from '$lib/components/startups/rna';
-  import { Button, buttonVariants } from '$lib/components/ui/button';
+  import { Button } from '$lib/components/ui/button';
   import { ChevronDown, Loader, Plus, Sparkles } from 'lucide-svelte';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import axiosInstance from '$lib/axios';
@@ -73,78 +73,108 @@
   };
 
   const addToRNA = async (id: number) => {
-    const toBeAdded = $rnaQueries[1].data.find((item: any) => item.id === id);
-    const existingItem = $rnaQueries[1].data.find(
-      (d: any) =>
-        d.isAiGenerated === false &&
-        d.readinessLevel.readinessType ===
-          toBeAdded.readinessLevel.readinessType
-    );
+    try {
+      const toBeAdded = $rnaQueries[1].data.find(
+        (item: any) => item.id === id
+      );
+      const existingItem = $rnaQueries[1].data.find(
+        (d: any) =>
+          d.isAiGenerated === false &&
+          d.readinessLevel.readinessType ===
+            toBeAdded.readinessLevel.readinessType
+      );
 
-    if (existingItem) {
-      await axiosInstance.delete(`/rna/${existingItem.id}/`, {
+      if (existingItem) {
+        await axiosInstance.delete(`/rna/${existingItem.id}/`, {
+          headers: {
+            Authorization: `Bearer ${data.access}`
+          }
+        });
+        toast.info('Existing RNA data with the same readiness type deleted');
+      }
+
+      await axiosInstance.patch(
+        `/rna/${id}/`,
+        {
+          isAiGenerated: false
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${data.access}`
+          }
+        }
+      );
+      toast.success('Successfully added to RNA');
+      $rnaQueries[1].refetch().then(() => (open = false));
+    } catch (error: any) {
+      console.error(error);
+      const msg =
+        error.response?.data?.message || 'Failed to add this RNA';
+      toast.error(msg);
+    }
+  };
+
+  const createRNA = async (payload: any) => {
+    try {
+      const cleanPayload = {
+        ...payload,
+        readiness_level_id: Number(payload.readiness_level_id),
+        startup_id: Number(payload.startup_id)
+      };
+
+      await axiosInstance.post(
+        '/rna',
+        { ...cleanPayload, status },
+        {
+          headers: {
+            Authorization: `Bearer ${data.access}`
+          }
+        }
+      );
+      toast.success('Successfully created the RNA');
+      open = false;
+      $rnaQueries[1].refetch();
+    } catch (error: any) {
+      console.error(error);
+      const msg =
+        error.response?.data?.message || 'Failed to create the RNA';
+      toast.error(msg);
+    }
+  };
+
+  const editRNA = async (id: number, payload: any) => {
+    try {
+      await axiosInstance.patch(`/rna/${id}/`, payload, {
         headers: {
           Authorization: `Bearer ${data.access}`
         }
       });
-      toast.info('Existing RNA data with the same readiness type deleted');
+      toast.success('Successfully updated the RNA');
+      open = false;
+      $rnaQueries[1].refetch();
+    } catch (error: any) {
+      console.error(error);
+      const msg =
+        error.response?.data?.message || 'Failed to update the RNA';
+      toast.error(msg);
     }
-
-    await axiosInstance.patch(
-      `/rna/${id}/`,
-      {
-        isAiGenerated: false
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${data.access}`
-        }
-      }
-    );
-    toast.success('Successfuly added to RNA');
-    $rnaQueries[1].refetch().then(() => (open = false));
-  };
-
-  const createRNA = async (payload: any) => {
-    const cleanPayload = {
-      ...payload,
-      readiness_level_id: Number(payload.readiness_level_id),
-      startup_id: Number(payload.startup_id)
-    };
-
-    await axiosInstance.post(
-      '/rna',
-      { ...cleanPayload, status },
-      {
-        headers: {
-          Authorization: `Bearer ${data.access}`
-        }
-      }
-    );
-    toast.success('Successfully created the RNA');
-    open = false;
-    $rnaQueries[1].refetch();
-  };
-
-  const editRNA = async (id: number, payload: any) => {
-    await axiosInstance.patch(`/rna/${id}/`, payload, {
-      headers: {
-        Authorization: `Bearer ${data.access}`
-      }
-    });
-    toast.success('Successfuly updated the RNA');
-    open = false;
-    $rnaQueries[1].refetch();
   };
 
   const deleteRNA = async (id: number, index: number) => {
-    await axiosInstance.delete(`/rna/${Number(id)}/`, {
-      headers: {
-        Authorization: `Bearer ${data.access}`
-      }
-    });
-    toast.success('Successfuly deleted the RNA');
-    $rnaQueries[1].refetch();
+    try {
+      await axiosInstance.delete(`/rna/${Number(id)}/`, {
+        headers: {
+          Authorization: `Bearer ${data.access}`
+        }
+      });
+      toast.success('Successfully deleted the RNA');
+      $rnaQueries[1].refetch();
+    } catch (error: any) {
+      console.error(error);
+      const msg =
+        error.response?.data?.message || 'Failed to delete the RNA';
+      toast.error(msg);
+    }
   };
 
   const readinessData = $derived(
@@ -250,18 +280,22 @@
   <div class="flex items-center justify-between">
     <div class="ml-auto flex items-center gap-3">
       {#if data.role !== 'Startup'}
-        <Button onclick={() => (open = true)}
-          ><Plus class="h-4 w-4" />Add</Button
+        <Button
+          class="gap-1.5 rounded-xl border-slate-200 bg-white/60 backdrop-blur dark:border-white/10 dark:bg-white/5"
+          variant="outline"
+          onclick={() => (open = true)}
         >
+          <Plus class="h-4 w-4" />Add
+        </Button>
 
         <div class="flex">
           <Button
-            class="rounded-r-none"
+            class="gap-1.5 rounded-l-xl rounded-r-none bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
             onclick={generateRNA}
             disabled={generatingRNA || selectedTypes.length === 0}
           >
             {#if generatingRNA}
-              <Loader class="mr-2 h-4 w-4 animate-spin" />
+              <Loader class="h-4 w-4 animate-spin" />
               Generating...
             {:else}
               <Sparkles class="h-4 w-4" />
@@ -271,27 +305,25 @@
 
           <DropdownMenu.Root>
             <DropdownMenu.Trigger
-              class={cn(
-                buttonVariants(),
-                'border-primary-foreground/25 rounded-l-none border-l px-2'
-              )}
+              class="flex h-9 items-center justify-center rounded-l-none rounded-r-xl border-l border-white/25 bg-[#6366f1] px-2 text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
               disabled={generatingRNA}
             >
               <span class="sr-only">Choose dimensions</span>
               <ChevronDown class="h-4 w-4" />
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" class="w-64">
+            <DropdownMenu.Content align="end" class="w-72">
               <DropdownMenu.Label>Dimensions to generate</DropdownMenu.Label>
               <DropdownMenu.Separator />
               {#each dimensionOptions as dimension}
                 <DropdownMenu.CheckboxItem
+                  class="pr-6 py-2"
                   closeOnSelect={false}
                   checked={selectedTypes.includes(dimension.readinessType)}
                   onCheckedChange={(checked) =>
                     toggleDimension(dimension.readinessType, checked)}
                 >
                   <div class="flex w-full items-center justify-between gap-3">
-                    <span>{dimension.readinessType}</span>
+                    <span class="font-medium">{dimension.readinessType}</span>
                     <span class="text-xs text-muted-foreground">
                       Level {dimension.level}{dimension.hasRna
                         ? ' · has RNA'
