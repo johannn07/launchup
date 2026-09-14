@@ -27,10 +27,10 @@
   <!-- No title: the radio label above already renders it as
        "Level {level} - {name}" once readiness_levels.name is backfilled from
        this same corpus row. -->
-  <div class="rounded-md border bg-background p-3 text-sm">
-    <p class="text-muted-foreground">{rubric.content}</p>
-    <p class="mt-2 text-xs text-muted-foreground">
-      <span class="font-semibold">{PROVENANCE_LABEL[rubric.provenance]}</span>
+  <div class="text-sm">
+    <p class="leading-relaxed text-slate-600 dark:text-white/70">{rubric.content}</p>
+    <p class="mt-3 text-xs text-slate-400 dark:text-white/40">
+      <span class="font-semibold text-slate-500 dark:text-white/50">{PROVENANCE_LABEL[rubric.provenance]}</span>
       {#if rubric.citation}
         &middot; {rubric.citation}
       {/if}
@@ -45,7 +45,5 @@
     </p>
   </div>
 {:else}
-  <div class="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-    No rubric text for this level yet.
-  </div>
+  <p class="text-sm text-slate-400 dark:text-white/40">No rubric text for this level yet.</p>
 {/if}

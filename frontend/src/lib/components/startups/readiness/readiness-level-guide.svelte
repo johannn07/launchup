@@ -40,18 +40,18 @@
 </script>
 
 {#if levels.length > 0}
-  <details class="mt-2 rounded-lg border bg-muted/30 text-sm">
+  <details class="mt-2 rounded-lg border border-slate-200/70 bg-slate-50/60 text-sm dark:border-white/10 dark:bg-white/[0.03]">
     <summary
-      class="cursor-pointer px-3 py-2 font-medium text-muted-foreground hover:text-foreground"
+      class="cursor-pointer px-3 py-2 font-medium text-slate-500 hover:text-slate-900 dark:text-white/50 dark:hover:text-white"
     >
       What each level means
     </summary>
 
     <!-- Bounded so nine levels of prose scroll inside the panel rather than
          overflowing whatever dialog or card is hosting it. -->
-    <div class="max-h-64 space-y-3 overflow-y-auto border-t px-3 py-3">
+    <div class="max-h-64 space-y-3 overflow-y-auto border-t border-slate-200/70 px-3 py-3 dark:border-white/10">
       {#if source}
-        <p class="text-xs text-muted-foreground">
+        <p class="text-xs text-slate-500 dark:text-white/50">
           <span class="font-semibold">{PROVENANCE_LABEL[source.provenance]}</span>
           {#if source.citation}
             &middot; {source.citation}
@@ -71,16 +71,16 @@
         {#each levels as rubric (rubric.level)}
           <li
             class="rounded-md border p-2 {rubric.level === selectedLevel
-              ? 'border-primary bg-primary/5'
+              ? 'border-[#6366f1]/30 bg-[#6366f1]/5'
               : 'border-transparent'}"
           >
-            <p class="font-semibold">
+            <p class="font-semibold text-slate-900 dark:text-white">
               {rubric.title}
               {#if rubric.level === selectedLevel}
-                <span class="ml-1 text-xs font-normal text-primary">selected</span>
+                <span class="ml-1 text-xs font-normal text-[#6366f1]">selected</span>
               {/if}
             </p>
-            <p class="mt-1 text-muted-foreground">{rubric.content}</p>
+            <p class="mt-1 text-slate-500 dark:text-white/50">{rubric.content}</p>
           </li>
         {/each}
       </ol>

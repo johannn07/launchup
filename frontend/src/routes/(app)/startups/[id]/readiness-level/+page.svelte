@@ -5,6 +5,7 @@
     Stepper
   } from '$lib/components/startups/readiness';
   import * as Tabs from '$lib/components/ui/tabs/index.js';
+  import * as Select from '$lib/components/ui/select';
   import { useQueries } from '@sveltestack/svelte-query';
   import { getData, canRateReadiness } from '$lib/utils';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
@@ -131,20 +132,22 @@
 
     return {
       technology: query.data.filter(
-        (r: any) => r.readinessType === 'Technology'
+        (r: any) => r.readinessLevel?.readinessType === 'Technology'
       ),
-      market: query.data.filter((r: any) => r.readinessType === 'Market'),
+      market: query.data.filter(
+        (r: any) => r.readinessLevel?.readinessType === 'Market'
+      ),
       acceptance: query.data.filter(
-        (r: any) => r.readinessType === 'Acceptance'
+        (r: any) => r.readinessLevel?.readinessType === 'Acceptance'
       ),
       organizational: query.data.filter(
-        (r: any) => r.readinessType === 'Organizational'
+        (r: any) => r.readinessLevel?.readinessType === 'Organizational'
       ),
       regulatory: query.data.filter(
-        (r: any) => r.readinessType === 'Regulatory'
+        (r: any) => r.readinessLevel?.readinessType === 'Regulatory'
       ),
       investment: query.data.filter(
-        (r: any) => r.readinessType === 'Investment'
+        (r: any) => r.readinessLevel?.readinessType === 'Investment'
       )
     };
   });
@@ -264,11 +267,12 @@
         </div>
       {/if}
     {/if}
+    {#if !revising}
     <Can role={['Mentor', 'Manager']} userRole={role}>
       <div class="flex justify-between">
         <div class="flex h-fit justify-between rounded-lg bg-background">
           <Tabs.Root value={selectedTab}>
-            <Tabs.List class="bg-flutter-gray/20 border">
+            <Tabs.List class="border border-border">
               <Tabs.Trigger value="chart" onclick={() => updateTab('chart')}>
                 Dashboard
               </Tabs.Trigger>
@@ -284,7 +288,7 @@
         {#if selectedTab === 'detailed'}
           <div class="flex h-fit justify-between rounded-lg bg-background">
             <Tabs.Root value={selectedReadinessTab}>
-              <Tabs.List class="bg-flutter-gray/20 border">
+              <Tabs.List class="border border-border">
                 <Tabs.Trigger
                   value="technology"
                   class="capitalize"
@@ -373,23 +377,22 @@
         </div>
       </div>
     {/if}
+    {/if}
   </div>
 {/snippet}
 
 {#snippet mentor(isRevision = false)}
   <div
-    class="mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-2xl border bg-background p-6 shadow-sm"
+    class="mx-auto flex w-full max-w-4xl flex-col gap-5 rounded-2xl border border-slate-200/70 bg-white/60 p-6 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/40"
   >
     <div>
-      <p
-        class="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground"
-      >
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#6366f1]">
         Mentor action
       </p>
-      <h2 class="mt-2 text-2xl font-bold">
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white">
         {isRevision ? 'Revise baseline scores' : 'Assign baseline scores'}
       </h2>
-      <p class="mt-1 text-sm text-muted-foreground">
+      <p class="mt-1 text-sm text-slate-500 dark:text-white/50">
         {isRevision
           ? 'These are the levels currently on record. Saving overwrites them for every dimension.'
           : 'Set one baseline level per readiness dimension. These values unlock the weighted readiness dashboard and RNA generation.'}
@@ -398,30 +401,33 @@
 
     <div class="grid gap-4 md:grid-cols-2">
       {#each readinessTypeOptions as readinessType}
-        <label class="flex flex-col gap-2 rounded-xl border p-4">
-          <span class="text-sm font-semibold">{readinessType}</span>
-          <select
-            class="h-10 rounded-md border bg-background px-3 text-sm"
-            value={baselineScores[readinessType]}
-            onchange={(event) => {
+        <div class="flex flex-col gap-2 rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+          <span class="text-sm font-bold text-slate-900 dark:text-white">{readinessType}</span>
+          <Select.Root
+            type="single"
+            value={String(baselineScores[readinessType])}
+            onValueChange={(value) => {
               baselineScores = {
                 ...baselineScores,
-                [readinessType]: Number(
-                  (event.currentTarget as HTMLSelectElement).value
-                )
+                [readinessType]: Number(value)
               };
             }}
           >
-            {#each Array.from({ length: 9 }, (_, index) => index + 1) as level}
-              <option value={level}>Level {level}</option>
-            {/each}
-          </select>
+            <Select.Trigger class="h-10 w-full">
+              Level {baselineScores[readinessType]}
+            </Select.Trigger>
+            <Select.Content>
+              {#each Array.from({ length: 9 }, (_, index) => index + 1) as level}
+                <Select.Item value={String(level)}>Level {level}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
           <ReadinessLevelGuide
             {readinessType}
             rubrics={levelRubrics}
             selectedLevel={baselineScores[readinessType]}
           />
-        </label>
+        </div>
       {/each}
     </div>
 
@@ -429,13 +435,18 @@
       {#if isRevision}
         <Button
           variant="outline"
+          class="rounded-xl border-slate-200 bg-white/60 backdrop-blur dark:border-white/10 dark:bg-white/5"
           onclick={cancelRevision}
           disabled={savingBaselineScores}
         >
           Cancel
         </Button>
       {/if}
-      <Button onclick={submitBaselineScores} disabled={savingBaselineScores}>
+      <Button
+        class="rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+        onclick={submitBaselineScores}
+        disabled={savingBaselineScores}
+      >
         {#if savingBaselineScores}
           Saving...
         {:else}

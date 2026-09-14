@@ -20,8 +20,11 @@
     />
   </div>
   {#if questionnaire}
-    <label for={id} class="cursor-pointer" class:pointer-events-none={readonly}
-      >Level {questionnaire.level} - {questionnaire.name}</label
+    <label
+      for={id}
+      class="cursor-pointer text-sm font-semibold text-foreground"
+      class:pointer-events-none={readonly}
+      >Level {questionnaire.level} &mdash; {questionnaire.name}</label
     >
   {/if}
 </div>
