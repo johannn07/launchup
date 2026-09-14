@@ -5,9 +5,15 @@
   import Badge from '../ui/badge/badge.svelte';
   import { getStartupMemberCount } from '$lib/utils';
 
-  export let startup: any;
-  export let selectedTab: string;
-  export let onOpenStartupDialog: (startup: any) => void;
+  let {
+    startup,
+    selectedTab,
+    onOpenStartupDialog
+  }: {
+    startup: any;
+    selectedTab: string;
+    onOpenStartupDialog: (startup: any) => void;
+  } = $props();
 
   function formatDate(dateString: string) {
     return new Date(dateString).toLocaleDateString('en-US', {
