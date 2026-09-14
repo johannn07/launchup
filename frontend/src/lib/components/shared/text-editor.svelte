@@ -89,57 +89,58 @@
 </script>
 
 <div class="editor-container w-full">
-  <div class="toolbar mb-2 flex flex-wrap gap-2">
+  <div class="toolbar mb-2 flex flex-wrap gap-1.5">
     <button
       onclick={toggleBold}
-      class="rounded border px-1.5 py-1 text-xs text-white
+      class="rounded-md border px-2 py-1 text-xs font-semibold transition-colors
         {isBoldActive
-        ? 'border-blue-600 bg-blue-600 hover:bg-blue-600'
-        : ' border-gray-700 bg-gray-700 hover:bg-gray-800'}"
+        ? 'border-primary/40 bg-primary/15 text-primary'
+        : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}"
       aria-pressed={isBoldActive}><b>B</b></button
     >
     <button
       onclick={toggleItalic}
-      class="rounded border px-1.5 py-1 text-xs text-white
+      class="rounded-md border px-2 py-1 text-xs font-semibold transition-colors
         {isItalicActive
-        ? 'border-blue-600 bg-blue-600 hover:bg-blue-600'
-        : ' border-gray-700 bg-gray-700 hover:bg-gray-800'}"
+        ? 'border-primary/40 bg-primary/15 text-primary'
+        : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}"
       aria-pressed={isItalicActive}><i>I</i></button
     >
     <button
       onclick={toggleUnderline}
-      class="rounded border px-1.5 py-1 text-xs text-white
+      class="rounded-md border px-2 py-1 text-xs font-semibold transition-colors
         {isUnderlineActive
-        ? 'border-blue-600 bg-blue-600 hover:bg-blue-600'
-        : ' border-gray-700 bg-gray-700 hover:bg-gray-800'}"
+        ? 'border-primary/40 bg-primary/15 text-primary'
+        : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'}"
       aria-pressed={isUnderlineActive}><u>U</u></button
     >
+    <span class="mx-1 w-px self-stretch bg-border"></span>
     <button
       onclick={addBulletPoint}
-      class="rounded border border-gray-600 bg-gray-700 px-1.5 py-1 text-xs text-white hover:bg-gray-600"
+      class="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
       >Bullet</button
     >
     <button
       onclick={() => setTextAlign('left')}
-      class="rounded border border-gray-600 bg-gray-700 px-1.5 py-1 text-xs text-white hover:bg-gray-600"
+      class="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
       >Align Left</button
     >
     <button
       onclick={() => setTextAlign('center')}
-      class="rounded border border-gray-600 bg-gray-700 px-1.5 py-1 text-xs text-white hover:bg-gray-600"
+      class="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
       >Align Center</button
     >
     <button
       onclick={() => setTextAlign('right')}
-      class="rounded border border-gray-600 bg-gray-700 px-1.5 py-1 text-xs text-white hover:bg-gray-600"
+      class="rounded-md border border-border bg-muted/40 px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted"
       >Align Right</button
     >
   </div>
-  <div class="rounded-lg border border-[#333]">
+  <div class="rounded-lg border border-border bg-background">
     <div
       bind:this={element}
       style="width:100%;height:{editorHeight};overflow-y:auto;"
-      class="prose-invert"
+      class="prose prose-sm dark:prose-invert max-w-none px-1"
     ></div>
   </div>
 </div>
