@@ -2,7 +2,7 @@
   import { Header } from '$lib/components/shared';
 
   let { children, data } = $props();
-  let scrollContainer: HTMLDivElement | null = $props();
+  let scrollContainer = $state<HTMLDivElement | null>(null);
 </script>
 
 <div class="flex h-full flex-col overflow-x-hidden">
