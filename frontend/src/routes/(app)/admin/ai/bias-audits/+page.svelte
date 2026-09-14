@@ -4,7 +4,7 @@
   import { Input } from '$lib/components/ui/input';
   import { ShieldAlert, ShieldCheck, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX } from 'lucide-svelte';
 
-  export let data: { audits: any[]; access: string };
+  let { data }: { data: { audits: any[]; access: string } } = $props();
   let audits = data.audits ?? [];
   let overridingId: number | null = null;
   let overrideValue: number | null = null;
@@ -46,7 +46,7 @@
     </div>
   </div>
 
-  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+  <div class="glass-card overflow-hidden">
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
         <thead>

@@ -251,7 +251,10 @@
 {/snippet}
 
 {#snippet error()}
-  ERROR
+  <div class="glass-card flex flex-col items-center justify-center p-12 text-center">
+    <p class="text-lg font-semibold text-foreground">Failed to load readiness data</p>
+    <p class="mt-2 text-sm text-muted-foreground">Please try again or contact support.</p>
+  </div>
 {/snippet}
 
 {#snippet rated()}
@@ -383,16 +386,16 @@
 
 {#snippet mentor(isRevision = false)}
   <div
-    class="mx-auto flex w-full max-w-4xl flex-col gap-5 rounded-2xl border border-slate-200/70 bg-white/60 p-6 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/40"
+    class="glass-card mx-auto w-full max-w-4xl p-6"
   >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#6366f1]">
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
         Mentor action
       </p>
-      <h2 class="mt-2 text-2xl font-black tracking-tight text-slate-950 dark:text-white">
+      <h2 class="mt-2 text-2xl font-black tracking-tight text-foreground">
         {isRevision ? 'Revise baseline scores' : 'Assign baseline scores'}
       </h2>
-      <p class="mt-1 text-sm text-slate-500 dark:text-white/50">
+      <p class="mt-1 text-sm text-muted-foreground">
         {isRevision
           ? 'These are the levels currently on record. Saving overwrites them for every dimension.'
           : 'Set one baseline level per readiness dimension. These values unlock the weighted readiness dashboard and RNA generation.'}
@@ -401,8 +404,8 @@
 
     <div class="grid gap-4 md:grid-cols-2">
       {#each readinessTypeOptions as readinessType}
-        <div class="flex flex-col gap-2 rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.03]">
-          <span class="text-sm font-bold text-slate-900 dark:text-white">{readinessType}</span>
+        <div class="glass-card flex flex-col gap-2 p-4">
+          <span class="text-sm font-bold text-foreground">{readinessType}</span>
           <Select.Root
             type="single"
             value={String(baselineScores[readinessType])}
@@ -435,7 +438,6 @@
       {#if isRevision}
         <Button
           variant="outline"
-          class="rounded-xl border-slate-200 bg-white/60 backdrop-blur dark:border-white/10 dark:bg-white/5"
           onclick={cancelRevision}
           disabled={savingBaselineScores}
         >
@@ -443,7 +445,7 @@
         </Button>
       {/if}
       <Button
-        class="rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+        variant="glass-primary"
         onclick={submitBaselineScores}
         disabled={savingBaselineScores}
       >

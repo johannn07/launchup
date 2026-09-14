@@ -3,7 +3,7 @@
   import * as Card from '$lib/components/ui/card/index.js';
   import { Calendar, Users, Clock, Eye } from 'lucide-svelte';
   import Badge from '../ui/badge/badge.svelte';
-  import { getBadgeColor, getStartupMemberCount } from '$lib/utils';
+  import { getStartupMemberCount } from '$lib/utils';
 
   export let startup: any;
   export let selectedTab: string;
@@ -18,10 +18,19 @@
   }
 
   const memberCount = getStartupMemberCount(startup);
+
+  const badgeVariant = $derived((() => {
+    if (selectedTab === 'pending') return 'pending';
+    if (selectedTab === 'waitlisted') return 'waitlisted';
+    if (selectedTab === 'qualified') return 'qualified';
+    if (selectedTab === 'completed') return 'completed';
+    return 'secondary';
+  })());
 </script>
 
 <Card.Root
-  class="hover:bg-muted/50 cursor-pointer rounded-lg border bg-background shadow-sm transition-all hover:shadow-md"
+  variant="glass"
+  class="cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-lg"
   onclick={() => onOpenStartupDialog(startup)}
 >
   <Card.Content class="p-6">
@@ -61,30 +70,13 @@
 
       <!-- Action Buttons -->
       <div class="ml-4 flex items-center gap-2">
-        {#if selectedTab === 'pending'}
-          <Badge class={getBadgeColor('Pending')}>
-            <Clock size={12} class="mr-1" />
-            Pending
-          </Badge>
-        {:else if selectedTab === 'waitlisted'}
-          <Badge class={getBadgeColor('Waitlisted')}>
-            <Clock size={12} class="mr-1" />
-            Waitlisted
-          </Badge>
-        {:else if selectedTab === 'qualified'}
-          <Badge class={getBadgeColor('Qualified')}>
-            <Clock size={12} class="mr-1" />
-            Qualified
-          </Badge>
-        {:else if selectedTab === 'completed'}
-          <Badge class={getBadgeColor('Completed')}>
-            <Clock size={12} class="mr-1" />
-            Completed
-          </Badge>
-        {/if}
+        <Badge variant={badgeVariant}>
+          <Clock size={12} class="mr-1" />
+          {selectedTab.charAt(0).toUpperCase() + selectedTab.slice(1)}
+        </Badge>
         <Button
           variant="outline"
-          class="hover:bg-muted/50 h-auto border-muted px-4 py-2 text-sm text-muted-foreground"
+          class="h-auto px-4 py-2 text-sm text-muted-foreground"
           onclick={(e) => onOpenStartupDialog(startup)}
         >
           <Eye class="mr-1 h-3 w-3" />

@@ -10,14 +10,16 @@
   import { getProfileColor } from '$lib/utils';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import { Rocket } from 'lucide-svelte';
+  import { Rocket, Menu, X } from 'lucide-svelte';
 
   const { user, startup, scrollContainer } = $props();
 
   let dropdownOpen = $state(false);
+  let mobileMenuOpen = $state(false);
 
   function navigateTo(path: string) {
     dropdownOpen = false;
+    mobileMenuOpen = false;
     goto(path);
   }
 
@@ -51,7 +53,6 @@
   let isBlurred = $state(false);
 
   function handleScroll(e?: Event) {
-    // Prefer scrollContainer if provided, fallback to window
     let scrollY = 0;
     if (scrollContainer) {
       scrollY = scrollContainer.scrollTop;
@@ -78,98 +79,83 @@
       window.removeEventListener('scroll', handleScroll);
     }
   });
+
+  function getNavLinks() {
+    if (module !== subModule && module !== 'account' && module !== 'admin' && subModule !== 'pending') {
+      return (modules.filter((item) => item.link === module)[0]?.subModule ?? []).map((item) => ({
+        name: item.name,
+        href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
+        isActive: currentModule === item.link || currentModulev2 === item.link
+      }));
+    }
+    return modules.map((item) => ({
+      name: item.name,
+      href: `/${item.link}${item.subModule.length > 0 && item.name !== 'Startups' && item.name !== 'Admin' ? `/${item.subModule[0].link}` : ''}`,
+      isActive: currentModule === item.link || currentModulev2 === item.link
+    }));
+  }
+
+  const navLinks = $derived(getNavLinks());
 </script>
 
 <header
-  class="fixed left-1/2 top-0 z-10 flex h-16 w-screen -translate-x-1/2 justify-center border-b transition-all duration-300"
-  class:backdrop-blur-lg={isBlurred}
-  style="backdrop-filter: blur(16px);"
+  class="fixed left-0 right-0 top-0 z-40 border-b transition-all duration-300 {isBlurred ? 'glass-strong' : 'glass-subtle'}"
 >
-  <nav class="flex h-16 w-4/5 items-center px-0">
-    <div class="flex flex-1 cursor-pointer items-center gap-2">
-      <!-- <img src="/logo.png" alt="citeams_logo" class="h-7 w-7" /> -->
-      <Rocket class="h-5 w-5" style="color: var(--primary);" />
+  <nav class="mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+    <div class="flex flex-1 items-center gap-2">
       <a
         data-sveltekit-preload-data="tap"
         href={`/${modules[0]?.link ?? ''}`}
-        class="cursor-pointer text-xl font-black normal-case"
-        style="color: var(--primary);">LaunchUp</a
+        class="flex items-center gap-2 text-xl font-black normal-case text-primary"
       >
+        <Rocket class="h-5 w-5" />
+        <span class="hidden sm:inline">LaunchUp</span>
+      </a>
     </div>
-    <div class="flex h-1/3 items-center justify-center gap-5">
-      <ul class="flex flex-1 cursor-pointer items-center gap-7 text-sm">
-          {#if module !== subModule && module !== 'account' && module !== 'admin' && subModule !== 'pending'}
-            <!-- submodule -->
-            {#each (modules.filter((item) => item.link === module)[0]?.subModule ?? []) as item}
-            {@const isActive =
-              currentModule === item.link || currentModulev2 === item.link}
+
+    <div class="hidden items-center gap-5 md:flex">
+      <ul class="flex items-center gap-1">
+        {#each navLinks as link}
+          <li>
             <a
               data-sveltekit-preload-data="tap"
-              href={`/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`}
-              class="hover:text-flutter-blue relative flex h-16 items-center justify-center text-center active:scale-95"
-              class:text-flutter-blue={currentModule === item.link ||
-                currentModulev2 === item.link}
+              href={link.href}
+              class="relative flex h-16 items-center px-3 text-sm font-medium transition-colors hover:text-primary {link.isActive ? 'text-primary' : 'text-muted-foreground'}"
             >
-              <li>
-                {item.name}
-                {#if isActive}
-                  <div
-                    class="absolute bottom-0 h-[1px] w-full bg-primary"
-                    in:send={{ key: 'active-sidebar-tab' }}
-                    out:receive={{ key: 'active-sidebar-tab' }}
-                  ></div>
-                {/if}
-              </li>
+              {link.name}
+              {#if link.isActive}
+                <div
+                  class="absolute bottom-0 h-[2px] w-full rounded-full bg-primary"
+                  in:send={{ key: 'active-sidebar-tab' }}
+                  out:receive={{ key: 'active-sidebar-tab' }}
+                ></div>
+              {/if}
             </a>
-          {/each}
-        {:else}
-          <!-- module -->
-          {#each modules as item}
-            {@const isActive =
-              currentModule === item.link || currentModulev2 === item.link}
-            <a
-              data-sveltekit-preload-data="tap"
-              href={`/${item.link}${item.subModule.length > 0 && item.name !== 'Startups' && item.name !== 'Admin' ? `/${item.subModule[0].link}` : ''}`}
-              class="hover:text-flutter-blue relative flex h-16 items-center justify-center text-center active:scale-95"
-              class:text-flutter-blue={currentModule === item.link ||
-                currentModulev2 === item.link}
-            >
-              <li>
-                {item.name}
-                {#if isActive}
-                  <div
-                    class="absolute bottom-0 h-[1px] w-full bg-primary"
-                  ></div>
-                {/if}
-              </li>
-            </a>
-          {/each}
-        {/if}
+          </li>
+        {/each}
       </ul>
-      <Separator orientation="vertical" />
-      <Badge
-        variant="outline"
-        class="h-8 rounded-full bg-accent text-sm font-normal"
-        >{user?.role ? user?.role : 'Anonymous'}</Badge
-      >
+      <Separator orientation="vertical" class="h-6" />
+      <Badge variant="glass" class="h-7 rounded-full text-xs font-normal">
+        {user?.role ?? 'Anonymous'}
+      </Badge>
       <DropdownMenu.Root bind:open={dropdownOpen}>
         <DropdownMenu.Trigger>
           <div
-            class={`flex h-9 w-9 items-center justify-center rounded-full ${getProfileColor(user.firstName)}`}
+            class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white transition-transform hover:scale-105 {getProfileColor(user.firstName)}"
           >
             {user.firstName.charAt(0)}
           </div>
         </DropdownMenu.Trigger>
-        <DropdownMenu.Content align="end">
+        <DropdownMenu.Content align="end" class="glass-card w-56">
           <DropdownMenu.Group>
             <DropdownMenu.Label>
-              <p>My Account</p>
-              <p class="text-xm font-normal">{user?.email}</p>
+              <p class="font-medium">My Account</p>
+              <p class="text-xs text-muted-foreground">{user?.email}</p>
             </DropdownMenu.Label>
             <DropdownMenu.Separator />
             {#each modules as module}
               <DropdownMenu.Item
-                class="cursor-pointer"
+                class="cursor-pointer rounded-lg"
                 onclick={() =>
                   navigateTo(
                     `/${module.link}${module.subModule.length > 0 && module.name !== 'Startups' ? `/${module.subModule[0].link}` : ''}`
@@ -180,14 +166,85 @@
             {/each}
             <form action="/logout" method="post" class="w-full">
               <button type="submit" class="w-full">
-                <DropdownMenu.Item class="cursor-pointer"
-                  >Logout</DropdownMenu.Item
-                >
+                <DropdownMenu.Item class="cursor-pointer rounded-lg">
+                  Logout
+                </DropdownMenu.Item>
               </button>
             </form>
           </DropdownMenu.Group>
         </DropdownMenu.Content>
       </DropdownMenu.Root>
     </div>
+
+    <div class="flex items-center gap-2 md:hidden">
+      <Badge variant="glass" class="h-7 rounded-full text-xs font-normal">
+        {user?.role ?? 'Anonymous'}
+      </Badge>
+      <DropdownMenu.Root bind:open={dropdownOpen}>
+        <DropdownMenu.Trigger>
+          <div
+            class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white {getProfileColor(user.firstName)}"
+          >
+            {user.firstName.charAt(0)}
+          </div>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end" class="glass-card w-56">
+          <DropdownMenu.Group>
+            <DropdownMenu.Label>
+              <p class="font-medium">My Account</p>
+              <p class="text-xs text-muted-foreground">{user?.email}</p>
+            </DropdownMenu.Label>
+            <DropdownMenu.Separator />
+            {#each modules as mod}
+              <DropdownMenu.Item
+                class="cursor-pointer rounded-lg"
+                onclick={() =>
+                  navigateTo(
+                    `/${mod.link}${mod.subModule.length > 0 && mod.name !== 'Startups' ? `/${mod.subModule[0].link}` : ''}`
+                  )}
+              >
+                {mod.name}
+              </DropdownMenu.Item>
+            {/each}
+            <form action="/logout" method="post" class="w-full">
+              <button type="submit" class="w-full">
+                <DropdownMenu.Item class="cursor-pointer rounded-lg">
+                  Logout
+                </DropdownMenu.Item>
+              </button>
+            </form>
+          </DropdownMenu.Group>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
+      <button
+        class="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
+      >
+        {#if mobileMenuOpen}
+          <X class="h-5 w-5" />
+        {:else}
+          <Menu class="h-5 w-5" />
+        {/if}
+      </button>
+    </div>
   </nav>
+
+  {#if mobileMenuOpen}
+    <div class="glass-strong border-t px-4 py-3 md:hidden">
+      <ul class="flex flex-col gap-1">
+        {#each navLinks as link}
+          <li>
+            <a
+              data-sveltekit-preload-data="tap"
+              href={link.href}
+              class="flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors {link.isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+              onclick={() => (mobileMenuOpen = false)}
+            >
+              {link.name}
+            </a>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 </header>

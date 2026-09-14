@@ -8,7 +8,7 @@
   import type { PageData } from './$types';
   import { Skeleton } from '$lib/components/ui/skeleton';
 
-  export let data: PageData;
+  let { data }: { data: PageData } = $props();
 
   const queryResult = useQuery(
     'startupData',
@@ -33,7 +33,7 @@
 <div class="flex flex-col gap-5">
   <h1 class="text-xl font-semibold">General</h1>
   {#if $queryResult.isError}
-    <div class="rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
+    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
       <p class="font-medium">Failed to load startup data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>

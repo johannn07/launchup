@@ -213,7 +213,7 @@
     </Button>
   </div>
 
-  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+  <div class="glass-card overflow-hidden">
     <div
       class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4"
     >
@@ -320,7 +320,7 @@
   open={showFieldEditModal}
   onOpenChange={(v) => (showFieldEditModal = v)}
 >
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Update Assessment</Dialog.Title>
       <Dialog.Description>Update the assessment details</Dialog.Description>
@@ -424,7 +424,7 @@
 
 <!-- Confirm Dialog -->
 <Dialog.Root open={showConfirm} onOpenChange={(v) => (showConfirm = v)}>
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Confirm Action</Dialog.Title>
       <Dialog.Description class="pt-2">{confirmText}</Dialog.Description>
@@ -456,7 +456,7 @@
   open={showCreateTypeModal}
   onOpenChange={(v) => (showCreateTypeModal = v)}
 >
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Create New Assessment</Dialog.Title>
       <Dialog.Description

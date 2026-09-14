@@ -30,10 +30,10 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
 <div class="flex flex-col gap-6">
 
   <!-- Profile Card -->
-  <div class="rounded-xl border border-white/5 bg-white/[0.03] overflow-hidden shadow-xl">
+  <div class="glass-card overflow-hidden">
     <!-- Card Header -->
-    <div class="flex items-center gap-4 border-b border-white/5 bg-white/[0.02] px-6 py-5">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1]/15 text-[#6366f1]">
+    <div class="flex items-center gap-4 border-b border-border/50 px-6 py-5">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <UserRound class="h-5 w-5" />
       </div>
       <div>
@@ -65,7 +65,7 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
               type="text"
               required
               value={data.user.firstName}
-              class="pl-9 bg-white/[0.03] border-white/10 focus:border-[#6366f1]/50 focus:ring-[#6366f1]/20 transition-all"
+              class="pl-9"
             />
           </div>
         </div>
@@ -79,7 +79,7 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
               type="text"
               required
               value={data.user.lastName}
-              class="pl-9 bg-white/[0.03] border-white/10 focus:border-[#6366f1]/50 focus:ring-[#6366f1]/20 transition-all"
+              class="pl-9"
             />
           </div>
         </div>
@@ -93,19 +93,20 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
               type="email"
               value={data.user.email}
               required
-              class="pl-9 bg-white/[0.03] border-white/10 focus:border-[#6366f1]/50 focus:ring-[#6366f1]/20 transition-all"
+              class="pl-9"
             />
           </div>
         </div>
       </div>
 
-      <div class="flex items-center justify-between border-t border-white/5 bg-white/[0.02] px-6 py-4">
+      <div class="flex items-center justify-between border-t border-border/50 px-6 py-4">
         <p class="text-xs text-muted-foreground">Changes will be reflected immediately.</p>
         <Button
           type="submit"
+          variant="glass-primary"
           size="sm"
           disabled={profileSubmitting}
-          class="bg-[#6366f1] hover:bg-[#4f46e5] text-white px-5 transition-all"
+          class="px-5"
         >
           {profileSubmitting ? 'Updating...' : 'Update Profile'}
         </Button>
@@ -114,10 +115,10 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
   </div>
 
   <!-- Change Password Card -->
-  <div class="rounded-xl border border-white/5 bg-white/[0.03] overflow-hidden shadow-xl">
+  <div class="glass-card overflow-hidden">
     <!-- Card Header -->
-    <div class="flex items-center gap-4 border-b border-white/5 bg-white/[0.02] px-6 py-5">
-      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-[#6366f1]/15 text-[#6366f1]">
+    <div class="flex items-center gap-4 border-b border-border/50 px-6 py-5">
+      <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
         <ShieldCheck class="h-5 w-5" />
       </div>
       <div>
@@ -152,7 +153,7 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
               type={showCurrentPassword ? 'text' : 'password'}
               required
               autocomplete="current-password"
-              class="pl-9 pr-10 bg-white/[0.03] border-white/10 focus:border-[#6366f1]/50 focus:ring-[#6366f1]/20 transition-all"
+              class="pl-9 pr-10"
             />
             <button
               type="button"
@@ -179,7 +180,7 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
               required
               minlength="6"
               autocomplete="new-password"
-              class="pl-9 pr-10 bg-white/[0.03] border-white/10 focus:border-[#6366f1]/50 focus:ring-[#6366f1]/20 transition-all"
+              class="pl-9 pr-10"
             />
             <button
               type="button"
@@ -197,13 +198,14 @@ import { UserRound, Lock, Mail, User, KeyRound, ShieldCheck, Eye, EyeOff } from 
         </div>
       </div>
 
-      <div class="flex items-center justify-between border-t border-white/5 bg-white/[0.02] px-6 py-4">
+      <div class="flex items-center justify-between border-t border-border/50 px-6 py-4">
         <p class="text-xs text-muted-foreground">Use a strong password you don't use elsewhere.</p>
         <Button
           type="submit"
+          variant="glass-primary"
           size="sm"
           disabled={passwordSubmitting}
-          class="bg-[#6366f1] hover:bg-[#4f46e5] text-white px-5 transition-all"
+          class="px-5"
         >
           {passwordSubmitting ? 'Changing...' : 'Change Password'}
         </Button>

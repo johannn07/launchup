@@ -36,7 +36,7 @@
   })());
 </script>
 
-<Card.Root class="h-full">
+<Card.Root variant="glass" class="h-full">
   <Card.Header>
     <Card.Title class="text-xl">Startup Settings</Card.Title>
     <Card.Description>Manage your startup</Card.Description>

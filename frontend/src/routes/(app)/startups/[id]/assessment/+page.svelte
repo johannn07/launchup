@@ -434,22 +434,22 @@
 
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
-    <Dialog.Content class="flex max-h-[85vh] max-w-[900px] flex-col rounded-2xl">
+    <Dialog.Content size="lg" class="flex flex-col">
       <Dialog.Header class="mb-1 shrink-0 text-left">
         <div class="flex items-center gap-3">
           <div class={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${selectedTypeConfig.accent}`}>
             <ModalTypeIcon class="h-5 w-5" />
           </div>
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#6366f1]">
+            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
               {selectedReadinessType} Readiness
             </p>
-            <Dialog.Title class="text-xl font-black tracking-tight text-slate-950 dark:text-white">
+            <Dialog.Title class="text-xl font-black tracking-tight text-foreground">
               Assessments
             </Dialog.Title>
           </div>
         </div>
-        <Dialog.Description class="mt-2 text-xs text-slate-500 dark:text-white/50">
+        <Dialog.Description class="mt-2 text-xs text-muted-foreground">
           {#if data.role === 'Startup'}
             Complete all assessments below to improve your readiness level
           {:else}
@@ -459,7 +459,7 @@
       </Dialog.Header>
 
       <div
-        class="assessment-scroll min-h-0 flex-1 overflow-y-auto rounded-2xl border border-slate-200/70 bg-white/50 p-5 shadow-sm backdrop-blur dark:border-white/10 dark:bg-slate-950/40"
+        class="assessment-scroll min-h-0 flex-1 overflow-y-auto glass-card p-5"
       >
         {#if selectedReadinessType && assessmentsByType()[selectedReadinessType]?.length > 0}
           <div class="flex flex-col gap-5">
@@ -475,9 +475,9 @@
               {@const isToggling =
                 togglingApplicable[assessmentData.id] || false}
 
-              <div class="rounded-xl border border-slate-200/70 bg-white/60 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+              <div class="glass-card p-4">
                 <!-- Assessment Header -->
-                <div class="mb-3 flex items-start justify-between gap-3 border-b border-slate-200/50 pb-3 dark:border-white/10">
+                <div class="mb-3 flex items-start justify-between gap-3 border-b border-border/50 pb-3">
                   <div class="flex flex-1 items-start gap-3">
                     <div class="flex items-center pt-1">
                       <Checkbox
@@ -492,10 +492,10 @@
                       />
                     </div>
                     <div class="min-w-0 flex-1">
-                      <h3 class="text-base font-bold leading-snug text-slate-900 dark:text-white">
+                      <h3 class="text-base font-bold leading-snug text-foreground">
                         {assessmentData.assessment.name}
                       </h3>
-                      <p class="text-xs text-slate-500 dark:text-white/50">
+                      <p class="text-xs text-muted-foreground">
                         {assessmentData.assessment.answerType}
                       </p>
                       {#if !assessmentData.isApplicable}
@@ -554,7 +554,8 @@
                   <div class="flex justify-end">
                     <Button
                       size="sm"
-                      class="gap-1.5 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+                      class="gap-1.5"
+                      variant="glass-primary"
                       disabled={isSubmitting || !assessmentData.isApplicable}
                       onclick={() => submitSingleAssessment(assessmentData)}
                     >
@@ -588,7 +589,7 @@
         {/if}
       </div>
 
-      <div class="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200/60 pt-4 dark:border-white/10">
+      <div class="flex shrink-0 items-center justify-between gap-3 border-t border-border/50 pt-4">
         {#if canRateReadiness(data.role)}
           {@const typeAssessments = selectedReadinessType
             ? assessmentsByType()[selectedReadinessType] || []
@@ -613,7 +614,8 @@
             </Select.Root>
             <Button
               size="sm"
-              class="gap-1.5 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+              variant="glass-primary"
+              class="gap-1.5"
               disabled={isRatingAssessment || !hasApplicableAssessments}
               onclick={rateAssessmentType}
             >
@@ -629,13 +631,12 @@
           <div></div>
         {/if}
 
-        <span class="hidden text-xs font-medium text-slate-500 dark:text-white/50 sm:block">
+        <span class="hidden text-xs font-medium text-muted-foreground sm:block">
           {modalProgress()}% complete
         </span>
 
         <Button
           variant="outline"
-          class="rounded-xl border-slate-200 bg-white/60 backdrop-blur dark:border-white/10 dark:bg-white/5"
           onclick={closeTypeModal}
         >
           Close
@@ -646,7 +647,7 @@
 
   <!-- Original Assessment Form Modal -->
   <Dialog.Root open={showAssessmentForm} onOpenChange={toggleAssessmentForm}>
-    <Dialog.Content class="h-4/5 max-w-[800px]">
+    <Dialog.Content size="lg">
       {#if selectedAssessment}
         <ReadinessAssessmentForm
           {access}

@@ -8,15 +8,17 @@
   import WaitlistedDialog from '$lib/components/dashboard/WaitlistedDialog.svelte';
   import QualifiedDialog from '$lib/components/dashboard/QualifiedDialog.svelte';
   import CompletedDialog from '$lib/components/dashboard/CompletedDialog.svelte';
+  import { LoadingState, EmptyState } from '$lib/components/shared';
+  import { ClipboardList } from 'lucide-svelte';
   import axiosInstance from '$lib/axios';
   import { useQueries } from '@sveltestack/svelte-query';
 
-  export let data: PageData;
+  let { data }: { data: PageData } = $props();
 
   let access = data.access;
 
-  $: selectedTab = $page.url.searchParams.get('tab') || 'pending';
-  let applicants: any = [];
+  let selectedTab = $state($page.url.searchParams.get('tab') || 'pending');
+  let applicants: any = $state([]);
 
   let dialogLoading = false;
   let showDialog = false;
@@ -91,9 +93,6 @@
       }
     );
 
-    // A refused approval must not read as a success. This used to fall through
-    // silently, so the dialog's success toast fired for a rejected request —
-    // which would make SO 4.4's 409 invisible.
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       throw new Error(body?.message || 'Failed to approve this application.');
@@ -261,28 +260,37 @@
     }
   }
 
-  $: if ($queries[0].isSuccess) {
-    if ($queries[0].data.length > 0) {
-      if (selectedTab === 'pending') {
-        applicants = $queries[0].data.filter(
-          (applicant: any) => applicant.qualificationStatus === 1
-        );
-      } else if (selectedTab === 'waitlisted') {
-        applicants = $queries[0].data.filter(
-          (applicant: any) => applicant.qualificationStatus === 2
-        );
-      } else if (selectedTab === 'qualified') {
-        applicants = $queries[0].data.filter(
-          (applicant: any) => applicant.qualificationStatus === 3
-        );
-      } else if (selectedTab === 'completed') {
-        applicants = $queries[0].data.filter(
-          (applicant: any) => applicant.qualificationStatus === 4
-        );
+  $effect(() => {
+    if ($queries[0].isSuccess) {
+      if ($queries[0].data.length > 0) {
+        if (selectedTab === 'pending') {
+          applicants = $queries[0].data.filter(
+            (applicant: any) => applicant.qualificationStatus === 1
+          );
+        } else if (selectedTab === 'waitlisted') {
+          applicants = $queries[0].data.filter(
+            (applicant: any) => applicant.qualificationStatus === 2
+          );
+        } else if (selectedTab === 'qualified') {
+          applicants = $queries[0].data.filter(
+            (applicant: any) => applicant.qualificationStatus === 3
+          );
+        } else if (selectedTab === 'completed') {
+          applicants = $queries[0].data.filter(
+            (applicant: any) => applicant.qualificationStatus === 4
+          );
+        }
+      } else {
+        applicants = [];
       }
-    } else {
-      applicants = []; // Handle case when there are no applicants
     }
+  });
+
+  function getEmptyTitle() {
+    if (selectedTab === 'pending') return 'No pending applications';
+    if (selectedTab === 'waitlisted') return 'No waitlisted applications';
+    if (selectedTab === 'qualified') return 'No qualified startups';
+    return 'No completed applications';
   }
 </script>
 
@@ -291,19 +299,14 @@
 </svelte:head>
 
 {#if $queries[0].isLoading || $queries[1].isLoading || $queries[2].isLoading}
-  <div class="flex h-64 items-center justify-center">
-    <div class="flex items-center gap-3">
-      <div class="loader"></div>
-      <span>Fetching applications...</span>
-    </div>
-  </div>
+  <LoadingState variant="spinner" />
 {:else}
   {@const mentors = $queries[1].data}
   {@const assessments = $queries[2].data}
-  <div class="flex flex-col gap-3">
-    <div class="flex justify-between rounded-lg bg-background">
+  <div class="flex flex-col gap-5">
+    <div class="glass-card p-1">
       <Tabs.Root value={selectedTab}>
-        <Tabs.List class="bg-flutter-gray/20 border">
+        <Tabs.List class="glass-subtle rounded-xl">
           <Tabs.Trigger
             value="pending"
             onclick={() => {
@@ -340,7 +343,6 @@
       </Tabs.Root>
     </div>
 
-    <!-- Cards container -->
     <div class="space-y-4">
       {#if applicants.length > 0}
         {#each applicants as applicant}
@@ -353,36 +355,24 @@
           />
         {/each}
       {:else}
-        <div class="flex h-32 items-center justify-center text-gray-500">
-          <div class="text-center">
-            <p class="text-lg font-medium">No applications found</p>
-            <p class="text-sm">
-              There are no {selectedTab === 'pending'
-                ? 'pending applications'
-                : selectedTab === 'waitlisted'
-                  ? 'waitlisted applications'
-                  : selectedTab === 'qualified'
-                    ? 'qualified startups'
-                    : 'completed applications'} at the moment.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title={getEmptyTitle()}
+          description="There are no applications in this category at the moment."
+        />
       {/if}
     </div>
   </div>
 
   {#if dialogLoading}
-    <div
-      class="fixed inset-0 z-50 flex items-center justify-center bg-background bg-opacity-90"
-    >
-      <div class="flex items-center gap-3 rounded-lg p-5 shadow-lg">
-        <div class="loader"></div>
-        <span>Loading...</span>
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm">
+      <div class="glass-card flex items-center gap-4 p-6">
+        <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary/20 border-t-primary"></div>
+        <span class="text-sm font-medium">Processing...</span>
       </div>
     </div>
   {/if}
 
-  <!-- Dialog components -->
   {#if selectedTab === 'pending'}
     <PendingDialog
       startup={selectedStartup}
@@ -426,23 +416,3 @@
     />
   {/if}
 {/if}
-
-<style>
-  .loader {
-    border: 4px solid hsl(var(--muted));
-    border-top: 4px solid hsl(var(--primary));
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-</style>

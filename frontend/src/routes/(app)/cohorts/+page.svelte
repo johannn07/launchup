@@ -65,9 +65,9 @@
 </script>
 
 <div class="flex h-full flex-col gap-3">
-  <div class="flex items-center justify-between">
+  <div class="glass-card flex items-center justify-between p-6">
     <div>
-      <h2 class="text-3xl font-bold">Cohorts</h2>
+      <h2 class="text-3xl font-bold text-foreground">Cohorts</h2>
       <p class="text-muted-foreground">
         Manage startup batches, track progress, and analyze trends to measure
         your platform's impact.
@@ -97,7 +97,7 @@
 
 {#snippet fallback()}
   <div class="grid h-[175px] grid-cols-4 gap-3">
-    <Card.Root>
+    <Card.Root variant="glass">
       <Card.Header
         class="flex flex-row items-center justify-between space-y-0 pb-2"
       >
@@ -110,7 +110,7 @@
         </div>
       </Card.Content>
     </Card.Root>
-    <Card.Root>
+    <Card.Root variant="glass">
       <Card.Header
         class="flex flex-row items-center justify-between space-y-0 pb-2"
       >
@@ -123,7 +123,7 @@
         </div>
       </Card.Content>
     </Card.Root>
-    <Card.Root>
+    <Card.Root variant="glass">
       <Card.Header
         class="flex flex-row items-center justify-between space-y-0 pb-2"
       >
@@ -138,7 +138,7 @@
         </div>
       </Card.Content>
     </Card.Root>
-    <Card.Root>
+    <Card.Root variant="glass">
       <Card.Header
         class="flex flex-row items-center justify-between space-y-0 pb-2"
       >
@@ -155,7 +155,7 @@
     </Card.Root>
   </div>
   <div class="flex flex-1 gap-3">
-    <Card.Root class="h-full w-4/6">
+    <Card.Root variant="glass" class="h-full w-4/6">
       <Card.Header
         class="flex flex-row items-center justify-between space-y-0 pb-2"
       >
@@ -169,7 +169,7 @@
         />
       </Card.Content>
     </Card.Root>
-    <Card.Root class="h-full flex-1">
+    <Card.Root variant="glass" class="h-full flex-1">
       <Card.Header
         class="flex flex-row items-center justify-between space-y-0 pb-2"
       >

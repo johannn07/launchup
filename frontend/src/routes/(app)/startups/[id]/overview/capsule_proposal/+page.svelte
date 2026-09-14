@@ -116,7 +116,7 @@
 
 <div class="flex h-[90vh] flex-col gap-5 overflow-y-auto">
   {#if $queryResult.isError}
-    <div class="rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
+    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
       <p class="font-medium">Failed to load capsule proposal data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>

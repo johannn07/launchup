@@ -14,7 +14,7 @@
   import * as Table from '$lib/components/ui/table';
   import { getReadinessLevels } from '$lib/utils';
   import { Textarea } from '$lib/components/ui/textarea';
-  export let data: PageData;
+  let { data }: { data: PageData } = $props();
 
   const queryResult = useQuery(
     'startupData',
@@ -160,19 +160,21 @@
 
   let t = false;
 
-  $: if ($readinessData.isSuccess && !t) {
-    t = true;
-    $readinessData.data
-      .sort((a, b) =>
-        a.readinessLevel.readinessType.localeCompare(
-          b.readinessLevel.readinessType
+  $effect(() => {
+    if ($readinessData.isSuccess && !t) {
+      t = true;
+      $readinessData.data
+        .sort((a, b) =>
+          a.readinessLevel.readinessType.localeCompare(
+            b.readinessLevel.readinessType
+          )
         )
-      )
-      .map((x, index) => {
-        elevatedReadiness[index] = x.readinessLevel.id;
-        elevatedRemark[index] = x.remark;
-      });
-  }
+        .map((x, index) => {
+          elevatedReadiness[index] = x.readinessLevel.id;
+          elevatedRemark[index] = x.remark;
+        });
+    }
+  });
 </script>
 
 <svelte:head>
@@ -181,7 +183,7 @@
 <div class="flex flex-col gap-5">
   <h1 class="text-xl font-semibold">Elevate</h1>
   {#if $readinessData.isError || $elevateData.isError || $queryResult.isError}
-    <div class="rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
+    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
       <p class="font-medium">Failed to load elevation data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>

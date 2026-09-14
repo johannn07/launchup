@@ -222,26 +222,17 @@
 </svelte:head>
 
 <!-- Hero Banner Header -->
-<div
-  class="mb-8 rounded-[2rem] border border-white/40 bg-gradient-to-br from-indigo-50 via-white to-white p-8 shadow-[0_8px_32px_rgba(15,23,42,0.04)] backdrop-blur-xl dark:border-white/10 dark:from-indigo-950/40 dark:via-slate-950/60 dark:to-slate-950/60 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
->
+<div class="glass-card mb-8 bg-gradient-to-br from-primary/5 via-transparent to-transparent p-8">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-4xl font-black tracking-tight text-slate-950 dark:text-white">Startups</h2>
-      <p class="text-slate-600 dark:text-slate-400 mt-1">Manage assigned startups</p>
+      <h2 class="text-4xl font-black tracking-tight text-foreground">Startups</h2>
+      <p class="mt-1 text-muted-foreground">Manage assigned startups</p>
     </div>
     <Can role={['Startup']} userRole={role}>
-      <div class="flex gap-5">
-        <button
-          onclick={openApplicationForm}
-          class="group relative flex items-center gap-2.5 overflow-hidden rounded-xl bg-[#6366f1] px-5 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(99,102,241,0.4)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_28px_rgba(99,102,241,0.55)] active:translate-y-0 active:shadow-[0_2px_10px_rgba(99,102,241,0.3)]"
-        >
-          <!-- animated shimmer -->
-          <span class="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-500 group-hover:translate-x-full"></span>
-          <RocketIcon class="relative h-4 w-4 transition-transform duration-300 group-hover:-rotate-12 group-hover:scale-110" />
-          <span class="relative">Apply</span>
-        </button>
-      </div>
+      <Button variant="glass-primary" onclick={openApplicationForm} class="gap-2">
+        <RocketIcon class="h-4 w-4" />
+        <span>Apply</span>
+      </Button>
     </Can>
   </div>
 </div>
@@ -250,7 +241,7 @@
 <div class="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
 
   <!-- Total Startups -->
-  <div class="group flex flex-col rounded-[2rem] border border-white/40 bg-white/60 p-7 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+  <div class="glass-card group flex flex-col p-7 transition-all hover:-translate-y-1">
     <div class="flex items-center justify-between">
       <span class="text-sm font-medium text-muted-foreground">Total Startups</span>
       <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
@@ -298,7 +289,7 @@
   </div>
 
   <!-- Initiatives Progress -->
-  <div class="group flex flex-col rounded-[2rem] border border-white/40 bg-white/60 p-7 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+  <div class="glass-card group flex flex-col p-7 transition-all hover:-translate-y-1">
     <div class="flex items-center justify-between">
       <span class="text-sm font-medium text-muted-foreground">Initiatives Progress</span>
       <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
@@ -328,7 +319,7 @@
   </div>
 
   <!-- Completion Rate -->
-  <div class="group flex flex-col rounded-[2rem] border border-white/40 bg-white/60 p-7 shadow-[0_8px_32px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
+  <div class="glass-card group flex flex-col p-7 transition-all hover:-translate-y-1">
     <div class="flex items-center justify-between">
       <span class="text-sm font-medium text-muted-foreground">Completion Rate</span>
       <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
@@ -363,13 +354,13 @@
 
 <!-- Search + Underline Tab Navigation -->
 <div class="mb-5 flex flex-wrap items-start justify-between gap-4">
-  <div class="flex gap-6 border-b border-slate-200/60 pt-3 dark:border-white/10">
+  <div class="flex gap-6 border-b border-border/50 pt-3">
     <button
       onclick={() => (filter = 'All Startups')}
       class={`pb-3 text-sm font-semibold transition-colors ${
         filter === 'All Startups'
-          ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
-          : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+          ? 'border-b-2 border-primary text-foreground'
+          : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
       }`}
     >
       All Startups
@@ -380,8 +371,8 @@
         onclick={() => (filter = 'Pending')}
         class={`pb-3 text-sm font-semibold transition-colors ${
           filter === 'Pending'
-            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
-            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+            ? 'border-b-2 border-primary text-foreground'
+            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
         }`}
       >
         Pending
@@ -390,8 +381,8 @@
         onclick={() => (filter = 'Waitlisted')}
         class={`pb-3 text-sm font-semibold transition-colors ${
           filter === 'Waitlisted'
-            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
-            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+            ? 'border-b-2 border-primary text-foreground'
+            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
         }`}
       >
         Waitlisted
@@ -400,8 +391,8 @@
         onclick={() => (filter = 'Qualified')}
         class={`pb-3 text-sm font-semibold transition-colors ${
           filter === 'Qualified'
-            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
-            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+            ? 'border-b-2 border-primary text-foreground'
+            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
         }`}
       >
         Qualified
@@ -411,8 +402,8 @@
         onclick={() => (filter = 'Qualified')}
         class={`pb-3 text-sm font-semibold transition-colors ${
           filter === 'Qualified'
-            ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
-            : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+            ? 'border-b-2 border-primary text-foreground'
+            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
         }`}
       >
         Active
@@ -423,8 +414,8 @@
       onclick={() => (filter = 'Completed')}
       class={`pb-3 text-sm font-semibold transition-colors ${
         filter === 'Completed'
-          ? 'border-b-2 border-[#6366f1] text-slate-950 dark:text-white'
-          : 'border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white'
+          ? 'border-b-2 border-primary text-foreground'
+          : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
       }`}
     >
       Completed
@@ -432,9 +423,9 @@
   </div>
 
   <div class="relative w-full max-w-[400px]">
-    <SearchIcon class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+    <SearchIcon class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
     <input
-      class="w-full rounded-2xl border border-white/50 bg-white/70 py-3 pl-11 pr-4 text-sm placeholder:text-slate-500 shadow-sm backdrop-blur-md transition-all focus:outline-none focus:ring-4 focus:ring-[#6366f1]/10 focus:border-[#6366f1]/50 dark:border-white/10 dark:bg-slate-950/60 dark:text-white dark:placeholder:text-slate-400"
+      class="glass-input w-full py-3 pl-11 pr-4 text-sm placeholder:text-muted-foreground"
       type="text"
       placeholder="Search startups..."
       bind:value={search}
@@ -444,21 +435,24 @@
 
 <!-- Startup Cards Grid -->
 {#if isLoading}
-  <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-10">
-    {#each Array(8) as _, i}
-      <div class="animate-pulse">
-        <div class="rounded-xl bg-muted/50 border border-border">
-          <Skeleton class="h-48 rounded-xl" />
+  <div class="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-10">
+    {#each Array(8) as _}
+      <div class="glass-card animate-pulse p-5 space-y-3">
+        <div class="h-4 w-3/4 rounded-full bg-muted"></div>
+        <div class="space-y-2">
+          <div class="h-3 w-full rounded-full bg-muted"></div>
+          <div class="h-3 w-5/6 rounded-full bg-muted"></div>
         </div>
       </div>
     {/each}
   </div>
 {:else if isError}
-  <div>
-    <p>Error fetching data. Contact support</p>
+  <div class="glass-card flex flex-col items-center justify-center p-12 text-center">
+    <p class="text-lg font-semibold text-foreground">Failed to load startups</p>
+    <p class="mt-2 text-sm text-muted-foreground">Please try again or contact support.</p>
   </div>
 {:else if hasStartups}
-  <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-10">
+  <div class="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-10">
     {#each filteredStartups() as startup}
       <StartupCard
         {startup}
@@ -471,16 +465,17 @@
   </div>
 {:else}
   <div class="mt-20 text-center">
-    <div class="mx-auto w-24 h-24 rounded-full bg-muted/50 flex items-center justify-center mb-6">
-      <RocketIcon class="h-12 w-12 text-muted-foreground/50" />
+    <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
+      <RocketIcon class="h-12 w-12 text-primary/50" />
     </div>
-    <h3 class="text-2xl font-bold mb-2">No startups found</h3>
-    <p class="text-muted-foreground mb-6">
+    <h3 class="mb-2 text-2xl font-bold text-foreground">No startups found</h3>
+    <p class="mb-6 text-muted-foreground">
       {search ? 'Try adjusting your search criteria' : 'Get started by adding your first startup'}
     </p>
     <Can role={['Startup']} userRole={role}>
       <Button
-        class="gap-2 rounded-xl bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)]"
+        variant="glass-primary"
+        class="gap-2"
         onclick={openApplicationForm}
       >
         <RocketIcon class="h-4 w-4" /> Apply Now
@@ -494,7 +489,7 @@
   open={showApplicationForm}
   onOpenChange={handleApplicationOpenChange}
 >
-  <Dialog.Content class="flex flex-col h-[90vh] max-w-4xl rounded-3xl border-slate-200/70 bg-white/95 p-6 shadow-[0_32px_80px_rgba(15,23,42,0.2)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/95">
+  <Dialog.Content size="full" class="flex p-6">
     <Application access={data.access!} startup={selectedStartup} />
   </Dialog.Content>
 </Dialog.Root>

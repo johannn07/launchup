@@ -44,13 +44,13 @@
     <!-- Navbar -->
     <div class="relative z-10 flex items-center justify-between px-10 py-8">
       <div class="flex items-center gap-3">
-        <Rocket class="h-5 w-5 text-[#6366f1]" />
-        <a href="/" class="text-xl font-black tracking-tight text-slate-950 dark:text-white">LaunchUp</a>
+        <Rocket class="h-5 w-5 text-primary" />
+        <a href="/" class="text-xl font-black tracking-tight text-foreground">LaunchUp</a>
       </div>
       <div class="flex items-center gap-3">
         <button
           onclick={toggleTheme}
-          class="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/60 text-slate-600 backdrop-blur transition-all hover:border-[#6366f1]/30 hover:text-[#6366f1] dark:border-white/10 dark:bg-white/5 dark:text-white/70 dark:hover:text-white"
+          class="glass flex h-9 w-9 items-center justify-center rounded-full transition-all hover:text-primary"
           aria-label="Toggle theme"
         >
           {#if dark}
@@ -59,7 +59,7 @@
             <Moon class="h-4 w-4" />
           {/if}
         </button>
-        <div class="rounded-full border border-slate-200 bg-white/60 px-4 py-2 text-sm font-medium text-slate-700 backdrop-blur dark:border-white/10 dark:bg-white/5 dark:text-white/90">
+        <div class="glass rounded-full px-4 py-2 text-sm font-medium text-foreground">
           Focused access for founders
         </div>
       </div>
@@ -69,25 +69,25 @@
     <div class="relative z-10 flex flex-1 items-center px-10 pb-32">
       <div class="max-w-xl space-y-6">
         
-        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-white/60">Welcome back</p>
-        <h1 class="text-5xl font-black tracking-[-0.05em] text-slate-950 dark:text-white">
+        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">Welcome back</p>
+        <h1 class="text-5xl font-black tracking-[-0.05em] text-foreground">
           Sign in to resume your startup journey.
         </h1>
-        <p class="text-lg leading-8 text-slate-600 dark:text-white/72">
+        <p class="text-lg leading-8 text-muted-foreground">
           Everything here is tuned for speed, clarity, and a cleaner signal when it matters most.
         </p>
         <div class="grid gap-4 pt-4 sm:grid-cols-3">
-          <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 backdrop-blur-md dark:border-white/10 dark:bg-slate-950/60">
-            <p class="text-sm text-slate-500 dark:text-white/55">Access</p>
-            <p class="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Fast login</p>
+          <div class="glass rounded-2xl p-4">
+            <p class="text-sm text-muted-foreground">Access</p>
+            <p class="mt-2 text-lg font-semibold text-foreground">Fast login</p>
           </div>
-          <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 backdrop-blur-md dark:border-white/10 dark:bg-slate-950/60">
-            <p class="text-sm text-slate-500 dark:text-white/55">Signal</p>
-            <p class="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Clear status</p>
+          <div class="glass rounded-2xl p-4">
+            <p class="text-sm text-muted-foreground">Signal</p>
+            <p class="mt-2 text-lg font-semibold text-foreground">Clear status</p>
           </div>
-          <div class="rounded-2xl border border-slate-200 bg-white/60 p-4 backdrop-blur-md dark:border-white/10 dark:bg-slate-950/60">
-            <p class="text-sm text-slate-500 dark:text-white/55">Flow</p>
-            <p class="mt-2 text-lg font-semibold text-slate-900 dark:text-white">Less friction</p>
+          <div class="glass rounded-2xl p-4">
+            <p class="text-sm text-muted-foreground">Flow</p>
+            <p class="mt-2 text-lg font-semibold text-foreground">Less friction</p>
           </div>
         </div>
       </div>
@@ -106,12 +106,12 @@
     <form
       method="post"
       use:enhance
-      class="relative w-full max-w-md rounded-[2.5rem] border border-white/40 bg-white/60 p-8 shadow-[0_8px_32px_rgba(15,23,42,0.06),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] sm:p-10"
+      class="glass-card relative w-full max-w-md p-8 sm:p-10"
     >
-      <div class="absolute -inset-0.5 -z-10 rounded-[2.5rem] bg-gradient-to-br from-[#6366f1]/20 via-transparent to-[#0ea5e9]/20 blur-xl dark:from-[#6366f1]/10 dark:to-[#0ea5e9]/10"></div>
+      <div class="absolute -inset-0.5 -z-10 rounded-[2.5rem] bg-gradient-to-br from-primary/20 via-transparent to-primary/10 blur-xl"></div>
       <div class="space-y-3 text-center">
-        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-[#6366f1]">Login</p>
-        <h1 class="text-3xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl pb-8">Welcome back</h1>
+        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-primary">Login</p>
+        <h1 class="text-3xl font-black tracking-tight text-foreground pb-8 sm:text-4xl">Welcome back</h1>
        
       </div>
       <div class="mt-8 grid gap-5">
@@ -124,7 +124,7 @@
             placeholder="m@example.com"
             required
             bind:value={$form.email}
-            class="h-12 rounded-2xl border-white/50 bg-white/70 shadow-sm transition-all focus-visible:border-[#6366f1]/50 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#6366f1]/10 focus-visible:ring-offset-0 dark:border-white/10 dark:bg-white/5 dark:focus-visible:border-[#6366f1]/50 dark:focus-visible:bg-white/10"
+            class="glass-input h-12"
           />
         </div>
         <div class="grid gap-2.5">
@@ -136,7 +136,7 @@
               type={showPassword ? 'text' : 'password'}
               required
               bind:value={$form.password}
-              class="h-12 rounded-2xl border-white/50 bg-white/70 pr-12 shadow-sm transition-all focus-visible:border-[#6366f1]/50 focus-visible:bg-white focus-visible:ring-4 focus-visible:ring-[#6366f1]/10 focus-visible:ring-offset-0 dark:border-white/10 dark:bg-white/5 dark:focus-visible:border-[#6366f1]/50 dark:focus-visible:bg-white/10"
+              class="glass-input h-12 pr-12"
             />
             <button
               type="button"
@@ -157,7 +157,8 @@
         {/if}
         <Button
           type="submit"
-          class="group mt-2 h-12 w-full rounded-2xl bg-gradient-to-b from-slate-800 to-slate-950 px-6 text-base font-semibold text-white shadow-[0_8px_30px_rgba(15,23,42,0.25),inset_0_1px_1px_rgba(255,255,255,0.15)] ring-1 ring-slate-950/20 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_18px_40px_rgba(15,23,42,0.35)] dark:from-white dark:to-slate-200 dark:text-slate-950 dark:shadow-[0_8px_30px_rgba(255,255,255,0.1)]"
+          variant="glass-primary"
+          class="group mt-2 h-12 w-full text-base"
           disabled={$submitting}
         >
           {#if $submitting}
@@ -166,9 +167,9 @@
           Sign In
         </Button>
       </div>
-      <div class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+      <div class="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?
-        <a href="/register" class="font-semibold text-[#4f46e5] underline-offset-4 hover:underline">Sign up</a>
+        <a href="/register" class="font-semibold text-primary underline-offset-4 hover:underline">Sign up</a>
       </div>
     </form>
   </div>
