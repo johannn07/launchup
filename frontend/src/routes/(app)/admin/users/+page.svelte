@@ -173,7 +173,7 @@
     </Button>
   </div>
 
-  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+  <div class="glass-card overflow-hidden">
     <div
       class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4"
     >
@@ -270,7 +270,7 @@
     createOpen = open;
   }}
 >
-  <Dialog.Content class="sm:max-w-lg">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Create New User</Dialog.Title>
       <Dialog.Description class="pt-2">
@@ -279,7 +279,7 @@
     </Dialog.Header>
 
     {#if createError}
-      <div class="rounded-md bg-red-50 p-3 text-sm text-red-600">
+      <div class="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
         {createError}
       </div>
     {/if}
@@ -365,7 +365,7 @@
     editOpen = open;
   }}
 >
-  <Dialog.Content class="sm:max-w-lg">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Edit User</Dialog.Title>
       <Dialog.Description class="pt-2">
@@ -376,7 +376,7 @@
     </Dialog.Header>
 
     {#if error}
-      <div class="rounded-md bg-red-50 p-3 text-sm text-red-600">
+      <div class="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
         {error}
       </div>
     {/if}
@@ -444,7 +444,7 @@
     deleteOpen = open;
   }}
 >
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Delete User</Dialog.Title>
       <Dialog.Description class="pt-2">

@@ -179,7 +179,7 @@
     </Button>
   </div>
 
-  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+  <div class="glass-card overflow-hidden">
     <div class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4">
       <h2 class="font-semibold text-foreground flex items-center gap-2">
         <Rocket class="h-4 w-4 text-muted-foreground" />
@@ -271,7 +271,7 @@
 
 <!-- Create Startup Modal -->
 <Dialog.Root bind:open={createOpen} onOpenChange={(open) => { if (!open && creating) return; createOpen = open; }}>
-  <Dialog.Content class="sm:max-w-lg">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Create New Startup</Dialog.Title>
       <Dialog.Description class="pt-2">
@@ -280,7 +280,7 @@
     </Dialog.Header>
 
     {#if createError}
-      <div class="rounded-md bg-red-50 p-3 text-sm text-red-600">
+      <div class="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
         {createError}
       </div>
     {/if}
@@ -362,7 +362,7 @@
 
 <!-- Edit Startup Modal -->
 <Dialog.Root bind:open={editOpen} onOpenChange={(open) => { if (!open && saving) return; editOpen = open; }}>
-  <Dialog.Content class="sm:max-w-lg">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Edit Startup</Dialog.Title>
       <Dialog.Description class="pt-2">
@@ -371,7 +371,7 @@
     </Dialog.Header>
 
     {#if error}
-      <div class="rounded-md bg-red-50 p-3 text-sm text-red-600">
+      <div class="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
         {error}
       </div>
     {/if}
@@ -450,7 +450,7 @@
 
 <!-- Delete Startup Modal -->
 <Dialog.Root bind:open={deleteOpen} onOpenChange={(open) => { if (!open && deleting) return; deleteOpen = open; }}>
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Delete Startup</Dialog.Title>
       <Dialog.Description class="pt-2">

@@ -1,7 +1,6 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card/index.js';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
-  import { getBadgeColor } from '$lib/utils';
   import Badge from '../ui/badge/badge.svelte';
   let {
     startup,
@@ -13,6 +12,7 @@
     number,
     {
       label: 'Pending' | 'Waitlisted' | 'Qualified' | 'Completed';
+      badgeVariant: 'pending' | 'waitlisted' | 'qualified' | 'completed';
       border: string;
       text: string;
       bg: string;
@@ -20,24 +20,28 @@
   > = {
     1: {
       label: 'Pending',
+      badgeVariant: 'pending',
       border: 'border-yellow-400',
       text: 'text-yellow-400',
       bg: 'bg-yellow-900'
     },
     2: {
       label: 'Waitlisted',
+      badgeVariant: 'waitlisted',
       border: 'border-purple-400',
       text: 'text-purple-400',
       bg: 'bg-purple-900'
     },
     3: {
       label: 'Qualified',
+      badgeVariant: 'qualified',
       border: 'border-blue-500',
       text: 'text-blue-500',
       bg: 'bg-slate-900'
     },
     4: {
       label: 'Completed',
+      badgeVariant: 'completed',
       border: 'border-green-500',
       text: 'text-green-500',
       bg: 'bg-green-900'
@@ -114,7 +118,8 @@
   }}
 >
   <Card.Root
-    class="cursor-pointer rounded-[1.5rem] border border-white/40 bg-white/60 p-0 shadow-[0_4px_24px_rgba(15,23,42,0.04),inset_0_1px_1px_rgba(255,255,255,0.7)] backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-slate-950/50 dark:shadow-[0_4px_24px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.05)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.6)]"
+    variant="glass"
+    class="cursor-pointer p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
   >
     <Card.Content class="h-full">
       <div class="flex flex-col items-center p-6 text-center">
@@ -129,7 +134,7 @@
         </span>
 
         <div class="mt-2 flex flex-wrap justify-center gap-1.5">
-          <Badge class={`rounded px-2 py-0.5 text-xs font-semibold ${getBadgeColor(status.label)}`}>
+          <Badge variant={status.badgeVariant} class="rounded px-2 py-0.5 text-xs font-semibold">
             {status.label === 'Qualified' && role === 'Mentor' ? 'Active' : status.label}
           </Badge>
           <div class={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${getTierColor(tier)}`}>

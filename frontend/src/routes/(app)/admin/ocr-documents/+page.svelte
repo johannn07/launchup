@@ -5,23 +5,23 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import { Scan, Eye, ArrowLeft, ArrowRight, Image as ImageIcon, Search, CheckCircle, AlertTriangle, PenTool, ExternalLink } from 'lucide-svelte';
 
-  export let data: { ocrs: any[]; access: string };
+  let { data }: { data: { ocrs: any[]; access: string } } = $props();
   let ocrs = data.ocrs ?? [];
-  let togglingId: number | null = null;
+  let togglingId: number | null = $state(null);
 
   // filtering & pagination
-  let filter = '';
-  let page = 1;
+  let filter = $state('');
+  let page = $state(1);
   const perPage = 12;
 
-  $: filtered = ocrs.filter(o => {
+  let filtered = $derived(ocrs.filter(o => {
     if (!filter) return true;
     const f = filter.toLowerCase();
     return (String(o.originalFilename || '').toLowerCase().includes(f) || String(o.extractedText || '').toLowerCase().includes(f));
-  });
+  }));
 
-  $: totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-  $: pageItems = filtered.slice((page - 1) * perPage, page * perPage);
+  let totalPages = $derived(Math.max(1, Math.ceil(filtered.length / perPage)));
+  let pageItems = $derived(filtered.slice((page - 1) * perPage, page * perPage));
 
   // preview modal
   let previewOpen = false;
@@ -69,7 +69,7 @@
     </div>
   </div>
 
-  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+  <div class="glass-card overflow-hidden">
     <div class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4">
       <h2 class="font-semibold text-foreground flex items-center gap-2">
         <Scan class="h-4 w-4 text-muted-foreground" />
@@ -211,7 +211,7 @@
   </div>
 
   <Dialog.Root bind:open={previewOpen}>
-    <Dialog.Content class="max-w-4xl p-1 bg-transparent border-none shadow-none">
+    <Dialog.Content variant="solid" size="xl" class="border-none bg-transparent p-1 shadow-none">
       <div class="relative rounded-lg overflow-hidden bg-background/50 backdrop-blur-md border border-border/50 flex items-center justify-center p-4">
         {#if previewUrl}
           <img src={previewUrl} alt="Document preview" class="max-w-full max-h-[80vh] object-contain rounded shadow-lg" />

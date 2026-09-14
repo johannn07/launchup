@@ -527,7 +527,7 @@
       </div>
     </div>
 
-    <div class="grid h-full grid-cols-4 gap-5">
+    <div class="glass-card grid h-full grid-cols-4 gap-5 p-5">
       <div class="h-full w-full bg-background">
         <Skeleton class="h-full" />
       </div>
@@ -625,8 +625,8 @@
                     )
                       ? 'opacity-50'
                       : ''}"
-                    on:click|stopPropagation={() => toggleRNSSelection(rna.id)}
-                    on:keydown|stopPropagation
+                    onclick={(e) => { e.stopPropagation(); toggleRNSSelection(rna.id); }}
+                    onkeydown={(e) => e.stopPropagation()}
                   >
                     <div class="flex items-center gap-2">
                       <input

@@ -194,7 +194,7 @@
 </svelte:head>
 <div class="flex flex-col gap-5">
   {#if $queryResult.isError}
-    <div class="rounded-md border border-red-200 bg-red-50 p-4 text-red-800">
+    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
       <p class="font-medium">Failed to load member data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>
@@ -281,7 +281,7 @@
                           open = true;
                           contracted = false;
                           toBeDeletedId = member.id;
-                        }}><Trash class="h-4 w-4 text-red-500" /></button
+                        }}><Trash class="h-4 w-4 text-destructive" /></button
                       >
                     {/if}
                   </Table.Cell>
@@ -316,7 +316,7 @@
 
 <!-- Add Member Dialog -->
 <Dialog.Root bind:open={dialogOpen}>
-  <Dialog.Content class="sm:max-w-[500px]">
+  <Dialog.Content size="default">
     <Dialog.Header>
       <Dialog.Title>Add Team Member</Dialog.Title>
       <Dialog.Description>
@@ -393,7 +393,7 @@
     <AlertDialog.Footer>
       <AlertDialog.Cancel onclick={() => (open = false)}>Cancel</AlertDialog.Cancel>
       <AlertDialog.Action
-        class="bg-red-500 hover:bg-red-600"
+        class="bg-destructive hover:bg-destructive/90"
         onclick={async () => {
           if (contracted) {
             await removeContractedMember(toBeDeletedId!);

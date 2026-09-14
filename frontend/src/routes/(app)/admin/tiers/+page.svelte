@@ -6,7 +6,7 @@
 
   import { toast } from 'svelte-sonner';
 
-  export let data: { tiers: any[]; access: string };
+  let { data }: { data: { tiers: any[]; access: string } } = $props();
   let tiers = (data.tiers ?? []).map(t => ({ ...t }));
   let saving = false;
   let saveSuccess = false;
@@ -81,7 +81,7 @@
     </div>
   </div>
 
-  <div class="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm shadow-sm overflow-hidden">
+  <div class="glass-card overflow-hidden">
     <div class="bg-muted/40 flex items-center justify-between border-b border-border/50 px-6 py-4">
       <h2 class="font-semibold text-foreground flex items-center gap-2">
         <Settings2 class="h-4 w-4 text-muted-foreground" />

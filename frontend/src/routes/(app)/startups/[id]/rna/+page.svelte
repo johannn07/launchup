@@ -281,7 +281,7 @@
     <div class="ml-auto flex items-center gap-3">
       {#if data.role !== 'Startup'}
         <Button
-          class="gap-1.5 rounded-xl border-slate-200 bg-white/60 backdrop-blur dark:border-white/10 dark:bg-white/5"
+          class="gap-1.5"
           variant="outline"
           onclick={() => (open = true)}
         >
@@ -290,7 +290,8 @@
 
         <div class="flex">
           <Button
-            class="gap-1.5 rounded-l-xl rounded-r-none bg-[#6366f1] text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+            class="gap-1.5 rounded-r-none"
+            variant="glass-primary"
             onclick={generateRNA}
             disabled={generatingRNA || selectedTypes.length === 0}
           >
@@ -305,13 +306,13 @@
 
           <DropdownMenu.Root>
             <DropdownMenu.Trigger
-              class="flex h-9 items-center justify-center rounded-l-none rounded-r-xl border-l border-white/25 bg-[#6366f1] px-2 text-white shadow-[0_4px_16px_rgba(99,102,241,0.3)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#6366f1] hover:shadow-[0_8px_24px_rgba(99,102,241,0.4)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none"
+              class="flex h-10 items-center justify-center rounded-l-none rounded-r-xl border-l border-primary/20 bg-primary/90 px-2 text-primary-foreground backdrop-blur-xl transition-all hover:bg-primary disabled:opacity-50"
               disabled={generatingRNA}
             >
               <span class="sr-only">Choose dimensions</span>
               <ChevronDown class="h-4 w-4" />
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" class="w-72">
+            <DropdownMenu.Content align="end" class="glass-card w-72">
               <DropdownMenu.Label>Dimensions to generate</DropdownMenu.Label>
               <DropdownMenu.Separator />
               {#each dimensionOptions as dimension}
@@ -340,10 +341,16 @@
   </div>
 
   <div
-    class="mt-5 grid max-h-[40rem] w-full grid-cols-4 gap-5 overflow-auto rounded-xl border-2 p-10"
+    class="mt-5 grid max-h-[40rem] w-full grid-cols-4 gap-5 overflow-auto rounded-xl border border-border/50 p-10"
   >
     {#if $rnaQueries[1].data.length === 0}
-      <h1 class="text-gray-600">There are currently no RNAs created...</h1>
+      <div class="col-span-full flex flex-col items-center justify-center py-12 text-center">
+        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+          <Sparkles class="h-8 w-8 text-primary/50" />
+        </div>
+        <p class="text-lg font-semibold text-foreground">No RNAs created yet</p>
+        <p class="mt-1 text-sm text-muted-foreground">Generate or add RNA entries to get started.</p>
+      </div>
     {/if}
     {#each $rnaQueries[1].data as rna}
       <RnaCard

@@ -685,7 +685,7 @@
       </div>
     </div>
 
-    <div class="grid h-full grid-cols-4 gap-5">
+    <div class="glass-card grid h-full grid-cols-4 gap-5 p-5">
       <div class="h-full w-full bg-background">
         <Skeleton class="h-full" />
       </div>
@@ -737,7 +737,7 @@
       {/if}
       {#if data.role !== 'Startup'}
         <Button
-          class="rounded-md bg-primary px-4 py-2 text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+          class="px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
           type="button"
           onclick={() => showDialog()}
         >
@@ -746,7 +746,8 @@
         </Button>
         <div class="flex gap-1">
           <Button
-            class="rounded-br-none rounded-tr-none border-l border-primary/20 bg-primary px-4 py-2 text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            variant="glass-primary"
+            class="rounded-br-none rounded-tr-none px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             disabled={generatingInitiatives}
             onclick={() => generateInitiativesForSelected()}
@@ -761,7 +762,8 @@
           <DropdownMenu.Root bind:open={dropdownOpen}>
             <DropdownMenu.Trigger>
               <Button
-                class="rounded-bl-none rounded-tl-none border-l border-primary/20 bg-primary px-2 py-2 text-white transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                variant="glass-primary"
+                class="rounded-bl-none rounded-tl-none border-l border-white/20 px-2 py-2 disabled:cursor-not-allowed disabled:opacity-50"
                 type="button"
                 disabled={generatingInitiatives}
               >
@@ -783,8 +785,8 @@
                     )
                       ? 'opacity-50'
                       : ''}"
-                    on:click|stopPropagation={() => toggleRNSSelection(task.id)}
-                    on:keydown|stopPropagation
+                    onclick={(e) => { e.stopPropagation(); toggleRNSSelection(task.id); }}
+                    onkeydown={(e) => e.stopPropagation()}
                   >
                     <div class="flex items-center gap-2">
                       <input

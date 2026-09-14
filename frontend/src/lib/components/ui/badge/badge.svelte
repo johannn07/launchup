@@ -1,7 +1,7 @@
 <script lang="ts" module>
   import { type VariantProps, tv } from 'tailwind-variants';
   export const badgeVariants = tv({
-    base: 'focus:ring-ring inline-flex select-none items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
+    base: 'focus:ring-ring inline-flex select-none items-center rounded-full border px-3 py-1 text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2',
     variants: {
       variant: {
         default:
@@ -10,7 +10,17 @@
           'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-transparent',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/80 border-transparent shadow',
-        outline: 'text-foreground'
+        outline: 'text-foreground',
+        glass:
+          'glass text-foreground border-transparent',
+        pending:
+          'bg-pending-background text-pending-foreground border-pending-border/30',
+        qualified:
+          'bg-qualified-background text-qualified-foreground border-qualified-border/30',
+        waitlisted:
+          'bg-waitlisted-background text-waitlisted-foreground border-waitlisted-border/30',
+        completed:
+          'bg-completed-background text-completed-foreground border-completed-border/30'
       }
     },
     defaultVariants: {
