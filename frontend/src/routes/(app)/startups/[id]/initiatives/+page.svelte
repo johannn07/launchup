@@ -737,7 +737,8 @@
       {/if}
       {#if data.role !== 'Startup'}
         <Button
-          class="px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+          class="gap-1.5"
+          variant="outline"
           type="button"
           onclick={() => showDialog()}
         >
@@ -747,13 +748,13 @@
         <div class="flex gap-1">
           <Button
             variant="glass-primary"
-            class="rounded-br-none rounded-tr-none px-4 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+            class="gap-1.5 rounded-r-none"
             type="button"
             disabled={generatingInitiatives}
             onclick={() => generateInitiativesForSelected()}
           >
             {#if generatingInitiatives}
-              <Loader class="mr-2 h-4 w-4 animate-spin" />
+              <Loader class="h-4 w-4 animate-spin" />
               Generating...
             {:else}
               <Sparkles class="h-4 w-4" />Generate
@@ -763,7 +764,7 @@
             <DropdownMenu.Trigger>
               <Button
                 variant="glass-primary"
-                class="rounded-bl-none rounded-tl-none border-l border-white/20 px-2 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-l-none border-l border-primary/20"
                 type="button"
                 disabled={generatingInitiatives}
               >

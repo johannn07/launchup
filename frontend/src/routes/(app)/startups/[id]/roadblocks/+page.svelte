@@ -573,7 +573,8 @@
       <ShowHideColumns views={columns} />
       {#if data.role !== 'Startup'}
         <Button
-          class="hover:bg-primary/90 rounded-md bg-primary px-4 py-2 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          class="gap-1.5"
+          variant="outline"
           type="button"
           onclick={() => showDialog()}
         >
@@ -582,13 +583,14 @@
         </Button>
         <div class="flex gap-1">
           <Button
-            class="border-primary/20 hover:bg-primary/90 rounded-br-none rounded-tr-none border-l bg-primary px-4 py-2 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            class="gap-1.5 rounded-r-none"
+            variant="glass-primary"
             type="button"
             disabled={generatingRoadblocks}
             onclick={() => generateRoadblocks(numToGenerate)}
           >
             {#if generatingRoadblocks}
-              <Loader class="mr-2 h-4 w-4 animate-spin" />
+              <Loader class="h-4 w-4 animate-spin" />
               Generating...
             {:else}
               <Sparkles class="h-4 w-4" />Generate
@@ -597,7 +599,8 @@
           <DropdownMenu.Root bind:open={dropdownOpen}>
             <DropdownMenu.Trigger>
               <Button
-                class="border-primary/20 hover:bg-primary/90 rounded-bl-none rounded-tl-none border-l bg-primary px-2 py-2 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-l-none border-l border-primary/20"
+                variant="glass-primary"
                 type="button"
                 disabled={generatingRoadblocks}
               >
