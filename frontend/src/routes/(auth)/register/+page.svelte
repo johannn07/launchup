@@ -244,7 +244,7 @@
         <Button
           type="submit"
           variant="glass-primary"
-          class="h-11 w-full text-base"
+          class="h-11 w-full bg-[#6366f1] text-base text-white hover:bg-[#6366f1]"
           disabled={$submitting}
         >
           Create account

@@ -158,7 +158,7 @@
         <Button
           type="submit"
           variant="glass-primary"
-          class="group mt-2 h-12 w-full text-base"
+          class="group mt-2 h-12 w-full bg-[#6366f1] text-base text-white hover:bg-[#6366f1]"
           disabled={$submitting}
         >
           {#if $submitting}

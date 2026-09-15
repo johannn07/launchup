@@ -23,7 +23,7 @@
         glass:
           'glass text-foreground hover:bg-white/10 dark:hover:bg-white/5',
         'glass-primary':
-          'bg-primary/90 text-primary-foreground backdrop-blur-xl border border-primary/20 hover:bg-primary shadow-lg hover:shadow-xl'
+          'bg-primary text-primary-foreground backdrop-blur-xl border border-primary/20 shadow-lg hover:shadow-xl hover:brightness-110'
       },
       size: {
         default: 'h-10 px-5 py-2',

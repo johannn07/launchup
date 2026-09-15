@@ -434,7 +434,7 @@
 
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
-    <Dialog.Content size="lg" class="flex flex-col">
+    <Dialog.Content size="full" class="flex flex-col">
       <Dialog.Header class="mb-1 shrink-0 text-left">
         <div class="flex items-center gap-3">
           <div class={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${selectedTypeConfig.accent}`}>

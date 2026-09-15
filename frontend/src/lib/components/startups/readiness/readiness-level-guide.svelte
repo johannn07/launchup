@@ -49,7 +49,7 @@
 
     <!-- Bounded so nine levels of prose scroll inside the panel rather than
          overflowing whatever dialog or card is hosting it. -->
-    <div class="max-h-64 space-y-3 overflow-y-auto border-t border-slate-200/70 px-3 py-3 dark:border-white/10">
+    <div class="max-h-[28rem] space-y-3 overflow-y-auto border-t border-slate-200/70 px-3 py-3 dark:border-white/10">
       {#if source}
         <p class="text-xs text-slate-500 dark:text-white/50">
           <span class="font-semibold">{PROVENANCE_LABEL[source.provenance]}</span>
