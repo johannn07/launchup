@@ -6,6 +6,7 @@ import type { RNSItem } from './types/rns.types';
 import type { Role } from './types/user.types';
 import { mode } from 'mode-watcher';
 import { get } from 'svelte/store';
+import { READINESS_TYPES } from './readiness-dimensions';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -24,8 +25,8 @@ export enum CalculatorCategory {
 export enum ReadinessType {
   Technology = 'Technology',
   Market = 'Market',
-  Acceptance = 'Acceptance',
   Regulatory = 'Regulatory',
+  Acceptance = 'Acceptance',
   Organizational = 'Organizational',
   Investment = 'Investment'
 }
@@ -406,34 +407,20 @@ export function getProfileColor(firstName: string) {
   return profileColor[colorIndex];
 }
 
-export const getReadinessTypes = () => {
-  return [
-    {
-      id: 2,
-      name: 'Technology'
-    },
-    {
-      id: 3,
-      name: 'Market'
-    },
-    {
-      id: 4,
-      name: 'Acceptance'
-    },
-    {
-      id: 5,
-      name: 'Organizational'
-    },
-    {
-      id: 6,
-      name: 'Regulatory'
-    },
-    {
-      id: 7,
-      name: 'Investment'
-    }
-  ];
+// Order comes from READINESS_TYPES; the ids are the original ones, pinned rather
+// than derived from position so reordering cannot remap them. No consumer reads
+// `id` — both select on `name` — so it is carried, not relied on.
+const READINESS_TYPE_IDS: Record<string, number> = {
+  Technology: 2,
+  Market: 3,
+  Acceptance: 4,
+  Organizational: 5,
+  Regulatory: 6,
+  Investment: 7
 };
+
+export const getReadinessTypes = () =>
+  READINESS_TYPES.map((name) => ({ id: READINESS_TYPE_IDS[name], name }));
 
 export const getReadinessLevels = (
   readiness:

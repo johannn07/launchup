@@ -2,15 +2,9 @@
 // Extracted from the readiness-level page so the seeding rule can be read and
 // tested on its own; the frontend has no test runner yet (TODO_CHECKLIST §4).
 
-export const READINESS_TYPES = [
-  'Technology',
-  'Acceptance',
-  'Market',
-  'Organizational',
-  'Regulatory',
-  'Investment'
-] as const;
+import { READINESS_TYPES } from './readiness-dimensions';
 
+export { READINESS_TYPES };
 export type ReadinessType = (typeof READINESS_TYPES)[number];
 export type BaselineScores = Record<ReadinessType, number>;
 

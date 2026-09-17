@@ -582,6 +582,106 @@ still has not happened" as its oldest debt. Both cannot be true — resolve agai
 the live site before either line is cited.
 
 ---
+## 2026-09-07 (later) — the dimension order settled, and unified
+
+### The block came off by reading the SDD
+
+The defect was recorded as "blocked on the SDD". It was blocked on nobody having
+opened it. The documents are in `Downloads\capstone\`, and `pdftotext -layout`
+reads all three in seconds.
+
+**The specification is unanimous: TRL, MRL, RRL, ARL, ORL.** Ten-plus
+occurrences across the SRS (the five-dimension sentence in §1.2 Scope, and the
+scoring descriptions in §3), the SDD (§2.2 — the bias-correction and
+classification-engine descriptions, the Manager URAT rating panel, and the
+`urat_questions.dimension` column definition) and the proposal. No
+counter-example. Regulatory is third.
+
+⚠️ **The §1.3 acronym lists in both documents are alphabetical** (ARL, MRL, ORL,
+RRL, TRL) and are not evidence of order. Only the prose is.
+
+**Honest limit on that evidence:** these are *listing* orders in prose, not a
+requirement that says the wizard shall present them in this sequence. What makes
+it decisive is the unanimity plus the fact that the apply flow already matched.
+
+### The apply flow was the thing that was right
+
+The checklist assumed patching the apply flow might be the fix. Backwards. And
+the count was low — **eight declaration sites, four different orders**, not three:
+
+| Site | Was | Visible |
+|---|---|---|
+| `Application.svelte:71` + `:280` | T M R A O I ✅ | apply wizard |
+| `Pie.svelte:5`, `BarChart.svelte:7` | T M R A O I ✅ | charts |
+| backend `ReadinessType` → `DIMENSION_ORDER` → rubric endpoint | T M **A O R** I | rubric guide |
+| `getReadinessTypes()` → assessment page + 2 RNS dropdowns | T M **A O R** I | yes |
+| URAT seed bank | T M **A O R** I | no |
+| `READINESS_TYPES` → readiness-level tabs | T **A M** O R I | yes |
+| frontend `ReadinessType` enum | T M A **R O** I | no |
+
+Two of the three "nobody has reported it" sites were invisible for a reason: the
+seed bank is filtered by name, and the frontend enum is used only as a type.
+
+### What was done — `fix/readiness-dimension-order`, one commit, local
+
+Option B of three: unify all eight, one canonical source per app, **no wizard
+refactor**. The wizard's URAT steps are interleaved with consent/details/
+calculator steps, so deriving them would have meant refactoring a working
+component for no visible gain.
+
+- Backend: the enum is already the single source — reordering it moved
+  `DIMENSION_ORDER` and the rubric endpoint with it. Seed bank reordered to match.
+- Frontend: new `readiness-dimensions.ts` owns the order; `readiness-baseline.ts`
+  re-exports it and `utils.ts` derives from it.
+
+**One judgement call worth recording.** Deriving `getReadinessTypes()`'s ids from
+array position would have silently remapped them (Regulatory 6 → 4). Nothing
+reads `id` — both consumers select on `name` — but changing a mapping quietly is
+worse than leaving it, so the ids are **pinned by name**. A future reorder cannot
+move them.
+
+### Verification, and what it does not cover
+
+- Backend **375/375**, unchanged from `master`.
+- `svelte-check` **113 errors / 15 warnings** — measured on the branch *and* on a
+  stashed working tree, identical. The "14 warnings" in older notes is stale; no
+  diagnostic mentions any changed file.
+- **Live against Neon:** `GET /readinesslevel/rubrics` returns its 54 rows as
+  Technology → Market → Regulatory → Acceptance → Organizational → Investment.
+- **Live in the browser:** the four frontend sources read out of the running Vite
+  module graph, all agreeing, with `getReadinessTypes()` still carrying ids
+  2/3/6/4/5/7 in the new order.
+
+⚠️ **The mentor-side click-through is not done.** The readiness-level tabs and the
+RNS dropdown are gated to Mentor/Manager, and reaching them means typing a
+password into the login form, which I don't do. The rendering is a direct map over
+the constant that was verified at runtime, but seeing the tabs in that order is
+still owed — and John tests the branch before merge anyway.
+
+### Not in this branch, on purpose
+
+- **"Acceptance" vs the spec's "Adoption Readiness Level".** A rename with a data
+  migration behind it — stored `readinessType` values and RAG corpus keys. Own
+  branch, own decision.
+- **IRL is not in the specification at all** (§0 has carried this since 2026-07-28).
+  Keeping Investment last is a superset of the spec order, so it did not block.
+
+### Corrected in `CLAUDE.md`
+
+The line that read "TRL/MRL/RRL/ARL/ORL/IRL — Technology, Market, Acceptance,
+Organizational, Regulatory, and Investment" contradicted itself in one sentence,
+and was the reason the defect read as unsettleable. It now states the canonical
+order once and names the two files that declare it.
+
+### Next step
+
+1. **John tests `fix/readiness-dimension-order`**, mentor side especially — the
+   readiness-level tabs and the RNS readiness-type dropdown.
+2. **`supportRatio` remains §2's open measurement problem**, unchanged: per-field
+   thresholds need their own pre-registered design on new data.
+3. **The critical path is still unstarted:** the SPMP and the traceability matrix,
+   competing for the same weeks as the 30-user study.
+
 ## 2026-09-07 — five defects fixed, a sixth reframed, three diagnoses corrected
 
 Zero Gemini generation calls. No measurement. Started from a quota question, ended
