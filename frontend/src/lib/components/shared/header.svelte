@@ -14,11 +14,14 @@
 
   const { user, startup, scrollContainer } = $props();
 
-  let dropdownOpen = $state(false);
+  // One flag per menu: a shared flag opens both, and the hidden one keeps the page locked.
+  let desktopDropdownOpen = $state(false);
+  let mobileDropdownOpen = $state(false);
   let mobileMenuOpen = $state(false);
 
   function navigateTo(path: string) {
-    dropdownOpen = false;
+    desktopDropdownOpen = false;
+    mobileDropdownOpen = false;
     mobileMenuOpen = false;
     goto(path);
   }
@@ -138,7 +141,7 @@
       <Badge variant="glass" class="h-7 rounded-full text-xs font-normal">
         {user?.role ?? 'Anonymous'}
       </Badge>
-      <DropdownMenu.Root bind:open={dropdownOpen}>
+      <DropdownMenu.Root bind:open={desktopDropdownOpen}>
         <DropdownMenu.Trigger>
           <div
             class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white transition-transform hover:scale-105 {getProfileColor(user.firstName)}"
@@ -180,7 +183,7 @@
       <Badge variant="glass" class="h-7 rounded-full text-xs font-normal">
         {user?.role ?? 'Anonymous'}
       </Badge>
-      <DropdownMenu.Root bind:open={dropdownOpen}>
+      <DropdownMenu.Root bind:open={mobileDropdownOpen}>
         <DropdownMenu.Trigger>
           <div
             class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white {getProfileColor(user.firstName)}"
