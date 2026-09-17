@@ -75,6 +75,11 @@
 
   const tier = $derived(getTierLabel(startup));
 
+  const isAssessable = $derived(
+    startup?.qualificationStatus === QualificationStatus.QUALIFIED ||
+      startup?.qualificationStatus === QualificationStatus.COMPLETED
+  );
+
   const getTierColor = (t: string) => {
     if (t === 'Gold') return 'bg-amber-400/10 text-amber-500 border-amber-400/20';
     if (t === 'Silver') return 'bg-slate-400/10 text-slate-500 border-slate-400/20';
@@ -107,10 +112,14 @@
 </script>
 
 <a
-  href={`/startups/${startup.id}/${startup?.qualificationStatus === QualificationStatus.QUALIFIED ? 'assessment' : 'pending'}`}
+  href={`/startups/${startup.id}/${isAssessable ? 'assessment' : 'overview/general'}`}
   class="block"
   onclick={(e) => {
-    if (startup?.qualificationStatus === QualificationStatus.WAITLISTED) {
+    // Founders reapply from here; everyone else reviews the overview.
+    if (
+      role === 'Startup' &&
+      startup?.qualificationStatus === QualificationStatus.WAITLISTED
+    ) {
       e.preventDefault();
       const event = new CustomEvent('openApplication', { detail: { startup } });
       window.dispatchEvent(event);

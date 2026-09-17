@@ -11,6 +11,7 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { Rocket, Menu, X } from 'lucide-svelte';
+  import { QualificationStatus } from '$lib/enums/qualification-status.enum';
 
   const { user, startup, scrollContainer } = $props();
 
@@ -83,13 +84,21 @@
     }
   });
 
+  // Pending and waitlisted startups have nothing to assess yet, only their overview.
+  const isUnqualifiedStartup = $derived(
+    page.data.qualificationStatus === QualificationStatus.PENDING ||
+      page.data.qualificationStatus === QualificationStatus.WAITLISTED
+  );
+
   function getNavLinks() {
-    if (module !== subModule && module !== 'account' && module !== 'admin' && subModule !== 'pending') {
-      return (modules.filter((item) => item.link === module)[0]?.subModule ?? []).map((item) => ({
-        name: item.name,
-        href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
-        isActive: currentModule === item.link || currentModulev2 === item.link
-      }));
+    if (module !== subModule && module !== 'account' && module !== 'admin') {
+      return (modules.filter((item) => item.link === module)[0]?.subModule ?? [])
+        .filter((item: { link: string }) => !isUnqualifiedStartup || item.link === 'overview')
+        .map((item) => ({
+          name: item.name,
+          href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
+          isActive: currentModule === item.link || currentModulev2 === item.link
+        }));
     }
     return modules.map((item) => ({
       name: item.name,

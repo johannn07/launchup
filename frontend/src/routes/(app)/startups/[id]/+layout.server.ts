@@ -1,9 +1,25 @@
 import type { LayoutServerLoad } from './$types';
+import { env } from '$env/dynamic/public';
+const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
-export const load: LayoutServerLoad = ({ cookies, params }) => {
+export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
+  const access = cookies.get('Access');
+
+  // The header reads this from page.data to limit the nav for unqualified startups.
+  let qualificationStatus: number | null = null;
+  try {
+    const res = await fetch(`${PUBLIC_API_URL}/startups/${params.id}`, {
+      headers: { Authorization: `Bearer ${access}` }
+    });
+    if (res.ok) qualificationStatus = (await res.json()).qualificationStatus ?? null;
+  } catch {
+    // Leave the nav unrestricted; the pages surface their own load errors.
+  }
+
   return {
-    access: cookies.get('Access'),
-    startupId: params.id
+    access,
+    startupId: params.id,
+    qualificationStatus
   };
 };
 
