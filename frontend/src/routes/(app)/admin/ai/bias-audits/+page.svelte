@@ -5,10 +5,10 @@
   import { ShieldAlert, ShieldCheck, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX } from 'lucide-svelte';
 
   let { data }: { data: { audits: any[]; access: string } } = $props();
-  let audits = data.audits ?? [];
-  let overridingId: number | null = null;
-  let overrideValue: number | null = null;
-  let overriding = false;
+  let audits = $state(data.audits ?? []);
+  let overridingId: number | null = $state(null);
+  let overrideValue: number | null = $state(null);
+  let overriding = $state(false);
 
   async function overrideAudit(id: number) {
     if (overrideValue === null) return;

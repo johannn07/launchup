@@ -24,8 +24,8 @@
   let pageItems = $derived(filtered.slice((page - 1) * perPage, page * perPage));
 
   // preview modal
-  let previewOpen = false;
-  let previewUrl: string | null = null;
+  let previewOpen = $state(false);
+  let previewUrl: string | null = $state(null);
 
   function openPreview(url: string) {
     previewUrl = url;

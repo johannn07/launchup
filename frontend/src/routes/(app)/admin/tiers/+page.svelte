@@ -7,9 +7,9 @@
   import { toast } from 'svelte-sonner';
 
   let { data }: { data: { tiers: any[]; access: string } } = $props();
-  let tiers = (data.tiers ?? []).map(t => ({ ...t }));
-  let saving = false;
-  let saveSuccess = false;
+  let tiers = $state((data.tiers ?? []).map(t => ({ ...t })));
+  let saving = $state(false);
+  let saveSuccess = $state(false);
 
   function addTier() {
     tiers = [...tiers, { tierLabel: 'New', threshold: 0 }];
