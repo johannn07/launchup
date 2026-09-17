@@ -67,3 +67,28 @@ describe('AdminService.deleteUser', () => {
     expect(remove).toHaveBeenCalledWith(MANAGER_B.id);
   });
 });
+
+// The page swaps the response into its list, so an unpopulated startup would
+// serialize as a bare id and render as "Startup #Unknown".
+describe('AdminService.overrideBiasAudit', () => {
+  it('returns the audit with its startup populated', async () => {
+    const audit = { id: 24, correctedScore: 5, startup: { id: 1 } };
+    const findOne = jest.fn(async () => audit);
+    const em = {
+      findOne,
+      flush: jest.fn(async () => undefined),
+      create: jest.fn((_entity: unknown, data: any) => data),
+      persistAndFlush: jest.fn(async () => undefined),
+    } as unknown as EntityManager;
+    const service = new AdminService({} as any, {} as any, {} as any, em);
+
+    const result = await service.overrideBiasAudit(24, { correctedScore: 3 });
+
+    expect(findOne).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 24 },
+      expect.objectContaining({ populate: ['startup'] }),
+    );
+    expect(result.correctedScore).toBe(3);
+  });
+});
