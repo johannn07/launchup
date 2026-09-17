@@ -102,7 +102,7 @@
     return logs[0].level;
   }
 
-  let elevatedReadiness: any = [0, 0, 0, 0, 0, 0];
+  let elevatedReadiness: any = $state([0, 0, 0, 0, 0, 0]);
   let elevatedRemark: any = ['', '', '', '', '', ''];
 
   async function elevate() {

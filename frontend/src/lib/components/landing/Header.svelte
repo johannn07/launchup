@@ -4,7 +4,7 @@
   import Button from '$lib/components/ui/button/button.svelte';
   import { Sun, Moon, Rocket} from 'lucide-svelte';
 
-  let isBlurred = false;
+  let isBlurred = $state(false);
   let activeSection = $state('hero');
 
   function handleScroll() {

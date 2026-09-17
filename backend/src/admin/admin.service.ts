@@ -262,7 +262,8 @@ export class AdminService {
   }
 
   async overrideBiasAudit(id: number, payload: { correctedScore?: number; biasFlagged?: boolean; biasStatus?: string; justification?: string }) {
-    const audit = await this.em.findOne(AiBiasAudit, { id });
+    // The admin page swaps this response into its list, which reads startup.id.
+    const audit = await this.em.findOne(AiBiasAudit, { id }, { populate: ['startup'] });
     if (!audit) throw new NotFoundException(`Audit with ID ${id} not found`);
     if (payload.correctedScore !== undefined) audit.correctedScore = payload.correctedScore;
     if (payload.biasFlagged !== undefined) audit.biasFlagged = payload.biasFlagged;
