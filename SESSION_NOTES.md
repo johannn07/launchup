@@ -41,6 +41,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **Playwright MCP refuses `file:` URLs and writes only inside the repo root.** Serve a scratch page over `http://127.0.0.1` instead, and clean `.playwright-mcp/` afterward — it is not gitignored.
 - **`allowGlobalContext` is unset (false), so a boot-time `app.get(...)` throws.** Boot seeders must take `orm.em.fork()` — every seeder in `main.ts` already does this.
 - **The Browser pane does not composite while hidden**, so CSS animations never advance and `requestAnimationFrame` never fires (`visibilityState: hidden`; a rAF loop ticks exactly once). Any library behaviour gated on `animationend` or rAF looks permanently stuck — bits-ui menus never unmount and leave `body { pointer-events: none }`, which reads exactly like a real freeze and **reproduces on unmodified code**. Install a rAF counter before believing any "the page is frozen" finding.
+- **A plain `let` in a runes-mode component does not re-render when reassigned.** Nothing errors; the UI just never updates — the Applications details dialog never opened because of this. `npx svelte-check --output machine | grep non_reactive` lists every instance.
 - **A capsule-proposal vision call took 175 s.** Budget client/HTTP timeouts well beyond a default before blaming the pipeline.
 
 ---
@@ -297,390 +298,48 @@ across its whole life** (96 + 36 + 72 observations).
 SQL parameter values to Render; the boot seeder still re-seeds on every redeploy.
 
 ---
-## 2026-09-05 (later) — objective 3a's threshold measured, and it fails
+## Compressed — 2026-09-05 (later) (objective 3a threshold measured)
 
-Branch `measure/ocr-accuracy`, local and unpushed. **12 Gemini calls**, 10
-documents, across two quota windows.
+`measure/ocr-accuracy`, merged as PRs #54/#55. 12 Gemini calls; 10 photographed
+pages from 2 writers; 80 human-labelled (document, field) observations scored with
+production's own `supportRatio`. **Citable:** `SUPPORT_THRESHOLD = 0.5` has
+**specificity 30.8%** — 18 of 26 invented fields pass. The pooled best (0.7879)
+passes the pre-registered gate but the confound-free arm fails it (J 0.438, spec
+43.8%), so no replacement shipped. The cause is a field-dependent baseline: an
+invented `scope` (0.632) outscores a grounded `methodology` (0.575). Per-field
+thresholds are the untested next hypothesis and need their own pre-registered
+design on new data — never "fix" it by raising the number.
 
-### The corpus, and why the reference had to be typed
-
-10 photographed pages, 2 writers, 5 each, hand-copied from AI-generated
-proposals. John confirmed the split and the labels.
-
-**The AI source text is gone, and it would have been the wrong reference even
-had it survived.** CER scores the model against *the page*; the writers
-introduced their own errors — `RxScan` misspells "Handwriten" in its own title —
-and charging a correct read as a model error inflates CER for a reason that has
-nothing to do with the model. A grep across Downloads/Documents/Desktop returned
-zero matches, so the question was settled twice.
-
-A model-produced reference was also ruled out: scoring Gemini against a
-transcription Claude wrote correlates the errors and flatters the number.
-
-### Stage 1 — measured, and negative for the shipped value
-
-80 human-labelled (document, field) observations — 54 grounded, 26 invented —
-scored with production's own `supportRatio`, imported rather than reimplemented.
-
-**`SUPPORT_THRESHOLD = 0.5` has specificity 30.8%: it badges 18 of 26 invented
-fields as green "Verified".** Specificity is measured directly on the invented
-class, so this finding does not depend on the confound below. Production is
-telling Managers to trust content the page never contained.
-
-**No replacement ships.** The pooled best (0.7879, sens 83.3%, spec 100%,
-J 0.833) passes the pre-registered gate; the confound-free arm fails it
-(J 0.438, spec 43.8%).
-
-⚠️ **The diagnosis is more useful than a threshold would have been.** Per-field
-means: `title` grounded 1.000, `problem_statement` 0.976 — but `methodology`
-grounded 0.575 against invented 0.468, and **an invented `scope` (0.632)
-outscores a grounded `methodology` (0.575)**. The classes cross *between*
-fields. `supportRatio` has a field-dependent baseline, because `title` reuses
-page words verbatim while `methodology` is written in the model's own register
-whether grounded or not. A single global threshold compares quantities that are
-not comparable, and the pooled sweep looks strong only because five fields are
-grounded on all ten pages and cluster near 1.0.
-
-Per-field thresholds are the obvious next hypothesis and are **not** tested —
-only `scope` and `methodology` carry both classes, and fitting on this run then
-reporting the fit is the forbidden move.
-
-### Two process points worth keeping
-
-**The pre-registration underspecified "at chance."** It said a strong pooled
-result beside a confound-free result "at chance" means pooled is the artifact,
-but never defined it numerically. J = 0.438 is above chance yet fails the gate.
-Resolved by requiring **both** arms to pass — and the harness now prints that
-conjunction itself, so a writeup cannot round a PASS/FAIL pair into a pass.
-
-**The confound check was worth building before knowing the answer.** It is the
-only thing standing between this run and a shipped 0.7879 that would have been
-sorting field types.
-
-### Quota, and the resume that paid for itself
-
-Metric 6's run had already spent 12 of the window's 20 calls 42 minutes earlier.
-The run got exactly 8 documents through before 429 — predicted to the call.
-Because failures are per-document and the result file is written after every
-row, the eight survived; the retry after the 15:00 reset cost **2 calls**, not
-10. The original design would have discarded all eight.
-
-The completed run did **not** rescue the confound arm: J moved 0.429 → 0.438
-with the two added documents, which carried half its positive class.
-
-
-### The scope decision — CER is out, and 3a closes without it
-
-John's call, made after seeing stage 1: **declare the accuracy measurement out
-of scope explicitly.** 3a goes 🟢 on implementation, CER moves to 3c, and the
-spans stay untyped.
-
-**The wording is load-bearing.** Say *"we scoped the accuracy measurement out"*,
-never *"3a is complete"* — a panel hears the difference, and *"how accurate is
-your OCR?"* is the most predictable question an objective named "OCR of
-handwritten text" attracts. The defensible answer is that the harness exists,
-the run is stored, and the transcription pass was a cost we chose not to pay.
-
-⚠️ **Stage 1 does not substitute.** It measures the field-confidence layer,
-which sits *downstream* of the OCR. Nothing measures how accurately the model
-reads handwriting.
-
-Amendment recorded in the design file — post-run, unlike metric 6's, which is
-why it is flagged as such. It changes no analysis: stage 2 was never computed,
-and stage 1's arms and gates are exactly as pre-registered. It costs a claim,
-not a number.
-
-**Re-opening costs 30–50 minutes and zero quota**: fill in
-`measurement/data/ocr-reference-spans.md`, run `--score`.
-
-### What must not get buried by 3a turning green
-
-**`SUPPORT_THRESHOLD = 0.5` is now an evidenced, unfixed production defect**,
-tracked in `TODO_CHECKLIST.md` §2 rather than inside a closed objective. It
-badges 18 of 26 invented fields "Verified", and it is **visible in the demo** —
-a reviewer who uploads a sparse page sees green badges on invented content.
-
-Do not fix it by raising the number. Per-field thresholds are the untested
-hypothesis and need their own pre-registered design on new data.
-
-### Parked, not owed
-
-**CER** now sits with 3c by decision. Predictions 1 and 2 (pooled CER < 0.15;
-Writer A worse than Writer B) are untested and stay that way. The harness is the
-asset: whoever picks 3c up spends transcription time, not build time or quota.
-
-**390/390 measurement tests.** `GoldChain.jpg` contains a proposal titled
-ColdChain Guard — the filename is wrong, not the transcription.
-
-### Branch state — `measure/ocr-accuracy`, 7 commits, local and unpushed
-
-**Mergeable, clean fast-forward.** `master` and `origin/master` are both
-`3a89708` and an ancestor of HEAD. Backend **336/336** (33 suites), measurement
-**390/390**. 11 files, **all `backend/measurement/` and docs — no production
-`src` touched**, so no schema and no runtime impact.
-
-Two things to know before merging:
-
-- **One commit strays from the branch name.** `4a2286c` corrects a stale
-  `TODO_CHECKLIST.md` line that called metric 6 "local, unpushed" when it had
-  merged as PR #53. A one-line staleness fix in a file this branch was already
-  editing — named rather than buried, given this repo's history with
-  drift-by-consent.
-- **The corpus images are not in the repo.** The harness reads them from
-  `Downloads/sample proposals` via `OCR_IMAGE_DIR`, and the stored run records
-  each image's SHA-256 so a future run can be verified against the exact files —
-  but **a fresh clone cannot reproduce the run without the photos.** Deliberate
-  (they are photographs of a teammate's handwriting, and committing them is
-  John's call), and a real limit on citing this as reproducible. Adding the 10
-  JPEGs is ~2.8 MB and belongs on its own branch.
-
-### Next step
-
-**Merge this branch** (fast-forward, no production code), then the critical path
-is unchanged and still unstarted: **the SPMP and the traceability matrix**,
-competing for the same weeks as the 30-user study.
-
-Two decisions are queued behind that, neither urgent enough to displace it:
-
-1. **`SUPPORT_THRESHOLD`** — evidenced, unfixed, **demo-visible**, and *not*
-   fixable by raising the number. Needs its own pre-registered design on new
-   data if it is to be fixed at all rather than disclosed.
-2. **The 2026-09-04 deploy still has not happened.** Render and Vercel run the
-   four-role build. Backend first; Admin-role JWTs are refused after deploy.
-
-⚠️ Item 2 is the older debt and has been carried on "next step" lines since
-2026-09-04 without moving. It is the one most likely to be discovered by a
-reviewer opening the live site rather than by us.
+**3a closed with CER explicitly scoped out to 3c** (John's decision). Say "we
+scoped the accuracy measurement out", never "3a is complete" — stage 1 measures
+field confidence, not how well the model reads handwriting. Reopening costs 30–50
+minutes of typed spans (`measurement/data/ocr-reference-spans.md`, `--score`) and
+zero quota. The photos are not in the repo (`OCR_IMAGE_DIR`, SHA-256 recorded), so
+a fresh clone cannot reproduce the run. 390/390 measurement tests.
 
 ---
 
-## 2026-09-06 — three reported UI/data issues, fixed on three branches
+## Compressed — 2026-09-06 (three UI/data fixes)
 
-Zero Gemini calls. No measurement. Three issues John reported, each scoped to its
-own branch off `master`, each verified live against Neon and a real browser
-before hand-off. All three tested by John and **pushed**; PRs not opened (below).
+Zero Gemini calls; three live-verified branches, merged as PRs #56–#58.
+(1) The application modal confirms before closing (bits-ui `controlledOpen`). The
+reported data loss did not reproduce within the page, but nothing is persisted, so
+a reload still loses the answers — `useApplicationStore.svelte.ts` is empty and a
+draft feature is unbuilt. (2) OCR rows deduped by sha256 `content_hash`, with a
+boot prune of unattached rows past `OCR_RETENTION_DAYS` (default 30). Open: the
+duplicate Vision call is not cached — any cache must key on the resolved pipeline
+config as well as the bytes — and `sourcePath` is never written. (3)
+`GET /readinesslevel/rubrics` + `ReadinessLevelGuide`, with provenance stated per
+dimension. Found then and **still open:** `ReadinessAssessmentForm` is unreachable
+(`openAssessment` is never called). `level_criteria` and the placeholder level
+names were fixed 2026-09-07. Correction still owed in `CLAUDE.md`: storage *is*
+configured — all five `S3_*` vars point at Supabase.
 
-### 1. Application modal discarded on a stray click — `fix/application-modal-close-confirm`
-
-An outside click or `Esc` dismissed the multi-step application with no warning.
-Every close path now routes through a confirmation. `Dialog.Root` needed
-`controlledOpen`: without it bits-ui **mutates its own copy** of `open` and only
-notifies the parent, which is also why the existing `onOpenChange` handler — a
-blind toggle that ignored the boolean it is passed — had drifted out of sync.
-`controlledOpen` also catches the ✕ button, which never goes through
-`onInteractOutside`.
-
-**The reported symptom did not reproduce, and the fix is not what the report
-implied.** Testing the *original* code with a sentinel DOM node: bits-ui keeps
-`Dialog.Content` mounted, the whole application renders as one tree with steps
-hidden by CSS, and reopening returns the identical node with its value intact.
-Closing never destroyed anything within the page. What is true is that **nothing
-is persisted anywhere**, so a reload or navigation still loses everything —
-`useApplicationStore.svelte.ts` is a 0-byte file. The dialog copy therefore says
-the answers have not been *submitted*, not that they will be lost. A real draft
-feature is unbuilt; its cost is dominated by lifting step state out of the child
-components, not by choosing storage.
-
-### 2. Duplicate OCR rows — `fix/ocr-document-dedupe`
-
-`parseCapsuleProposal` inserted an `OcrDocument` on **every** call across all
-three paths, so each retry left another orphan. Rows are now keyed on a sha256 of
-the uploaded bytes (nullable + unique, so pre-existing rows keep NULL and
-Postgres permits many NULLs), and a repeat upload refreshes the existing row.
-Unattached rows past `OCR_RETENTION_DAYS` (default 30) are pruned once per boot —
-the app has no scheduler; a malformed or negative value falls back rather than
-widening the delete, and `0` disables it.
-
-**Live on Neon:** schema sync issued the column plus unique constraint, the boot
-prune ran with `startup_id is null and created_at < cutoff`, three uploads of an
-identical file produced **one** row, a different file produced its own.
-
-**Deliberately excluded, both real follow-ups.** Dedupe stops the duplicate row,
-not the duplicate Gemini Vision call — the extracted fields are never stored, so
-a cache hit cannot reproduce the response. **Any such cache must key on the
-resolved pipeline config as well as the bytes**, or it serves a result produced
-under a different arm and corrupts the attribution `ai_generation_runs` exists
-for. Image storage is the other half: `sourcePath` is still never written.
-
-**Doc correction:** `CLAUDE.md` says file storage is unconfigured and uploads
-503. **False as of this session** — all five `S3_*` vars are set in
-`backend/.env`, pointing at Supabase Storage (`launchup` bucket,
-`ap-southeast-1`), and `UploadService` enables on config presence. `uploadSingle`
-even names "OCR intake" as an intended caller. Config verified; not a live
-round-trip to the bucket.
-
-### 3. Mentors could not tell what a readiness level meant — `feat/readiness-level-guide`
-
-Every level picker was a bare `Level 1-9` select. `GET /readinesslevel/rubrics`
-flattens the 54 rubric rows already sitting in `rag_contexts` (9 levels × 6
-dimensions), and `ReadinessLevelGuide` expands to all nine descriptors for its
-dimension with the selected one highlighted. Not gated on
-`AI_RAG_CORPUS_ENABLED` — that flag decides what the *model* sees, not what a
-mentor may read; renders nothing when the corpus is unseeded.
-
-**Provenance is stated per dimension because it is not uniform** (verified from
-the corpus, not assumed): TRL transcribed from EU Horizon Europe / ISO
-16290:2013, four dimensions derived from BRLa, IRL authored with no external
-source. Presenting all 54 identically would lend authored text a standard's
-authority.
-
-**Three pre-existing defects found while building it, none fixed here:**
-
-- **`level_criteria` is empty (0 rows).** This is why the URAT criteria tables
-  render nothing, and why the rubric endpoint could not be sourced from there.
-- **`readiness_levels.name` holds placeholders** seeded by `main.ts` — "Seeded
-  Technology level 4", "Technology Readiness Level 9". Not usable as descriptors.
-- **`ReadinessAssessmentForm` is unreachable.** `openAssessment` is the only
-  function that sets `selectedAssessment` and **nothing calls it**. The guide was
-  added there too and is type-checked but *not* live-verified.
-
-### Two gotchas worth the standing-notes entry
-
-**Switching branches silently drops columns.** `updateSchema()` syncs the schema
-*to the entities*, so checking out a branch whose entities lack a column **drops
-it** from shared Neon on boot; merging back re-adds it empty. This wiped the
-`content_hash` values on two rows mid-session. Harmless there, live hazard on a
-shared branch.
-
-**The `pnpm lint` trap fired again.** It is already in these notes, and it still
-cost a cleanup pass: `eslint --fix` reformatted ~120 files over the CRLF/prettier
-conflict, mixing churn into the four files the change actually touched. The tree
-had to be reverted and the edits re-applied onto pristine files. **Verify with
-`npx eslint --no-fix <paths>`** — never `pnpm lint` — and read `git diff --stat`
-before staging.
-
-### Branch state — all three pushed, no PRs
-
-| Branch | Commits | Verified |
-|---|---|---|
-| `fix/application-modal-close-confirm` | 1 | Live: outside click, `Esc`, ✕ |
-| `fix/ocr-document-dedupe` | 2 | Live on Neon; backend 351/351 |
-| `feat/readiness-level-guide` | 2 | Live as mentor; backend 342/342 |
-
-Merged together on a throwaway `test/all-three` (clean, disjoint files) and
-click-tested by John — all three pass. `svelte-check` held at its 117-error
-baseline throughout, none in touched files. Backend tests were written first and
-watched fail in both backend branches.
-
-### Next step
-
-**Open the three PRs** — blocked on tooling, not on the work: `gh` is not
-installed on this machine and the GitHub MCP server failed to connect this
-session (`Authorization header is badly formatted`). `winget install --id
-GitHub.cli` then `gh auth login` unblocks it. Bodies are drafted and were handed
-to John. **Merge `fix/ocr-document-dedupe` first** — its schema sync adds
-`content_hash`, and anyone booting a branch without it drops the column again.
-
-Then the critical path is unchanged and still unstarted: **the SPMP and the
-traceability matrix**, competing for the same weeks as the 30-user study.
-`SUPPORT_THRESHOLD` remains evidenced, demo-visible and unfixed.
-
-⚠️ **These notes contradict themselves about the deployment.** The 2026-09-04
-(later) entry records the three-role deploy to Render and Vercel as *done by John
-before that session*; the 2026-09-05 (later) entry carries "the 2026-09-04 deploy
-still has not happened" as its oldest debt. Both cannot be true — resolve against
-the live site before either line is cited.
+**Hazard:** `updateSchema()` drops columns that an older branch's entities lack,
+on shared Neon. The deployment contradiction recorded that day is resolved: John
+deployed current `master` on 2026-09-18.
 
 ---
-## 2026-09-07 (later) — the dimension order settled, and unified
-
-### The block came off by reading the SDD
-
-The defect was recorded as "blocked on the SDD". It was blocked on nobody having
-opened it. The documents are in `Downloads\capstone\`, and `pdftotext -layout`
-reads all three in seconds.
-
-**The specification is unanimous: TRL, MRL, RRL, ARL, ORL.** Ten-plus
-occurrences across the SRS (the five-dimension sentence in §1.2 Scope, and the
-scoring descriptions in §3), the SDD (§2.2 — the bias-correction and
-classification-engine descriptions, the Manager URAT rating panel, and the
-`urat_questions.dimension` column definition) and the proposal. No
-counter-example. Regulatory is third.
-
-⚠️ **The §1.3 acronym lists in both documents are alphabetical** (ARL, MRL, ORL,
-RRL, TRL) and are not evidence of order. Only the prose is.
-
-**Honest limit on that evidence:** these are *listing* orders in prose, not a
-requirement that says the wizard shall present them in this sequence. What makes
-it decisive is the unanimity plus the fact that the apply flow already matched.
-
-### The apply flow was the thing that was right
-
-The checklist assumed patching the apply flow might be the fix. Backwards. And
-the count was low — **eight declaration sites, four different orders**, not three:
-
-| Site | Was | Visible |
-|---|---|---|
-| `Application.svelte:71` + `:280` | T M R A O I ✅ | apply wizard |
-| `Pie.svelte:5`, `BarChart.svelte:7` | T M R A O I ✅ | charts |
-| backend `ReadinessType` → `DIMENSION_ORDER` → rubric endpoint | T M **A O R** I | rubric guide |
-| `getReadinessTypes()` → assessment page + 2 RNS dropdowns | T M **A O R** I | yes |
-| URAT seed bank | T M **A O R** I | no |
-| `READINESS_TYPES` → readiness-level tabs | T **A M** O R I | yes |
-| frontend `ReadinessType` enum | T M A **R O** I | no |
-
-Two of the three "nobody has reported it" sites were invisible for a reason: the
-seed bank is filtered by name, and the frontend enum is used only as a type.
-
-### What was done — `fix/readiness-dimension-order`, one commit, local
-
-Option B of three: unify all eight, one canonical source per app, **no wizard
-refactor**. The wizard's URAT steps are interleaved with consent/details/
-calculator steps, so deriving them would have meant refactoring a working
-component for no visible gain.
-
-- Backend: the enum is already the single source — reordering it moved
-  `DIMENSION_ORDER` and the rubric endpoint with it. Seed bank reordered to match.
-- Frontend: new `readiness-dimensions.ts` owns the order; `readiness-baseline.ts`
-  re-exports it and `utils.ts` derives from it.
-
-**One judgement call worth recording.** Deriving `getReadinessTypes()`'s ids from
-array position would have silently remapped them (Regulatory 6 → 4). Nothing
-reads `id` — both consumers select on `name` — but changing a mapping quietly is
-worse than leaving it, so the ids are **pinned by name**. A future reorder cannot
-move them.
-
-### Verification, and what it does not cover
-
-- Backend **375/375**, unchanged from `master`.
-- `svelte-check` **113 errors / 15 warnings** — measured on the branch *and* on a
-  stashed working tree, identical. The "14 warnings" in older notes is stale; no
-  diagnostic mentions any changed file.
-- **Live against Neon:** `GET /readinesslevel/rubrics` returns its 54 rows as
-  Technology → Market → Regulatory → Acceptance → Organizational → Investment.
-- **Live in the browser:** the four frontend sources read out of the running Vite
-  module graph, all agreeing, with `getReadinessTypes()` still carrying ids
-  2/3/6/4/5/7 in the new order.
-
-⚠️ **The mentor-side click-through is not done.** The readiness-level tabs and the
-RNS dropdown are gated to Mentor/Manager, and reaching them means typing a
-password into the login form, which I don't do. The rendering is a direct map over
-the constant that was verified at runtime, but seeing the tabs in that order is
-still owed — and John tests the branch before merge anyway.
-
-### Not in this branch, on purpose
-
-- **"Acceptance" vs the spec's "Adoption Readiness Level".** A rename with a data
-  migration behind it — stored `readinessType` values and RAG corpus keys. Own
-  branch, own decision.
-- **IRL is not in the specification at all** (§0 has carried this since 2026-07-28).
-  Keeping Investment last is a superset of the spec order, so it did not block.
-
-### Corrected in `CLAUDE.md`
-
-The line that read "TRL/MRL/RRL/ARL/ORL/IRL — Technology, Market, Acceptance,
-Organizational, Regulatory, and Investment" contradicted itself in one sentence,
-and was the reason the defect read as unsettleable. It now states the canonical
-order once and names the two files that declare it.
-
-### Next step
-
-1. **John tests `fix/readiness-dimension-order`**, mentor side especially — the
-   readiness-level tabs and the RNS readiness-type dropdown.
-2. **`supportRatio` remains §2's open measurement problem**, unchanged: per-field
-   thresholds need their own pre-registered design on new data.
-3. **The critical path is still unstarted:** the SPMP and the traceability matrix,
-   competing for the same weeks as the 30-user study.
 
 ## 2026-09-07 — five defects fixed, a sixth reframed, three diagnoses corrected
 
@@ -850,3 +509,215 @@ apply flow. Tracked in `TODO_CHECKLIST.md` §2.
    Per-field thresholds need their own pre-registered design on new data.
 3. **The critical path is unchanged and still unstarted:** the SPMP and the
    traceability matrix, competing for the same weeks as the 30-user study.
+
+---
+
+## 2026-09-07 (later) — the dimension order settled, and unified
+
+### The block came off by reading the SDD
+
+The defect was recorded as "blocked on the SDD". It was blocked on nobody having
+opened it. The documents are in `Downloads\capstone\`, and `pdftotext -layout`
+reads all three in seconds.
+
+**The specification is unanimous: TRL, MRL, RRL, ARL, ORL.** Ten-plus
+occurrences across the SRS (the five-dimension sentence in §1.2 Scope, and the
+scoring descriptions in §3), the SDD (§2.2 — the bias-correction and
+classification-engine descriptions, the Manager URAT rating panel, and the
+`urat_questions.dimension` column definition) and the proposal. No
+counter-example. Regulatory is third.
+
+⚠️ **The §1.3 acronym lists in both documents are alphabetical** (ARL, MRL, ORL,
+RRL, TRL) and are not evidence of order. Only the prose is.
+
+**Honest limit on that evidence:** these are *listing* orders in prose, not a
+requirement that says the wizard shall present them in this sequence. What makes
+it decisive is the unanimity plus the fact that the apply flow already matched.
+
+### The apply flow was the thing that was right
+
+The checklist assumed patching the apply flow might be the fix. Backwards. And
+the count was low — **eight declaration sites, four different orders**, not three:
+
+| Site | Was | Visible |
+|---|---|---|
+| `Application.svelte:71` + `:280` | T M R A O I ✅ | apply wizard |
+| `Pie.svelte:5`, `BarChart.svelte:7` | T M R A O I ✅ | charts |
+| backend `ReadinessType` → `DIMENSION_ORDER` → rubric endpoint | T M **A O R** I | rubric guide |
+| `getReadinessTypes()` → assessment page + 2 RNS dropdowns | T M **A O R** I | yes |
+| URAT seed bank | T M **A O R** I | no |
+| `READINESS_TYPES` → readiness-level tabs | T **A M** O R I | yes |
+| frontend `ReadinessType` enum | T M A **R O** I | no |
+
+Two of the three "nobody has reported it" sites were invisible for a reason: the
+seed bank is filtered by name, and the frontend enum is used only as a type.
+
+### What was done — `fix/readiness-dimension-order`, one commit, local
+
+Option B of three: unify all eight, one canonical source per app, **no wizard
+refactor**. The wizard's URAT steps are interleaved with consent/details/
+calculator steps, so deriving them would have meant refactoring a working
+component for no visible gain.
+
+- Backend: the enum is already the single source — reordering it moved
+  `DIMENSION_ORDER` and the rubric endpoint with it. Seed bank reordered to match.
+- Frontend: new `readiness-dimensions.ts` owns the order; `readiness-baseline.ts`
+  re-exports it and `utils.ts` derives from it.
+
+**One judgement call worth recording.** Deriving `getReadinessTypes()`'s ids from
+array position would have silently remapped them (Regulatory 6 → 4). Nothing
+reads `id` — both consumers select on `name` — but changing a mapping quietly is
+worse than leaving it, so the ids are **pinned by name**. A future reorder cannot
+move them.
+
+### Verification, and what it does not cover
+
+- Backend **375/375**, unchanged from `master`.
+- `svelte-check` **113 errors / 15 warnings** — measured on the branch *and* on a
+  stashed working tree, identical. The "14 warnings" in older notes is stale; no
+  diagnostic mentions any changed file.
+- **Live against Neon:** `GET /readinesslevel/rubrics` returns its 54 rows as
+  Technology → Market → Regulatory → Acceptance → Organizational → Investment.
+- **Live in the browser:** the four frontend sources read out of the running Vite
+  module graph, all agreeing, with `getReadinessTypes()` still carrying ids
+  2/3/6/4/5/7 in the new order.
+
+⚠️ **The mentor-side click-through is not done.** The readiness-level tabs and the
+RNS dropdown are gated to Mentor/Manager, and reaching them means typing a
+password into the login form, which I don't do. The rendering is a direct map over
+the constant that was verified at runtime, but seeing the tabs in that order is
+still owed — and John tests the branch before merge anyway.
+
+### Not in this branch, on purpose
+
+- **"Acceptance" vs the spec's "Adoption Readiness Level".** A rename with a data
+  migration behind it — stored `readinessType` values and RAG corpus keys. Own
+  branch, own decision.
+- **IRL is not in the specification at all** (§0 has carried this since 2026-07-28).
+  Keeping Investment last is a superset of the spec order, so it did not block.
+
+### Corrected in `CLAUDE.md`
+
+The line that read "TRL/MRL/RRL/ARL/ORL/IRL — Technology, Market, Acceptance,
+Organizational, Regulatory, and Investment" contradicted itself in one sentence,
+and was the reason the defect read as unsettleable. It now states the canonical
+order once and names the two files that declare it.
+
+### Next step
+
+1. ~~**John tests `fix/readiness-dimension-order`**~~ — tested and merged
+   (`f14beda`, 2026-09-17).
+2. **`supportRatio` remains §2's open measurement problem**, unchanged: per-field
+   thresholds need their own pre-registered design on new data.
+3. **The critical path is still unstarted:** the SPMP and the traceability matrix,
+   competing for the same weeks as the 30-user study.
+
+---
+
+## 2026-09-17 — four reported UI issues, fixed on four branches
+
+Zero Gemini calls. Frontend only, no schema change. Each issue got its own branch
+off `master`. Merged locally 2026-09-18 (`331851d`), then pushed and deployed by
+John.
+
+| Branch | Defect | Cause | Verified |
+|---|---|---|---|
+| `fix/header-dropdown-lock` | Page unclickable after using the avatar menu | Desktop and mobile menus shared one `bind:open`; one click opened both, and the hidden one's modal lock stayed on `body` | Browser, desktop and mobile: one menu, `pointer-events` back to `auto` after Esc and outside click |
+| `fix/applications-dialog-state` | Manager → Applications never opened startup details | `showDialog`, `selectedStartup`, `startupAssessments`, `dialogLoading` were plain `let` in a runes component | `svelte-check` warnings for all four gone; not clicked through as Manager |
+| `fix/startup-overview-access` | No overview for unqualified startups | Every non-QUALIFIED card linked to the `/pending` placeholder, where the header hides the nav; completed startups landed there too | Browser as Startup: pending → `overview/general`, Overview-only nav, banner; qualified unchanged |
+| `feat/startups-pagination` | Startups grid unbounded | — | 8 per page, checked with a temporary page size of 1; tab or search change resets to page 1 |
+
+### Design of the overview fix
+
+- `startups/[id]/+layout.server.ts` returns `qualificationStatus`; the header reads
+  it from `page.data`, so the nav is correct on first render.
+- Pending/waitlisted: Overview-only nav plus a status banner. Completed: full view.
+  Waitlisted founders still get the reapply form from the card; other roles go to
+  Overview.
+- No backend change — `assertCanAccessStartup` does not check qualification status.
+
+### Verification limits
+
+- **No Manager-side click-through by Claude.** The pane was signed in as the
+  Startup demo user, and Claude doesn't type passwords.
+- **Issue 1 was reproduced in the Browser pane, which a standing note warns can
+  fake this exact freeze.** The evidence does not depend on animation: before the
+  fix one click rendered **two** `[role=menu]` elements, and under the same
+  instrument the fixed build unlocks while the old one stayed locked. John
+  reported it from a real browser.
+- `svelte-check` after merge: **113 errors / 22 warnings**. No diagnostics in
+  touched files. The warning count was 15 on 2026-09-07; this session removed four,
+  so the rise came from other merges.
+
+### Found, not fixed
+
+- **Eleven more `non_reactive_update` warnings — the same defect as issue 2.**
+  `admin/ocr-documents` (`previewOpen`, `previewUrl` — the preview dialog likely
+  never opens), `admin/tiers` (`tiers`, `saving`, `saveSuccess`),
+  `admin/ai/bias-audits` (four override-state variables), `overview/elevate`
+  (`elevatedReadiness`), `landing/Header` (`isBlurred`). Not browser-checked.
+  TODO §2.
+- The Startups page fetches initiatives once per startup, for every startup, on
+  every visit. TODO §4.
+- `/startups/[id]/pending` is now unlinked; kept so old links still work. TODO §4.
+
+### Next step
+
+1. **Fix the eleven non-reactive state variables** on their own branch. Cheap, and
+   the OCR preview is likely a visible break. Click-test each as Manager.
+2. `supportRatio` stays §2's open measurement problem.
+3. **The critical path is unchanged and still unstarted:** the SPMP and the
+   traceability matrix, competing for the same weeks as the 30-user study.
+
+---
+
+## 2026-09-18 — the eleven non-reactive variables, and what fixing them exposed
+
+Zero Gemini calls. `fix/non-reactive-state`, merged to local `master` (`2870e9e`).
+Eleven variables wrapped in `$state(...)` across five components (bias audits,
+tiers, OCR documents, elevate, the landing header). `svelte-check` warnings
+**22 → 11**, none of this class left; errors unchanged at 113.
+
+**The landing header is the one verified both ways.** The window never scrolls on
+`/` — the page scrolls inside a container — so the test drove a scroll event with
+`window.scrollY` stubbed: the fixed build toggles `border-b`/`backdrop-blur-lg`,
+the stashed original never does. ⚠️ **That also means the header's blur still
+cannot fire from real scrolling**, because the listener is on `window`. Own
+branch; TODO §2.
+
+### Fixing the state surfaced a second defect behind it
+
+John overrode bias audit #24 (three saves, in `activity_logs`) and the row
+rendered **"Startup #Unknown"**. `overrideBiasAudit` did `findOne` with no
+`populate`, so the startup serialized as a bare `1` and the page — which swaps
+that response into its list — read `startup.id` as `undefined`. Stored data was
+never wrong: Neon still had `startup_id = 1`. **The display bug had been
+unreachable precisely because the list never re-rendered**, so this branch would
+have shipped it as a visible regression; fixed here rather than deferred.
+Test-first (failed for the right reason, then passed), **380/380 backend**, and
+proven on the real ORM read-only: without `populate` the field serializes as `1`,
+with it as `{"id":1,"name":"AgroLink PH",…}`. Same class as the standing note —
+**a missing `populate` is invisible to every mocked test.**
+
+### The OCR preview cannot be reached at all
+
+John reported no preview button. Not this branch and not a regression: the button
+is gated on `o.sourcePath`, and **nothing ever writes `sourcePath`** (open since
+2026-09-06, §5). The `previewOpen`/`previewUrl` fix is correct and currently
+unreachable — it needs image storage first.
+
+### Verification limits
+
+Claude's pane was signed in as the Startup demo user throughout, so **Tiers,
+AI Bias and Elevate were not clicked through by Claude** — John tests those. The
+Manager screenshots that surfaced both findings came from John's own browser.
+
+### Next step
+
+1. **John tests on `master`:** Tiers "Add tier", an AI Bias override (the row must
+   still name its startup), Elevate's Next Level picker.
+2. **The landing header's scroll listener** watches `window` on a page that scrolls
+   in a container — own branch.
+3. `supportRatio` stays §2's open measurement problem, and the critical path is
+   unchanged: the SPMP and the traceability matrix, competing for the same weeks
+   as the 30-user study.
