@@ -1,7 +1,14 @@
 <script lang="ts">
   import { Skeleton } from '$lib/components/ui/skeleton';
   import Button from '$lib/components/ui/button/button.svelte';
-  import { RocketIcon, TargetIcon, CheckCircleIcon, Search as SearchIcon } from 'lucide-svelte';
+  import {
+    RocketIcon,
+    TargetIcon,
+    CheckCircleIcon,
+    Search as SearchIcon,
+    ArrowLeft,
+    ArrowRight
+  } from 'lucide-svelte';
   import { StartupCard } from '$lib/components/startups';
   import StartupStatusCard from '$lib/components/startups/base/StartupStatusCard.svelte';
   import StartupFilterButton from '$lib/components/startups/base/StartupFilterButton.svelte';
@@ -108,6 +115,23 @@
     return base.filter((startup: any) =>
       startup.name.toLowerCase().includes(search.toLowerCase())
     );
+  });
+
+  const perPage = 8;
+  let currentPage = $state(1);
+
+  const totalPages = $derived(
+    Math.max(1, Math.ceil(filteredStartups().length / perPage))
+  );
+  const pageStartups = $derived(
+    filteredStartups().slice((currentPage - 1) * perPage, currentPage * perPage)
+  );
+
+  // A new tab or search can have fewer pages than the one being viewed.
+  $effect(() => {
+    filter;
+    search;
+    currentPage = 1;
   });
 
   // Utility function to get initiatives for a single startup
@@ -452,8 +476,8 @@
     <p class="mt-2 text-sm text-muted-foreground">Please try again or contact support.</p>
   </div>
 {:else if hasStartups}
-  <div class="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-10">
-    {#each filteredStartups() as startup}
+  <div class="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 {totalPages > 1 ? 'pb-6' : 'pb-10'}">
+    {#each pageStartups as startup}
       <StartupCard
         {startup}
         {role}
@@ -463,6 +487,26 @@
       />
     {/each}
   </div>
+  {#if totalPages > 1}
+    <div class="flex items-center justify-between pb-10">
+      <p class="text-xs text-muted-foreground">
+        Showing <span class="font-medium text-foreground">{(currentPage - 1) * perPage + 1}</span>
+        to <span class="font-medium text-foreground">{Math.min(currentPage * perPage, filteredStartups().length)}</span>
+        of <span class="font-medium text-foreground">{filteredStartups().length}</span> startups
+      </p>
+      <div class="flex items-center gap-2">
+        <Button variant="outline" size="sm" class="h-8 w-8 p-0" aria-label="Previous page" disabled={currentPage <= 1} onclick={() => currentPage--}>
+          <ArrowLeft class="h-4 w-4" />
+        </Button>
+        <div class="rounded-md border border-border/50 bg-background px-2 py-1 text-xs font-medium">
+          Page {currentPage} of {totalPages}
+        </div>
+        <Button variant="outline" size="sm" class="h-8 w-8 p-0" aria-label="Next page" disabled={currentPage >= totalPages} onclick={() => currentPage++}>
+          <ArrowRight class="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  {/if}
 {:else}
   <div class="mt-20 text-center">
     <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
