@@ -1,5 +1,6 @@
-/* Landing-only design tokens. Scoped under .lu-root so the rest of the app
-   keeps Geist and the shadcn CSS variables. */
+/* LaunchUp brand tokens. Scoped under .lu-root so the rest of the app keeps
+   Geist and the shadcn CSS variables. Used by the landing page and the auth
+   pages; they must stay visually identical. */
 
 .lu-root {
   --lu-ink: #050816;
@@ -15,6 +16,8 @@
   --lu-indigo-dark: #4338ca;
   --lu-indigo-lite: #818cf8; /* small text on navy — 6.24:1 */
   --lu-flag: #fbbf24; /* readiness gaps only */
+  --lu-danger: #fb7185; /* form errors — 6.9:1 on the panel ground */
+  --lu-ok: #34d399; /* satisfied validation — 9.5:1 */
 
   --lu-cloud: #f1f5f9;
   --lu-mute: #94a3b8;
@@ -158,4 +161,139 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/* ---- Form controls ----
+   Radius language: 999px is an action, 10px is something you type into,
+   1rem+ is a surface. Inputs sit deliberately between button and card. */
+.lu-root .lu-field {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lu-cloud);
+}
+
+.lu-root .lu-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--lu-navy-2);
+  border: 1px solid var(--lu-line-2);
+  color: var(--lu-cloud);
+  font-family: inherit;
+  font-size: 15px;
+  transition:
+    border-color 0.16s var(--lu-ease),
+    box-shadow 0.16s var(--lu-ease);
+}
+.lu-root .lu-input::placeholder {
+  color: #64748b;
+}
+.lu-root .lu-input:hover:not(:focus) {
+  border-color: #2b3a5c;
+}
+.lu-root .lu-input:focus {
+  outline: none;
+  border-color: var(--lu-indigo-deep);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+.lu-root .lu-input[aria-invalid='true'] {
+  border-color: var(--lu-danger);
+}
+.lu-root .lu-input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.22);
+}
+/* Room for the show/hide toggle */
+.lu-root .lu-input-pw {
+  padding-right: 44px;
+}
+
+.lu-root .lu-hint {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--lu-mute);
+}
+.lu-root .lu-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--lu-danger);
+}
+
+/* Form-level error, for a failure that belongs to the whole submission
+   rather than one field (bad credentials). */
+.lu-root .lu-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  background: rgba(251, 113, 133, 0.1);
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--lu-danger);
+}
+
+.lu-root .lu-check {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 5px;
+  border: 1px solid var(--lu-line-2);
+  background: var(--lu-navy-2);
+  cursor: pointer;
+  transition:
+    background-color 0.16s var(--lu-ease),
+    border-color 0.16s var(--lu-ease);
+}
+.lu-root .lu-check:checked {
+  background: var(--lu-indigo-deep);
+  border-color: var(--lu-indigo-deep);
+  /* check mark */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  background-size: 14px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.lu-root .lu-check:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 2px;
+}
+.lu-root .lu-check[aria-invalid='true'] {
+  border-color: var(--lu-danger);
+}
+
+.lu-root .lu-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.lu-root .lu-btn-primary:disabled:hover {
+  background: var(--lu-indigo-deep);
+  box-shadow: none;
+}
+
+/* Inline text link inside body copy */
+.lu-root .lu-link {
+  color: var(--lu-indigo-lite);
+  font-weight: 600;
+  text-underline-offset: 3px;
+  transition: color 0.16s var(--lu-ease);
+}
+.lu-root .lu-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+.lu-root .lu-link:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 3px;
+  border-radius: 3px;
 }

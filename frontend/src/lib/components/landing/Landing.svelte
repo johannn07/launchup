@@ -1,5 +1,5 @@
 <script lang="ts">
-  import './landing.css';
+  import '$lib/styles/brand.css';
   import AboutUs from './AboutUs.svelte';
   import CallToAction from './CallToAction.svelte';
   import Footer from './Footer.svelte';
