@@ -2,6 +2,13 @@
    Geist and the shadcn CSS variables. Used by the landing page and the auth
    pages; they must stay visually identical. */
 
+/* Reserve the scrollbar track so a short page and a tall one put their
+   content on the same left edge. Without it, login and register differ by
+   the scrollbar width. */
+html:has(.lu-root) {
+  scrollbar-gutter: stable;
+}
+
 .lu-root {
   --lu-ink: #050816;
   --lu-navy: #07111f;
