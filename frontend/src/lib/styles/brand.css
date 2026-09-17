@@ -297,3 +297,155 @@
   outline-offset: 3px;
   border-radius: 3px;
 }
+
+/* ---- Long-form prose (legal documents) ----
+   Measure is set in rem, not ch. `ch` is the advance of "0", which in Public
+   Sans is ~10.1px while the average character is ~8.6px — 68ch measured out
+   at 80 characters per line. 36rem lands at ~67. */
+.lu-prose {
+  max-width: 36rem;
+  font-size: 16.5px;
+  line-height: 1.75;
+  color: #c3ced9; /* 11.7:1 on the navy ground */
+}
+.lu-root .lu-prose > * + * {
+  margin-top: 1.1em;
+}
+
+/* Section heads: a hairline plus generous lead-in, so sections read as
+   separate blocks rather than one column of text. */
+.lu-root .lu-prose h2 {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  font-variation-settings:
+    'wdth' 108,
+    'wght' 600;
+  letter-spacing: -0.012em;
+  font-size: 22px;
+  line-height: 1.3;
+  color: #fff;
+  margin-top: 3.2rem;
+  padding-top: 2.1rem;
+  border-top: 1px solid #17213a;
+  scroll-margin-top: 5.5rem;
+}
+.lu-root .lu-prose h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.lu-root .lu-prose h2 + * {
+  margin-top: 0.85em;
+}
+
+/* Subheads must outrank body copy. They were 15.5px against 16.5px body,
+   which read as bold paragraphs rather than headings. */
+.lu-root .lu-prose h3 {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #fff;
+  margin-top: 2rem;
+}
+.lu-root .lu-prose h3 + * {
+  margin-top: 0.45em;
+}
+
+.lu-root .lu-prose strong {
+  color: #fff;
+  font-weight: 650;
+}
+.lu-root .lu-prose ul {
+  list-style: disc;
+  padding-left: 1.3rem;
+}
+.lu-root .lu-prose li + li {
+  margin-top: 0.55em;
+}
+.lu-root .lu-prose li::marker {
+  color: #64748b;
+}
+.lu-root .lu-prose a {
+  color: var(--lu-indigo-lite);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lu-root .lu-prose a:hover {
+  color: #fff;
+}
+.lu-root .lu-prose a:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* An actual code token (a cookie flag), not a decorative label. */
+.lu-root .lu-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  border: 1px solid var(--lu-line-2);
+  background: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+}
+
+/* Unresolved drafting decisions. Distinct from <strong>, which is emphasis. */
+.lu-root .lu-prose .lu-todo {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px dashed rgba(251, 191, 36, 0.4);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+  color: var(--lu-flag);
+  font-weight: 600;
+}
+
+/* Legal text is cited by section number, so the number is information. */
+.lu-root .lu-prose {
+  counter-reset: lu-section;
+}
+.lu-root .lu-prose h2::before {
+  counter-increment: lu-section;
+  content: counter(lu-section) '. ';
+  color: var(--lu-indigo-lite);
+}
+
+/* ---- On-this-page rail ---- */
+.lu-root .lu-toc a {
+  display: block;
+  text-decoration: none;
+  padding: 6px 0 6px 12px;
+  border-left: 2px solid var(--lu-line-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--lu-mute);
+  transition:
+    color 0.16s var(--lu-ease),
+    border-color 0.16s var(--lu-ease);
+}
+.lu-root .lu-toc a:hover {
+  color: var(--lu-cloud);
+  border-left-color: #2b3a5c;
+}
+.lu-root .lu-toc a[aria-current='true'] {
+  color: #fff;
+  border-left-color: var(--lu-indigo);
+}
+.lu-root .lu-toc a:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 2px;
+}
+
+/* Draft notice */
+.lu-root .lu-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.08);
+  padding: 13px 15px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lu-flag);
+}
