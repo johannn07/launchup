@@ -668,3 +668,56 @@ John.
 2. `supportRatio` stays §2's open measurement problem.
 3. **The critical path is unchanged and still unstarted:** the SPMP and the
    traceability matrix, competing for the same weeks as the 30-user study.
+
+---
+
+## 2026-09-18 — the eleven non-reactive variables, and what fixing them exposed
+
+Zero Gemini calls. `fix/non-reactive-state`, merged to local `master` (`2870e9e`).
+Eleven variables wrapped in `$state(...)` across five components (bias audits,
+tiers, OCR documents, elevate, the landing header). `svelte-check` warnings
+**22 → 11**, none of this class left; errors unchanged at 113.
+
+**The landing header is the one verified both ways.** The window never scrolls on
+`/` — the page scrolls inside a container — so the test drove a scroll event with
+`window.scrollY` stubbed: the fixed build toggles `border-b`/`backdrop-blur-lg`,
+the stashed original never does. ⚠️ **That also means the header's blur still
+cannot fire from real scrolling**, because the listener is on `window`. Own
+branch; TODO §2.
+
+### Fixing the state surfaced a second defect behind it
+
+John overrode bias audit #24 (three saves, in `activity_logs`) and the row
+rendered **"Startup #Unknown"**. `overrideBiasAudit` did `findOne` with no
+`populate`, so the startup serialized as a bare `1` and the page — which swaps
+that response into its list — read `startup.id` as `undefined`. Stored data was
+never wrong: Neon still had `startup_id = 1`. **The display bug had been
+unreachable precisely because the list never re-rendered**, so this branch would
+have shipped it as a visible regression; fixed here rather than deferred.
+Test-first (failed for the right reason, then passed), **380/380 backend**, and
+proven on the real ORM read-only: without `populate` the field serializes as `1`,
+with it as `{"id":1,"name":"AgroLink PH",…}`. Same class as the standing note —
+**a missing `populate` is invisible to every mocked test.**
+
+### The OCR preview cannot be reached at all
+
+John reported no preview button. Not this branch and not a regression: the button
+is gated on `o.sourcePath`, and **nothing ever writes `sourcePath`** (open since
+2026-09-06, §5). The `previewOpen`/`previewUrl` fix is correct and currently
+unreachable — it needs image storage first.
+
+### Verification limits
+
+Claude's pane was signed in as the Startup demo user throughout, so **Tiers,
+AI Bias and Elevate were not clicked through by Claude** — John tests those. The
+Manager screenshots that surfaced both findings came from John's own browser.
+
+### Next step
+
+1. **John tests on `master`:** Tiers "Add tier", an AI Bias override (the row must
+   still name its startup), Elevate's Next Level picker.
+2. **The landing header's scroll listener** watches `window` on a page that scrolls
+   in a container — own branch.
+3. `supportRatio` stays §2's open measurement problem, and the critical path is
+   unchanged: the SPMP and the traceability matrix, competing for the same weeks
+   as the 30-user study.
