@@ -20,14 +20,14 @@
   let selectedTab = $state($page.url.searchParams.get('tab') || 'pending');
   let applicants: any = $state([]);
 
-  let dialogLoading = false;
-  let showDialog = false;
-  let selectedStartup: any = null;
+  let dialogLoading = $state(false);
+  let showDialog = $state(false);
+  let selectedStartup: any = $state(null);
   let startupAssessments: Array<{
     name: string;
     assessmentStatus: string;
     assessmentFields?: any[];
-  }> = [];
+  }> = $state([]);
 
   async function fetchStartupAssessments(startupId: number) {
     try {
