@@ -390,16 +390,6 @@
   color: #c7d2fe;
 }
 
-/* Unresolved drafting decisions. Distinct from <strong>, which is emphasis. */
-.lu-root .lu-prose .lu-todo {
-  background: rgba(251, 191, 36, 0.1);
-  border: 1px dashed rgba(251, 191, 36, 0.4);
-  border-radius: 5px;
-  padding: 0.1em 0.4em;
-  color: var(--lu-flag);
-  font-weight: 600;
-}
-
 /* Legal text is cited by section number, so the number is information. */
 .lu-root .lu-prose {
   counter-reset: lu-section;

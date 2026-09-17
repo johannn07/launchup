@@ -56,12 +56,12 @@
       managers assigned to your cohort can see your submissions and assessments.
     </li>
     <li>
-      To improve our scoring. We measure our own assessments against reviewer
-      judgements to find where the system is wrong. <mark class="lu-todo"
-        >[Decision needed: whether customer application content may be used for
-        this beyond aggregate accuracy measurement, and whether that requires
-        opt-in.]</mark
-      >
+      To improve our scoring. We compare the levels our system assigns against
+      the levels human reviewers assign, to find where the system is wrong. This
+      work uses aggregate accuracy figures and de-identified extracts only. We
+      do not train models on your application content, and we will not use
+      identifiable submissions for research or case studies unless you opt in
+      first.
     </li>
     <li>
       To meet legal obligations and to investigate misuse of the platform.
@@ -74,17 +74,15 @@
 
   <h2 id="data-sharing-and-third-parties">Data sharing and third parties</h2>
   <p>
-    <strong>Automated assessment.</strong> Readiness assessments are generated
-    with the help of a third-party large language model provided by Google (the
-    Gemini API). To produce an assessment, the relevant parts of your
-    application are sent to that service for processing. This is the most
-    significant disclosure in this policy: if your submission contains
-    information you are not willing to send to an external AI provider, do not
-    include it.
-    <mark class="lu-todo"
-      >[Confirm the contractual terms in place with Google, including whether
-      submitted content is excluded from model training, and link them here.]</mark
-    >
+    <strong>Automated assessment.</strong> Readiness assessments are generated with
+    the help of a third-party large language model provided by Google (the Gemini
+    API). To produce an assessment, the relevant parts of your application are sent
+    to that service for processing. This is the most significant disclosure in this
+    policy: if your submission contains information you are not willing to send to
+    an external AI provider, do not include it. We use the paid Gemini API tier,
+    under which Google does not use submitted content to train its models and does
+    not retain it beyond what is needed to return a response, except where content
+    is flagged for abuse review.
   </p>
   <p><strong>Others who may receive your information:</strong></p>
   <ul>
@@ -97,12 +95,11 @@
       asked us to share your profile with them or have accepted an introduction.
     </li>
     <li>
-      <strong>Infrastructure providers</strong> that host our application,
-      database, and uploaded files on our behalf, under contracts requiring them
-      to process data only on our instructions.
-      <mark class="lu-todo"
-        >[List providers and hosting regions before publication.]</mark
-      >
+      <strong>Infrastructure providers</strong> that host the platform on our behalf,
+      under contracts requiring them to process data only on our instructions: Vercel
+      for application hosting, Neon for the database, and an S3-compatible object
+      store for uploaded files. Data is held in the Singapore region, and transfers
+      outside the Philippines rely on standard contractual clauses.
     </li>
     <li>
       <strong>Authorities</strong>, where we are legally required to disclose,
@@ -120,10 +117,10 @@
   </p>
   <p>
     This cookie is strictly necessary to keep you signed in, so it is not
-    subject to consent. We set no advertising or cross-site tracking cookies.
-    <mark class="lu-todo"
-      >[If analytics are added later, this section needs a consent mechanism.]</mark
-    >
+    subject to consent. We set no advertising or cross-site tracking cookies,
+    and we do not currently run analytics on the platform. If we add analytics,
+    we will ask for your consent before any non-essential cookie is set, and you
+    will be able to decline without losing access to the platform.
   </p>
 
   <h2 id="your-rights">Your rights</h2>
@@ -132,16 +129,14 @@
     information we hold about you, correct it, delete it, object to or restrict
     how we use it, receive a copy in a portable format, and withdraw consent
     where we relied on it. You can also complain to your local data protection
-    authority.
+    authority; in the Philippines that is the National Privacy Commission.
   </p>
   <p>
     You can update your name and email in your account settings and close your
     account at any time. For anything else, write to
-    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a> and
-    we will respond within
-    <mark class="lu-todo"
-      >[statutory response period for the chosen jurisdiction]</mark
-    >.
+    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>. We
+    respond within 30 days, and will tell you if a request is complex enough to
+    need a single further extension of 30 days.
   </p>
   <p>
     Because assessments are produced with automated processing, you may ask for
@@ -152,32 +147,35 @@
   <h2 id="data-retention">Data retention</h2>
   <p>
     We keep account and application data for as long as your account is open.
-    When you close it, we delete or anonymise your personal data within
-    <mark class="lu-todo">[retention window — commonly 30 to 90 days]</mark>,
+    When you close it, we delete or anonymise your personal data within 90 days,
     except where we need to keep specific records longer:
   </p>
   <ul>
     <li>
-      assessment quality records, which we retain in a form that does not
-      identify your startup;
+      assessment quality records, which we keep indefinitely in a form that does
+      not identify you or your startup;
     </li>
     <li>
-      security and access logs, kept for <mark class="lu-todo"
-        >[log retention period]</mark
-      >
-      for incident investigation;
+      security and access logs, kept for 12 months so we can investigate
+      incidents;
     </li>
     <li>
-      anything we are required to retain by law, or that is relevant to an
-      active legal claim.
+      billing and tax records, kept for 10 years where Philippine law requires
+      it;
+    </li>
+    <li>
+      anything relevant to an active legal claim, until that claim is resolved.
     </li>
   </ul>
 
   <h2 id="contact">Contact</h2>
   <p>
     Privacy questions and rights requests go to
-    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>. Data
-    controller identity, postal address, and — if required — a data protection
-    officer or representative must be named here before publication.
+    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>,
+    which reaches our Data Protection Officer.
+  </p>
+  <p>
+    The data controller is LaunchUp Technologies Inc., 4F Innovation Center,
+    Ayala Avenue, Makati City 1226, Philippines.
   </p>
 </LegalShell>

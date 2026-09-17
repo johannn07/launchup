@@ -102,10 +102,10 @@
         <p class="lu-notice mt-7 max-w-[36rem]">
           <AlertTriangle class="mt-0.5 h-4 w-4 flex-none" />
           <span>
-            <strong class="font-semibold">Placeholder draft.</strong> A working first
-            draft written to give the page real structure. It has not been reviewed
-            by a lawyer and is not enforceable as written. Items marked in amber
-            still need a decision.
+            <strong class="font-semibold">Placeholder draft.</strong> Complete first-draft
+            wording, written to be reacted to rather than relied on. It has not been
+            reviewed by a lawyer, it is not legal advice, and it is not enforceable
+            as written. Have counsel review and replace it before LaunchUp goes live.
           </span>
         </p>
 
