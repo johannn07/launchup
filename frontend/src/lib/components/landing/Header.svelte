@@ -1,88 +1,79 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { toggleMode } from 'mode-watcher';
-  import Button from '$lib/components/ui/button/button.svelte';
-  import { Sun, Moon, Rocket} from 'lucide-svelte';
+  import { Rocket } from 'lucide-svelte';
 
-  let isBlurred = false;
   let activeSection = $state('hero');
 
   function handleScroll() {
-    isBlurred = window.scrollY > 100;
-
-    const sections = ['hero', 'howitwork', 'aboutus'];
-    for (const id of sections) {
+    for (const id of ['hero', 'howitwork', 'aboutus']) {
       const el = document.getElementById(id);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= 80 && rect.bottom >= 80) {
-          activeSection = id;
-          break;
-        }
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.top <= 80 && rect.bottom >= 80) {
+        activeSection = id;
+        break;
       }
     }
   }
 
   onMount(() => {
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   });
 </script>
 
 <header
-  class="fixed left-1/2 top-0 z-10 flex h-16 w-screen -translate-x-1/2 justify-center transition-all duration-300 ease-in-out"
-  class:border-b={isBlurred}
-  class:backdrop-blur-lg={isBlurred}
+  class="sticky top-0 z-40 border-b border-[#17213a]/70 bg-[#07111f]/80 backdrop-blur-lg"
 >
-  <nav class="flex h-16 w-4/5 items-center p-[var(--navbar-padding,0.5rem)] px-0">
-    <div class="flex flex-1 cursor-pointer items-center gap-2">
-      <a href="/" class="flex cursor-pointer items-center gap-2 text-xl font-black normal-case">
-        <Rocket class="h-4 w-4 -rotate-12 text-[#6366f1]" />
-        <span class="text-white">LaunchUp</span>
-      </a>
-    </div>
-    <div class="flex-none font-medium">
-      <ul class="flex flex-1 cursor-pointer items-center gap-7 text-[15px]">
-        <li class="active:scale-95">
-          <a
-            href="#hero"
-            class="transition-colors duration-200"
-            class:text-[#6366f1]={activeSection === 'hero'}
-            class:font-semibold={activeSection === 'hero'}
-          >Home</a>
-        </li>
-        <li class="active:scale-95">
-          <a
-            href="#howitwork"
-            class="transition-colors duration-200"
-            class:text-[#6366f1]={activeSection === 'howitwork'}
-            class:font-semibold={activeSection === 'howitwork'}
-          >How it Works</a>
-        </li>
-        <li class="active:scale-95">
-          <a
-            href="#aboutus"
-            class="transition-colors duration-200"
-            class:text-[#6366f1]={activeSection === 'aboutus'}
-            class:font-semibold={activeSection === 'aboutus'}
-          >About Us</a>
-        </li>
-        <li class="active:scale-95">
-          <a data-sveltekit-reload href="/login">Login</a>
-        </li>
-        <li>
-          <Button
-            onclick={toggleMode}
-            variant="ghost"
-            size="icon"
-            class="hover:text-flutter-blue hover:bg-transparent"
-          >
-            <Sun class="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-            <Moon class="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-            <span class="sr-only">Toggle theme</span>
-          </Button>
-        </li>
-      </ul>
-    </div>
+  <nav class="mx-auto flex h-16 w-[min(72rem,88vw)] items-center">
+    <a href="/" class="flex items-center gap-2">
+      <Rocket class="h-4 w-4 -rotate-12 text-[#6366f1]" />
+      <span class="lu-d-xw text-xl text-white">LaunchUp</span>
+    </a>
+
+    <ul
+      class="ml-auto hidden items-center gap-7 text-[15px] font-medium md:flex"
+    >
+      <li>
+        <a
+          href="#hero"
+          class="transition-colors hover:text-[#818cf8] {activeSection ===
+          'hero'
+            ? 'text-[#f1f5f9]'
+            : 'text-[#94a3b8]'}">Home</a
+        >
+      </li>
+      <li>
+        <a
+          href="#howitwork"
+          class="transition-colors hover:text-[#818cf8] {activeSection ===
+          'howitwork'
+            ? 'text-[#f1f5f9]'
+            : 'text-[#94a3b8]'}">How it Works</a
+        >
+      </li>
+      <li>
+        <a
+          href="#aboutus"
+          class="transition-colors hover:text-[#818cf8] {activeSection ===
+          'aboutus'
+            ? 'text-[#f1f5f9]'
+            : 'text-[#94a3b8]'}">About Us</a
+        >
+      </li>
+      <li>
+        <a
+          data-sveltekit-reload
+          href="/login"
+          class="text-[#94a3b8] transition-colors hover:text-[#818cf8]">Login</a
+        >
+      </li>
+    </ul>
+
+    <a
+      data-sveltekit-reload
+      href="/register"
+      class="lu-btn lu-btn-primary lu-btn-sm ml-auto md:ml-7">Get Started</a
+    >
   </nav>
 </header>

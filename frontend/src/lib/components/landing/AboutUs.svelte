@@ -1,45 +1,103 @@
-<div class="relative h-full w-full py-10">
-  <div
-    class="absolute bottom-0 left-0 right-0 top-0 -z-10 bg-[linear-gradient(to_right,#ecf3fc_1px,transparent_1px),linear-gradient(to_bottom,#ecf3fc_1px,transparent_1px)] bg-[size:2.5rem_2.5rem] [mask-image:radial-gradient(ellipse_100%_52%_at_50%_45%,#000_70%,transparent_110%)] dark:bg-[linear-gradient(to_right,#171e31_1px,transparent_1px),linear-gradient(to_bottom,#171e31_1px,transparent_1px)]"
-  ></div>
+<script lang="ts">
+  import { reveal } from './reveal';
 
+  // Provenance of the scoring rubric, as seeded in rag_contexts. Only the TRL
+  // rows are transcribed from a public standard — the rest say so plainly.
+  const rubric = [
+    { name: 'Technology', code: 'TRL', source: 'EU Horizon Europe, ISO 16290' },
+    { name: 'Market', code: 'MRL', source: 'Authored against BRLa (2021)' },
+    { name: 'Acceptance', code: 'ARL', source: 'Authored against BRLa (2021)' },
+    {
+      name: 'Organizational',
+      code: 'ORL',
+      source: 'Authored against BRLa (2021)'
+    },
+    { name: 'Regulatory', code: 'RRL', source: 'Authored against BRLa (2021)' },
+    {
+      name: 'Investment',
+      code: 'IRL',
+      source: 'Authored in-house, no external standard',
+      flag: true
+    }
+  ];
+</script>
+
+<section id="aboutus" class="scroll-mt-16">
   <div
-    class="mx-auto grid min-h-[42rem] w-[min(72rem,86vw)] items-center gap-14 py-16 lg:grid-cols-[1fr_0.9fr]"
-    id="aboutus"
+    class="mx-auto grid w-[min(72rem,88vw)] items-center gap-12 py-24 lg:grid-cols-[1fr_0.92fr] lg:gap-16"
   >
-    <div class="space-y-6">
-      <div class="inline-flex items-center rounded-full border border-[#6366f1]/15 bg-[#6366f1]/8 px-4 py-2 text-sm font-semibold text-[#4f46e5] dark:border-white/10 dark:bg-white/5 dark:text-slate-200">
-        About the platform
-      </div>
-      <div class="space-y-5">
-        <p class="text-4xl font-black tracking-tight text-slate-950 dark:text-white sm:text-5xl">
-          About LaunchUp
-        </p>
-        <p class="max-w-2xl text-xl leading-9 text-slate-600 dark:text-slate-300">
-          LaunchUp is a dedicated program designed to support startups on their path to success. It provides essential resources and guidance to innovative entrepreneurs, with a specific focus on incubation and acceleration.
-        </p>
-      </div>
-      <div class="grid gap-4 sm:grid-cols-3">
-        <div class="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60">
-          <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Focus</p>
-          <p class="mt-2 font-semibold text-slate-950 dark:text-white">Founders first</p>
-        </div>
-        <div class="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60">
-          <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Method</p>
-          <p class="mt-2 font-semibold text-slate-950 dark:text-white">Grounded scoring</p>
-        </div>
-        <div class="rounded-2xl border border-white/60 bg-white/80 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-slate-950/60">
-          <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Outcome</p>
-          <p class="mt-2 font-semibold text-slate-950 dark:text-white">Clear next steps</p>
-        </div>
-      </div>
-      </div>
+    <div use:reveal>
+      <p class="lu-chip">About the platform</p>
+      <h2
+        class="lu-d-xw mt-6 text-[32px] leading-[1.08] text-white sm:text-[42px]"
+      >
+        About LaunchUp
+      </h2>
+      <p class="mt-5 max-w-[56ch] text-[17.5px] leading-[1.75] text-[#94a3b8]">
+        LaunchUp is a dedicated program designed to support startups on their
+        path to success. It provides essential resources and guidance to
+        innovative entrepreneurs, with a specific focus on incubation and
+        acceleration.
+      </p>
 
-    <div class="relative flex items-center justify-center">
-      <div class="absolute inset-0 -z-10 rounded-[2.5rem] bg-[radial-gradient(circle_at_center,rgba(14,165,233,0.14),transparent_65%)] blur-3xl"></div>
-      <div class="relative w-full max-w-[34rem] rounded-[2rem] border border-white/60 bg-white/75 p-6 shadow-[0_28px_70px_rgba(15,23,42,0.12)] backdrop-blur dark:border-white/10 dark:bg-slate-950/55">
-        <img src="/aboutus.svg" alt="startup" class="w-full drop-shadow-[0_24px_50px_rgba(15,23,42,0.1)]" />
+      <dl class="mt-8 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
+          <dt class="text-[13px] text-[#94a3b8]">Focus</dt>
+          <dd class="lu-d-md mt-1.5 text-[15px] text-white">Founders first</dd>
+        </div>
+        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
+          <dt class="text-[13px] text-[#94a3b8]">Method</dt>
+          <dd class="lu-d-md mt-1.5 text-[15px] text-white">
+            Grounded scoring
+          </dd>
+        </div>
+        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
+          <dt class="text-[13px] text-[#94a3b8]">Outcome</dt>
+          <dd class="lu-d-md mt-1.5 text-[15px] text-white">
+            Clear next steps
+          </dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Answers the question the hero raises: where does a level come from? -->
+    <div use:reveal={60}>
+      <div
+        class="overflow-hidden rounded-[1.75rem] border border-[#1f2c47] bg-[#0b1220]"
+      >
+        <div class="border-b border-[#17213a] px-6 py-4">
+          <p class="lu-d-md text-[15px] text-white">
+            What each scale is measured against
+          </p>
+        </div>
+
+        <ul class="divide-y divide-[#17213a] text-[14px]">
+          {#each rubric as r (r.code)}
+            <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+              <span class="font-semibold text-[#f1f5f9]">
+                {r.name}
+                <span class="lu-num text-[12px] font-medium text-[#818cf8]"
+                  >{r.code}</span
+                >
+              </span>
+              <span
+                class="text-right {r.flag
+                  ? 'text-[#fbbf24]'
+                  : 'text-[#94a3b8]'}"
+              >
+                {r.source}
+              </span>
+            </li>
+          {/each}
+        </ul>
+
+        <div class="border-t border-[#17213a] bg-[#111b2e] px-6 py-4">
+          <p class="text-[12.5px] leading-[1.6] text-[#94a3b8]">
+            Published per scale so a score can be argued with rather than taken
+            on trust.
+          </p>
+        </div>
       </div>
     </div>
   </div>
-</div>
+</section>

@@ -1,0 +1,161 @@
+/* Landing-only design tokens. Scoped under .lu-root so the rest of the app
+   keeps Geist and the shadcn CSS variables. */
+
+.lu-root {
+  --lu-ink: #050816;
+  --lu-navy: #07111f;
+  --lu-navy-2: #0b1220;
+  --lu-navy-3: #111b2e;
+  --lu-line: #17213a;
+  --lu-line-2: #1f2c47;
+  --lu-step: #54648a; /* step numerals: 3.25:1, readable but still recessive */
+
+  --lu-indigo: #6366f1; /* accent only — 4.35:1 on navy, too low for text */
+  --lu-indigo-deep: #4f46e5; /* button fill — 6.15:1 against white */
+  --lu-indigo-dark: #4338ca;
+  --lu-indigo-lite: #818cf8; /* small text on navy — 6.24:1 */
+  --lu-flag: #fbbf24; /* readiness gaps only */
+
+  --lu-cloud: #f1f5f9;
+  --lu-mute: #94a3b8;
+
+  --lu-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  background: var(--lu-navy);
+  color: var(--lu-cloud);
+  font-family: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Display face carried over unchanged: Archivo, width as the personality */
+.lu-root .lu-d,
+.lu-root .lu-d-xw,
+.lu-root .lu-d-md {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+}
+.lu-root .lu-d {
+  font-variation-settings:
+    'wdth' 112,
+    'wght' 700;
+  letter-spacing: -0.021em;
+}
+.lu-root .lu-d-xw {
+  font-variation-settings:
+    'wdth' 118,
+    'wght' 800;
+  letter-spacing: -0.028em;
+}
+.lu-root .lu-d-md {
+  font-variation-settings:
+    'wdth' 108,
+    'wght' 600;
+  letter-spacing: -0.012em;
+}
+.lu-root .lu-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- One button system: primary and secondary share a base ---- */
+.lu-root .lu-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition:
+    background-color 0.18s var(--lu-ease),
+    border-color 0.18s var(--lu-ease),
+    color 0.18s var(--lu-ease),
+    box-shadow 0.18s var(--lu-ease),
+    transform 0.08s var(--lu-ease);
+}
+.lu-root .lu-btn:active {
+  transform: translateY(1px);
+}
+.lu-root .lu-btn:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 3px;
+}
+.lu-root .lu-btn-primary {
+  background: var(--lu-indigo-deep);
+  color: #fff;
+}
+.lu-root .lu-btn-primary:hover {
+  background: var(--lu-indigo-dark);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.22);
+}
+.lu-root .lu-btn-secondary {
+  background: transparent;
+  color: #c7d2fe;
+  border-color: var(--lu-line-2);
+}
+.lu-root .lu-btn-secondary:hover {
+  border-color: var(--lu-indigo-deep);
+  color: #fff;
+  background: rgba(99, 102, 241, 0.1);
+}
+.lu-root .lu-btn-sm {
+  height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+.lu-root .lu-btn .lu-arw {
+  transition: transform 0.18s var(--lu-ease);
+}
+.lu-root .lu-btn:hover .lu-arw {
+  transform: translateX(3px);
+}
+
+.lu-root .lu-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--lu-line-2);
+  background: var(--lu-navy-2);
+  padding: 0.5rem 1rem;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lu-mute);
+}
+
+/* ---- Scroll reveal: opacity + 8px, fires once ---- */
+.lu-root .lu-rv {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.5s var(--lu-ease),
+    transform 0.5s var(--lu-ease);
+}
+.lu-root .lu-rv.lu-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Readiness meter ---- */
+.lu-root .lu-meter > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  transition: width 0.9s var(--lu-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lu-root *,
+  .lu-root *::before,
+  .lu-root *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+  .lu-root .lu-rv {
+    opacity: 1;
+    transform: none;
+  }
+}
