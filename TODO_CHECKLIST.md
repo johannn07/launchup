@@ -37,14 +37,15 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | Mentor-selectable RNA dimensions — per-dimension AI generation | `feat/rna-dimension-picker` — local, unpushed, live-verified |
 | Vite dev proxy deleted — unshadows the same-origin `/api` route | `a2d5435` — same branch; client-side API calls worked in dev for the first time |
 | Metric 6 salience manipulation — `scopedCount`, G1 control, `unlabelled` variants, `--doc-variant`, variant fingerprints, **and the 12-call run that retired the metric** | PR #53 (`3a89708`) — merged |
-| **Application modal no longer discards a part-filled form** — confirm on outside click / `Esc` / ✕, via bits-ui `controlledOpen` | `fix/application-modal-close-confirm` — pushed, live-verified, PR not opened |
-| **OCR documents deduped by content hash + boot-time prune of unattached rows** (`OCR_RETENTION_DAYS`, default 30) | `fix/ocr-document-dedupe` — pushed, live-verified on Neon, PR not opened |
-| **Mentors can read what each readiness level means** — `GET /readinesslevel/rubrics` over the 54 corpus rows + per-dimension provenance | `feat/readiness-level-guide` — pushed, live-verified, PR not opened |
-| **3a OCR accuracy harness — 10-page/2-writer corpus, 80 labelled observations, threshold sweep with a confound-free arm, CER primitives, zero-quota gates, and the 12-call run** | `measure/ocr-accuracy` — local, unpushed. Threshold measured (negative, now a §2 defect); **CER scoped out to 3c** — harness built and parked, needs only typed spans |
+| **Application modal no longer discards a part-filled form** — confirm on outside click / `Esc` / ✕, via bits-ui `controlledOpen` | PR #56 — merged, live-verified |
+| **OCR documents deduped by content hash + boot-time prune of unattached rows** (`OCR_RETENTION_DAYS`, default 30) | PR #57 — merged, live-verified on Neon |
+| **Mentors can read what each readiness level means** — `GET /readinesslevel/rubrics` over the 54 corpus rows + per-dimension provenance | PR #58 — merged, live-verified |
+| **3a OCR accuracy harness — 10-page/2-writer corpus, 80 labelled observations, threshold sweep with a confound-free arm, CER primitives, zero-quota gates, and the 12-call run** | PRs #54/#55 — merged. Threshold measured (negative, now a §2 defect); **CER scoped out to 3c** — harness built and parked, needs only typed spans |
 | **Generation `debug` flags made real dry runs** — RNA/RNS/Initiatives declared the flag and spent full quota anyway; only roadblocks short-circuited. All four now return `{ prompts }` before any AI call, and the renumbering writes are guarded too | `fix/generation-debug-dry-run` — **merged `b8a091e`**, live-verified (runs 42/43/44 null tokens vs 2731/117 for a real run, 0 rows written) |
 | **Four §2 defects fixed on four branches** — empty criteria table, placeholder level names, remove-member, unguarded controller. Three carried a wrong diagnosis (impact, scope, risk) | **merged to `master` `b8a091e`** after John tested each branch — see `SESSION_NOTES.md` 2026-09-07 |
 | **The extraction review stopped claiming fields are "Verified"** — vocabulary is now unsupported / unverified / failed, the threshold untouched; also deletes the `length < 40` rule that was still tinting every card green | `fix/field-confidence-claim` — **merged `b8a091e`**; verified against a stubbed response at zero quota, then by John on a real upload |
-| **One readiness dimension order, taken from the specification** — eight declaration sites, four disagreeing orders, now two canonical sources | `fix/readiness-dimension-order` — local, unpushed, live-verified against Neon and the running Vite module graph |
+| **One readiness dimension order, taken from the specification** — eight declaration sites, four disagreeing orders, now two canonical sources | `fix/readiness-dimension-order` — **merged `f14beda`**, live-verified against Neon and the running Vite module graph |
+| **Four reported UI issues** — avatar menu locked the page, Manager could not open application details, no overview for unqualified startups, unbounded startups grid (now 8 per page) | Four branches merged `331851d`, deployed 2026-09-18 — see `SESSION_NOTES.md` 2026-09-17 |
 
 ---
 
@@ -54,9 +55,9 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 |---|---|
 | **Capstone objectives (§0)** | In progress — 1b, 1c, 2a, 2b, 2c, **3a**, 4c and SO 4.4 built; 1a, 3b and 4b partial; 3c and 4a are research tasks, not code. **Metric 6 retired 2026-09-05** on its stopping rule. **3a closed 2026-09-05 with its accuracy measurement explicitly scoped out to 3c** — a decision, not an omission; the CER harness is built and gated, needing only 30–50 min of transcription and no quota. That run also found a live defect — `SUPPORT_THRESHOLD = 0.5` badges 18 of 26 invented fields "Verified". **The badge was removed 2026-09-07** (the claim changed, the threshold did not); the underlying metric stays open in §2 |
 | **Security issues (§1)** | In progress — all P0 closed; the unguarded `readinesslevel` controller closed 2026-09-07 (`fix/guard-readinesslevel-controller`); 4 P1 open, 1 to confirm and close |
-| **Broken functionality (§2)** | In progress — **15 of 21 fixed**: 14 merged to `master` 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller), all four tested by John first, three of them carrying a wrong diagnosis — impact, scope and risk; see `SESSION_NOTES.md` 2026-09-07. The dimension-order defect added and fixed 2026-09-07 on `fix/readiness-dimension-order`, unblocked by reading the SDD. **6 open, none demo-visible.** The `supportRatio` defect stays open as a measurement problem, its false "Verified" badge removed without touching the threshold |
+| **Broken functionality (§2)** | In progress — **16 of 23 fixed**. 2026-09-17: three UI defects fixed and deployed (avatar-menu lock, applications dialog state, no overview for unqualified startups); **the same non-reactive-state defect found in eleven more variables — open, possibly visible on admin pages**. Earlier: 15 of 21 fixed — 14 merged to `master` 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller), all four tested by John first, three of them carrying a wrong diagnosis — impact, scope and risk; see `SESSION_NOTES.md` 2026-09-07. The dimension-order defect added and fixed 2026-09-07 on `fix/readiness-dimension-order`, unblocked by reading the SDD. **7 open.** The `supportRatio` defect stays open as a measurement problem, its false "Verified" badge removed without touching the threshold |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 8 items still open, the deletions not yet executed |
-| **Cleanup / tech debt (§4)** | In progress — 7 of 27 done, 20 open (two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`) |
+| **Cleanup / tech debt (§4)** | In progress — 7 of 29 done, 22 open (two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`; two added 2026-09-17: per-startup initiatives fetch, orphaned `/pending` route) |
 | **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota, 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06). **Quota is now costed** (2026-09-07): 2 calls per startup intake, ~23 per 6-dimension workflow, against a hard 20/day — see §5 |
 
 ---
@@ -722,6 +723,17 @@ measurement.
 
 ## 2. Broken functionality
 
+- [ ] 🐞 **BUG · S · Eleven more state variables are plain `let` in runes components** — *found 2026-09-17, unfixed, not browser-checked*
+  Same defect as the Applications dialog fixed that day: reassigning them never re-renders. `svelte-check` reports each as `non_reactive_update`:
+  `admin/ocr-documents` `previewOpen`, `previewUrl` (preview dialog likely never opens) · `admin/tiers` `tiers`, `saving`, `saveSuccess` · `admin/ai/bias-audits` `audits`, `overridingId`, `overrideValue`, `overriding` · `overview/elevate` `elevatedReadiness` · `landing/Header` `isBlurred`.
+  **Fix:** wrap each in `$state(...)`, then click-test each page as Manager. `npx svelte-check --output machine | grep non_reactive` should then print nothing.
+
+- [x] ✅ **BUG · Three UI defects John reported** — *found and fixed 2026-09-17, merged `331851d`, deployed 2026-09-18*
+  **Avatar menu locked the page:** desktop and mobile `DropdownMenu`s shared one `bind:open`, so both opened and the hidden one's modal lock stuck on `body`.
+  **Manager could not open application details:** the dialog's state was plain `let` in a runes component.
+  **No overview for unqualified startups:** every non-QUALIFIED card linked to the `/pending` placeholder, which hides the nav (completed startups too). Pending/waitlisted now open `overview/general` with an Overview-only nav and a banner; `qualificationStatus` comes from `startups/[id]/+layout.server.ts`.
+  ⚠️ The Manager-side fixes were not clicked through by Claude; see `SESSION_NOTES.md` 2026-09-17.
+
 - [x] ✅ **BUG · Readiness dimension order — settled against the specification and unified** — *found 2026-09-07 by John, fixed 2026-09-07 (`fix/readiness-dimension-order`)*
   **The SDD was read, and the apply flow was the thing that was right.** The SRS §1.2, the SDD §2.2 and the proposal all list the dimensions **TRL, MRL, RRL, ARL, ORL** — ten-plus occurrences, no variation, including the SDD's own `urat_questions.dimension` column definition. (The §1.3 acronym lists in both documents are **alphabetical** and are not evidence of order.) Regulatory is third.
   **It was worse than recorded: eight declaration sites, four different orders.**
@@ -956,6 +968,12 @@ Each verified by reading **both** sides of the call.
 **Gates — two separate suites, never one figure.** Backend `pnpm test` **336/336 across 33 suites**, re-run 2026-09-04 (was 308/308 across 28 on 2026-08-23); an earlier "328/328 across 32" in these docs was stale and is retired. `pnpm test:measurement` **304/304**, re-run 2026-09-04 and unchanged since 2026-08-23 — note it is `node:test`/TAP, not jest, so it reports `suites 0` and its totals must never be added to the jest figure. Frontend `pnpm check` sits at a **119 errors / 44 files** baseline on `master`, unrelated to current work — compare against it rather than expecting zero. Note the suite prints a `[OCR] Gemini Vision extraction failed` stack trace on the way past — that is a test exercising the Tesseract fallback, not a failure.
 
 > **Deferred (2026-08-07)** except the three 🎯 items, which are deletions a reviewer would notice. Everything else here is invisible to a panel and survives the capstone unchanged.
+
+- [ ] 🧹 **DEBT · S · Startups page fetches initiatives once per startup** — *found 2026-09-17*
+  `startups/+page.svelte` `getAllInitiativesForStartups` sends one `/initiatives?startupId=` request per startup on every visit, whatever page of the grid is shown, so requests grow with the startup count. Needs a bulk endpoint, or fetching per visible page.
+
+- [ ] 🧹 **DEBT · S · `/startups/[id]/pending` is no longer linked** — *2026-09-17*
+  Cards now open `overview/general` for unqualified startups. The route was kept so old links still work. Delete it, or redirect it to the overview.
 
 - [ ] 🧹 **DEBT · S · `pnpm start` points at a file the build does not produce** — *found 2026-08-25, worked around in Render's dashboard*
   `"start": "node dist/main"`, but `nest build` emits `dist/src/main.js` — `seed-dummy.ts` sits at the backend root, which drags TypeScript's inferred `rootDir` up a level. The standing note about `dist/src/` already existed; this script is an unfixed instance of it, invisible locally because `pnpm dev` never reads that path.
