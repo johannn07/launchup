@@ -372,3 +372,56 @@ describe('RoadblockService.refineRoadblock provenance', () => {
     expect(aiService.createBasePrompt).not.toHaveBeenCalled();
   });
 });
+
+describe('RoadblockService.statusChange', () => {
+  function build(roadblock: Record<string, any>) {
+    const em = {
+      findOne: jest.fn().mockResolvedValue(roadblock),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new RoadblockService(
+      em as any,
+      {} as any,
+      {} as any,
+      {} as any,
+    );
+    return { service, em };
+  }
+
+  it('holds a startup move for mentor approval', async () => {
+    const roadblock = {
+      id: 7,
+      status: 1,
+      requestedStatus: 1,
+      approvalStatus: 'Unchanged',
+    };
+    const { service, em } = build(roadblock);
+
+    await service.statusChange(7, 'Startup', { status: 3 } as any);
+
+    expect(roadblock).toMatchObject({
+      status: 1,
+      requestedStatus: 3,
+      approvalStatus: 'Pending',
+    });
+    expect(em.flush).toHaveBeenCalled();
+  });
+
+  it('applies a mentor move directly', async () => {
+    const roadblock = {
+      id: 7,
+      status: 1,
+      requestedStatus: 1,
+      approvalStatus: 'Unchanged',
+    };
+    const { service } = build(roadblock);
+
+    await service.statusChange(7, 'Mentor', { status: 3 } as any);
+
+    expect(roadblock).toMatchObject({
+      status: 3,
+      requestedStatus: 3,
+      approvalStatus: 'Unchanged',
+    });
+  });
+});

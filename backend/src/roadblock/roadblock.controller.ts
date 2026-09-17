@@ -48,6 +48,17 @@ export class RoadblockController {
     return this.roadblockService.update(id, dto);
   }
 
+  // Role comes from the token: the board's ?role= is client-controlled, and
+  // trusting it would let a startup skip mentor approval.
+  @Patch(':id/roleDependent')
+  async roleStatusUpdate(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Body() dto: UpdateRoadblockDto,
+  ) {
+    return this.roadblockService.statusChange(id, req.user?.role, dto);
+  }
+
   @Delete(':id')
   async delete(
     @Param('id', ParseIntPipe) id: number,
