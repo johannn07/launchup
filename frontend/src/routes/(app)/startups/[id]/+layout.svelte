@@ -3,6 +3,7 @@
   import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
   import { getData } from '$lib/utils';
   import { useQuery } from '@sveltestack/svelte-query';
+  import { QualificationStatus } from '$lib/enums/qualification-status.enum';
 
   const { children, data } = $props();
   const { access, startupId } = data;
@@ -73,5 +74,13 @@
     {$startupQuery.isLoading ? 'Loading...' : info.name}
   </h2>
 </div>
+  {#if data.qualificationStatus === QualificationStatus.PENDING || data.qualificationStatus === QualificationStatus.WAITLISTED}
+    <div class="glass-card px-5 py-3 text-sm text-muted-foreground">
+      {data.qualificationStatus === QualificationStatus.PENDING
+        ? 'This startup is pending evaluation.'
+        : 'This startup is waitlisted.'}
+      Assessments and readiness become available once it is qualified.
+    </div>
+  {/if}
   {@render children()}
 </div>
