@@ -237,8 +237,11 @@
   </section>
 
   <!-- ============ Sign-in & security ============ -->
+  <!-- #security is the target of the old /account/password route. The scroll
+       margin clears the fixed 64px app header. -->
   <section
-    class="rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220]"
+    id="security"
+    class="scroll-mt-24 rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220]"
     aria-labelledby="security-heading"
   >
     <div class="border-b border-[#17213a] px-6 py-5">
