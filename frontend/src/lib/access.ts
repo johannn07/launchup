@@ -78,10 +78,6 @@ const settingsModule = {
       link: 'appearance',
       subModule: []
     }
-    // {
-    // 	name: 'Change Password',
-    // 	link: 'password'
-    // }
   ]
 };
 

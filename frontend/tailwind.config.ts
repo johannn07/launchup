@@ -106,6 +106,20 @@ const config: Config = {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
         'caret-blink': 'caret-blink 1.25s ease-out infinite'
+      },
+      // The LaunchUp motion scale (see brand.css). DEFAULT applies to every
+      // bare `transition*` utility app-wide, including pages not yet
+      // redesigned, so their hovers already run on the system's timing.
+      transitionDuration: {
+        DEFAULT: '120ms',
+        quick: '120ms',
+        move: '240ms',
+        settle: '600ms'
+      },
+      transitionTimingFunction: {
+        DEFAULT: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+        lu: 'cubic-bezier(0.2, 0.7, 0.3, 1)',
+        'lu-inout': 'cubic-bezier(0.65, 0, 0.35, 1)'
       }
     }
   },

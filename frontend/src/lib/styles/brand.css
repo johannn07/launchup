@@ -1,0 +1,742 @@
+/* LaunchUp brand tokens. Scoped under .lu-root so the rest of the app keeps
+   Geist and the shadcn CSS variables. Every branded page imports this file.
+
+   The fonts are loaded here rather than per page. Only the landing page used
+   to load them, so auth, legal and dashboard declared Archivo/Public Sans but
+   rendered in system fonts on a direct visit. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Public+Sans:wght@300..800&display=swap');
+
+/* Reserve the scrollbar track so a short page and a tall one put their
+   content on the same left edge. Without it, login and register differ by
+   the scrollbar width. */
+html:has(.lu-root) {
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+
+/* ================= Motion system =================
+   Three durations and two curves. Every transition on a branded page uses one
+   of these, so hover, state changes and arriving data read as one system
+   rather than per-page flourishes. Replaces eleven ad-hoc durations. */
+:root {
+  --lu-quick: 120ms; /* hover, press, focus */
+  --lu-move: 240ms; /* a state or position changing */
+  --lu-settle: 600ms; /* data arriving: counters, bars */
+  --lu-ease: cubic-bezier(
+    0.2,
+    0.7,
+    0.3,
+    1
+  ); /* arrivals: quick out, soft landing */
+  --lu-ease-inout: cubic-bezier(
+    0.65,
+    0,
+    0.35,
+    1
+  ); /* swaps between two states */
+}
+
+.lu-root {
+  --lu-ink: #050816;
+  --lu-navy: #07111f;
+  --lu-navy-2: #0b1220;
+  --lu-navy-3: #111b2e;
+  --lu-line: #17213a;
+  --lu-line-2: #1f2c47;
+  --lu-step: #54648a; /* step numerals: 3.25:1, readable but still recessive */
+
+  --lu-indigo: #6366f1; /* accent only — 4.35:1 on navy, too low for text */
+  --lu-indigo-deep: #4f46e5; /* button fill — 6.15:1 against white */
+  --lu-indigo-dark: #4338ca;
+  --lu-indigo-lite: #818cf8; /* small text on navy — 6.24:1 */
+  --lu-flag: #fbbf24; /* readiness gaps only */
+  --lu-danger: #fb7185; /* form errors — 6.9:1 on the panel ground */
+  --lu-ok: #34d399; /* satisfied validation — 9.5:1 */
+
+  --lu-cloud: #f1f5f9;
+  --lu-mute: #94a3b8;
+
+  background: var(--lu-navy);
+  color: var(--lu-cloud);
+  font-family: 'Public Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Display face carried over unchanged: Archivo, width as the personality */
+.lu-root .lu-d,
+.lu-root .lu-d-xw,
+.lu-root .lu-d-md {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+}
+.lu-root .lu-d {
+  font-variation-settings:
+    'wdth' 112,
+    'wght' 700;
+  letter-spacing: -0.021em;
+}
+.lu-root .lu-d-xw {
+  font-variation-settings:
+    'wdth' 118,
+    'wght' 800;
+  letter-spacing: -0.028em;
+}
+.lu-root .lu-d-md {
+  font-variation-settings:
+    'wdth' 108,
+    'wght' 600;
+  letter-spacing: -0.012em;
+}
+.lu-root .lu-num {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---- One button system: primary and secondary share a base ---- */
+.lu-root .lu-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition:
+    background-color var(--lu-quick) var(--lu-ease),
+    border-color var(--lu-quick) var(--lu-ease),
+    color var(--lu-quick) var(--lu-ease),
+    box-shadow var(--lu-quick) var(--lu-ease),
+    transform var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-btn:active {
+  transform: translateY(1px);
+}
+.lu-root .lu-btn:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 3px;
+}
+.lu-root .lu-btn-primary {
+  background: var(--lu-indigo-deep);
+  color: #fff;
+}
+.lu-root .lu-btn-primary:hover {
+  background: var(--lu-indigo-dark);
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.22);
+}
+.lu-root .lu-btn-secondary {
+  background: transparent;
+  color: #c7d2fe;
+  border-color: var(--lu-line-2);
+}
+.lu-root .lu-btn-secondary:hover {
+  border-color: var(--lu-indigo-deep);
+  color: #fff;
+  background: rgba(99, 102, 241, 0.1);
+}
+.lu-root .lu-btn-sm {
+  height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+.lu-root .lu-btn .lu-arw {
+  transition: transform var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-btn:hover .lu-arw {
+  transform: translateX(3px);
+}
+
+.lu-root .lu-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--lu-line-2);
+  background: var(--lu-navy-2);
+  padding: 0.5rem 1rem;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lu-mute);
+}
+
+/* ---- Scroll reveal: opacity + 8px, fires once ---- */
+.lu-root .lu-rv {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--lu-settle) var(--lu-ease),
+    transform var(--lu-settle) var(--lu-ease);
+}
+.lu-root .lu-rv.lu-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Reduced motion: from the OS setting, or from Settings > Appearance, which
+   sets html[data-motion='reduce']. Applies app-wide, not just to branded
+   pages, because it is a preference about the product. State still changes;
+   it just changes instantly. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lu-quick: 0ms;
+    --lu-move: 0ms;
+    --lu-settle: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  .lu-root .lu-rv {
+    opacity: 1;
+    transform: none;
+  }
+}
+html[data-motion='reduce'] {
+  --lu-quick: 0ms;
+  --lu-move: 0ms;
+  --lu-settle: 0ms;
+}
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion='reduce'] .lu-root .lu-rv {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Form controls ----
+   Radius language: 999px is an action, 10px is something you type into,
+   1rem+ is a surface. Inputs sit deliberately between button and card. */
+.lu-root .lu-field {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lu-cloud);
+}
+
+.lu-root .lu-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--lu-navy-2);
+  border: 1px solid var(--lu-line-2);
+  color: var(--lu-cloud);
+  font-family: inherit;
+  font-size: 15px;
+  transition:
+    border-color var(--lu-quick) var(--lu-ease),
+    box-shadow var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-input::placeholder {
+  color: #64748b;
+}
+.lu-root .lu-input:hover:not(:focus) {
+  border-color: #2b3a5c;
+}
+.lu-root .lu-input:focus {
+  outline: none;
+  border-color: var(--lu-indigo-deep);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+.lu-root .lu-input[aria-invalid='true'] {
+  border-color: var(--lu-danger);
+}
+.lu-root .lu-input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 3px rgba(251, 113, 133, 0.22);
+}
+/* Room for the show/hide toggle */
+.lu-root .lu-input-pw {
+  padding-right: 44px;
+}
+
+.lu-root .lu-hint {
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--lu-mute);
+}
+.lu-root .lu-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--lu-danger);
+}
+
+/* Form-level error, for a failure that belongs to the whole submission
+   rather than one field (bad credentials). */
+.lu-root .lu-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 113, 133, 0.32);
+  background: rgba(251, 113, 133, 0.1);
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--lu-danger);
+}
+
+.lu-root .lu-check {
+  appearance: none;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 5px;
+  border: 1px solid var(--lu-line-2);
+  background: var(--lu-navy-2);
+  cursor: pointer;
+  transition:
+    background-color var(--lu-quick) var(--lu-ease),
+    border-color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-check:checked {
+  background: var(--lu-indigo-deep);
+  border-color: var(--lu-indigo-deep);
+  /* check mark */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-6'/%3E%3C/svg%3E");
+  background-size: 14px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.lu-root .lu-check:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 2px;
+}
+.lu-root .lu-check[aria-invalid='true'] {
+  border-color: var(--lu-danger);
+}
+
+.lu-root .lu-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.lu-root .lu-btn-primary:disabled:hover {
+  background: var(--lu-indigo-deep);
+  box-shadow: none;
+}
+
+/* Inline text link inside body copy */
+.lu-root .lu-link {
+  color: var(--lu-indigo-lite);
+  font-weight: 600;
+  text-underline-offset: 3px;
+  transition: color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+.lu-root .lu-link:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* ---- Long-form prose (legal documents) ----
+   Measure is set in rem, not ch. `ch` is the advance of "0", which in Public
+   Sans is ~10.1px while the average character is ~8.6px — 68ch measured out
+   at 80 characters per line. 36rem lands at ~67. */
+.lu-prose {
+  max-width: 36rem;
+  font-size: 16.5px;
+  line-height: 1.75;
+  color: #c3ced9; /* 11.7:1 on the navy ground */
+}
+.lu-root .lu-prose > * + * {
+  margin-top: 1.1em;
+}
+
+/* Section heads: a hairline plus generous lead-in, so sections read as
+   separate blocks rather than one column of text. */
+.lu-root .lu-prose h2 {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  font-variation-settings:
+    'wdth' 108,
+    'wght' 600;
+  letter-spacing: -0.012em;
+  font-size: 22px;
+  line-height: 1.3;
+  color: #fff;
+  margin-top: 3.2rem;
+  padding-top: 2.1rem;
+  border-top: 1px solid #17213a;
+  scroll-margin-top: 5.5rem;
+}
+.lu-root .lu-prose h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.lu-root .lu-prose h2 + * {
+  margin-top: 0.85em;
+}
+
+/* Subheads must outrank body copy. They were 15.5px against 16.5px body,
+   which read as bold paragraphs rather than headings. */
+.lu-root .lu-prose h3 {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #fff;
+  margin-top: 2rem;
+}
+.lu-root .lu-prose h3 + * {
+  margin-top: 0.45em;
+}
+
+.lu-root .lu-prose strong {
+  color: #fff;
+  font-weight: 650;
+}
+.lu-root .lu-prose ul {
+  list-style: disc;
+  padding-left: 1.3rem;
+}
+.lu-root .lu-prose li + li {
+  margin-top: 0.55em;
+}
+.lu-root .lu-prose li::marker {
+  color: #64748b;
+}
+.lu-root .lu-prose a {
+  color: var(--lu-indigo-lite);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lu-root .lu-prose a:hover {
+  color: #fff;
+}
+.lu-root .lu-prose a:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* An actual code token (a cookie flag), not a decorative label. */
+.lu-root .lu-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+  padding: 0.12em 0.4em;
+  border-radius: 5px;
+  border: 1px solid var(--lu-line-2);
+  background: rgba(99, 102, 241, 0.12);
+  color: #c7d2fe;
+}
+
+/* Legal text is cited by section number, so the number is information. */
+.lu-root .lu-prose {
+  counter-reset: lu-section;
+}
+.lu-root .lu-prose h2::before {
+  counter-increment: lu-section;
+  content: counter(lu-section) '. ';
+  color: var(--lu-indigo-lite);
+}
+
+/* ---- On-this-page rail ---- */
+.lu-root .lu-toc a {
+  display: block;
+  text-decoration: none;
+  padding: 6px 0 6px 12px;
+  border-left: 2px solid var(--lu-line-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--lu-mute);
+  transition:
+    color var(--lu-quick) var(--lu-ease),
+    border-color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-toc a:hover {
+  color: var(--lu-cloud);
+  border-left-color: #2b3a5c;
+}
+.lu-root .lu-toc a[aria-current='true'] {
+  color: #fff;
+}
+/* The marker travels along the 2px track the links' left borders draw. */
+.lu-root .lu-toc ol {
+  position: relative;
+}
+.lu-root .lu-toc__marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--lu-indigo);
+  pointer-events: none;
+}
+.lu-root .lu-toc__marker[data-live] {
+  transition:
+    transform var(--lu-move) var(--lu-ease-inout),
+    height var(--lu-move) var(--lu-ease-inout);
+}
+/* A heading's flash stays behind the text, not across its top padding. */
+.lu-root .lu-prose h2.lu-flash {
+  background-clip: content-box;
+}
+.lu-root .lu-toc a:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 2px;
+}
+
+/* Draft notice */
+.lu-root .lu-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  background: rgba(251, 191, 36, 0.08);
+  padding: 13px 15px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lu-flag);
+}
+
+/* ---- Startup status ----
+   One mapping, used everywhere a qualification status appears. Pending and
+   waitlisted used to be yellow/orange on one component and yellow/purple on
+   another. Palette tokens only. */
+.lu-root .lu-status {
+  --st: var(--lu-mute);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--st) 32%, transparent);
+  background: color-mix(in srgb, var(--st) 10%, transparent);
+  padding: 3px 10px 3px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--st);
+  white-space: nowrap;
+}
+.lu-root .lu-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--st);
+}
+/* Any element can carry data-status: badges, the pipeline bar segments and the
+   legend all read the same --st, so the colours cannot drift apart again. */
+.lu-root [data-status='pending'] {
+  --st: var(--lu-flag);
+}
+.lu-root [data-status='waitlisted'] {
+  --st: var(--lu-mute);
+}
+.lu-root [data-status='qualified'] {
+  --st: var(--lu-indigo-lite);
+}
+.lu-root [data-status='completed'] {
+  --st: var(--lu-ok);
+}
+
+.lu-root .lu-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lu-root .lu-legend::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--st);
+}
+.lu-root .lu-legend b {
+  font-weight: 600;
+  color: var(--lu-cloud);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================= Motion building blocks ================= */
+
+/* Arriving data. Counters and fills start empty and animate when first seen
+   (the `arrive` action sets data-ready). html.js is set by an inline script in
+   app.html before first paint, so the start state never flashes the final
+   value first, and without JavaScript the real values simply show. */
+html.js:not([data-motion='reduce']) .lu-count:not([data-ready]) {
+  visibility: hidden;
+}
+html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
+  width: 0 !important;
+}
+.lu-fill {
+  transition: width var(--lu-settle) var(--lu-ease);
+}
+
+/* Loading -> content: content fades up 4px instead of snapping in. */
+@keyframes lu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.lu-enter {
+  animation: lu-enter var(--lu-move) var(--lu-ease) both;
+}
+
+/* Something just changed here: a brief indigo wash that fades out. */
+@keyframes lu-flash {
+  from {
+    background-color: rgba(99, 102, 241, 0.24);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.lu-flash {
+  border-radius: 6px;
+  animation: lu-flash calc(var(--lu-settle) * 2) var(--lu-ease) both;
+}
+
+/* Drawn tick for save/done confirmations. */
+@keyframes lu-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.lu-tick path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: lu-draw var(--lu-move) var(--lu-ease) 80ms forwards;
+}
+
+/* Submit button: idle, busy and done labels share one grid cell, so the
+   button is always as wide as its widest label and never jumps mid-action. */
+.lu-root .lu-btn.lu-submit {
+  display: inline-grid;
+  place-items: center;
+}
+.lu-root .lu-submit__layer {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition:
+    opacity var(--lu-move) var(--lu-ease),
+    transform var(--lu-move) var(--lu-ease);
+}
+.lu-root .lu-submit__layer:not([data-active]) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Segmented control with a sliding indicator (tabs, filters). Until it has
+   measured itself, the active button paints its own fill, so there is never
+   a moment with no visible selection. */
+.lu-root .lu-seg {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--lu-line-2);
+  background: var(--lu-navy-2);
+  padding: 4px;
+}
+.lu-root .lu-seg__ind {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 999px;
+  background: var(--lu-indigo-deep);
+  transition:
+    transform var(--lu-move) var(--lu-ease-inout),
+    width var(--lu-move) var(--lu-ease-inout),
+    height var(--lu-move) var(--lu-ease-inout);
+}
+.lu-root .lu-seg__btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lu-mute);
+  transition: color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-seg__btn:hover {
+  color: var(--lu-cloud);
+}
+.lu-root .lu-seg__btn[aria-selected='true'] {
+  color: #fff;
+}
+.lu-root .lu-seg:not(.lu-seg--live) .lu-seg__btn[aria-selected='true'] {
+  background: var(--lu-indigo-deep);
+}
+.lu-root .lu-seg__btn:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 2px;
+}
+.lu-root .lu-seg__count {
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 12px;
+  background: var(--lu-line);
+  color: var(--lu-mute);
+  transition:
+    background-color var(--lu-quick) var(--lu-ease),
+    color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-seg__btn[aria-selected='true'] .lu-seg__count {
+  background: var(--lu-indigo-dark);
+  color: #fff;
+}
+
+/* Clickable rows: an indigo edge grows in from the centre on hover/focus. */
+.lu-root .lu-row {
+  position: relative;
+}
+.lu-root .lu-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--lu-indigo);
+  transform: scaleY(0);
+  transition: transform var(--lu-move) var(--lu-ease);
+}
+.lu-root .lu-row:hover::before,
+.lu-root .lu-row:focus-visible::before {
+  transform: scaleY(1);
+}
+
+/* Transient "Saved" confirmation. */
+.lu-root .lu-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lu-ok);
+}

@@ -7,7 +7,10 @@
   import { type VariantProps, tv } from 'tailwind-variants';
 
   export const buttonVariants = tv({
-    base: 'focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+    // active:translate-y-px gives every shadcn button on pages not yet
+    // redesigned the same press as .lu-btn; transition-all takes the motion
+    // scale's DEFAULT (quick) from tailwind.config.ts.
+    base: 'focus-visible:ring-ring inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all active:translate-y-px focus-visible:outline-none focus-visible:ring-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
     variants: {
       variant: {
         default:
@@ -20,8 +23,7 @@
           'bg-secondary text-secondary-foreground hover:bg-secondary/80 shadow-sm',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
-        glass:
-          'glass text-foreground hover:bg-white/10 dark:hover:bg-white/5',
+        glass: 'glass text-foreground hover:bg-white/10 dark:hover:bg-white/5',
         'glass-primary':
           'bg-primary text-primary-foreground backdrop-blur-xl border border-primary/20 shadow-lg hover:shadow-xl hover:brightness-110'
       },

@@ -1,11 +1,10 @@
 <script lang="ts">
   import { Skeleton } from '$lib/components/ui/skeleton';
-  import Button from '$lib/components/ui/button/button.svelte';
   import {
-    RocketIcon,
-    TargetIcon,
-    CheckCircleIcon,
     Search as SearchIcon,
+    Inbox,
+    SearchX,
+    AlertCircle,
     ArrowLeft,
     ArrowRight
   } from 'lucide-svelte';
@@ -23,6 +22,9 @@
   import { toast } from 'svelte-sonner';
   import axiosInstance from '$lib/axios';
   import { onMount } from 'svelte';
+  import { flip } from 'svelte/animate';
+  import { fade } from 'svelte/transition';
+  import { CountUp, Segmented, arrive, dur, MOVE } from '$lib/motion';
 
   let { data, form } = $props();
 
@@ -115,23 +117,6 @@
     return base.filter((startup: any) =>
       startup.name.toLowerCase().includes(search.toLowerCase())
     );
-  });
-
-  const perPage = 8;
-  let currentPage = $state(1);
-
-  const totalPages = $derived(
-    Math.max(1, Math.ceil(filteredStartups().length / perPage))
-  );
-  const pageStartups = $derived(
-    filteredStartups().slice((currentPage - 1) * perPage, currentPage * perPage)
-  );
-
-  // A new tab or search can have fewer pages than the one being viewed.
-  $effect(() => {
-    filter;
-    search;
-    currentPage = 1;
   });
 
   // Utility function to get initiatives for a single startup
@@ -239,294 +224,374 @@
   onMount(() => {
     $queryResult.refetch();
   });
+
+  // Summary figures, derived once rather than recomputed inline in markup.
+  const total = $derived(listOfStartups().length);
+  const doneInitiatives = $derived(
+    allInitiatives?.filter((i) => i?.status === 4)?.length || 0
+  );
+  const completionRate = $derived(
+    total > 0 ? Math.round((completedStartups.length / total) * 100) : 0
+  );
+  // Tab counts follow the search box, so each tab says how many results it
+  // would show for what you've typed; they tick as you type.
+  const matching = (list: any[]) =>
+    search
+      ? list.filter((s: any) =>
+          s.name.toLowerCase().includes(search.toLowerCase())
+        ).length
+      : list.length;
+  const filterOptions = $derived([
+    { value: 'All Startups', label: 'All', count: matching(listOfStartups()) },
+    ...(role === 'Startup'
+      ? [
+          {
+            value: 'Pending',
+            label: 'Pending',
+            count: matching(pendingStartups)
+          },
+          {
+            value: 'Waitlisted',
+            label: 'Waitlisted',
+            count: matching(waitlistedStartups)
+          },
+          {
+            value: 'Qualified',
+            label: 'Qualified',
+            count: matching(qualifiedStartups)
+          }
+        ]
+      : role === 'Mentor'
+        ? [
+            {
+              value: 'Qualified',
+              label: 'Active',
+              count: matching(qualifiedStartups)
+            }
+          ]
+        : []),
+    {
+      value: 'Completed',
+      label: 'Completed',
+      count: matching(completedStartups)
+    }
+  ]);
+  // Eight startups a page (upstream 0499f92).
+  const perPage = 8;
+  let currentPage = $state(1);
+  const totalPages = $derived(
+    Math.max(1, Math.ceil(filteredStartups().length / perPage))
+  );
+  const pageStartups = $derived(
+    filteredStartups().slice((currentPage - 1) * perPage, currentPage * perPage)
+  );
+  // A new tab or search can have fewer pages than the one being viewed.
+  $effect(() => {
+    filter;
+    search;
+    currentPage = 1;
+  });
+
+  const pipeline = $derived([
+    { key: 'pending', n: pendingStartups.length },
+    { key: 'waitlisted', n: waitlistedStartups.length },
+    { key: 'qualified', n: qualifiedStartups.length },
+    { key: 'completed', n: completedStartups.length }
+  ]);
 </script>
 
 <svelte:head>
-  <title>LaunchUp - Startups</title>
+  <title>Startups — LaunchUp</title>
 </svelte:head>
 
-<!-- Hero Banner Header -->
-<div class="glass-card mb-8 bg-gradient-to-br from-primary/5 via-transparent to-transparent p-8">
-  <div class="flex items-center justify-between">
+<div class="lu-root bg-transparent pb-12">
+  <!-- Header -->
+  <div class="flex flex-wrap items-end justify-between gap-4 pt-2">
     <div>
-      <h2 class="text-4xl font-black tracking-tight text-foreground">Startups</h2>
-      <p class="mt-1 text-muted-foreground">Manage assigned startups</p>
-    </div>
-    <Can role={['Startup']} userRole={role}>
-      <Button variant="glass-primary" onclick={openApplicationForm} class="gap-2">
-        <RocketIcon class="h-4 w-4" />
-        <span>Apply</span>
-      </Button>
-    </Can>
-  </div>
-</div>
-
-<!-- Statistics Cards -->
-<div class="mb-8 grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-
-  <!-- Total Startups -->
-  <div class="glass-card group flex flex-col p-7 transition-all hover:-translate-y-1">
-    <div class="flex items-center justify-between">
-      <span class="text-sm font-medium text-muted-foreground">Total Startups</span>
-      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-        <RocketIcon class="h-4 w-4 text-primary" />
-      </div>
-    </div>
-
-    <span class="mt-3 text-4xl font-bold leading-none tracking-tight">{listOfStartups().length}</span>
-
-    <div class="mt-5 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-border/50 pt-4">
-      {#if role === 'Startup'}
-        <div class="flex items-center justify-between">
-          <span class="flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="h-2 w-2 rounded-full bg-yellow-500"></span>Pending
-          </span>
-          <span class="text-sm font-semibold">{pendingStartups.length}</span>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="h-2 w-2 rounded-full bg-orange-500"></span>Waitlisted
-          </span>
-          <span class="text-sm font-semibold">{waitlistedStartups.length}</span>
-        </div>
-        <div class="flex items-center justify-between">
-          <span class="flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="h-2 w-2 rounded-full bg-green-500"></span>Qualified
-          </span>
-          <span class="text-sm font-semibold">{qualifiedStartups.length}</span>
-        </div>
-      {:else if role === 'Mentor'}
-        <div class="flex items-center justify-between">
-          <span class="flex items-center gap-2 text-xs text-muted-foreground">
-            <span class="h-2 w-2 rounded-full bg-blue-500"></span>Active
-          </span>
-          <span class="text-sm font-semibold">{qualifiedStartups.length}</span>
-        </div>
-      {/if}
-      <div class="flex items-center justify-between">
-        <span class="flex items-center gap-2 text-xs text-muted-foreground">
-          <span class="h-2 w-2 rounded-full bg-purple-500"></span>Completed
-        </span>
-        <span class="text-sm font-semibold">{completedStartups.length}</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- Initiatives Progress -->
-  <div class="glass-card group flex flex-col p-7 transition-all hover:-translate-y-1">
-    <div class="flex items-center justify-between">
-      <span class="text-sm font-medium text-muted-foreground">Initiatives Progress</span>
-      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-        <TargetIcon class="h-4 w-4 text-primary" />
-      </div>
-    </div>
-
-    <div class="mt-3 flex items-baseline gap-1.5">
-      <span class="text-4xl font-bold leading-none tracking-tight">
-        {allInitiatives?.filter((initiative) => initiative?.status === 4)?.length || 0}
-      </span>
-      <span class="text-lg text-muted-foreground">/ {allInitiatives?.length ?? 0}</span>
-    </div>
-
-    <div class="mt-5 border-t border-border/50 pt-4">
-      <div class="mb-2 flex items-center justify-between">
-        <span class="text-xs text-muted-foreground">Completion</span>
-        <span class="text-sm font-semibold text-primary">{completedInitiativesPercentage.toFixed(0)}%</span>
-      </div>
-      <div class="h-3 w-full rounded-full bg-muted overflow-hidden">
-        <div
-          class="h-full rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500 ease-out shadow-sm"
-          style="width:{completedInitiativesPercentage.toFixed(0)}%"
-        ></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Completion Rate -->
-  <div class="glass-card group flex flex-col p-7 transition-all hover:-translate-y-1">
-    <div class="flex items-center justify-between">
-      <span class="text-sm font-medium text-muted-foreground">Completion Rate</span>
-      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10">
-        <CheckCircleIcon class="h-4 w-4 text-primary" />
-      </div>
-    </div>
-
-    <span class="mt-3 text-4xl font-bold leading-none tracking-tight">
-      {listOfStartups().length > 0
-        ? Math.round((completedStartups.length / listOfStartups().length) * 100)
-        : 0}%
-    </span>
-
-    <div class="mt-5 border-t border-border/50 pt-4">
-      <div class="mb-2 flex items-center justify-between">
-        <span class="text-xs text-muted-foreground">Completed</span>
-        <span class="text-sm font-semibold">
-          <span class="text-foreground">{completedStartups.length}</span>
-          <span class="text-muted-foreground"> of {listOfStartups().length}</span>
-        </span>
-      </div>
-      <div class="flex h-3 w-full gap-0.5 overflow-hidden rounded-full bg-muted">
-        <div
-          class="h-full rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500 ease-out"
-          style="width:{listOfStartups().length > 0 ? Math.round((completedStartups.length / listOfStartups().length) * 100) : 0}%"
-        ></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- Search + Underline Tab Navigation -->
-<div class="mb-5 flex flex-wrap items-start justify-between gap-4">
-  <div class="flex gap-6 border-b border-border/50 pt-3">
-    <button
-      onclick={() => (filter = 'All Startups')}
-      class={`pb-3 text-sm font-semibold transition-colors ${
-        filter === 'All Startups'
-          ? 'border-b-2 border-primary text-foreground'
-          : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      All Startups
-    </button>
-
-    {#if role === 'Startup'}
-      <button
-        onclick={() => (filter = 'Pending')}
-        class={`pb-3 text-sm font-semibold transition-colors ${
-          filter === 'Pending'
-            ? 'border-b-2 border-primary text-foreground'
-            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        Pending
-      </button>
-      <button
-        onclick={() => (filter = 'Waitlisted')}
-        class={`pb-3 text-sm font-semibold transition-colors ${
-          filter === 'Waitlisted'
-            ? 'border-b-2 border-primary text-foreground'
-            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        Waitlisted
-      </button>
-      <button
-        onclick={() => (filter = 'Qualified')}
-        class={`pb-3 text-sm font-semibold transition-colors ${
-          filter === 'Qualified'
-            ? 'border-b-2 border-primary text-foreground'
-            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        Qualified
-      </button>
-    {:else if role === 'Mentor'}
-      <button
-        onclick={() => (filter = 'Qualified')}
-        class={`pb-3 text-sm font-semibold transition-colors ${
-          filter === 'Qualified'
-            ? 'border-b-2 border-primary text-foreground'
-            : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        Active
-      </button>
-    {/if}
-
-    <button
-      onclick={() => (filter = 'Completed')}
-      class={`pb-3 text-sm font-semibold transition-colors ${
-        filter === 'Completed'
-          ? 'border-b-2 border-primary text-foreground'
-          : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
-      }`}
-    >
-      Completed
-    </button>
-  </div>
-
-  <div class="relative w-full max-w-[400px]">
-    <SearchIcon class="pointer-events-none absolute left-4 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-    <input
-      class="glass-input w-full py-3 pl-11 pr-4 text-sm placeholder:text-muted-foreground"
-      type="text"
-      placeholder="Search startups..."
-      bind:value={search}
-    />
-  </div>
-</div>
-
-<!-- Startup Cards Grid -->
-{#if isLoading}
-  <div class="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-10">
-    {#each Array(8) as _}
-      <div class="glass-card animate-pulse p-5 space-y-3">
-        <div class="h-4 w-3/4 rounded-full bg-muted"></div>
-        <div class="space-y-2">
-          <div class="h-3 w-full rounded-full bg-muted"></div>
-          <div class="h-3 w-5/6 rounded-full bg-muted"></div>
-        </div>
-      </div>
-    {/each}
-  </div>
-{:else if isError}
-  <div class="glass-card flex flex-col items-center justify-center p-12 text-center">
-    <p class="text-lg font-semibold text-foreground">Failed to load startups</p>
-    <p class="mt-2 text-sm text-muted-foreground">Please try again or contact support.</p>
-  </div>
-{:else if hasStartups}
-  <div class="mt-3 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 {totalPages > 1 ? 'pb-6' : 'pb-10'}">
-    {#each pageStartups as startup}
-      <StartupCard
-        {startup}
-        {role}
-        initiatives={allInitiatives.filter(
-          (initiative) => initiative.startup === startup.id
-        )}
-      />
-    {/each}
-  </div>
-  {#if totalPages > 1}
-    <div class="flex items-center justify-between pb-10">
-      <p class="text-xs text-muted-foreground">
-        Showing <span class="font-medium text-foreground">{(currentPage - 1) * perPage + 1}</span>
-        to <span class="font-medium text-foreground">{Math.min(currentPage * perPage, filteredStartups().length)}</span>
-        of <span class="font-medium text-foreground">{filteredStartups().length}</span> startups
+      <h1 class="lu-d-xw text-[27px] leading-[1.15] text-white sm:text-[30px]">
+        Startups
+      </h1>
+      <p class="mt-2 text-[15px] text-[#94a3b8]">
+        {role === 'Startup'
+          ? 'Your applications and where each one stands.'
+          : role === 'Mentor'
+            ? 'The startups you are mentoring.'
+            : 'Every startup in the programme, by stage.'}
       </p>
-      <div class="flex items-center gap-2">
-        <Button variant="outline" size="sm" class="h-8 w-8 p-0" aria-label="Previous page" disabled={currentPage <= 1} onclick={() => currentPage--}>
-          <ArrowLeft class="h-4 w-4" />
-        </Button>
-        <div class="rounded-md border border-border/50 bg-background px-2 py-1 text-xs font-medium">
-          Page {currentPage} of {totalPages}
-        </div>
-        <Button variant="outline" size="sm" class="h-8 w-8 p-0" aria-label="Next page" disabled={currentPage >= totalPages} onclick={() => currentPage++}>
-          <ArrowRight class="h-4 w-4" />
-        </Button>
-      </div>
     </div>
-  {/if}
-{:else}
-  <div class="mt-20 text-center">
-    <div class="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-primary/10">
-      <RocketIcon class="h-12 w-12 text-primary/50" />
-    </div>
-    <h3 class="mb-2 text-2xl font-bold text-foreground">No startups found</h3>
-    <p class="mb-6 text-muted-foreground">
-      {search ? 'Try adjusting your search criteria' : 'Get started by adding your first startup'}
-    </p>
     <Can role={['Startup']} userRole={role}>
-      <Button
-        variant="glass-primary"
-        class="gap-2"
+      <button
+        type="button"
+        class="lu-btn lu-btn-primary"
         onclick={openApplicationForm}
       >
-        <RocketIcon class="h-4 w-4" /> Apply Now
-      </Button>
+        Apply with a startup
+      </button>
     </Can>
   </div>
-{/if}
+
+  <!-- Summary: one surface split by hairlines, not three identical icon cards -->
+  <section
+    class="mt-8 grid overflow-hidden rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] md:grid-cols-[1.5fr_1fr_1fr] md:divide-x md:divide-[#17213a]"
+    aria-label="Summary"
+  >
+    <!-- Pipeline: the page's one distinctive element, and the status legend -->
+    <div class="p-6">
+      <p class="text-[13px] text-[#94a3b8]">
+        {role === 'Mentor' ? 'Startups mentored' : 'Startups'}
+      </p>
+      <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
+        <CountUp value={total} />
+      </p>
+
+      {#if total > 0}
+        <div
+          class="mt-5 flex h-2 w-full gap-[3px] overflow-hidden rounded-full"
+          role="img"
+          aria-label="Pipeline: {pendingStartups.length} pending, {waitlistedStartups.length} waitlisted, {qualifiedStartups.length} {role ===
+          'Mentor'
+            ? 'active'
+            : 'qualified'}, {completedStartups.length} completed"
+        >
+          {#each pipeline as seg, i (seg.key)}
+            {#if seg.n > 0}
+              <span
+                class="lu-fill h-full"
+                data-status={seg.key}
+                style="width:{(seg.n / total) *
+                  100}%; background: var(--st); transition-delay:{i * 80}ms"
+                use:arrive
+              ></span>
+            {/if}
+          {/each}
+        </div>
+        <ul
+          class="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-[#94a3b8]"
+        >
+          {#if role === 'Startup'}
+            <li class="lu-legend" data-status="pending">
+              Pending <b>{pendingStartups.length}</b>
+            </li>
+            <li class="lu-legend" data-status="waitlisted">
+              Waitlisted <b>{waitlistedStartups.length}</b>
+            </li>
+          {/if}
+          <li class="lu-legend" data-status="qualified">
+            {role === 'Mentor' ? 'Active' : 'Qualified'}
+            <b>{qualifiedStartups.length}</b>
+          </li>
+          <li class="lu-legend" data-status="completed">
+            Completed <b>{completedStartups.length}</b>
+          </li>
+        </ul>
+      {/if}
+    </div>
+
+    <div class="border-t border-[#17213a] p-6 md:border-t-0">
+      <p class="text-[13px] text-[#94a3b8]">Initiatives completed</p>
+      <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
+        <CountUp value={doneInitiatives} /><span
+          class="text-[18px] text-[#94a3b8]"
+        >
+          / {allInitiatives?.length ?? 0}</span
+        >
+      </p>
+      <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-[#17213a]">
+        <div
+          class="lu-fill h-full rounded-full bg-[#6366f1]"
+          style="width:{completedInitiativesPercentage.toFixed(0)}%"
+          use:arrive
+        ></div>
+      </div>
+      <p class="lu-num mt-3.5 text-[12.5px] text-[#94a3b8]">
+        {completedInitiativesPercentage.toFixed(0)}% across all startups
+      </p>
+    </div>
+
+    <div class="border-t border-[#17213a] p-6 md:border-t-0">
+      <p class="text-[13px] text-[#94a3b8]">Programme completion</p>
+      <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
+        <CountUp value={completionRate} suffix="%" />
+      </p>
+      <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-[#17213a]">
+        <div
+          class="lu-fill h-full rounded-full"
+          style="width:{completionRate}%; background: var(--lu-ok); transition-delay:80ms"
+          use:arrive
+        ></div>
+      </div>
+      <p class="lu-num mt-3.5 text-[12.5px] text-[#94a3b8]">
+        {completedStartups.length} of {total} completed
+      </p>
+    </div>
+  </section>
+
+  <!-- Controls -->
+  <div class="mt-8 flex flex-wrap items-center justify-between gap-4">
+    <Segmented
+      options={filterOptions}
+      bind:value={filter}
+      label="Filter by status"
+    />
+
+    <div class="relative w-full sm:w-[20rem]">
+      <SearchIcon
+        class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#54648a]"
+      />
+      <input
+        class="lu-input pl-10"
+        type="search"
+        placeholder="Search by name"
+        aria-label="Search startups by name"
+        bind:value={search}
+      />
+    </div>
+  </div>
+
+  <!-- List -->
+  <section
+    class="mt-4 overflow-hidden rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220]"
+    aria-label="Startups"
+    aria-busy={isLoading}
+  >
+    <!-- Column labels, aligned to the row grid in startup-card.svelte -->
+    <div
+      class="hidden gap-x-5 border-b border-[#17213a] px-5 py-3 text-[12.5px] font-medium text-[#94a3b8] sm:grid sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]"
+    >
+      <span>Startup</span>
+      <span>Status</span>
+      <span>Progress</span>
+      <span class="hidden lg:block">Next step</span>
+      <span></span>
+    </div>
+
+    {#if isLoading}
+      <ul class="divide-y divide-[#17213a]">
+        {#each [0, 1, 2, 3, 4] as i (i)}
+          <li class="flex animate-pulse items-center gap-3.5 px-5 py-4">
+            <span class="h-10 w-10 shrink-0 rounded-[0.75rem] bg-[#17213a]"
+            ></span>
+            <span class="flex-1 space-y-2">
+              <span class="block h-3.5 w-40 rounded bg-[#17213a]"></span>
+              <span class="block h-3 w-24 rounded bg-[#17213a]"></span>
+            </span>
+            <span class="hidden h-6 w-24 rounded-full bg-[#17213a] sm:block"
+            ></span>
+          </li>
+        {/each}
+      </ul>
+    {:else if isError}
+      <div class="p-5">
+        <p class="lu-alert" role="alert">
+          <AlertCircle class="mt-0.5 h-4 w-4 flex-none" />
+          <span
+            >Startups could not be loaded. Refresh the page to try again.</span
+          >
+        </p>
+      </div>
+    {:else if !hasStartups}
+      <div class="flex flex-col items-center px-6 py-16 text-center">
+        <Inbox class="h-6 w-6 text-[#54648a]" />
+        <p class="lu-d-md mt-3 text-[16px] text-white">
+          {role === 'Startup'
+            ? 'No applications yet'
+            : 'No startups assigned yet'}
+        </p>
+        <p class="mt-1.5 max-w-[40ch] text-[14px] leading-[1.6] text-[#94a3b8]">
+          {role === 'Startup'
+            ? 'Apply with a startup and it will appear here with its status and readiness progress.'
+            : 'Startups will appear here once they are assigned to you.'}
+        </p>
+        <Can role={['Startup']} userRole={role}>
+          <button
+            type="button"
+            class="lu-btn lu-btn-primary mt-6"
+            onclick={openApplicationForm}
+          >
+            Apply with a startup
+          </button>
+        </Can>
+      </div>
+    {:else if filteredStartups().length === 0}
+      <!-- Previously a blank grid: the "adjust your search" copy lived in the
+           no-startups branch, where no search could have applied. -->
+      <div class="flex flex-col items-center px-6 py-16 text-center">
+        <SearchX class="h-6 w-6 text-[#54648a]" />
+        <p class="lu-d-md mt-3 text-[16px] text-white">No matches</p>
+        <p class="mt-1.5 max-w-[40ch] text-[14px] leading-[1.6] text-[#94a3b8]">
+          {search
+            ? `Nothing matches "${search}" in this view.`
+            : 'No startups have this status yet.'}
+        </p>
+        <button
+          type="button"
+          class="lu-btn lu-btn-secondary lu-btn-sm mt-6"
+          onclick={() => {
+            search = '';
+            filter = 'All Startups';
+          }}
+        >
+          Clear filters
+        </button>
+      </div>
+    {:else}
+      <ul class="lu-enter divide-y divide-[#17213a]">
+        {#each pageStartups as startup (startup.id)}
+          <li
+            animate:flip={{ duration: dur(MOVE) }}
+            in:fade={{ duration: dur(MOVE) }}
+          >
+            <StartupCard
+              {startup}
+              {role}
+              initiatives={allInitiatives.filter(
+                (i) => i.startup === startup.id
+              )}
+            />
+          </li>
+        {/each}
+      </ul>
+
+      {#if totalPages > 1}
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 border-t border-[#17213a] px-5 py-3.5"
+        >
+          <p class="lu-num text-[13px] text-[#94a3b8]">
+            Showing <span class="text-[#f1f5f9]"
+              >{(currentPage - 1) * perPage + 1}</span
+            >–<span class="text-[#f1f5f9]"
+              >{Math.min(currentPage * perPage, filteredStartups().length)}</span
+            >
+            of <span class="text-[#f1f5f9]">{filteredStartups().length}</span>
+          </p>
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="lu-btn lu-btn-secondary lu-btn-sm !px-0 w-[38px]"
+              aria-label="Previous page"
+              disabled={currentPage <= 1}
+              onclick={() => currentPage--}
+            >
+              <ArrowLeft class="h-4 w-4" />
+            </button>
+            <span class="lu-num min-w-[6.5rem] text-center text-[13px] text-[#94a3b8]">
+              Page <span class="text-white">{currentPage}</span> of {totalPages}
+            </span>
+            <button
+              type="button"
+              class="lu-btn lu-btn-secondary lu-btn-sm !px-0 w-[38px]"
+              aria-label="Next page"
+              disabled={currentPage >= totalPages}
+              onclick={() => currentPage++}
+            >
+              <ArrowRight class="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      {/if}
+    {/if}
+  </section>
+</div>
 
 <Dialog.Root
   controlledOpen

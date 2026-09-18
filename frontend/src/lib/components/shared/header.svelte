@@ -1,21 +1,20 @@
 <script lang="ts">
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-  import { Badge } from '$lib/components/ui/badge';
   import { access } from '$lib/access';
   import { page } from '$app/state';
-  import { Separator } from '$lib/components/ui/separator';
   import { crossfade } from 'svelte/transition';
   import { cubicInOut } from 'svelte/easing';
   import { onMount, onDestroy } from 'svelte';
-  import { getProfileColor } from '$lib/utils';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { Rocket, Menu, X } from 'lucide-svelte';
+  import { MOVE } from '$lib/motion';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
 
   const { user, startup, scrollContainer } = $props();
 
-  // One flag per menu: a shared flag opens both, and the hidden one keeps the page locked.
+  // One flag per menu: a shared flag opens both, and the hidden one keeps the
+  // page locked (upstream 59a5781).
   let desktopDropdownOpen = $state(false);
   let mobileDropdownOpen = $state(false);
   let mobileMenuOpen = $state(false);
@@ -50,7 +49,7 @@
   );
 
   const [send, receive] = crossfade({
-    duration: 250,
+    duration: MOVE,
     easing: cubicInOut
   });
 
@@ -84,7 +83,8 @@
     }
   });
 
-  // Pending and waitlisted startups have nothing to assess yet, only their overview.
+  // Pending and waitlisted startups have nothing to assess yet, only their
+  // overview (upstream 139026c).
   const isUnqualifiedStartup = $derived(
     page.data.qualificationStatus === QualificationStatus.PENDING ||
       page.data.qualificationStatus === QualificationStatus.WAITLISTED
@@ -92,13 +92,18 @@
 
   function getNavLinks() {
     if (module !== subModule && module !== 'account' && module !== 'admin') {
-      return (modules.filter((item) => item.link === module)[0]?.subModule ?? [])
-        .filter((item: { link: string }) => !isUnqualifiedStartup || item.link === 'overview')
+      return (
+        modules.filter((item) => item.link === module)[0]?.subModule ?? []
+      )
+        .filter(
+          (item: { link: string }) =>
+            !isUnqualifiedStartup || item.link === 'overview'
+        )
         .map((item) => ({
-          name: item.name,
-          href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
-          isActive: currentModule === item.link || currentModulev2 === item.link
-        }));
+        name: item.name,
+        href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
+        isActive: currentModule === item.link || currentModulev2 === item.link
+      }));
     }
     return modules.map((item) => ({
       name: item.name,
@@ -110,18 +115,26 @@
   const navLinks = $derived(getNavLinks());
 </script>
 
+<!-- Matches the landing header: navy at 85% with blur, hairline rule. The
+     blur is functional here, since page content scrolls beneath it. -->
 <header
-  class="fixed left-0 right-0 top-0 z-40 border-b transition-all duration-300 {isBlurred ? 'glass-strong' : 'glass-subtle'}"
+  class="lu-root fixed left-0 right-0 top-0 z-40 border-b backdrop-blur-lg transition-colors duration-move {isBlurred
+    ? 'border-[#1f2c47]'
+    : 'border-[#17213a]/70'}"
+  style="background: rgba(7, 17, 31, 0.85)"
 >
-  <nav class="mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
-    <div class="flex flex-1 items-center gap-2">
+  <nav
+    class="mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8"
+  >
+    <div class="flex flex-1 items-center">
       <a
         data-sveltekit-preload-data="tap"
         href={`/${modules[0]?.link ?? ''}`}
-        class="flex items-center gap-2 text-xl font-black normal-case text-primary"
+        class="flex items-center gap-2"
       >
-        <Rocket class="h-5 w-5" />
-        <span class="hidden sm:inline">LaunchUp</span>
+        <Rocket class="h-4 w-4 -rotate-12 text-[#6366f1]" />
+        <span class="lu-d-xw hidden text-xl text-white sm:inline">LaunchUp</span
+        >
       </a>
     </div>
 
@@ -132,12 +145,14 @@
             <a
               data-sveltekit-preload-data="tap"
               href={link.href}
-              class="relative flex h-16 items-center px-3 text-sm font-medium transition-colors hover:text-primary {link.isActive ? 'text-primary' : 'text-muted-foreground'}"
+              class="relative flex h-16 items-center px-3 text-[14px] font-medium transition-colors hover:text-[#f1f5f9] {link.isActive
+                ? 'text-white'
+                : 'text-[#94a3b8]'}"
             >
               {link.name}
               {#if link.isActive}
                 <div
-                  class="absolute bottom-0 h-[2px] w-full rounded-full bg-primary"
+                  class="absolute bottom-0 left-3 right-3 h-[2px] rounded-full bg-[#6366f1]"
                   in:send={{ key: 'active-sidebar-tab' }}
                   out:receive={{ key: 'active-sidebar-tab' }}
                 ></div>
@@ -146,90 +161,25 @@
           </li>
         {/each}
       </ul>
-      <Separator orientation="vertical" class="h-6" />
-      <Badge variant="glass" class="h-7 rounded-full text-xs font-normal">
+      <span class="h-6 w-px bg-[#1f2c47]" aria-hidden="true"></span>
+      <span
+        class="rounded-full border border-[#1f2c47] bg-[#0b1220] px-2.5 py-1 text-[12px] font-medium text-[#94a3b8]"
+      >
         {user?.role ?? 'Anonymous'}
-      </Badge>
-      <DropdownMenu.Root bind:open={desktopDropdownOpen}>
-        <DropdownMenu.Trigger>
-          <div
-            class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white transition-transform hover:scale-105 {getProfileColor(user.firstName)}"
-          >
-            {user.firstName.charAt(0)}
-          </div>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content align="end" class="glass-card w-56">
-          <DropdownMenu.Group>
-            <DropdownMenu.Label>
-              <p class="font-medium">My Account</p>
-              <p class="text-xs text-muted-foreground">{user?.email}</p>
-            </DropdownMenu.Label>
-            <DropdownMenu.Separator />
-            {#each modules as module}
-              <DropdownMenu.Item
-                class="cursor-pointer rounded-lg"
-                onclick={() =>
-                  navigateTo(
-                    `/${module.link}${module.subModule.length > 0 && module.name !== 'Startups' ? `/${module.subModule[0].link}` : ''}`
-                  )}
-              >
-                {module.name}
-              </DropdownMenu.Item>
-            {/each}
-            <form action="/logout" method="post" class="w-full">
-              <button type="submit" class="w-full">
-                <DropdownMenu.Item class="cursor-pointer rounded-lg">
-                  Logout
-                </DropdownMenu.Item>
-              </button>
-            </form>
-          </DropdownMenu.Group>
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+      </span>
+      {@render account('desktop')}
     </div>
 
     <div class="flex items-center gap-2 md:hidden">
-      <Badge variant="glass" class="h-7 rounded-full text-xs font-normal">
+      <span
+        class="rounded-full border border-[#1f2c47] bg-[#0b1220] px-2.5 py-1 text-[12px] font-medium text-[#94a3b8]"
+      >
         {user?.role ?? 'Anonymous'}
-      </Badge>
-      <DropdownMenu.Root bind:open={mobileDropdownOpen}>
-        <DropdownMenu.Trigger>
-          <div
-            class="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-white {getProfileColor(user.firstName)}"
-          >
-            {user.firstName.charAt(0)}
-          </div>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content align="end" class="glass-card w-56">
-          <DropdownMenu.Group>
-            <DropdownMenu.Label>
-              <p class="font-medium">My Account</p>
-              <p class="text-xs text-muted-foreground">{user?.email}</p>
-            </DropdownMenu.Label>
-            <DropdownMenu.Separator />
-            {#each modules as mod}
-              <DropdownMenu.Item
-                class="cursor-pointer rounded-lg"
-                onclick={() =>
-                  navigateTo(
-                    `/${mod.link}${mod.subModule.length > 0 && mod.name !== 'Startups' ? `/${mod.subModule[0].link}` : ''}`
-                  )}
-              >
-                {mod.name}
-              </DropdownMenu.Item>
-            {/each}
-            <form action="/logout" method="post" class="w-full">
-              <button type="submit" class="w-full">
-                <DropdownMenu.Item class="cursor-pointer rounded-lg">
-                  Logout
-                </DropdownMenu.Item>
-              </button>
-            </form>
-          </DropdownMenu.Group>
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+      </span>
+      {@render account('mobile')}
       <button
-        class="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        class="flex h-10 w-10 items-center justify-center rounded-full text-[#94a3b8] transition-colors hover:bg-[#0b1220] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
+        aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
         onclick={() => (mobileMenuOpen = !mobileMenuOpen)}
       >
         {#if mobileMenuOpen}
@@ -242,14 +192,16 @@
   </nav>
 
   {#if mobileMenuOpen}
-    <div class="glass-strong border-t px-4 py-3 md:hidden">
+    <div class="border-t border-[#17213a] px-4 py-3 md:hidden">
       <ul class="flex flex-col gap-1">
         {#each navLinks as link}
           <li>
             <a
               data-sveltekit-preload-data="tap"
               href={link.href}
-              class="flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors {link.isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+              class="flex items-center rounded-[10px] px-3 py-2.5 text-[14px] font-medium transition-colors {link.isActive
+                ? 'bg-[#4f46e5]/15 text-white'
+                : 'text-[#94a3b8] hover:bg-[#0b1220] hover:text-white'}"
               onclick={() => (mobileMenuOpen = false)}
             >
               {link.name}
@@ -260,3 +212,55 @@
     </div>
   {/if}
 </header>
+
+<!-- One account menu, rendered in both the desktop and mobile slots. -->
+{#snippet account(which: 'desktop' | 'mobile')}
+  <DropdownMenu.Root
+    bind:open={
+      () => (which === 'desktop' ? desktopDropdownOpen : mobileDropdownOpen),
+      (v) =>
+        which === 'desktop'
+          ? (desktopDropdownOpen = v)
+          : (mobileDropdownOpen = v)
+    }
+  >
+    <DropdownMenu.Trigger
+      class="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
+      aria-label="Account menu"
+    >
+      <div
+        class="flex h-9 w-9 items-center justify-center rounded-full border border-[#4f46e5]/50 bg-[#4f46e5]/20 text-[14px] font-semibold text-white transition-colors hover:bg-[#4f46e5]/30"
+      >
+        {user.firstName.charAt(0)}
+      </div>
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Content align="end" class="w-56">
+      <DropdownMenu.Group>
+        <DropdownMenu.Label>
+          <p class="font-medium">{user.firstName} {user.lastName ?? ''}</p>
+          <p class="text-xs text-muted-foreground">{user?.email}</p>
+        </DropdownMenu.Label>
+        <DropdownMenu.Separator />
+        {#each modules as mod}
+          <DropdownMenu.Item
+            class="cursor-pointer rounded-md"
+            onclick={() =>
+              navigateTo(
+                `/${mod.link}${mod.subModule.length > 0 && mod.name !== 'Startups' ? `/${mod.subModule[0].link}` : ''}`
+              )}
+          >
+            {mod.name}
+          </DropdownMenu.Item>
+        {/each}
+        <DropdownMenu.Separator />
+        <form action="/logout" method="post" class="w-full">
+          <button type="submit" class="w-full">
+            <DropdownMenu.Item class="cursor-pointer rounded-md"
+              >Log out</DropdownMenu.Item
+            >
+          </button>
+        </form>
+      </DropdownMenu.Group>
+    </DropdownMenu.Content>
+  </DropdownMenu.Root>
+{/snippet}

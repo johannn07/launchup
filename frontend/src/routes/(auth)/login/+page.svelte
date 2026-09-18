@@ -1,176 +1,112 @@
 <script lang="ts">
   import type { PageData } from './$types';
-  import { Button } from '$lib/components/ui/button/index.js';
-  import { Input } from '$lib/components/ui/input/index.js';
-  import { Label } from '$lib/components/ui/label/index.js';
   import { superForm } from 'sveltekit-superforms';
-  import { toast } from 'svelte-sonner';
-  import { Loader, Sun, Moon, Rocket, ArrowLeft, Eye, EyeOff } from 'lucide-svelte';
+  import { Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+  import { slide } from 'svelte/transition';
+  import { SubmitButton, dur, MOVE } from '$lib/motion';
+  import AuthShell from '../AuthShell.svelte';
 
   let { data }: { data: PageData } = $props();
 
   const { form, errors, enhance, submitting } = superForm(data.form);
 
-  let dark = $state(false);
   let showPassword = $state(false);
 
-  function toggleTheme() {
-    dark = !dark;
-    document.documentElement.classList.toggle('dark', dark);
-  }
-
-  $effect(() => {
-    dark = document.documentElement.classList.contains('dark');
-  });
-
-  $effect(() => {
-    if ($errors.email && !$submitting) {
-      toast.dismiss();
-      toast.error($errors.email as unknown as string);
-    }
-  });
+  // The server puts both the zod format complaint and the sign-in failures on
+  // `email`. A format complaint belongs under the field; anything else is about
+  // the submission as a whole and belongs in the alert above the form.
+  const emailError = $derived($errors.email?.[0]);
+  const isFormatError = $derived(
+    !!emailError && /invalid email/i.test(emailError)
+  );
+  const fieldError = $derived(isFormatError ? emailError : undefined);
+  const formError = $derived(!isFormatError ? emailError : undefined);
 </script>
 
 <svelte:head>
-  <title>Login</title>
+  <title>Login — LaunchUp</title>
 </svelte:head>
 
-<div class="grid min-h-screen lg:grid-cols-[1.08fr_0.92fr]">
-  <!-- LEFT PANEL -->
-  <div class="relative hidden overflow-hidden bg-slate-50 dark:bg-slate-950 lg:flex lg:flex-col">
-    <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.08),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.06),transparent_30%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,0.28),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.2),transparent_30%)]"></div>
-    <div class="absolute inset-0 bg-[linear-gradient(135deg,rgba(0,0,0,0.02),transparent_40%,rgba(0,0,0,0.01))] dark:bg-[linear-gradient(135deg,rgba(255,255,255,0.08),transparent_40%,rgba(255,255,255,0.03))]"></div>
+<AuthShell
+  title="Sign in to LaunchUp"
+  subtitle="Pick up where you left off with your startup's assessment."
+  switchPrompt="Don't have an account?"
+  switchHref="/register"
+  switchLabel="Create one"
+>
+  <form method="post" use:enhance novalidate class="grid gap-5">
+    {#if formError}
+      <p
+        transition:slide={{ duration: dur(MOVE) }}
+        class="lu-alert"
+        role="alert"
+      >
+        <AlertCircle class="mt-0.5 h-4 w-4 flex-none" />
+        <span>{formError}</span>
+      </p>
+    {/if}
 
-    <!-- Navbar -->
-    <div class="relative z-10 flex items-center justify-between px-10 py-8">
-      <div class="flex items-center gap-3">
-        <Rocket class="h-5 w-5 text-primary" />
-        <a href="/" class="text-xl font-black tracking-tight text-foreground">LaunchUp</a>
-      </div>
-      <div class="flex items-center gap-3">
-        <button
-          onclick={toggleTheme}
-          class="glass flex h-9 w-9 items-center justify-center rounded-full transition-all hover:text-primary"
-          aria-label="Toggle theme"
+    <div>
+      <label class="lu-field" for="email">Email</label>
+      <input
+        class="lu-input"
+        name="email"
+        id="email"
+        type="email"
+        autocomplete="email"
+        placeholder="you@company.com"
+        aria-invalid={fieldError ? 'true' : undefined}
+        aria-describedby={fieldError ? 'email-error' : undefined}
+        bind:value={$form.email}
+      />
+      {#if fieldError}
+        <p
+          transition:slide={{ duration: dur(MOVE) }}
+          class="lu-error"
+          id="email-error"
         >
-          {#if dark}
-            <Sun class="h-4 w-4" />
+          <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
+          <span>{fieldError}</span>
+        </p>
+      {/if}
+    </div>
+
+    <div>
+      <div class="flex items-baseline justify-between gap-3">
+        <label class="lu-field" for="password">Password</label>
+        <a href="/forgot-password" class="lu-link mb-[7px] text-[13px]"
+          >Forgot password?</a
+        >
+      </div>
+      <div class="relative">
+        <input
+          class="lu-input lu-input-pw"
+          name="password"
+          id="password"
+          type={showPassword ? 'text' : 'password'}
+          autocomplete="current-password"
+          bind:value={$form.password}
+        />
+        <button
+          type="button"
+          onclick={() => (showPassword = !showPassword)}
+          class="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#94a3b8] transition-colors hover:text-[#f1f5f9] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+        >
+          {#if showPassword}
+            <EyeOff class="h-4 w-4" />
           {:else}
-            <Moon class="h-4 w-4" />
+            <Eye class="h-4 w-4" />
           {/if}
         </button>
-        <div class="glass rounded-full px-4 py-2 text-sm font-medium text-foreground">
-          Focused access for founders
-        </div>
       </div>
     </div>
 
-    <!-- Content -->
-    <div class="relative z-10 flex flex-1 items-center px-10 pb-32">
-      <div class="max-w-xl space-y-6">
-        
-        <p class="text-sm font-semibold uppercase tracking-[0.3em] text-muted-foreground">Welcome back</p>
-        <h1 class="text-5xl font-black tracking-[-0.05em] text-foreground">
-          Sign in to resume your startup journey.
-        </h1>
-        <p class="text-lg leading-8 text-muted-foreground">
-          Everything here is tuned for speed, clarity, and a cleaner signal when it matters most.
-        </p>
-        <div class="grid gap-4 pt-4 sm:grid-cols-3">
-          <div class="glass rounded-2xl p-4">
-            <p class="text-sm text-muted-foreground">Access</p>
-            <p class="mt-2 text-lg font-semibold text-foreground">Fast login</p>
-          </div>
-          <div class="glass rounded-2xl p-4">
-            <p class="text-sm text-muted-foreground">Signal</p>
-            <p class="mt-2 text-lg font-semibold text-foreground">Clear status</p>
-          </div>
-          <div class="glass rounded-2xl p-4">
-            <p class="text-sm text-muted-foreground">Flow</p>
-            <p class="mt-2 text-lg font-semibold text-foreground">Less friction</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="absolute bottom-10 right-10 w-[24rem]">
-      <img src="loginv2.svg" alt="" class="w-full drop-shadow-[0_30px_60px_rgba(0,0,0,0.28)]" />
-    </div>
-  </div>
-
-  <!-- RIGHT PANEL (untouched) -->
-  <div class="relative flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.08),transparent_36%),linear-gradient(to_bottom,#ffffff,#f7f9ff)] px-6 py-10 dark:bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.12),transparent_36%),linear-gradient(to_bottom,#020617,#050816)]">
-    <div class="absolute left-6 top-6 lg:hidden">
-      <a href="/" class="text-xl font-black tracking-tight">LaunchUp</a>
-    </div>
-    <form
-      method="post"
-      use:enhance
-      class="glass-card relative w-full max-w-md p-8 sm:p-10"
-    >
-      <div class="absolute -inset-0.5 -z-10 rounded-[2.5rem] bg-gradient-to-br from-primary/20 via-transparent to-primary/10 blur-xl"></div>
-      <div class="space-y-3 text-center">
-        <p class="text-sm font-semibold uppercase tracking-[0.28em] text-primary">Login</p>
-        <h1 class="text-3xl font-black tracking-tight text-foreground pb-8 sm:text-4xl">Welcome back</h1>
-       
-      </div>
-      <div class="mt-8 grid gap-5">
-        <div class="grid gap-2.5">
-          <Label for="email">Email</Label>
-          <Input
-            name="email"
-            id="email"
-            type="email"
-            placeholder="m@example.com"
-            required
-            bind:value={$form.email}
-            class="glass-input h-12"
-          />
-        </div>
-        <div class="grid gap-2.5">
-          <Label for="password">Password</Label>
-          <div class="relative">
-            <Input
-              name="password"
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              required
-              bind:value={$form.password}
-              class="glass-input h-12 pr-12"
-            />
-            <button
-              type="button"
-              onclick={() => (showPassword = !showPassword)}
-              class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200"
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-            >
-              {#if showPassword}
-                <EyeOff class="h-4 w-4" />
-              {:else}
-                <Eye class="h-4 w-4" />
-              {/if}
-            </button>
-          </div>
-        </div>
-        {#if $errors.email}
-          <p class="text-sm font-medium text-rose-500">{$errors.email}</p>
-        {/if}
-        <Button
-          type="submit"
-          variant="glass-primary"
-          class="group mt-2 h-12 w-full bg-[#6366f1] text-base text-white hover:bg-[#6366f1]"
-          disabled={$submitting}
-        >
-          {#if $submitting}
-            <Loader class="mr-2 h-5 w-5 animate-spin" />
-          {/if}
-          Sign In
-        </Button>
-      </div>
-      <div class="mt-6 text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?
-        <a href="/register" class="font-semibold text-primary underline-offset-4 hover:underline">Sign up</a>
-      </div>
-    </form>
-  </div>
-</div>
+    <SubmitButton
+      status={$submitting ? 'busy' : 'idle'}
+      label="Sign in"
+      busyLabel="Signing in"
+      class="mt-1 w-full"
+    />
+  </form>
+</AuthShell>

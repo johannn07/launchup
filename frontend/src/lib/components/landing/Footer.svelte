@@ -1,48 +1,75 @@
-<footer
-  class="grid-rows-auto text-base-content mx-auto grid w-4/5 justify-start gap-x-4 gap-y-10 border-t py-4 sm:flex sm:flex-row sm:flex-wrap sm:items-start sm:justify-between sm:gap-x-2 sm:gap-y-4"
->
-  <aside class="flex grid-flow-col items-center gap-5">
-    <!-- <img src="logo.png" alt="" class="w-8" /> -->
-    <p>LaunchUp <br />Fueling Startup Success</p>
-  </aside>
-  <nav class="md:place-self-center md:justify-self-end">
-    <div class="grid grid-flow-col gap-4">
-      <a href="/" aria-label="go_to_github"
-        ><svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          class="fill-current"
-          ><path
-            d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"
-          ></path></svg
-        ></a
-      >
-      <a href="/" aria-label="go_to_twitter"
-        ><svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          class="fill-current"
-          ><path
-            d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"
-          ></path></svg
-        ></a
-      >
-      <a href="/" aria-label="go_to_instagram"
-        ><svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          class="fill-current"
-          ><path
-            d="M9 8h-3v4h3v12h5v-12h3.642l.358-4h-4v-1.667c0-.955.192-1.333 1.115-1.333h2.885v-5h-3.808c-3.596 0-5.192 1.583-5.192 4.615v3.385z"
-          ></path></svg
-        ></a
-      >
+<script lang="ts">
+  import { Rocket } from 'lucide-svelte';
+</script>
+
+<!-- Social links and legal pages are deliberately absent: no accounts or
+     /legal routes exist yet, and dead links are worse than none. -->
+<footer class="bg-[#050816]/60">
+  <div class="mx-auto w-[min(72rem,88vw)] py-16">
+    <div class="grid gap-12 md:grid-cols-[1.6fr_1fr_1fr]">
+      <div>
+        <div class="flex items-center gap-2">
+          <Rocket class="h-4 w-4 -rotate-12 text-[#6366f1]" />
+          <span class="lu-d-xw text-xl text-white">LaunchUp</span>
+        </div>
+        <p
+          class="mt-3 max-w-[34ch] text-[14.5px] leading-[1.65] text-[#94a3b8]"
+        >
+          Fueling startup success — readiness assessment, incubation and
+          acceleration for early-stage founders.
+        </p>
+      </div>
+
+      <nav aria-label="Platform">
+        <h2 class="lu-d-md text-[14px] text-white">Platform</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-[#94a3b8]">
+          <li>
+            <a href="#howitwork" class="transition-colors hover:text-[#818cf8]"
+              >How it Works</a
+            >
+          </li>
+          <li>
+            <a href="#aboutus" class="transition-colors hover:text-[#818cf8]"
+              >About LaunchUp</a
+            >
+          </li>
+          <li>
+            <a href="#aboutus" class="transition-colors hover:text-[#818cf8]"
+              >Readiness scales</a
+            >
+          </li>
+        </ul>
+      </nav>
+
+      <nav aria-label="Account">
+        <h2 class="lu-d-md text-[14px] text-white">Account</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-[#94a3b8]">
+          <li>
+            <a
+              data-sveltekit-reload
+              href="/register"
+              class="transition-colors hover:text-[#818cf8]"
+            >
+              Create an account
+            </a>
+          </li>
+          <li>
+            <a
+              data-sveltekit-reload
+              href="/login"
+              class="transition-colors hover:text-[#818cf8]"
+            >
+              Login
+            </a>
+          </li>
+        </ul>
+      </nav>
     </div>
-  </nav>
+
+    <div class="mt-14 border-t border-[#17213a] pt-7">
+      <p class="lu-num text-[13.5px] text-[#94a3b8]">
+        © {new Date().getFullYear()} LaunchUp
+      </p>
+    </div>
+  </div>
 </footer>
