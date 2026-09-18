@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { CountUp, arrive } from '$lib/motion';
 
   // The six scales are the real ones the backend scores. The levels are
   // illustrative — the panel is labelled as an example for that reason.
@@ -24,66 +24,9 @@
 
   const target = scales.reduce((a, s) => a + s.level, 0) / scales.length;
   const gapCount = scales.filter((s) => s.gap).length;
-
-  let panelEl: HTMLElement;
-  let composite = $state('0.0');
-  let widths = $state(scales.map(() => 0));
-  let tick: ReturnType<typeof setInterval>;
-
-  function run() {
-    const reduce = window.matchMedia(
-      '(prefers-reduced-motion: reduce)'
-    ).matches;
-
-    if (reduce) {
-      widths = scales.map((s) => (s.level / 9) * 100);
-      composite = target.toFixed(1);
-      return;
-    }
-
-    scales.forEach((s, i) => {
-      setTimeout(() => (widths[i] = (s.level / 9) * 100), 80 + i * 90);
-    });
-
-    // Driven off elapsed time rather than frames: a hidden tab throttles the
-    // tick, but progress still reaches 1 and the score never strands at 0.0.
-    const DURATION = 1000;
-    const t0 = performance.now();
-    tick = setInterval(() => {
-      const p = Math.min((performance.now() - t0) / DURATION, 1);
-      composite = (target * (1 - Math.pow(1 - p, 3))).toFixed(1);
-      if (p >= 1) clearInterval(tick);
-    }, 16);
-  }
-
-  onMount(() => {
-    // Already in view or scrolled past (deep link, scroll restoration): run now,
-    // otherwise the observer never fires and the score is stuck at 0.0.
-    if (panelEl.getBoundingClientRect().top < window.innerHeight) {
-      run();
-      return () => clearInterval(tick);
-    }
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (!e.isIntersecting) continue;
-          run();
-          obs.disconnect();
-        }
-      },
-      { threshold: 0.3 }
-    );
-    obs.observe(panelEl);
-    return () => {
-      obs.disconnect();
-      clearInterval(tick);
-    };
-  });
 </script>
 
 <div
-  bind:this={panelEl}
   class="overflow-hidden rounded-[1.75rem] border border-[#1f2c47] bg-[#0b1220]"
 >
   <div
@@ -105,7 +48,11 @@
         Composite readiness level
       </p>
       <p class="lu-d-xw lu-num mt-1 text-[42px] leading-none text-white">
-        {composite}<span class="text-[20px] text-[#94a3b8]"> / 9</span>
+        <CountUp value={target} decimals={1} /><span
+          class="text-[20px] text-[#94a3b8]"
+        >
+          / 9</span
+        >
       </p>
     </div>
     <p
@@ -128,7 +75,7 @@
 
   <div class="divide-y divide-[#17213a]">
     {#each scales as s, i (s.code)}
-      <div class="px-5 py-3 sm:px-6">
+      <div class="px-5 py-3 transition-colors hover:bg-[#0f1a2c] sm:px-6">
         <div class="flex items-baseline justify-between gap-4">
           <p class="text-[14px] font-semibold text-[#f1f5f9]">
             {s.name}
@@ -150,14 +97,17 @@
         </div>
 
         <div
-          class="lu-meter mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]"
+          class="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]"
           aria-hidden="true"
         >
-          <i
-            style="width:{widths[i]}%; background:{s.gap
+          <!-- Fills when first seen, each bar 60ms after the one above. -->
+          <div
+            class="lu-fill h-full rounded-full"
+            style="width:{(s.level / 9) * 100}%; background:{s.gap
               ? '#fbbf24'
-              : '#6366f1'}"
-          ></i>
+              : '#6366f1'}; transition-delay:{i * 60}ms"
+            use:arrive
+          ></div>
         </div>
 
         {#if s.gap}

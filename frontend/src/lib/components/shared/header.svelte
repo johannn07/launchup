@@ -8,6 +8,7 @@
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { Rocket, Menu, X } from 'lucide-svelte';
+  import { MOVE } from '$lib/motion';
 
   const { user, startup, scrollContainer } = $props();
 
@@ -43,7 +44,7 @@
   );
 
   const [send, receive] = crossfade({
-    duration: 250,
+    duration: MOVE,
     easing: cubicInOut
   });
 
@@ -105,7 +106,7 @@
 <!-- Matches the landing header: navy at 85% with blur, hairline rule. The
      blur is functional here, since page content scrolls beneath it. -->
 <header
-  class="lu-root fixed left-0 right-0 top-0 z-40 border-b backdrop-blur-lg transition-colors duration-300 {isBlurred
+  class="lu-root fixed left-0 right-0 top-0 z-40 border-b backdrop-blur-lg transition-colors duration-move {isBlurred
     ? 'border-[#1f2c47]'
     : 'border-[#17213a]/70'}"
   style="background: rgba(7, 17, 31, 0.85)"

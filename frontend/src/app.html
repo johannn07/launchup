@@ -4,6 +4,24 @@
     <meta charset="utf-8" />
     <!--<link rel="icon" href="%sveltekit.assets%/logo.png" />-->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Runs before first paint. `js` lets brand.css hold animated counters and
+         bars at their start state without ever flashing the final value (no-JS
+         readers see the real values). data-motion folds the OS setting and the
+         Settings > Appearance preference into one flag. -->
+    <script>
+      (function () {
+        var d = document.documentElement;
+        d.classList.add('js');
+        try {
+          if (
+            localStorage.getItem('lu-motion') === 'reduce' ||
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ) {
+            d.dataset.motion = 'reduce';
+          }
+        } catch (e) {}
+      })();
+    </script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

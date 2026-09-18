@@ -1,7 +1,9 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import { superForm } from 'sveltekit-superforms';
-  import { Loader, Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+  import { Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+  import { slide } from 'svelte/transition';
+  import { SubmitButton, dur, MOVE } from '$lib/motion';
   import AuthShell from '../AuthShell.svelte';
 
   let { data }: { data: PageData } = $props();
@@ -34,7 +36,11 @@
 >
   <form method="post" use:enhance novalidate class="grid gap-5">
     {#if formError}
-      <p class="lu-alert" role="alert">
+      <p
+        transition:slide={{ duration: dur(MOVE) }}
+        class="lu-alert"
+        role="alert"
+      >
         <AlertCircle class="mt-0.5 h-4 w-4 flex-none" />
         <span>{formError}</span>
       </p>
@@ -54,7 +60,11 @@
         bind:value={$form.email}
       />
       {#if fieldError}
-        <p class="lu-error" id="email-error">
+        <p
+          transition:slide={{ duration: dur(MOVE) }}
+          class="lu-error"
+          id="email-error"
+        >
           <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
           <span>{fieldError}</span>
         </p>
@@ -92,17 +102,11 @@
       </div>
     </div>
 
-    <button
-      type="submit"
-      class="lu-btn lu-btn-primary mt-1 w-full"
-      disabled={$submitting}
-    >
-      {#if $submitting}
-        <Loader class="h-4 w-4 animate-spin" />
-        Signing in
-      {:else}
-        Sign in
-      {/if}
-    </button>
+    <SubmitButton
+      status={$submitting ? 'busy' : 'idle'}
+      label="Sign in"
+      busyLabel="Signing in"
+      class="mt-1 w-full"
+    />
   </form>
 </AuthShell>

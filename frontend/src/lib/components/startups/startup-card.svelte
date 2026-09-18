@@ -1,6 +1,7 @@
 <script lang="ts">
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
   import { ChevronRight } from 'lucide-svelte';
+  import { arrive } from '$lib/motion';
 
   let {
     startup,
@@ -71,12 +72,12 @@
 <a
   {href}
   onclick={onClick}
-  class="group grid items-center gap-x-5 gap-y-3 px-5 py-4 transition-colors hover:bg-[#0f1a2c] focus-visible:bg-[#0f1a2c] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#818cf8] sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]"
+  class="lu-row group grid items-center gap-x-5 gap-y-3 px-5 py-4 transition-colors hover:bg-[#0f1a2c] focus-visible:bg-[#0f1a2c] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#818cf8] sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]"
 >
   <!-- Identity -->
   <div class="flex min-w-0 items-center gap-3.5">
     <span
-      class="lu-d flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.75rem] border border-[#2b3a5c] bg-[#111b2e] text-[14px] text-[#c7d2fe]"
+      class="lu-d flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.75rem] border border-[#2b3a5c] bg-[#111b2e] text-[14px] text-[#c7d2fe] transition-colors group-hover:border-[#4f46e5]/70 group-hover:text-white"
       aria-hidden="true"
     >
       {initials}
@@ -111,8 +112,9 @@
     </div>
     <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[#17213a]">
       <div
-        class="h-full rounded-full bg-[#6366f1] transition-[width] duration-500"
+        class="lu-fill h-full rounded-full bg-[#6366f1]"
         style="width:{pct}%"
+        use:arrive
       ></div>
     </div>
   </div>

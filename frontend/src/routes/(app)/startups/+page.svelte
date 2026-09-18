@@ -20,6 +20,9 @@
   import { toast } from 'svelte-sonner';
   import axiosInstance from '$lib/axios';
   import { onMount } from 'svelte';
+  import { flip } from 'svelte/animate';
+  import { fade } from 'svelte/transition';
+  import { CountUp, Segmented, arrive, dur, MOVE } from '$lib/motion';
 
   let { data, form } = $props();
 
@@ -228,6 +231,49 @@
   const completionRate = $derived(
     total > 0 ? Math.round((completedStartups.length / total) * 100) : 0
   );
+  // Tab counts follow the search box, so each tab says how many results it
+  // would show for what you've typed; they tick as you type.
+  const matching = (list: any[]) =>
+    search
+      ? list.filter((s: any) =>
+          s.name.toLowerCase().includes(search.toLowerCase())
+        ).length
+      : list.length;
+  const filterOptions = $derived([
+    { value: 'All Startups', label: 'All', count: matching(listOfStartups()) },
+    ...(role === 'Startup'
+      ? [
+          {
+            value: 'Pending',
+            label: 'Pending',
+            count: matching(pendingStartups)
+          },
+          {
+            value: 'Waitlisted',
+            label: 'Waitlisted',
+            count: matching(waitlistedStartups)
+          },
+          {
+            value: 'Qualified',
+            label: 'Qualified',
+            count: matching(qualifiedStartups)
+          }
+        ]
+      : role === 'Mentor'
+        ? [
+            {
+              value: 'Qualified',
+              label: 'Active',
+              count: matching(qualifiedStartups)
+            }
+          ]
+        : []),
+    {
+      value: 'Completed',
+      label: 'Completed',
+      count: matching(completedStartups)
+    }
+  ]);
   const pipeline = $derived([
     { key: 'pending', n: pendingStartups.length },
     { key: 'waitlisted', n: waitlistedStartups.length },
@@ -239,26 +285,6 @@
 <svelte:head>
   <title>Startups — LaunchUp</title>
 </svelte:head>
-
-{#snippet filterPill(value: string, label: string, count: number)}
-  <button
-    type="button"
-    role="tab"
-    aria-selected={filter === value}
-    onclick={() => (filter = value)}
-    class="inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8] {filter ===
-    value
-      ? 'bg-[#4f46e5] text-white'
-      : 'text-[#94a3b8] hover:text-[#f1f5f9]'}"
-  >
-    {label}
-    <span
-      class="lu-num rounded-full px-1.5 text-[12px] {filter === value
-        ? 'bg-[#4338ca] text-white'
-        : 'bg-[#17213a] text-[#94a3b8]'}">{count}</span
-    >
-  </button>
-{/snippet}
 
 <div class="lu-root bg-transparent pb-12">
   <!-- Header -->
@@ -297,7 +323,7 @@
         {role === 'Mentor' ? 'Startups mentored' : 'Startups'}
       </p>
       <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-        {total}
+        <CountUp value={total} />
       </p>
 
       {#if total > 0}
@@ -309,12 +335,14 @@
             ? 'active'
             : 'qualified'}, {completedStartups.length} completed"
         >
-          {#each pipeline as seg (seg.key)}
+          {#each pipeline as seg, i (seg.key)}
             {#if seg.n > 0}
               <span
-                class="h-full transition-[flex-grow] duration-500"
+                class="lu-fill h-full"
                 data-status={seg.key}
-                style="flex-grow:{seg.n}; background: var(--st)"
+                style="width:{(seg.n / total) *
+                  100}%; background: var(--st); transition-delay:{i * 80}ms"
+                use:arrive
               ></span>
             {/if}
           {/each}
@@ -344,14 +372,17 @@
     <div class="border-t border-[#17213a] p-6 md:border-t-0">
       <p class="text-[13px] text-[#94a3b8]">Initiatives completed</p>
       <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-        {doneInitiatives}<span class="text-[18px] text-[#94a3b8]">
+        <CountUp value={doneInitiatives} /><span
+          class="text-[18px] text-[#94a3b8]"
+        >
           / {allInitiatives?.length ?? 0}</span
         >
       </p>
       <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-[#17213a]">
         <div
-          class="h-full rounded-full bg-[#6366f1] transition-[width] duration-500"
+          class="lu-fill h-full rounded-full bg-[#6366f1]"
           style="width:{completedInitiativesPercentage.toFixed(0)}%"
+          use:arrive
         ></div>
       </div>
       <p class="lu-num mt-3.5 text-[12.5px] text-[#94a3b8]">
@@ -362,12 +393,13 @@
     <div class="border-t border-[#17213a] p-6 md:border-t-0">
       <p class="text-[13px] text-[#94a3b8]">Programme completion</p>
       <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-        {completionRate}%
+        <CountUp value={completionRate} suffix="%" />
       </p>
       <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-[#17213a]">
         <div
-          class="h-full rounded-full transition-[width] duration-500"
-          style="width:{completionRate}%; background: var(--lu-ok)"
+          class="lu-fill h-full rounded-full"
+          style="width:{completionRate}%; background: var(--lu-ok); transition-delay:80ms"
+          use:arrive
         ></div>
       </div>
       <p class="lu-num mt-3.5 text-[12.5px] text-[#94a3b8]">
@@ -378,25 +410,11 @@
 
   <!-- Controls -->
   <div class="mt-8 flex flex-wrap items-center justify-between gap-4">
-    <div
-      class="inline-flex flex-wrap gap-1 rounded-full border border-[#1f2c47] bg-[#0b1220] p-1"
-      role="tablist"
-      aria-label="Filter by status"
-    >
-      {@render filterPill('All Startups', 'All', total)}
-      {#if role === 'Startup'}
-        {@render filterPill('Pending', 'Pending', pendingStartups.length)}
-        {@render filterPill(
-          'Waitlisted',
-          'Waitlisted',
-          waitlistedStartups.length
-        )}
-        {@render filterPill('Qualified', 'Qualified', qualifiedStartups.length)}
-      {:else if role === 'Mentor'}
-        {@render filterPill('Qualified', 'Active', qualifiedStartups.length)}
-      {/if}
-      {@render filterPill('Completed', 'Completed', completedStartups.length)}
-    </div>
+    <Segmented
+      options={filterOptions}
+      bind:value={filter}
+      label="Filter by status"
+    />
 
     <div class="relative w-full sm:w-[20rem]">
       <SearchIcon
@@ -499,9 +517,12 @@
         </button>
       </div>
     {:else}
-      <ul class="divide-y divide-[#17213a]">
+      <ul class="lu-enter divide-y divide-[#17213a]">
         {#each filteredStartups() as startup (startup.id)}
-          <li>
+          <li
+            animate:flip={{ duration: dur(MOVE) }}
+            in:fade={{ duration: dur(MOVE) }}
+          >
             <StartupCard
               {startup}
               {role}

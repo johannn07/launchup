@@ -11,6 +11,29 @@
    the scrollbar width. */
 html:has(.lu-root) {
   scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+
+/* ================= Motion system =================
+   Three durations and two curves. Every transition on a branded page uses one
+   of these, so hover, state changes and arriving data read as one system
+   rather than per-page flourishes. Replaces eleven ad-hoc durations. */
+:root {
+  --lu-quick: 120ms; /* hover, press, focus */
+  --lu-move: 240ms; /* a state or position changing */
+  --lu-settle: 600ms; /* data arriving: counters, bars */
+  --lu-ease: cubic-bezier(
+    0.2,
+    0.7,
+    0.3,
+    1
+  ); /* arrivals: quick out, soft landing */
+  --lu-ease-inout: cubic-bezier(
+    0.65,
+    0,
+    0.35,
+    1
+  ); /* swaps between two states */
 }
 
 .lu-root {
@@ -32,8 +55,6 @@ html:has(.lu-root) {
 
   --lu-cloud: #f1f5f9;
   --lu-mute: #94a3b8;
-
-  --lu-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
 
   background: var(--lu-navy);
   color: var(--lu-cloud);
@@ -83,11 +104,11 @@ html:has(.lu-root) {
   font-weight: 650;
   white-space: nowrap;
   transition:
-    background-color 0.18s var(--lu-ease),
-    border-color 0.18s var(--lu-ease),
-    color 0.18s var(--lu-ease),
-    box-shadow 0.18s var(--lu-ease),
-    transform 0.08s var(--lu-ease);
+    background-color var(--lu-quick) var(--lu-ease),
+    border-color var(--lu-quick) var(--lu-ease),
+    color var(--lu-quick) var(--lu-ease),
+    box-shadow var(--lu-quick) var(--lu-ease),
+    transform var(--lu-quick) var(--lu-ease);
 }
 .lu-root .lu-btn:active {
   transform: translateY(1px);
@@ -120,7 +141,7 @@ html:has(.lu-root) {
   font-size: 14px;
 }
 .lu-root .lu-btn .lu-arw {
-  transition: transform 0.18s var(--lu-ease);
+  transition: transform var(--lu-quick) var(--lu-ease);
 }
 .lu-root .lu-btn:hover .lu-arw {
   transform: translateX(3px);
@@ -144,34 +165,53 @@ html:has(.lu-root) {
   opacity: 0;
   transform: translateY(8px);
   transition:
-    opacity 0.5s var(--lu-ease),
-    transform 0.5s var(--lu-ease);
+    opacity var(--lu-settle) var(--lu-ease),
+    transform var(--lu-settle) var(--lu-ease);
 }
 .lu-root .lu-rv.lu-in {
   opacity: 1;
   transform: none;
 }
 
-/* ---- Readiness meter ---- */
-.lu-root .lu-meter > i {
-  display: block;
-  height: 100%;
-  width: 0;
-  border-radius: 999px;
-  transition: width 0.9s var(--lu-ease);
-}
-
+/* Reduced motion: from the OS setting, or from Settings > Appearance, which
+   sets html[data-motion='reduce']. Applies app-wide, not just to branded
+   pages, because it is a preference about the product. State still changes;
+   it just changes instantly. */
 @media (prefers-reduced-motion: reduce) {
-  .lu-root *,
-  .lu-root *::before,
-  .lu-root *::after {
+  :root {
+    --lu-quick: 0ms;
+    --lu-move: 0ms;
+    --lu-settle: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
     transition-duration: 0.001ms !important;
     animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
   }
   .lu-root .lu-rv {
     opacity: 1;
     transform: none;
   }
+}
+html[data-motion='reduce'] {
+  --lu-quick: 0ms;
+  --lu-move: 0ms;
+  --lu-settle: 0ms;
+}
+html[data-motion='reduce'] *,
+html[data-motion='reduce'] *::before,
+html[data-motion='reduce'] *::after {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion='reduce'] .lu-root .lu-rv {
+  opacity: 1;
+  transform: none;
 }
 
 /* ---- Form controls ----
@@ -196,8 +236,8 @@ html:has(.lu-root) {
   font-family: inherit;
   font-size: 15px;
   transition:
-    border-color 0.16s var(--lu-ease),
-    box-shadow 0.16s var(--lu-ease);
+    border-color var(--lu-quick) var(--lu-ease),
+    box-shadow var(--lu-quick) var(--lu-ease);
 }
 .lu-root .lu-input::placeholder {
   color: #64748b;
@@ -263,8 +303,8 @@ html:has(.lu-root) {
   background: var(--lu-navy-2);
   cursor: pointer;
   transition:
-    background-color 0.16s var(--lu-ease),
-    border-color 0.16s var(--lu-ease);
+    background-color var(--lu-quick) var(--lu-ease),
+    border-color var(--lu-quick) var(--lu-ease);
 }
 .lu-root .lu-check:checked {
   background: var(--lu-indigo-deep);
@@ -297,7 +337,7 @@ html:has(.lu-root) {
   color: var(--lu-indigo-lite);
   font-weight: 600;
   text-underline-offset: 3px;
-  transition: color 0.16s var(--lu-ease);
+  transition: color var(--lu-quick) var(--lu-ease);
 }
 .lu-root .lu-link:hover {
   color: #fff;
@@ -421,8 +461,8 @@ html:has(.lu-root) {
   line-height: 1.45;
   color: var(--lu-mute);
   transition:
-    color 0.16s var(--lu-ease),
-    border-color 0.16s var(--lu-ease);
+    color var(--lu-quick) var(--lu-ease),
+    border-color var(--lu-quick) var(--lu-ease);
 }
 .lu-root .lu-toc a:hover {
   color: var(--lu-cloud);
@@ -430,7 +470,28 @@ html:has(.lu-root) {
 }
 .lu-root .lu-toc a[aria-current='true'] {
   color: #fff;
-  border-left-color: var(--lu-indigo);
+}
+/* The marker travels along the 2px track the links' left borders draw. */
+.lu-root .lu-toc ol {
+  position: relative;
+}
+.lu-root .lu-toc__marker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--lu-indigo);
+  pointer-events: none;
+}
+.lu-root .lu-toc__marker[data-live] {
+  transition:
+    transform var(--lu-move) var(--lu-ease-inout),
+    height var(--lu-move) var(--lu-ease-inout);
+}
+/* A heading's flash stays behind the text, not across its top padding. */
+.lu-root .lu-prose h2.lu-flash {
+  background-clip: content-box;
 }
 .lu-root .lu-toc a:focus-visible {
   outline: 2px solid var(--lu-indigo-lite);
@@ -508,4 +569,174 @@ html:has(.lu-root) {
   font-weight: 600;
   color: var(--lu-cloud);
   font-variant-numeric: tabular-nums;
+}
+
+/* ================= Motion building blocks ================= */
+
+/* Arriving data. Counters and fills start empty and animate when first seen
+   (the `arrive` action sets data-ready). html.js is set by an inline script in
+   app.html before first paint, so the start state never flashes the final
+   value first, and without JavaScript the real values simply show. */
+html.js:not([data-motion='reduce']) .lu-count:not([data-ready]) {
+  visibility: hidden;
+}
+html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
+  width: 0 !important;
+}
+.lu-fill {
+  transition: width var(--lu-settle) var(--lu-ease);
+}
+
+/* Loading -> content: content fades up 4px instead of snapping in. */
+@keyframes lu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.lu-enter {
+  animation: lu-enter var(--lu-move) var(--lu-ease) both;
+}
+
+/* Something just changed here: a brief indigo wash that fades out. */
+@keyframes lu-flash {
+  from {
+    background-color: rgba(99, 102, 241, 0.24);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.lu-flash {
+  border-radius: 6px;
+  animation: lu-flash calc(var(--lu-settle) * 2) var(--lu-ease) both;
+}
+
+/* Drawn tick for save/done confirmations. */
+@keyframes lu-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.lu-tick path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: lu-draw var(--lu-move) var(--lu-ease) 80ms forwards;
+}
+
+/* Submit button: idle, busy and done labels share one grid cell, so the
+   button is always as wide as its widest label and never jumps mid-action. */
+.lu-root .lu-btn.lu-submit {
+  display: inline-grid;
+  place-items: center;
+}
+.lu-root .lu-submit__layer {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition:
+    opacity var(--lu-move) var(--lu-ease),
+    transform var(--lu-move) var(--lu-ease);
+}
+.lu-root .lu-submit__layer:not([data-active]) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* Segmented control with a sliding indicator (tabs, filters). Until it has
+   measured itself, the active button paints its own fill, so there is never
+   a moment with no visible selection. */
+.lu-root .lu-seg {
+  position: relative;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--lu-line-2);
+  background: var(--lu-navy-2);
+  padding: 4px;
+}
+.lu-root .lu-seg__ind {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 999px;
+  background: var(--lu-indigo-deep);
+  transition:
+    transform var(--lu-move) var(--lu-ease-inout),
+    width var(--lu-move) var(--lu-ease-inout),
+    height var(--lu-move) var(--lu-ease-inout);
+}
+.lu-root .lu-seg__btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--lu-mute);
+  transition: color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-seg__btn:hover {
+  color: var(--lu-cloud);
+}
+.lu-root .lu-seg__btn[aria-selected='true'] {
+  color: #fff;
+}
+.lu-root .lu-seg:not(.lu-seg--live) .lu-seg__btn[aria-selected='true'] {
+  background: var(--lu-indigo-deep);
+}
+.lu-root .lu-seg__btn:focus-visible {
+  outline: 2px solid var(--lu-indigo-lite);
+  outline-offset: 2px;
+}
+.lu-root .lu-seg__count {
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 12px;
+  background: var(--lu-line);
+  color: var(--lu-mute);
+  transition:
+    background-color var(--lu-quick) var(--lu-ease),
+    color var(--lu-quick) var(--lu-ease);
+}
+.lu-root .lu-seg__btn[aria-selected='true'] .lu-seg__count {
+  background: var(--lu-indigo-dark);
+  color: #fff;
+}
+
+/* Clickable rows: an indigo edge grows in from the centre on hover/focus. */
+.lu-root .lu-row {
+  position: relative;
+}
+.lu-root .lu-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--lu-indigo);
+  transform: scaleY(0);
+  transition: transform var(--lu-move) var(--lu-ease);
+}
+.lu-root .lu-row:hover::before,
+.lu-root .lu-row:focus-visible::before {
+  transform: scaleY(1);
+}
+
+/* Transient "Saved" confirmation. */
+.lu-root .lu-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lu-ok);
 }

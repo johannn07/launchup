@@ -3,7 +3,9 @@
   import { superForm } from 'sveltekit-superforms';
   import { toast } from 'svelte-sonner';
   import { goto } from '$app/navigation';
-  import { Loader, Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+  import { Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+  import { slide } from 'svelte/transition';
+  import { SubmitButton, dur, MOVE } from '$lib/motion';
   import AuthShell from '../AuthShell.svelte';
 
   let { data }: { data: PageData } = $props();
@@ -108,7 +110,11 @@
 >
   <form method="post" use:enhance novalidate class="grid gap-5">
     {#if $errors.email?.[0]}
-      <p class="lu-alert" role="alert">
+      <p
+        transition:slide={{ duration: dur(MOVE) }}
+        class="lu-alert"
+        role="alert"
+      >
         <AlertCircle class="mt-0.5 h-4 w-4 flex-none" />
         <span>{$errors.email[0]}</span>
       </p>
@@ -129,7 +135,7 @@
           onblur={() => (touched.firstName = true)}
         />
         {#if errorFor('firstName')}
-          <p class="lu-error">
+          <p transition:slide={{ duration: dur(MOVE) }} class="lu-error">
             <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
             <span>{errorFor('firstName')}</span>
           </p>
@@ -150,7 +156,7 @@
           onblur={() => (touched.lastName = true)}
         />
         {#if errorFor('lastName')}
-          <p class="lu-error">
+          <p transition:slide={{ duration: dur(MOVE) }} class="lu-error">
             <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
             <span>{errorFor('lastName')}</span>
           </p>
@@ -172,7 +178,7 @@
         onblur={() => (touched.email = true)}
       />
       {#if errorFor('email')}
-        <p class="lu-error">
+        <p transition:slide={{ duration: dur(MOVE) }} class="lu-error">
           <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
           <span>{errorFor('email')}</span>
         </p>
@@ -211,8 +217,8 @@
           <div class="grid flex-1 grid-cols-4 gap-1.5" aria-hidden="true">
             {#each [0, 1, 2, 3] as seg (seg)}
               <span
-                class="h-1 rounded-full transition-colors duration-200"
-                style="background:{seg < strength
+                class="h-1 rounded-full transition-colors duration-move"
+                style="transition-delay:{seg * 60}ms; background:{seg < strength
                   ? STRENGTH[strength].colour
                   : '#1f2c47'}"
               ></span>
@@ -228,7 +234,7 @@
       {/if}
 
       {#if errorFor('password')}
-        <p class="lu-error">
+        <p transition:slide={{ duration: dur(MOVE) }} class="lu-error">
           <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
           <span>{errorFor('password')}</span>
         </p>
@@ -268,7 +274,7 @@
         </button>
       </div>
       {#if errorFor('repeatPassword', $errors.repeatPassword?.[0])}
-        <p class="lu-error">
+        <p transition:slide={{ duration: dur(MOVE) }} class="lu-error">
           <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
           <span>{errorFor('repeatPassword', $errors.repeatPassword?.[0])}</span>
         </p>
@@ -294,24 +300,18 @@
         </label>
       </div>
       {#if errorFor('terms')}
-        <p class="lu-error">
+        <p transition:slide={{ duration: dur(MOVE) }} class="lu-error">
           <AlertCircle class="mt-0.5 h-3.5 w-3.5 flex-none" />
           <span>{errorFor('terms')}</span>
         </p>
       {/if}
     </div>
 
-    <button
-      type="submit"
-      class="lu-btn lu-btn-primary w-full"
-      disabled={$submitting}
-    >
-      {#if $submitting}
-        <Loader class="h-4 w-4 animate-spin" />
-        Creating account
-      {:else}
-        Create account
-      {/if}
-    </button>
+    <SubmitButton
+      status={$submitting ? 'busy' : 'idle'}
+      label="Create account"
+      busyLabel="Creating account"
+      class="w-full"
+    />
   </form>
 </AuthShell>

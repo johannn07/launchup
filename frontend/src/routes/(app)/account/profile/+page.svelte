@@ -2,13 +2,26 @@
   import type { ActionData, PageData } from './$types';
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
-  import { Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-svelte';
+  import { Eye, EyeOff, AlertCircle } from 'lucide-svelte';
+  import { tick } from 'svelte';
+  import { slide } from 'svelte/transition';
+  import {
+    CountUp,
+    SubmitButton,
+    SavedNote,
+    autoHeight,
+    flash,
+    dur,
+    MOVE
+  } from '$lib/motion';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let editing = $state(false);
-  let profileSubmitting = $state(false);
-  let passwordSubmitting = $state(false);
+  let profileStatus = $state<'idle' | 'busy' | 'done'>('idle');
+  let passwordStatus = $state<'idle' | 'busy' | 'done'>('idle');
+  let savedTick = $state(0);
+  let detailsEl = $state<HTMLElement | null>(null);
   let showCurrent = $state(false);
   let showNew = $state(false);
   let passwordForm = $state<HTMLFormElement | null>(null);
@@ -86,7 +99,7 @@
       <div class="border-[#17213a] sm:border-l sm:pl-6">
         <p class="text-[12.5px] text-[#94a3b8]">{statLabel}</p>
         <p class="lu-d-xw lu-num mt-1 text-[28px] leading-none text-white">
-          {data.startupCount}
+          <CountUp value={data.startupCount} />
         </p>
       </div>
     {/if}
@@ -114,126 +127,152 @@
             : 'How you appear to mentors and programme managers.'}
         </p>
       </div>
-      {#if !editing}
-        <button
-          type="button"
-          class="lu-btn lu-btn-secondary lu-btn-sm"
-          onclick={() => (editing = true)}
-        >
-          Edit details
-        </button>
-      {/if}
+      <div class="flex items-center gap-4">
+        <SavedNote trigger={savedTick} />
+        {#if !editing}
+          <button
+            type="button"
+            class="lu-btn lu-btn-secondary lu-btn-sm"
+            onclick={() => (editing = true)}
+          >
+            Edit details
+          </button>
+        {/if}
+      </div>
     </div>
 
-    {#if form?.success}
+    {#if form?.error}
       <p
-        class="mx-6 mt-5 flex items-start gap-2.5 rounded-[12px] border border-[#34d399]/30 bg-[#34d399]/10 px-3.5 py-3 text-[14px] text-[#34d399]"
-        role="status"
+        class="lu-alert mx-6 mt-5"
+        role="alert"
+        transition:slide={{ duration: dur(MOVE) }}
       >
-        <CheckCircle2 class="mt-0.5 h-4 w-4 flex-none" />
-        <span>Details saved.</span>
-      </p>
-    {:else if form?.error}
-      <p class="lu-alert mx-6 mt-5" role="alert">
         <AlertCircle class="mt-0.5 h-4 w-4 flex-none" />
         <span>{form.error}</span>
       </p>
     {/if}
 
-    {#if !editing}
-      <dl class="divide-y divide-[#17213a] px-6">
-        <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr] sm:gap-6">
-          <dt class="text-[13.5px] text-[#94a3b8]">Name</dt>
-          <dd class="text-[15px] text-white">{fullName}</dd>
-        </div>
-        <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr] sm:gap-6">
-          <dt class="text-[13.5px] text-[#94a3b8]">Email</dt>
-          <dd class="break-all text-[15px] text-white">{user.email}</dd>
-        </div>
-        <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr] sm:gap-6">
-          <dt class="text-[13.5px] text-[#94a3b8]">Role</dt>
-          <dd class="text-[15px] text-white">
-            {user.role}
-            <span class="ml-2 text-[13px] text-[#94a3b8]"
-              >Set by your programme</span
-            >
-          </dd>
-        </div>
-      </dl>
-    {:else}
-      <form
-        method="POST"
-        action="?/updateProfile"
-        use:enhance={() => {
-          profileSubmitting = true;
-          return async ({ update, result }) => {
-            await update();
-            profileSubmitting = false;
-            if (result.type === 'success') {
-              editing = false;
-              await invalidateAll();
-            }
-          };
-        }}
-      >
-        <div class="grid gap-5 px-6 py-6 sm:grid-cols-2">
-          <div>
-            <label class="lu-field" for="firstName">First name</label>
-            <input
-              class="lu-input"
-              name="firstName"
-              id="firstName"
-              type="text"
-              autocomplete="given-name"
-              required
-              value={user.firstName}
-            />
-          </div>
-          <div>
-            <label class="lu-field" for="lastName">Last name</label>
-            <input
-              class="lu-input"
-              name="lastName"
-              id="lastName"
-              type="text"
-              autocomplete="family-name"
-              required
-              value={user.lastName}
-            />
-          </div>
-          <div class="sm:col-span-2">
-            <label class="lu-field" for="email">Email</label>
-            <input
-              class="lu-input"
-              name="email"
-              id="email"
-              type="email"
-              autocomplete="email"
-              required
-              value={user.email}
-            />
-          </div>
-        </div>
+    <!-- Height follows view/edit mode, so switching animates the section. -->
+    <div use:autoHeight>
+      <div bind:this={detailsEl}>
+        {#if !editing}
+          <dl class="lu-enter divide-y divide-[#17213a] px-6">
+            <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr] sm:gap-6">
+              <dt class="text-[13.5px] text-[#94a3b8]">Name</dt>
+              <dd
+                class="-mx-1.5 px-1.5 text-[15px] text-white"
+                data-field="name"
+              >
+                {fullName}
+              </dd>
+            </div>
+            <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr] sm:gap-6">
+              <dt class="text-[13.5px] text-[#94a3b8]">Email</dt>
+              <dd
+                class="-mx-1.5 break-all px-1.5 text-[15px] text-white"
+                data-field="email"
+              >
+                {user.email}
+              </dd>
+            </div>
+            <div class="grid gap-1 py-4 sm:grid-cols-[11rem_1fr] sm:gap-6">
+              <dt class="text-[13.5px] text-[#94a3b8]">Role</dt>
+              <dd class="text-[15px] text-white">
+                {user.role}
+                <span class="ml-2 text-[13px] text-[#94a3b8]"
+                  >Set by your programme</span
+                >
+              </dd>
+            </div>
+          </dl>
+        {:else}
+          <form
+            class="lu-enter"
+            method="POST"
+            action="?/updateProfile"
+            use:enhance={() => {
+              const before = { name: fullName, email: user.email };
+              profileStatus = 'busy';
+              return async ({ update, result }) => {
+                await update();
+                profileStatus = 'idle';
+                if (result.type !== 'success') return;
+                await invalidateAll();
+                editing = false;
+                savedTick++;
+                // Point at what actually changed once the read-only view is back.
+                await tick();
+                const after = { name: fullName, email: user.email };
+                for (const k of ['name', 'email'] as const) {
+                  if (before[k] !== after[k])
+                    flash(
+                      detailsEl?.querySelector(`[data-field="${k}"]`) ?? null
+                    );
+                }
+              };
+            }}
+          >
+            <div class="grid gap-5 px-6 py-6 sm:grid-cols-2">
+              <div>
+                <label class="lu-field" for="firstName">First name</label>
+                <input
+                  class="lu-input"
+                  name="firstName"
+                  id="firstName"
+                  type="text"
+                  autocomplete="given-name"
+                  required
+                  value={user.firstName}
+                />
+              </div>
+              <div>
+                <label class="lu-field" for="lastName">Last name</label>
+                <input
+                  class="lu-input"
+                  name="lastName"
+                  id="lastName"
+                  type="text"
+                  autocomplete="family-name"
+                  required
+                  value={user.lastName}
+                />
+              </div>
+              <div class="sm:col-span-2">
+                <label class="lu-field" for="email">Email</label>
+                <input
+                  class="lu-input"
+                  name="email"
+                  id="email"
+                  type="email"
+                  autocomplete="email"
+                  required
+                  value={user.email}
+                />
+              </div>
+            </div>
 
-        <div class="flex justify-end gap-3 border-t border-[#17213a] px-6 py-4">
-          <button
-            type="button"
-            class="lu-btn lu-btn-secondary lu-btn-sm"
-            onclick={() => (editing = false)}
-            disabled={profileSubmitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            class="lu-btn lu-btn-primary lu-btn-sm"
-            disabled={profileSubmitting}
-          >
-            {profileSubmitting ? 'Saving' : 'Save details'}
-          </button>
-        </div>
-      </form>
-    {/if}
+            <div
+              class="flex justify-end gap-3 border-t border-[#17213a] px-6 py-4"
+            >
+              <button
+                type="button"
+                class="lu-btn lu-btn-secondary lu-btn-sm"
+                onclick={() => (editing = false)}
+                disabled={profileStatus === 'busy'}
+              >
+                Cancel
+              </button>
+              <SubmitButton
+                small
+                status={profileStatus}
+                label="Save details"
+                busyLabel="Saving"
+              />
+            </div>
+          </form>
+        {/if}
+      </div>
+    </div>
   </section>
 
   <!-- ============ Sign-in & security ============ -->
@@ -259,25 +298,21 @@
       action="?/changePassword"
       bind:this={passwordForm}
       use:enhance={() => {
-        passwordSubmitting = true;
+        passwordStatus = 'busy';
         return async ({ update, result }) => {
           await update();
-          passwordSubmitting = false;
+          passwordStatus = result.type === 'success' ? 'done' : 'idle';
           if (result.type === 'success') passwordForm?.reset();
         };
       }}
     >
       <div class="grid gap-5 px-6 py-6 sm:grid-cols-2">
-        {#if form?.passwordSuccess}
+        {#if form?.passwordError}
           <p
-            class="flex items-start gap-2.5 rounded-[12px] border border-[#34d399]/30 bg-[#34d399]/10 px-3.5 py-3 text-[14px] text-[#34d399] sm:col-span-2"
-            role="status"
+            class="lu-alert sm:col-span-2"
+            role="alert"
+            transition:slide={{ duration: dur(MOVE) }}
           >
-            <CheckCircle2 class="mt-0.5 h-4 w-4 flex-none" />
-            <span>Password changed.</span>
-          </p>
-        {:else if form?.passwordError}
-          <p class="lu-alert sm:col-span-2" role="alert">
             <AlertCircle class="mt-0.5 h-4 w-4 flex-none" />
             <span>{form.passwordError}</span>
           </p>
@@ -335,13 +370,13 @@
       </div>
 
       <div class="flex justify-end border-t border-[#17213a] px-6 py-4">
-        <button
-          type="submit"
-          class="lu-btn lu-btn-primary lu-btn-sm"
-          disabled={passwordSubmitting}
-        >
-          {passwordSubmitting ? 'Changing' : 'Change password'}
-        </button>
+        <SubmitButton
+          small
+          status={passwordStatus}
+          label="Change password"
+          busyLabel="Changing"
+          doneLabel="Password changed"
+        />
       </div>
     </form>
   </section>

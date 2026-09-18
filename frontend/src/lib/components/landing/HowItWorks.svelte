@@ -64,7 +64,7 @@
     <ol class="mt-12 grid gap-5 lg:grid-cols-3">
       {#each steps as step, i (step.number)}
         <li
-          class="group relative overflow-hidden rounded-[1.75rem] border border-[#1f2c47] bg-[#0b1220] p-7 transition-colors duration-300 hover:border-[#6366f1]/45"
+          class="group relative overflow-hidden rounded-[1.75rem] border border-[#1f2c47] bg-[#0b1220] p-7 transition-colors duration-quick hover:border-[#6366f1]/45"
           use:reveal={i * 60}
         >
           <div
@@ -73,12 +73,12 @@
 
           <div class="flex items-center justify-between">
             <p
-              class="lu-d-xw lu-num text-[44px] leading-none text-[#54648a] transition-colors duration-300 group-hover:text-[#818cf8]"
+              class="lu-d-xw lu-num text-[44px] leading-none text-[#54648a] transition-colors duration-quick group-hover:text-[#818cf8]"
             >
               {step.number}
             </p>
             <span
-              class="flex h-10 w-10 items-center justify-center rounded-full border border-[#1f2c47] bg-[#111b2e] text-[#94a3b8] transition-colors duration-300 group-hover:border-[#6366f1]/40 group-hover:text-[#818cf8]"
+              class="flex h-10 w-10 items-center justify-center rounded-full border border-[#1f2c47] bg-[#111b2e] text-[#94a3b8] transition-colors duration-quick group-hover:border-[#6366f1]/40 group-hover:text-[#818cf8]"
             >
               <step.icon class="h-4 w-4" strokeWidth={1.75} />
             </span>

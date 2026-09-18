@@ -4,6 +4,31 @@
   import { ArrowLeft, AlertTriangle } from 'lucide-svelte';
   import { onMount } from 'svelte';
   import type { Snippet } from 'svelte';
+  import { flash, reducedMotion } from '$lib/motion';
+
+  // One marker per list that slides to the current section, instead of each
+  // link's border lighting up in turn. First placement is instant; after that
+  // it travels.
+  function follow(node: HTMLElement, id: string) {
+    const place = (target: string) => {
+      const a = node.parentElement?.querySelector<HTMLElement>(
+        `a[href="#${target}"]`
+      );
+      if (!a) return;
+      node.style.height = `${a.offsetHeight}px`;
+      node.style.transform = `translateY(${a.offsetTop}px)`;
+    };
+    place(id);
+    requestAnimationFrame(() => (node.dataset.live = ''));
+    return { update: place };
+  }
+
+  // Jumping to a section briefly highlights its heading, once the smooth
+  // scroll has had time to land, so it's clear where you arrived.
+  function jump(id: string) {
+    const el = document.getElementById(id);
+    setTimeout(() => flash(el), reducedMotion() ? 0 : 380);
+  }
 
   let {
     title,
@@ -117,10 +142,17 @@
           >
             <p class="lu-d-md mb-3 text-[13.5px] text-white">On this page</p>
             <ol>
+              <li
+                class="lu-toc__marker"
+                aria-hidden="true"
+                role="presentation"
+                use:follow={activeId}
+              ></li>
               {#each sections as s, i (s.id)}
                 <li>
                   <a
                     href="#{s.id}"
+                    onclick={() => jump(s.id)}
                     aria-current={activeId === s.id ? 'true' : undefined}
                   >
                     <span class="lu-num text-[#818cf8]">{i + 1}.</span>
@@ -153,10 +185,17 @@
           <nav class="lu-toc sticky top-24" aria-label="On this page">
             <p class="lu-d-md mb-3 text-[13px] text-white">On this page</p>
             <ol>
+              <li
+                class="lu-toc__marker"
+                aria-hidden="true"
+                role="presentation"
+                use:follow={activeId}
+              ></li>
               {#each sections as s, i (s.id)}
                 <li>
                   <a
                     href="#{s.id}"
+                    onclick={() => jump(s.id)}
                     aria-current={activeId === s.id ? 'true' : undefined}
                   >
                     <span class="lu-num text-[#818cf8]">{i + 1}.</span>

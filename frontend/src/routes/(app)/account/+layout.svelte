@@ -3,13 +3,14 @@
   import { cubicInOut } from 'svelte/easing';
   import { crossfade } from 'svelte/transition';
   import { access } from '$lib/access';
+  import { MOVE } from '$lib/motion';
   import { UserRound, KeyRound, Palette } from 'lucide-svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
 
   // The indicator slides between items on navigation: motion tied to an action.
-  const [send, receive] = crossfade({ duration: 250, easing: cubicInOut });
+  const [send, receive] = crossfade({ duration: MOVE, easing: cubicInOut });
 
   const modules =
     access.roles[`${data.user.role as 'Startup' | 'Mentor' | 'Manager'}`]

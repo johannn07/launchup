@@ -1,8 +1,9 @@
 <script lang="ts">
   import '../app.css';
-  import { ModeWatcher } from 'mode-watcher';
+  import { ModeWatcher, setMode } from 'mode-watcher';
   import { Toaster } from '$lib/components/ui/sonner';
   import { QueryClient, QueryClientProvider } from '@sveltestack/svelte-query';
+  import { onMount } from 'svelte';
 
   let { children } = $props();
 
@@ -14,6 +15,11 @@
       }
     }
   });
+
+  // The product is dark-only. Anyone who picked Light or System under the old
+  // Appearance page still has that stored, which would leave the pages that
+  // rely on shadcn variables rendering light. Normalise it once.
+  onMount(() => setMode('dark'));
 </script>
 
 <ModeWatcher defaultMode="dark" />
