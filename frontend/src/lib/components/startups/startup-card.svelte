@@ -1,162 +1,128 @@
 <script lang="ts">
-  import * as Card from '$lib/components/ui/card/index.js';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
-  import Badge from '../ui/badge/badge.svelte';
+  import { ChevronRight } from 'lucide-svelte';
+
   let {
     startup,
     role,
     initiatives
   }: { startup: any; role: any; initiatives: any[] } = $props();
 
-  const statusMap: Record<
-    number,
-    {
-      label: 'Pending' | 'Waitlisted' | 'Qualified' | 'Completed';
-      badgeVariant: 'pending' | 'waitlisted' | 'qualified' | 'completed';
-      border: string;
-      text: string;
-      bg: string;
-    }
-  > = {
-    1: {
-      label: 'Pending',
-      badgeVariant: 'pending',
-      border: 'border-yellow-400',
-      text: 'text-yellow-400',
-      bg: 'bg-yellow-900'
+  // Same mapping as the .lu-status tokens in brand.css.
+  const STATUS: Record<number, { key: string; label: string }> = {
+    [QualificationStatus.PENDING]: { key: 'pending', label: 'Pending' },
+    [QualificationStatus.WAITLISTED]: {
+      key: 'waitlisted',
+      label: 'Waitlisted'
     },
-    2: {
-      label: 'Waitlisted',
-      badgeVariant: 'waitlisted',
-      border: 'border-purple-400',
-      text: 'text-purple-400',
-      bg: 'bg-purple-900'
-    },
-    3: {
-      label: 'Qualified',
-      badgeVariant: 'qualified',
-      border: 'border-blue-500',
-      text: 'text-blue-500',
-      bg: 'bg-slate-900'
-    },
-    4: {
-      label: 'Completed',
-      badgeVariant: 'completed',
-      border: 'border-green-500',
-      text: 'text-green-500',
-      bg: 'bg-green-900'
-    }
-    // 5: {
-    //   label: 'Rejected',
-    //   border: 'border-red-400',
-    //   text: 'text-red-400',
-    //   bg: 'bg-red-900'
-    // },
-    // 6: {
-    //   label: 'Paused',
-    //   border: 'border-gray-400',
-    //   text: 'text-gray-400',
-    //   bg: 'bg-gray-900'
-    // }
+    [QualificationStatus.QUALIFIED]: { key: 'qualified', label: 'Qualified' },
+    [QualificationStatus.COMPLETED]: { key: 'completed', label: 'Completed' }
   };
+
   const status = $derived(
-    statusMap[startup?.qualificationStatus] ?? statusMap[1]
+    STATUS[startup?.qualificationStatus] ?? STATUS[QualificationStatus.PENDING]
+  );
+  // Mentors only ever see qualified startups as the ones they are working with.
+  const statusLabel = $derived(
+    status.key === 'qualified' && role === 'Mentor' ? 'Active' : status.label
   );
 
-  const getTierLabel = (startupData: any) => {
-    if (startupData?.qualificationStatus !== QualificationStatus.QUALIFIED) {
-      return 'Pending';
-    }
-    if (startupData?.readinessEvaluations && startupData.readinessEvaluations.length > 0) {
-      return startupData.readinessEvaluations[startupData.readinessEvaluations.length - 1].tierLabel;
-    }
-    return 'Pending';
-  };
-
-  const tier = $derived(getTierLabel(startup));
-
-  const getTierColor = (t: string) => {
-    if (t === 'Gold') return 'bg-amber-400/10 text-amber-500 border-amber-400/20';
-    if (t === 'Silver') return 'bg-slate-400/10 text-slate-500 border-slate-400/20';
-    if (t === 'Bronze') return 'bg-orange-600/10 text-orange-600 border-orange-600/20';
-    if (t === 'Strong') return 'bg-green-500/10 text-green-500 border-green-500/20';
-    if (t === 'Developing') return 'bg-blue-500/10 text-blue-500 border-blue-500/20';
-    if (t === 'Early') return 'bg-orange-500/10 text-orange-500 border-orange-500/20';
-    return 'bg-slate-500/10 text-slate-500 border-slate-500/20';
-  };
+  const tier = $derived.by(() => {
+    if (startup?.qualificationStatus !== QualificationStatus.QUALIFIED)
+      return null;
+    const evals = startup?.readinessEvaluations;
+    return evals?.length ? evals[evals.length - 1].tierLabel : null;
+  });
 
   const initials = $derived(
-    startup.name
+    (startup?.name ?? '?')
       .split(' ')
-      .map((word: any) => word.charAt(0).toUpperCase())
+      .filter(Boolean)
+      .map((w: string) => w.charAt(0).toUpperCase())
       .join('')
-      .slice(0, 3)
+      .slice(0, 2)
   );
 
-  const truncatedName = $derived(
-    startup.name.length > 14 ? startup.name.slice(0, 14) + '...' : startup.name
+  const done = $derived(initiatives.filter((i) => i.status === 4).length);
+  const pct = $derived(
+    initiatives.length ? Math.round((done / initiatives.length) * 100) : 0
   );
 
-  const completedCount = $derived(
-    initiatives.filter((initiative) => initiative.status === 4).length
+  const href = $derived(
+    `/startups/${startup.id}/${startup?.qualificationStatus === QualificationStatus.QUALIFIED ? 'assessment' : 'pending'}`
   );
 
-  const progressPct = $derived(
-    initiatives.length > 0 ? (completedCount / initiatives.length) * 100 : 0
-  );
-</script>
-
-<a
-  href={`/startups/${startup.id}/${startup?.qualificationStatus === QualificationStatus.QUALIFIED ? 'assessment' : 'pending'}`}
-  class="block"
-  onclick={(e) => {
+  function onClick(e: MouseEvent) {
+    // A waitlisted startup reopens its application rather than navigating.
     if (startup?.qualificationStatus === QualificationStatus.WAITLISTED) {
       e.preventDefault();
-      const event = new CustomEvent('openApplication', { detail: { startup } });
-      window.dispatchEvent(event);
+      window.dispatchEvent(
+        new CustomEvent('openApplication', { detail: { startup } })
+      );
     }
-  }}
+  }
+</script>
+
+<!--
+  A row, not a centred card: the job on this page is comparing many startups on
+  the same four fields, and aligned columns let the eye run straight down them.
+  Rounded square for an organisation, circle for a person (the header avatar).
+-->
+<a
+  {href}
+  onclick={onClick}
+  class="group grid items-center gap-x-5 gap-y-3 px-5 py-4 transition-colors hover:bg-[#0f1a2c] focus-visible:bg-[#0f1a2c] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#818cf8] sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]"
 >
-  <Card.Root
-    variant="glass"
-    class="cursor-pointer p-0 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-  >
-    <Card.Content class="h-full">
-      <div class="flex flex-col items-center p-6 text-center">
-        <div
-          class="bg-primary text-primary-foreground flex h-[52px] w-[52px] items-center justify-center rounded-2xl text-base font-bold"
+  <!-- Identity -->
+  <div class="flex min-w-0 items-center gap-3.5">
+    <span
+      class="lu-d flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.75rem] border border-[#2b3a5c] bg-[#111b2e] text-[14px] text-[#c7d2fe]"
+      aria-hidden="true"
+    >
+      {initials}
+    </span>
+    <div class="min-w-0">
+      <p
+        class="truncate text-[15px] font-semibold text-white"
+        title={startup.name}
+      >
+        {startup.name}
+      </p>
+      <p class="mt-0.5 truncate text-[12.5px] text-[#94a3b8]">
+        {tier ? `${tier} tier` : 'Not yet tiered'}
+      </p>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div>
+    <span class="lu-status" data-status={status.key}>{statusLabel}</span>
+  </div>
+
+  <!-- Progress -->
+  <div class="min-w-0">
+    <div class="flex items-baseline justify-between gap-3 text-[12.5px]">
+      <span class="text-[#94a3b8]">Initiatives</span>
+      <span class="lu-num font-semibold text-[#f1f5f9]">
+        {done}<span class="font-normal text-[#94a3b8]">
+          / {initiatives.length}</span
         >
-          {initials}
-        </div>
+      </span>
+    </div>
+    <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-[#17213a]">
+      <div
+        class="h-full rounded-full bg-[#6366f1] transition-[width] duration-500"
+        style="width:{pct}%"
+      ></div>
+    </div>
+  </div>
 
-        <span class="mt-2.5 max-w-[160px] truncate text-[15px] font-semibold" title={startup.name}>
-          {truncatedName}
-        </span>
+  <!-- Next step (wide screens only) -->
+  <p class="hidden min-w-0 truncate text-[13px] text-[#94a3b8] lg:block">
+    {startup.consultationText ?? 'No consultation pending'}
+  </p>
 
-        <div class="mt-2 flex flex-wrap justify-center gap-1.5">
-          <Badge variant={status.badgeVariant} class="rounded px-2 py-0.5 text-xs font-semibold">
-            {status.label === 'Qualified' && role === 'Mentor' ? 'Active' : status.label}
-          </Badge>
-          <div class={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wider ${getTierColor(tier)}`}>
-            {tier}
-          </div>
-        </div>
-
-        <div class="mt-6 w-full text-left">
-          <div class="mb-1.5 flex items-center justify-between text-xs">
-            <span>Initiatives</span>
-            <span class="font-bold">{completedCount} / {initiatives.length}</span>
-          </div>
-          <div class="bg-accent h-2 w-full rounded">
-            <div class="bg-primary h-2 rounded" style="width: {progressPct}%"></div>
-          </div>
-        </div>
-
-        <div class="mt-3.5 flex items-center justify-center gap-2 text-xs">
-          <img src="/checked.png" alt="Checked" class="h-4 w-4" />
-          <span>{startup.consultationText ?? 'No consultation pending'}</span>
-        </div>
-      </div>
-    </Card.Content>
-  </Card.Root>
+  <ChevronRight
+    class="hidden h-4 w-4 text-[#54648a] transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-[#818cf8] sm:block"
+  />
 </a>

@@ -1,6 +1,10 @@
 /* LaunchUp brand tokens. Scoped under .lu-root so the rest of the app keeps
-   Geist and the shadcn CSS variables. Used by the landing page and the auth
-   pages; they must stay visually identical. */
+   Geist and the shadcn CSS variables. Every branded page imports this file.
+
+   The fonts are loaded here rather than per page. Only the landing page used
+   to load them, so auth, legal and dashboard declared Archivo/Public Sans but
+   rendered in system fonts on a direct visit. */
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Public+Sans:wght@300..800&display=swap');
 
 /* Reserve the scrollbar track so a short page and a tall one put their
    content on the same left edge. Without it, login and register differ by
@@ -445,4 +449,63 @@ html:has(.lu-root) {
   font-size: 14px;
   line-height: 1.6;
   color: var(--lu-flag);
+}
+
+/* ---- Startup status ----
+   One mapping, used everywhere a qualification status appears. Pending and
+   waitlisted used to be yellow/orange on one component and yellow/purple on
+   another. Palette tokens only. */
+.lu-root .lu-status {
+  --st: var(--lu-mute);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--st) 32%, transparent);
+  background: color-mix(in srgb, var(--st) 10%, transparent);
+  padding: 3px 10px 3px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--st);
+  white-space: nowrap;
+}
+.lu-root .lu-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--st);
+}
+/* Any element can carry data-status: badges, the pipeline bar segments and the
+   legend all read the same --st, so the colours cannot drift apart again. */
+.lu-root [data-status='pending'] {
+  --st: var(--lu-flag);
+}
+.lu-root [data-status='waitlisted'] {
+  --st: var(--lu-mute);
+}
+.lu-root [data-status='qualified'] {
+  --st: var(--lu-indigo-lite);
+}
+.lu-root [data-status='completed'] {
+  --st: var(--lu-ok);
+}
+
+.lu-root .lu-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lu-root .lu-legend::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--st);
+}
+.lu-root .lu-legend b {
+  font-weight: 600;
+  color: var(--lu-cloud);
+  font-variant-numeric: tabular-nums;
 }

@@ -3,9 +3,25 @@ import { env } from '$env/dynamic/public';
 const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 import { fail } from '@sveltejs/kit';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies, fetch }) => {
+  // One real figure for the profile header. Optional: if it fails, the header
+  // simply omits it rather than showing a made-up number.
+  let startupCount: number | null = null;
+  try {
+    const res = await fetch(`${PUBLIC_API_URL}/startups/startups`, {
+      headers: { Authorization: `Bearer ${cookies.get('Access')}` }
+    });
+    if (res.ok) {
+      const startups = await res.json();
+      if (Array.isArray(startups)) startupCount = startups.length;
+    }
+  } catch {
+    startupCount = null;
+  }
+
   return {
-    user: locals.user
+    user: locals.user,
+    startupCount
   };
 };
 
