@@ -1,5 +1,6 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, UseGuards } from '@nestjs/common';
 import { AppService } from './app.service';
+import { AdminGuard, JwtGuard } from './auth/guard';
 
 type ObjectiveStatus = {
   id: string;
@@ -20,7 +21,10 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  // Internal build-status tracker: it lists source files and database tables,
+  // so it was a map of the system for anyone who asked. Managers only.
   @Get('design/status')
+  @UseGuards(JwtGuard, AdminGuard)
   getDesignStatus() {
     const objectives: ObjectiveStatus[] = [
       {
