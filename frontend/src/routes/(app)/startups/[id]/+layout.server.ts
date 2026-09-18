@@ -5,13 +5,20 @@ const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
   const access = cookies.get('Access');
 
-  // The header reads this from page.data to limit the nav for unqualified startups.
+  // The header reads qualificationStatus from page.data to limit the nav for
+  // unqualified startups; the name lets the title and heading render with the
+  // page instead of flashing "Loading".
   let qualificationStatus: number | null = null;
+  let startupName: string | null = null;
   try {
     const res = await fetch(`${PUBLIC_API_URL}/startups/${params.id}`, {
       headers: { Authorization: `Bearer ${access}` }
     });
-    if (res.ok) qualificationStatus = (await res.json()).qualificationStatus ?? null;
+    if (res.ok) {
+      const startup = await res.json();
+      qualificationStatus = startup.qualificationStatus ?? null;
+      startupName = startup.name ?? null;
+    }
   } catch {
     // Leave the nav unrestricted; the pages surface their own load errors.
   }
@@ -19,7 +26,8 @@ export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
   return {
     access,
     startupId: params.id,
-    qualificationStatus
+    qualificationStatus,
+    startupName
   };
 };
 

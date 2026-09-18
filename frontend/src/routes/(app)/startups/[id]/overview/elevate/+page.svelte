@@ -177,9 +177,6 @@
   });
 </script>
 
-<svelte:head>
-  <title>Settings - Elevate</title>
-</svelte:head>
 <div class="flex flex-col gap-5">
   <h1 class="text-xl font-semibold">Elevate</h1>
   {#if $readinessData.isError || $elevateData.isError || $queryResult.isError}

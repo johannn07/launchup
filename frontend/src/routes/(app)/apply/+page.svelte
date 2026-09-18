@@ -230,6 +230,11 @@
   });
 </script>
 
+<svelte:head>
+  <title>{isEditMode ? 'Edit application' : 'New application'} — LaunchUp</title
+  >
+</svelte:head>
+
 <div class="mx-auto max-w-4xl space-y-6 p-6">
   {#if isEditMode && startupData}
     <WaitlistedMessage message={waitlistMessage()} />

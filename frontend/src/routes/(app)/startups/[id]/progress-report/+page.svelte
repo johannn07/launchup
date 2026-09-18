@@ -103,13 +103,6 @@
   ];
 </script>
 
-<svelte:head>
-  <title
-    >{$queryResult.isSuccess
-      ? `${$queryResult.data.startup.name} - Readiness and Needs Assessment`
-      : 'Loading'}</title
-  >
-</svelte:head>
 <div class="flex">
   <Button class="ml-auto" onclick={downloadMultiPagePDF}
     ><Download class="h-4 w-4" /> Download PDF</Button

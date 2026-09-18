@@ -189,9 +189,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Settings - Members</title>
-</svelte:head>
 <div class="flex flex-col gap-5">
   {#if $queryResult.isError}
     <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">

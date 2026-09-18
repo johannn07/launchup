@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { Skeleton } from '$lib/components/ui/skeleton';
   import {
     Search as SearchIcon,
     Inbox,
@@ -24,7 +23,7 @@
   import { onMount } from 'svelte';
   import { flip } from 'svelte/animate';
   import { fade } from 'svelte/transition';
-  import { CountUp, Segmented, arrive, dur, MOVE } from '$lib/motion';
+  import { Segmented, arrive, dur, MOVE } from '$lib/motion';
 
   let { data, form } = $props();
 
@@ -340,9 +339,14 @@
       <p class="text-[13px] text-[#94a3b8]">
         {role === 'Mentor' ? 'Startups mentored' : 'Startups'}
       </p>
-      <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-        <CountUp value={total} />
-      </p>
+      <!-- Plain figures: on a working page, ticking up adds nothing. -->
+      {#if isLoading}
+        <span class="lu-skel mt-1.5 h-[34px] w-16" aria-hidden="true"></span>
+      {:else}
+        <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
+          {total}
+        </p>
+      {/if}
 
       {#if total > 0}
         <div
@@ -389,13 +393,15 @@
 
     <div class="border-t border-[#17213a] p-6 md:border-t-0">
       <p class="text-[13px] text-[#94a3b8]">Initiatives completed</p>
-      <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-        <CountUp value={doneInitiatives} /><span
-          class="text-[18px] text-[#94a3b8]"
-        >
-          / {allInitiatives?.length ?? 0}</span
-        >
-      </p>
+      {#if isLoading}
+        <span class="lu-skel mt-1.5 h-[34px] w-16" aria-hidden="true"></span>
+      {:else}
+        <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
+          {doneInitiatives}<span class="text-[18px] text-[#94a3b8]">
+            / {allInitiatives?.length ?? 0}</span
+          >
+        </p>
+      {/if}
       <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-[#17213a]">
         <div
           class="lu-fill h-full rounded-full bg-[#6366f1]"
@@ -410,9 +416,13 @@
 
     <div class="border-t border-[#17213a] p-6 md:border-t-0">
       <p class="text-[13px] text-[#94a3b8]">Programme completion</p>
-      <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-        <CountUp value={completionRate} suffix="%" />
-      </p>
+      {#if isLoading}
+        <span class="lu-skel mt-1.5 h-[34px] w-16" aria-hidden="true"></span>
+      {:else}
+        <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
+          {completionRate}%
+        </p>
+      {/if}
       <div class="mt-5 h-2 w-full overflow-hidden rounded-full bg-[#17213a]">
         <div
           class="lu-fill h-full rounded-full"
@@ -468,15 +478,13 @@
     {#if isLoading}
       <ul class="divide-y divide-[#17213a]">
         {#each [0, 1, 2, 3, 4] as i (i)}
-          <li class="flex animate-pulse items-center gap-3.5 px-5 py-4">
-            <span class="h-10 w-10 shrink-0 rounded-[0.75rem] bg-[#17213a]"
-            ></span>
+          <li class="flex items-center gap-3.5 px-5 py-4" aria-hidden="true">
+            <span class="lu-skel h-10 w-10 shrink-0 rounded-[0.75rem]"></span>
             <span class="flex-1 space-y-2">
-              <span class="block h-3.5 w-40 rounded bg-[#17213a]"></span>
-              <span class="block h-3 w-24 rounded bg-[#17213a]"></span>
+              <span class="lu-skel h-3.5 w-40"></span>
+              <span class="lu-skel h-3 w-24"></span>
             </span>
-            <span class="hidden h-6 w-24 rounded-full bg-[#17213a] sm:block"
-            ></span>
+            <span class="lu-skel hidden h-6 w-24 rounded-full sm:block"></span>
           </li>
         {/each}
       </ul>

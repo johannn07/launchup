@@ -82,7 +82,7 @@
   {/if}
 </div>
 <svelte:head>
-  <title>LaunchUp - Analytics</title>
+  <title>Analytics — LaunchUp</title>
 </svelte:head>
 {#snippet loading()}
   <div class="grid h-[175px] grid-cols-4 gap-3">

@@ -27,9 +27,6 @@
   );
 </script>
 
-<svelte:head>
-  <title>Settings - General</title>
-</svelte:head>
 <div class="flex flex-col gap-5">
   <h1 class="text-xl font-semibold">General</h1>
   {#if $queryResult.isError}

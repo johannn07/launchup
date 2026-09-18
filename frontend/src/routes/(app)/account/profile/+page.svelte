@@ -6,7 +6,6 @@
   import { tick } from 'svelte';
   import { slide } from 'svelte/transition';
   import {
-    CountUp,
     SubmitButton,
     SavedNote,
     autoHeight,
@@ -99,7 +98,7 @@
       <div class="border-[#17213a] sm:border-l sm:pl-6">
         <p class="text-[12.5px] text-[#94a3b8]">{statLabel}</p>
         <p class="lu-d-xw lu-num mt-1 text-[28px] leading-none text-white">
-          <CountUp value={data.startupCount} />
+          {data.startupCount}
         </p>
       </div>
     {/if}

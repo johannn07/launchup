@@ -615,13 +615,6 @@
   };
 </script>
 
-<svelte:head>
-  <title
-    >{$initiativesQueries[3].isSuccess
-      ? `${$initiativesQueries[3].data.name} - Initiatives`
-      : 'Loading'}</title
-  >
-</svelte:head>
 {#if isLoading}
   {@render loading()}
 {:else if isError}

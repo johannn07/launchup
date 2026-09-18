@@ -38,7 +38,7 @@
 </script>
 
 <svelte:head>
-  <title>Manager Login</title>
+  <title>Manager sign-in — LaunchUp</title>
 </svelte:head>
 
 <div class="grid min-h-screen lg:grid-cols-[1.08fr_0.92fr]">

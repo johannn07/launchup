@@ -458,13 +458,6 @@
   let selectedFormat = $state('board');
 </script>
 
-<svelte:head>
-  <title
-    >{$roadblocksQueries[2].isSuccess
-      ? `${$roadblocksQueries[2].data.name} - Roadblocks`
-      : 'Loading'}</title
-  >
-</svelte:head>
 {#if isLoading}
   {@render loading()}
 {:else if isError}

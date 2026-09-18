@@ -38,7 +38,7 @@
 
 <Card.Root variant="glass" class="h-full">
   <Card.Header>
-    <Card.Title class="text-xl">Startup Settings</Card.Title>
+    <Card.Title class="text-xl">Overview</Card.Title>
     <Card.Description>Manage your startup</Card.Description>
   </Card.Header>
   <Card.Content class="mt-1 grid w-full grid-cols-[250px_1fr] gap-10">

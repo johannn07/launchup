@@ -247,7 +247,10 @@ export class AdminService {
         const safeLabel = cfg.tierLabel.replace(/'/g, "''");
         caseSql += `WHEN composite_score >= ${cfg.threshold} THEN '${safeLabel}' `;
       }
-      caseSql += `ELSE 'Pending' END`;
+      // Below every threshold is the lowest tier, as ReadinessService scores
+      // it. 'Pending' here collided with the qualification status of that name.
+      const lowest = sortedConfigs[sortedConfigs.length - 1].tierLabel.replace(/'/g, "''");
+      caseSql += `ELSE '${lowest}' END`;
       
       const conn = this.em.getConnection();
       await conn.execute(`UPDATE readiness_evaluations SET tier_label = ${caseSql}`);

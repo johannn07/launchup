@@ -10,7 +10,15 @@
     access.roles.Manager.modules.find((m) => m.link === 'admin')?.subModule ?? [];
 
   const current = $derived(page.url.pathname.replace(/^\/admin\/?/, ''));
+  // Titled from the same nav labels, so the tab matches the selected link.
+  const section = $derived(
+    current ? links.find((l) => l.link === current)?.name : undefined
+  );
 </script>
+
+<svelte:head>
+  <title>{section ? `${section} · Admin` : 'Admin'} — LaunchUp</title>
+</svelte:head>
 
 <div class="mx-auto w-full max-w-7xl p-4">
   <nav class="mb-6 border-b">

@@ -470,13 +470,6 @@
   {@render fallback()}
 {/if}
 
-<svelte:head>
-  <title
-    >{$rnsQueries[3].isSuccess
-      ? `${$rnsQueries[3].data.name} - Recommended Next Steps`
-      : 'Loading'}</title
-  >
-</svelte:head>
 
 <RnsCreateDialog
   {open}

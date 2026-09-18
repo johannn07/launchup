@@ -219,13 +219,6 @@
   };
 </script>
 
-<svelte:head>
-  <title
-    >{$rnaQueries[3].isSuccess
-      ? `${$rnaQueries[3].data.name} - Readiness and Needs Assessment`
-      : 'Loading'}</title
-  >
-</svelte:head>
 
 {#if isLoading}
   {@render loading()}

@@ -13,30 +13,35 @@
   );
 
   const info: any = $derived($startupQuery.isSuccess ? $startupQuery.data : {});
+  // The server load already has the name, so nothing waits on the client query.
+  const name: string | null = $derived(data.startupName ?? info.name ?? null);
 
-  type m =
-    | 'readiness-level'
-    | 'progress-report'
-    | 'rns'
-    | 'rna'
-    | 'initiatives'
-    | 'roadblocks';
-
-  const getModule = (segment: string): string => {
-    const modules: Record<string, string> = {
-      'readiness-level': 'Readiness Level',
-      'progress-report': 'Progress Report',
-      rns: 'Recommended Next Steps',
-      rna: 'Readiness and Needs Assessment',
-      initiatives: 'Initiatives',
-      roadblocks: 'Roadblocks',
-      assessment: 'Assessments',
-      pending: 'Pending Approval',
-      overview: 'Overview'
-    };
-    return modules[segment] || segment;
+  // One name per section, shared by the breadcrumb and the tab title.
+  const SECTIONS: Record<string, string> = {
+    assessment: 'Assessment',
+    'readiness-level': 'Readiness levels',
+    rna: 'Readiness and needs assessment',
+    rns: 'Recommended next steps',
+    initiatives: 'Initiatives',
+    roadblocks: 'Roadblocks',
+    'progress-report': 'Progress report',
+    pending: 'Pending approval',
+    overview: 'Overview',
+    general: 'Overview',
+    members: 'Members',
+    capsule_proposal: 'Capsule proposal',
+    elevate: 'Elevate'
   };
+
+  const section = $derived.by(() => {
+    const segments = $page.url.pathname.split('/').filter(Boolean);
+    return SECTIONS[segments[segments.length - 1]] ?? 'Overview';
+  });
 </script>
+
+<svelte:head>
+  <title>{section}{name ? ` · ${name}` : ''} — LaunchUp</title>
+</svelte:head>
 
 <div class="flex max-h-full flex-1 flex-col gap-3">
   <Breadcrumb.Root>
@@ -46,20 +51,19 @@
       </Breadcrumb.Item>
       <Breadcrumb.Separator />
       <Breadcrumb.Item>
-        <Breadcrumb.Page
-          >{$startupQuery.isLoading ? 'Loading...' : info.name}</Breadcrumb.Page
-        >
+        <Breadcrumb.Page>
+          {#if name}
+            {name}
+          {:else if $startupQuery.isLoading}
+            <span class="lu-skel h-3.5 w-28" aria-hidden="true"></span>
+          {:else}
+            Startup
+          {/if}
+        </Breadcrumb.Page>
       </Breadcrumb.Item>
       <Breadcrumb.Separator />
       <Breadcrumb.Item>
-        <Breadcrumb.Page>
-          {@const currentPath = $page.url.pathname.split('/').slice(-1)[0]}
-          {currentPath === 'assessment'
-            ? 'Assessments'
-            : currentPath === 'pending'
-              ? 'Pending Approval'
-              : getModule(currentPath as m) || 'Overview'}
-        </Breadcrumb.Page>
+        <Breadcrumb.Page>{section}</Breadcrumb.Page>
       </Breadcrumb.Item>
     </Breadcrumb.List>
   </Breadcrumb.Root>
@@ -70,9 +74,17 @@
   >
     STARTUP
   </span>
-  <h2 class="text-4xl font-bold tracking-tight text-white">
-    {$startupQuery.isLoading ? 'Loading...' : info.name}
-  </h2>
+  {#if name}
+    <h2 class="text-4xl font-bold tracking-tight text-white">{name}</h2>
+  {:else if $startupQuery.isLoading}
+    <span
+      class="lu-skel my-1 h-9 w-72 max-w-full"
+      role="status"
+      aria-label="Loading startup"
+    ></span>
+  {:else}
+    <h2 class="text-4xl font-bold tracking-tight text-white">Startup</h2>
+  {/if}
 </div>
   {#if data.qualificationStatus === QualificationStatus.PENDING || data.qualificationStatus === QualificationStatus.WAITLISTED}
     <div class="glass-card px-5 py-3 text-sm text-muted-foreground">

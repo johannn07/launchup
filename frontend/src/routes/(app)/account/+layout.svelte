@@ -27,7 +27,7 @@
 <div class="lu-root bg-transparent pb-12">
   <div class="pt-2">
     <h1 class="lu-d-xw text-[27px] leading-[1.15] text-white sm:text-[30px]">
-      Settings
+      Account
     </h1>
     <p class="mt-2 text-[15px] text-[#94a3b8]">
       Your account, sign-in and preferences.
@@ -35,7 +35,7 @@
   </div>
 
   <div class="mt-8 grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-12">
-    <nav aria-label="Settings">
+    <nav aria-label="Account">
       <ul class="flex gap-1 overflow-x-auto lg:flex-col">
         {#each items as item (item.link)}
           {@const isActive = currentModule === item.link}

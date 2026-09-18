@@ -173,7 +173,7 @@ html:has(.lu-root) {
   transform: none;
 }
 
-/* Reduced motion: from the OS setting, or from Settings > Appearance, which
+/* Reduced motion: from the OS setting, or from Account > Appearance, which
    sets html[data-motion='reduce']. Applies app-wide, not just to branded
    pages, because it is a preference about the product. State still changes;
    it just changes instantly. */
@@ -596,6 +596,20 @@ html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
 }
 .lu-enter {
   animation: lu-enter var(--lu-move) var(--lu-ease) both;
+}
+
+/* Loading placeholder in the shape of what is coming. Unscoped and literal
+   colours: dialogs portal outside .lu-root. */
+@keyframes lu-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.lu-skel {
+  display: block;
+  border-radius: 6px;
+  background: #17213a;
+  animation: lu-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 /* Something just changed here: a brief indigo wash that fades out. */

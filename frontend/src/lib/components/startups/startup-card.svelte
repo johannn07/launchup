@@ -28,8 +28,13 @@
     status.key === 'qualified' && role === 'Mentor' ? 'Active' : status.label
   );
 
+  // Two vocabularies that never share a word: status is where the startup is
+  // in the programme (the badge), tier is how ready it scored (this line).
   const tier = $derived.by(() => {
-    if (startup?.qualificationStatus !== QualificationStatus.QUALIFIED)
+    if (
+      startup?.qualificationStatus !== QualificationStatus.QUALIFIED &&
+      startup?.qualificationStatus !== QualificationStatus.COMPLETED
+    )
       return null;
     const evals = startup?.readinessEvaluations;
     return evals?.length ? evals[evals.length - 1].tierLabel : null;
@@ -100,7 +105,7 @@
         {startup.name}
       </p>
       <p class="mt-0.5 truncate text-[12.5px] text-[#94a3b8]">
-        {tier ? `${tier} tier` : 'Not yet tiered'}
+        {tier ? `Readiness: ${tier}` : 'Readiness not scored'}
       </p>
     </div>
   </div>
@@ -131,7 +136,7 @@
 
   <!-- Next step (wide screens only) -->
   <p class="hidden min-w-0 truncate text-[13px] text-[#94a3b8] lg:block">
-    {startup.consultationText ?? 'No consultation pending'}
+    {startup.consultationText ?? 'No next step set'}
   </p>
 
   <ChevronRight

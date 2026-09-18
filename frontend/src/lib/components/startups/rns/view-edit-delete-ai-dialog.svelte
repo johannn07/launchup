@@ -172,8 +172,11 @@
           class="flex-1 space-y-4 overflow-y-auto py-4"
         >
           {#if isLoadingHistory}
-            <div class="flex h-full items-center justify-center">
-              <div class="text-gray-400">Loading chat history...</div>
+            <!-- Placeholder bubbles, alternating sides like the thread. -->
+            <div class="space-y-4" role="status" aria-label="Loading chat history">
+              <span class="lu-skel h-16 w-3/4 rounded-lg"></span>
+              <span class="lu-skel ml-auto h-10 w-1/2 rounded-lg"></span>
+              <span class="lu-skel h-20 w-2/3 rounded-lg"></span>
             </div>
           {:else}
             <div class="flex justify-start">

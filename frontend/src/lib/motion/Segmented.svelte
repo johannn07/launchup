@@ -1,6 +1,5 @@
 <script lang="ts" generics="T extends string">
   import { onMount } from 'svelte';
-  import CountUp from './CountUp.svelte';
 
   let {
     options,
@@ -76,7 +75,8 @@
     >
       {o.label}
       {#if o.count !== undefined}
-        <span class="lu-seg__count"><CountUp value={o.count} /></span>
+        <!-- Plain: counts follow the search on every keystroke. -->
+        <span class="lu-seg__count lu-num">{o.count}</span>
       {/if}
     </button>
   {/each}

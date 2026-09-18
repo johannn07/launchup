@@ -110,9 +110,6 @@
   }
 </script>
 
-<svelte:head>
-  <title>Settings - Capsule Proposal</title>
-</svelte:head>
 
 <div class="flex h-[90vh] flex-col gap-5 overflow-y-auto">
   {#if $queryResult.isError}

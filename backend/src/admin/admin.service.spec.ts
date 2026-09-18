@@ -92,3 +92,30 @@ describe('AdminService.overrideBiasAudit', () => {
     expect(result.correctedScore).toBe(3);
   });
 });
+
+// A score below every threshold must relabel to the lowest tier, as
+// ReadinessService scores it, not to 'Pending', the qualification status.
+describe('AdminService.upsertTierConfigs', () => {
+  it('relabels scores below every threshold to the lowest tier', async () => {
+    const execute = jest.fn(async () => undefined);
+    const em = {
+      find: jest.fn(async () => []),
+      remove: jest.fn(),
+      flush: jest.fn(async () => undefined),
+      persist: jest.fn(),
+      create: jest.fn((_entity: unknown, data: any) => data),
+      persistAndFlush: jest.fn(async () => undefined),
+      getConnection: () => ({ execute }),
+    } as unknown as EntityManager;
+    const service = new AdminService({} as any, {} as any, {} as any, em);
+
+    await service.upsertTierConfigs([
+      { tierLabel: 'Ready', threshold: 70 },
+      { tierLabel: "O'Early", threshold: 25 },
+    ]);
+
+    const sql = (execute.mock.calls[0] as unknown as [string])[0];
+    expect(sql).toContain(`ELSE 'O''Early' END`);
+    expect(sql).not.toContain('Pending');
+  });
+});

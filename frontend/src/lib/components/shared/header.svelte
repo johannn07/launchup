@@ -18,6 +18,8 @@
   let desktopDropdownOpen = $state(false);
   let mobileDropdownOpen = $state(false);
   let mobileMenuOpen = $state(false);
+  const logoutForms: Record<'desktop' | 'mobile', HTMLFormElement | undefined> =
+    $state({ desktop: undefined, mobile: undefined });
 
   function navigateTo(path: string) {
     desktopDropdownOpen = false;
@@ -213,8 +215,11 @@
   {/if}
 </header>
 
-<!-- One account menu, rendered in both the desktop and mobile slots. -->
+<!-- One account menu, rendered in both the desktop and mobile slots. Inside a
+     startup the nav shows its sections, so this is the way back to modules. -->
 {#snippet account(which: 'desktop' | 'mobile')}
+  {@const item =
+    'flex cursor-pointer items-center gap-3 rounded-[10px] px-3 py-2 text-[14px] font-medium text-[#cbd5e1] outline-none transition-colors duration-quick data-[highlighted]:bg-[#111b2e] data-[highlighted]:text-white'}
   <DropdownMenu.Root
     bind:open={
       () => (which === 'desktop' ? desktopDropdownOpen : mobileDropdownOpen),
@@ -234,33 +239,63 @@
         {user.firstName.charAt(0)}
       </div>
     </DropdownMenu.Trigger>
-    <DropdownMenu.Content align="end" class="w-56">
-      <DropdownMenu.Group>
-        <DropdownMenu.Label>
-          <p class="font-medium">{user.firstName} {user.lastName ?? ''}</p>
-          <p class="text-xs text-muted-foreground">{user?.email}</p>
-        </DropdownMenu.Label>
-        <DropdownMenu.Separator />
-        {#each modules as mod}
-          <DropdownMenu.Item
-            class="cursor-pointer rounded-md"
-            onclick={() =>
-              navigateTo(
-                `/${mod.link}${mod.subModule.length > 0 && mod.name !== 'Startups' ? `/${mod.subModule[0].link}` : ''}`
-              )}
-          >
-            {mod.name}
-          </DropdownMenu.Item>
-        {/each}
-        <DropdownMenu.Separator />
-        <form action="/logout" method="post" class="w-full">
-          <button type="submit" class="w-full">
-            <DropdownMenu.Item class="cursor-pointer rounded-md"
-              >Log out</DropdownMenu.Item
-            >
-          </button>
-        </form>
-      </DropdownMenu.Group>
+    <DropdownMenu.Content
+      align="end"
+      sideOffset={8}
+      class="w-64 rounded-2xl border-[#1f2c47] bg-[#0b1220] p-1.5 text-[#f1f5f9] shadow-[0_16px_40px_-12px_rgba(0,0,0,0.6)]"
+      style="font-family: 'Public Sans', ui-sans-serif, system-ui, sans-serif"
+    >
+      <div class="flex items-center gap-3 px-3 pb-3 pt-2.5">
+        <span
+          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#4f46e5]/50 bg-[#4f46e5]/20 text-[14px] font-semibold text-white"
+          aria-hidden="true"
+        >
+          {user.firstName.charAt(0)}
+        </span>
+        <div class="min-w-0">
+          <p class="truncate text-[14px] font-semibold text-white">
+            {user.firstName}
+            {user.lastName ?? ''}
+          </p>
+          <p class="truncate text-[12.5px] text-[#94a3b8]">{user?.email}</p>
+        </div>
+      </div>
+      <DropdownMenu.Separator class="-mx-1.5 my-1 bg-[#17213a]" />
+      {#each modules.filter((m: { link: string }) => m.link !== 'account') as mod (mod.link)}
+        <DropdownMenu.Item
+          class={item}
+          onSelect={() =>
+            navigateTo(
+              `/${mod.link}${mod.subModule.length > 0 && mod.name !== 'Startups' ? `/${mod.subModule[0].link}` : ''}`
+            )}
+        >
+          {mod.name}
+        </DropdownMenu.Item>
+      {/each}
+      <DropdownMenu.Separator class="-mx-1.5 my-1 bg-[#17213a]" />
+      <DropdownMenu.Item
+        class={item}
+        onSelect={() => navigateTo('/account/profile')}
+      >
+        Profile
+      </DropdownMenu.Item>
+      <DropdownMenu.Item
+        class={item}
+        onSelect={() => navigateTo('/account/appearance')}
+      >
+        Appearance
+      </DropdownMenu.Item>
+      <DropdownMenu.Separator class="-mx-1.5 my-1 bg-[#17213a]" />
+      <!-- The item submits the form itself; a menu item inside a button was
+           two nested controls. -->
+      <form action="/logout" method="post" bind:this={logoutForms[which]}>
+        <DropdownMenu.Item
+          class={item}
+          onSelect={() => logoutForms[which]?.requestSubmit()}
+        >
+          Log out
+        </DropdownMenu.Item>
+      </form>
     </DropdownMenu.Content>
   </DropdownMenu.Root>
 {/snippet}

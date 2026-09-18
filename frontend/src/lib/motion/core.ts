@@ -10,7 +10,7 @@ export const SETTLE = 600; // data arriving: counters, bars
 
 
 /**
- * True when motion should be skipped: the OS setting, or the Settings >
+ * True when motion should be skipped: the OS setting, or the Account >
  * Appearance preference. app.html folds both into html[data-motion] before
  * first paint; the media query is re-checked in case the OS setting changed.
  */

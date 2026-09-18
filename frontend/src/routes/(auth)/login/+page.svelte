@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-  <title>Login — LaunchUp</title>
+  <title>Sign in — LaunchUp</title>
 </svelte:head>
 
 <AuthShell
