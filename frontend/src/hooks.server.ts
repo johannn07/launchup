@@ -29,9 +29,18 @@ const protectedRoutes = [
   '/analytics',
   '/applications',
   '/startups',
-  '/admin'
+  '/admin',
+  '/objectives'
 ];
 const publicOnlyRoutes = ['/login', '/register', '/manager-login'];
+
+// Manager-only surfaces sign in at /manager-login, since /login turns Managers
+// away.
+const managerRoutes = ['/admin', '/objectives'];
+const signInFor = (pathname: string) =>
+  managerRoutes.some((r) => pathname === r || pathname.startsWith(r + '/'))
+    ? '/manager-login'
+    : '/login';
 
 export const handle: Handle = async ({ event, resolve }) => {
   let accessToken = event.cookies.get('Access');
@@ -47,13 +56,10 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   if (!accessToken) {
     if (isProtectedRoute) {
-      if (pathname.startsWith('/admin')) {
-        throw redirect(
-          302,
-          `/manager-login?redirectTo=${encodeURIComponent(pathname)}`
-        );
-      }
-      throw redirect(302, `/login?redirectTo=${encodeURIComponent(pathname)}`);
+      throw redirect(
+        302,
+        `${signInFor(pathname)}?redirectTo=${encodeURIComponent(pathname)}`
+      );
     }
     return await resolve(event);
   }
@@ -88,13 +94,10 @@ export const handle: Handle = async ({ event, resolve }) => {
     console.error(`[ HANDLE ERROR ]`);
     console.error(error);
     if (isProtectedRoute) {
-      if (pathname.startsWith('/admin')) {
-        throw redirect(
-          302,
-          `/manager-login?redirectTo=${encodeURIComponent(pathname)}`
-        );
-      }
-      throw redirect(302, `/login?redirectTo=${encodeURIComponent(pathname)}`);
+      throw redirect(
+        302,
+        `${signInFor(pathname)}?redirectTo=${encodeURIComponent(pathname)}`
+      );
     }
 
     return await resolve(event);
