@@ -276,14 +276,14 @@
 
   {#if uploadedFiles.length > 0}
     <div class="space-y-2">
-      <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <div class="text-sm font-medium text-[#c7d2fe]">
         Uploaded Files ({uploadedFiles.length}):
       </div>
       {#each uploadedFiles as file, index}
         <div
-          class="flex items-center justify-between gap-3 rounded border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800"
+          class="flex items-center justify-between gap-3 rounded-[10px] border border-[#1f2c47] bg-[#111b2e] p-3"
         >
-          <span class="flex-1 truncate text-sm text-gray-900 dark:text-gray-100">
+          <span class="flex-1 truncate text-sm text-[#f1f5f9]">
             {file.fileName}
           </span>
 
@@ -328,14 +328,14 @@
 
   {#if pendingFiles.length > 0 && !isReadOnly}
     <div class="space-y-2">
-      <div class="text-sm font-medium text-gray-700 dark:text-gray-300">
+      <div class="text-sm font-medium text-[#c7d2fe]">
         Pending Upload ({pendingFiles.length}):
       </div>
       {#each pendingFiles as file, index}
         <div
           class="flex items-center justify-between rounded bg-yellow-50 p-2 dark:bg-yellow-900/20"
         >
-          <span class="flex-1 truncate text-gray-700 dark:text-gray-300">
+          <span class="flex-1 truncate text-[#c7d2fe]">
             {file.name}
           </span>
           <button
@@ -353,7 +353,7 @@
   {#if !isReadOnly}
     <label
       for="fileUpload-{description}"
-      class="flex h-32 cursor-pointer items-center justify-center rounded-lg border border-dashed border-gray-400 text-sm transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+      class="flex h-32 cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#2b3a5c] text-sm transition-colors duration-quick hover:border-[#4f46e5]/70 hover:bg-[#111b2e]"
       ondrop={handleDrop}
       ondragover={handleDragOver}
     >
@@ -364,9 +364,9 @@
         </div>
       {:else}
         <div class="flex flex-col items-center gap-2 text-center">
-          <CloudUpload class="h-6 w-6 text-gray-400 dark:text-gray-500" />
+          <CloudUpload class="h-6 w-6 text-[#54648a]" />
           <p>Drop multiple files here or click to upload</p>
-          <p class="text-xs text-gray-500">
+          <p class="text-xs text-[#94a3b8]">
             You can upload multiple files at once
           </p>
         </div>

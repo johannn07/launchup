@@ -168,7 +168,17 @@ export class StartupService {
     const startup = await this.em.findOne(
       Startup,
       { id: startupId },
-      { populate: ['user', 'members', 'capsuleProposal', 'waitlistMessages'] },
+      {
+        // The workspace header reads the tier from here; without it the page
+        // cannot tell "not scored" from "not loaded".
+        populate: [
+          'user',
+          'members',
+          'capsuleProposal',
+          'waitlistMessages',
+          'readinessEvaluations',
+        ],
+      },
     );
     if (!startup) {
       throw new NotFoundException(

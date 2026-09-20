@@ -2,17 +2,15 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
   import { SlidersHorizontal } from 'lucide-svelte';
 
-  import { buttonVariants } from '$lib/components/ui/button/index.js';
-
   let { views } = $props();
 
   let dropdownOpen = $state(false);
 </script>
 
 <DropdownMenu.Root bind:open={dropdownOpen}>
-  <DropdownMenu.Trigger class={buttonVariants({ variant: 'outline' })}>
+  <DropdownMenu.Trigger class="lu-btn lu-btn-secondary lu-btn-sm">
     <SlidersHorizontal class="h-4 w-4" />
-    View</DropdownMenu.Trigger
+    Columns</DropdownMenu.Trigger
   >
   <DropdownMenu.Content align="end">
     <DropdownMenu.Group>

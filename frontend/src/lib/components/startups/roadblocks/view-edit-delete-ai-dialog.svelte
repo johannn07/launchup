@@ -188,7 +188,7 @@
                           <strong>Description:</strong>
                           <div>{message.refinedDescription}</div>
                           <button
-                            class="absolute bottom-2 right-2 flex items-center gap-1 text-sm text-gray-400 opacity-50 transition-opacity hover:opacity-100"
+                            class="absolute bottom-2 right-2 flex items-center gap-1 text-sm text-[#94a3b8] opacity-60 transition-opacity duration-quick hover:text-white hover:opacity-100"
                             onclick={(e) => {
                               const button =
                                 e.currentTarget as HTMLButtonElement;
@@ -218,7 +218,7 @@
                           <strong>Fix:</strong>
                           <div>{message.refinedFix}</div>
                           <button
-                            class="absolute bottom-2 right-2 flex items-center gap-1 text-sm text-gray-400 opacity-50 transition-opacity hover:opacity-100"
+                            class="absolute bottom-2 right-2 flex items-center gap-1 text-sm text-[#94a3b8] opacity-60 transition-opacity duration-quick hover:text-white hover:opacity-100"
                             onclick={(e) => {
                               const button =
                                 e.currentTarget as HTMLButtonElement;

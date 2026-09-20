@@ -1,15 +1,8 @@
 <script lang="ts">
-  import * as Card from '$lib/components/ui/card/index.js';
+  import { StatePanel } from '$lib/components/workspace';
 </script>
 
-<div></div>
-
-<Card.Root class="h-full">
-  <Card.Content class="flex h-full flex-col items-center justify-center gap-5">
-    <img src="/pending.svg" alt="pending" class="h-[300px] w-[300px]" />
-    <h1>
-      Your startup is currently under evaluation. We’ll keep you updated as we
-      progress.
-    </h1>
-  </Card.Content>
-</Card.Root>
+<StatePanel title="Your application is under evaluation">
+  We will let you know as soon as it has been reviewed. Assessments and
+  readiness open once your startup is qualified.
+</StatePanel>

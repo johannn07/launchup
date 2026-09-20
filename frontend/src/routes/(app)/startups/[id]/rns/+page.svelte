@@ -10,24 +10,15 @@
   import { toast } from 'svelte-sonner';
   import axiosInstance from '$lib/axios.js';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
-  import { Badge } from '$lib/components/ui/badge/index.js';
   import {
     RnsCard,
     RnsCreateDialog
   } from '$lib/components/startups/rns/index.js';
-  import {
-    Kanban,
-    TableIcon,
-    Loader,
-    ChevronDown,
-    Sparkles,
-    Plus
-  } from 'lucide-svelte';
-  import { Skeleton } from '$lib/components/ui/skeleton/index.js';
-  import * as Tabs from '$lib/components/ui/tabs/index.js';
+  import { Loader, ChevronDown, Sparkles, Plus } from 'lucide-svelte';
   import * as Table from '$lib/components/ui/table';
+  import { Segmented } from '$lib/motion';
+  import { BoardSkeleton, StatePanel } from '$lib/components/workspace';
   import { goto } from '$app/navigation';
-  import { Button } from '$lib/components/ui/button';
 
   let dropdownOpen = $state(false);
 
@@ -440,7 +431,12 @@
     }
   };
 
-  let selectedFormat = $state('board');
+  let selectedFormat: 'board' | 'table' = $state('board');
+  const viewOptions = [
+    { value: 'board' as const, label: 'Board' },
+    { value: 'table' as const, label: 'Table' }
+  ];
+  const canEdit = $derived(data.role !== 'Startup');
 
   let taskType = $state(3);
 
@@ -494,162 +490,89 @@
 {/snippet}
 
 {#snippet loading()}
-  <div class="flex h-full flex-col gap-3">
-    <div class="flex justify-between">
-      <div class="flex gap-3">
-        <div class="bg-background" class:hidden={data.role === 'Startup'}>
-          <Skeleton class="h-9 w-[126px]" />
-        </div>
-        <div class="bg-background">
-          <Skeleton class="h-9 w-[170px]" />
-        </div>
-        <div class="flex">
-          {#each [1, 2] as item, index}
-            <Skeleton
-              class={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-background ${
-                index !== 2 - 1 ? '-mr-1' : ''
-              } `}
-            >
-              <span>?</span>
-            </Skeleton>
-          {/each}
-        </div>
-      </div>
-      <div class="ml-auto bg-background">
-        <Skeleton class="h-9 w-[90px]" />
-      </div>
-    </div>
-
-    <div class="glass-card grid h-full grid-cols-4 gap-5 p-5">
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-    </div>
-  </div>
+  <BoardSkeleton {canEdit} />
 {/snippet}
 
-{#snippet error()}{/snippet}
+{#snippet error()}
+  <StatePanel kind="error" title="Recommended next steps could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
+{/snippet}
 
 {#snippet accessible()}
-  <div class="flex items-center justify-between">
-    <div class="flex gap-3">
-      <div class="flex h-fit justify-between rounded-lg bg-background">
-        <Tabs.Root value={selectedFormat}>
-          <Tabs.List class="border">
-            <Tabs.Trigger
-              class="flex items-center gap-1"
-              value="board"
-              onclick={() => (selectedFormat = 'board')}
-            >
-              <Kanban class="h-4 w-4" />
-              Board</Tabs.Trigger
-            >
-            <Tabs.Trigger
-              class="flex items-center gap-1"
-              value="table"
-              onclick={() => (selectedFormat = 'table')}
-            >
-              <TableIcon class="h-4 w-4" />
-              Table</Tabs.Trigger
-            >
-          </Tabs.List>
-        </Tabs.Root>
-      </div>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <Segmented options={viewOptions} bind:value={selectedFormat} label="View" />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
     </div>
-    <div class="flex items-center gap-4">
-      {#if selectedFormat !== 'table'}
+    <div class="flex flex-wrap items-center gap-2.5">
+      {#if selectedFormat === 'board'}
         <ShowHideColumns {views} />
       {/if}
-      {#if data.role !== 'Startup'}
-        <Button
-          class="gap-1.5"
-          variant="outline"
+      {#if canEdit}
+        <button
           type="button"
+          class="lu-btn lu-btn-secondary lu-btn-sm"
           onclick={() => showDialog()}
         >
           <Plus class="h-4 w-4" />
           Add
-        </Button>
-        <div class="flex gap-1">
-          <Button
-            class="gap-1.5 rounded-r-none"
-            variant="glass-primary"
+        </button>
+        <div class="lu-split">
+          <button
             type="button"
+            class="lu-btn lu-btn-primary lu-btn-sm"
             disabled={generatingRNS}
             onclick={() => generateRNSForSelected()}
           >
             {#if generatingRNS}
               <Loader class="h-4 w-4 animate-spin" />
-              Generating...
+              Generating…
             {:else}
-              <Sparkles class="h-4 w-4" />Generate
+              <Sparkles class="h-4 w-4" />
+              Generate
             {/if}
-          </Button>
-
+          </button>
           <DropdownMenu.Root bind:open={dropdownOpen}>
-            <DropdownMenu.Trigger>
-              <Button
-                class="rounded-l-none border-l border-primary/20"
-                variant="glass-primary"
-                type="button"
-                disabled={generatingRNS}
-              >
-                <ChevronDown class="h-4 w-4" />
-              </Button>
+            <DropdownMenu.Trigger
+              class="lu-btn lu-btn-primary lu-btn-sm"
+              disabled={generatingRNS}
+              aria-label="Choose assessments to generate from"
+            >
+              <ChevronDown class="h-4 w-4" />
             </DropdownMenu.Trigger>
             <DropdownMenu.Content
               align="end"
-              class="max-h-[300px] w-[300px] overflow-y-auto"
+              class="max-h-[320px] w-[320px] overflow-y-auto"
+              closeOnItemClick={false}
             >
-              <DropdownMenu.Group class="space-y-1">
-                {#each $rnsQueries[4].data as rna}
-                  <div
-                    class="cursor-pointer px-2 py-1.5 hover:bg-accent {$rnsQueries[1].data.some(
-                      (rns: any) =>
-                        rns.readinessType === rna.readinessLevel.readinessType
-                    )
-                      ? 'opacity-50'
-                      : ''}"
-                    onclick={(e) => { e.stopPropagation(); toggleRNSSelection(rna.id); }}
-                    onkeydown={(e) => e.stopPropagation()}
-                  >
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedRNA.includes(rna.id)}
-                        class="h-4 w-4"
-                      />
-                      <div class="flex flex-col gap-0.5">
-                        <div class="flex items-center gap-2">
-                          <span class="font-medium"
-                            >{rna.readinessLevel.readinessType}</span
-                          >
-                          {#if $rnsQueries[1].data.some((rns: any) => rns.readinessType === rna.readinessLevel.readinessType)}
-                            <span class="text-xs text-muted-foreground"
-                              >(Has RNS)</span
-                            >
-                          {/if}
-                        </div>
-                        <span
-                          class="line-clamp-2 text-xs text-muted-foreground"
-                        >
-                          {rna.rna.substring(0, 50) + '...'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                {/each}
-              </DropdownMenu.Group>
+              <DropdownMenu.Label class="text-[12.5px] text-[#94a3b8]"
+                >Assessments to generate from</DropdownMenu.Label
+              >
+              <DropdownMenu.Separator />
+              {#each $rnsQueries[4].data as rna}
+                {@const taken = $rnsQueries[1].data.some(
+                  (rns: any) =>
+                    rns.readinessType === rna.readinessLevel.readinessType
+                )}
+                <DropdownMenu.CheckboxItem
+                  class="items-start gap-2.5 rounded-[10px] py-2"
+                  closeOnSelect={false}
+                  checked={selectedRNA.includes(rna.id)}
+                  onCheckedChange={() => toggleRNSSelection(rna.id)}
+                >
+                  <span class="flex flex-col gap-0.5 {taken ? 'opacity-50' : ''}">
+                    <span class="text-[13px] font-semibold text-[#f1f5f9]">
+                      {rna.readinessLevel.readinessType}{taken
+                        ? ' · has next steps'
+                        : ''}
+                    </span>
+                    <span class="line-clamp-2 text-[12.5px] text-[#94a3b8]">
+                      {rna.rna.substring(0, 60)}…
+                    </span>
+                  </span>
+                </DropdownMenu.CheckboxItem>
+              {/each}
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </div>
@@ -670,40 +593,53 @@
         {taskType}
       />
     {:else}
-      <div class="h-fit w-full rounded-md border">
-        <Table.Root class="rounded-lg bg-background">
+      <div
+        class="overflow-hidden rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220]"
+      >
+        <Table.Root>
           <Table.Header>
-            <Table.Row class="text-centery h-12">
-              <Table.Head class="pl-5">Type</Table.Head>
-              <Table.Head class="">Description</Table.Head>
-              <Table.Head class="">Target Level</Table.Head>
-              <Table.Head class="">Term</Table.Head>
-              <Table.Head class="">Assignee</Table.Head>
+            <Table.Row class="border-[#17213a] hover:bg-transparent">
+              <Table.Head class="h-11 pl-5 text-[12.5px] text-[#94a3b8]"
+                >Dimension</Table.Head
+              >
+              <Table.Head class="text-[12.5px] text-[#94a3b8]"
+                >Description</Table.Head
+              >
+              <Table.Head class="text-[12.5px] text-[#94a3b8]"
+                >Target level</Table.Head
+              >
+              <Table.Head class="text-[12.5px] text-[#94a3b8]">Term</Table.Head>
+              <Table.Head class="pr-5 text-[12.5px] text-[#94a3b8]"
+                >Assignee</Table.Head
+              >
             </Table.Row>
           </Table.Header>
           <Table.Body>
             {#each $rnsQueries[1].data.filter((data: any) => data.isAiGenerated === false) as item}
               {#if selectedMembers.includes(item.assignee.id) || selectedMembers.length === 0}
-                <Table.Row class="h-14 cursor-pointer">
-                  <Table.Cell class="pl-5">{item.readinessType}</Table.Cell>
-                  <Table.Cell class=""
+                <Table.Row class="h-14 border-[#17213a]">
+                  <Table.Cell class="pl-5 text-[13.5px] text-[#f1f5f9]"
+                    >{item.readinessType}</Table.Cell
+                  >
+                  <Table.Cell class="text-[13.5px] text-[#94a3b8]"
                     >{item.description.substring(0, 100)}</Table.Cell
                   >
-                  <Table.Cell class="">{item.targetLevelScore}</Table.Cell>
-                  <Table.Cell class=""
-                    ><Badge
-                      class={`${item.status !== 7 ? 'bg-gray-700 hover:bg-gray-800' : 'bg-rose-700 hover:bg-rose-800'}`}
-                      >{item.status !== 7 ? 'Short' : 'Long'} Term</Badge
-                    ></Table.Cell
+                  <Table.Cell class="lu-num text-[13.5px] text-[#94a3b8]"
+                    >{item.targetLevelScore}</Table.Cell
                   >
-                  <Table.Cell class=""
-                    >{members.filter(
-                      (member: any) => member.userId === item.assignee.id
-                    )[0]?.firstName}
+                  <Table.Cell>
+                    <span class="lu-chip-sm"
+                      >{item.status !== 7 ? 'Short' : 'Long'} term</span
+                    >
+                  </Table.Cell>
+                  <Table.Cell class="pr-5 text-[13.5px] text-[#94a3b8]">
                     {members.filter(
                       (member: any) => member.userId === item.assignee.id
-                    )[0]?.lastName}</Table.Cell
-                  >
+                    )[0]?.firstName ?? 'Unassigned'}
+                    {members.filter(
+                      (member: any) => member.userId === item.assignee.id
+                    )[0]?.lastName ?? ''}
+                  </Table.Cell>
                 </Table.Row>
               {/if}
             {/each}
@@ -715,13 +651,13 @@
 {/snippet}
 
 {#snippet fallback()}
-  <div class="text-2xl font-bold mt-10 text-center">
+  <StatePanel title="No readiness and needs assessments yet">
     {#if data.role === 'Startup'}
-      Your mentor has not yet created Readiness and Needs Assessments.
-    {:else if data.role === 'Mentor' || data.role === 'Manager'}
-      Please create Readiness and Needs Assessments for your startup.
+      Your mentor has not created any yet. Next steps are recommended from
+      them, so this page opens once they exist.
     {:else}
-      Something went wrong...
+      Create readiness and needs assessments for this startup first — next
+      steps are recommended from them.
     {/if}
-  </div>
+  </StatePanel>
 {/snippet}

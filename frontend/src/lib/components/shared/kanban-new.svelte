@@ -1,8 +1,10 @@
 <script lang="ts">
-  import { dndzone } from 'svelte-dnd-action';
+  import { dndzone, TRIGGERS } from 'svelte-dnd-action';
   import { flip } from 'svelte/animate';
+  import { cubicOut } from 'svelte/easing';
   import Column from './column.svelte';
-  import type { RNSItem } from '$lib/types';
+  import { dur, MOVE } from '$lib/motion/core';
+  import type { RNSItem } from '$lib/types/rns.types';
 
   let {
     handleDndConsider,
@@ -24,70 +26,115 @@
     selectedMembers: any;
   } = $props();
 
-  const flipDurationMs = 300;
+  // Reorders use the move token; dur() makes it 0 under reduced motion.
+  // cubicOut is the closest built-in to --lu-ease.
+  const flipDurationMs = dur(MOVE);
+
+  // Only the column under the card lights up. The library's dropTargetClasses
+  // mark every column that could accept it, which says nothing.
+  let overIndex: number | null = $state(null);
+  let settlingId: number | string | null = $state(null);
+
+  function consider(e: CustomEvent<DndEvent<RNSItem>>, index: number) {
+    const t = e.detail.info.trigger;
+    if (
+      t === TRIGGERS.DRAG_STARTED ||
+      t === TRIGGERS.DRAGGED_ENTERED ||
+      t === TRIGGERS.DRAGGED_OVER_INDEX
+    ) {
+      overIndex = index;
+    } else if (
+      (t === TRIGGERS.DRAGGED_LEFT || t === TRIGGERS.DRAGGED_LEFT_ALL) &&
+      overIndex === index
+    ) {
+      overIndex = null;
+    }
+    handleDndConsider(e, index);
+  }
+
+  function finalize(
+    e: CustomEvent<DndEvent<RNSItem>>,
+    index: number,
+    value: number
+  ) {
+    overIndex = null;
+    if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
+      const id = e.detail.info.id;
+      settlingId = id;
+      setTimeout(
+        () => {
+          if (settlingId === id) settlingId = null;
+        },
+        dur(MOVE) + 60
+      );
+    }
+    handleDndFinalize(e, index, value);
+  }
+
+  const isHidden = (item: any) =>
+    !selectedMembers.includes(item.assigneeId ? item.assigneeId : 999) &&
+    selectedMembers.length !== 0;
+
+  // Four working columns across the top, the two exits beneath, long-term
+  // last. Wide columns lay their cards out in a grid rather than one tall list.
+  const PLACE: Record<string, { cls: string; wide: boolean }> = {
+    Delayed: { cls: 'sm:col-span-2 lg:col-start-1 lg:row-start-2', wide: true },
+    Discontinued: {
+      cls: 'sm:col-span-2 lg:col-start-3 lg:row-start-2',
+      wide: true
+    },
+    'Long Term': {
+      cls: 'sm:col-span-2 lg:col-span-4 lg:row-start-3',
+      wide: true
+    }
+  };
 </script>
 
-<div
-  class="
-    mb-4
-    grid
-    w-full
-    auto-rows-fr
-    grid-cols-4
-    grid-rows-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]
-    gap-4
-  "
->
+<div class="lu-board mb-4 grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
   {#each columns as column, index}
     {#if column.show}
-      <div
-        class={column.name === 'Long Term'
-          ? 'col-span-4 row-start-3'
-          : column.name === 'Delayed'
-            ? 'col-span-2 col-start-1 row-start-2'
-            : column.name === 'Discontinued'
-              ? 'col-span-2 col-start-3 row-start-2'
-              : 'row-start-1'}
-      >
+      {@const place = PLACE[column.name] ?? {
+        cls: 'lg:row-start-1',
+        wide: false
+      }}
+      <div class="min-w-0 {place.cls}">
         <Column
           name={column.name}
-          itemCount={column.items.length}
+          itemCount={column.items.filter((i: any) => !i.isDndShadowItem).length}
           {showDialog}
           {updateStatus}
           statusId={column.value}
           {role}
+          over={overIndex === index}
         >
+          {#if column.items.length === 0}
+            <p
+              class="pointer-events-none absolute inset-x-0 top-7 text-center text-[12.5px] text-[#54648a]"
+            >
+              Nothing here
+            </p>
+          {/if}
           <div
             use:dndzone={{
               items: column.items,
-              flipDurationMs: flipDurationMs,
-              dropTargetStyle: {
-                outline: 'rgba(255, 255, 255, 0.5) solid 2px'
-              }
+              flipDurationMs,
+              dropTargetStyle: {}
             }}
-            onconsider={(e: CustomEvent<DndEvent<RNSItem>>) =>
-              handleDndConsider(e, index)}
-            onfinalize={(e: CustomEvent<DndEvent<RNSItem>>) =>
-              handleDndFinalize(e, index, column.value)}
-            class="flex h-[700px] flex-col gap-3"
+            onconsider={(e: any) => consider(e, index)}
+            onfinalize={(e: any) => finalize(e, index, column.value)}
+            class="max-h-[34rem] min-h-[6.5rem] gap-2.5 overflow-y-auto rounded-2xl {place.wide
+              ? 'grid content-start [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]'
+              : 'flex flex-col'}"
           >
-            {#if column.items.length === 0}
+            {#each column.items as item (item.id)}
               <div
-                class="empty-placeholder"
-                style="pointer-events: none;"
-              ></div>
-            {:else}
-              {#each column.items as item (item.id)}
-                <div
-                  animate:flip={{ duration: flipDurationMs }}
-                  class:hidden={!selectedMembers.includes(
-                    item.assigneeId ? item.assigneeId : 999
-                  ) && selectedMembers.length !== 0}
-                >
-                  {@render card(item, false, index)}
-                </div>
-              {/each}
-            {/if}
+                animate:flip={{ duration: flipDurationMs, easing: cubicOut }}
+                class:hidden={isHidden(item)}
+                data-settling={settlingId === item.id || undefined}
+              >
+                {@render card(item, false, index)}
+              </div>
+            {/each}
           </div>
         </Column>
       </div>

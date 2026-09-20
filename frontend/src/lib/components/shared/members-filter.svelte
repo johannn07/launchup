@@ -1,7 +1,5 @@
 <script lang="ts">
   import * as Tooltip from '$lib/components/ui/tooltip/index.js';
-  import { getProfileColor, zIndex } from '$lib/utils';
-  import { Kanban, Table, SlidersHorizontal } from 'lucide-svelte';
 
   let {
     members = $bindable(),
@@ -10,21 +8,19 @@
   } = $props();
 </script>
 
-<div class="flex items-center">
+<div class="flex items-center" role="group" aria-label="Filter by member">
   {#each members as member, index}
     <Tooltip.Provider>
       <Tooltip.Root>
         <Tooltip.Trigger
-          class={`border-2 ${
-            selectedMembers.includes(member.id)
-              ? 'ring-2 ring-flutter-blue'
-              : ''
-          } flex h-9 w-9 items-center justify-center rounded-full border-background ${
-            index !== members.length - 1 ? '-mr-1' : ''
-          } ${zIndex[index]} ${getProfileColor(member.firstName)}`}
-          onclick={() => {
-            toggleMemberSelection(index);
-          }}
+          class="flex h-9 w-9 items-center justify-center rounded-full border text-[13px] font-semibold transition-colors duration-quick focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8] {index !==
+          members.length - 1
+            ? '-mr-1'
+            : ''} {selectedMembers.includes(member.userId)
+            ? 'border-[#4f46e5] bg-[#4f46e5] text-white'
+            : 'border-[#2b3a5c] bg-[#111b2e] text-[#c7d2fe] hover:border-[#4f46e5]/70'}"
+          aria-pressed={selectedMembers.includes(member.userId)}
+          onclick={() => toggleMemberSelection(index)}
         >
           {member.firstName.charAt(0)}
         </Tooltip.Trigger>
@@ -37,10 +33,13 @@
   <Tooltip.Provider>
     <Tooltip.Root>
       <Tooltip.Trigger
-        class={`border-2 ${selectedMembers.includes(999) ? 'ring-2 ring-flutter-blue' : ''} -ml-1 flex h-9 w-9 items-center justify-center rounded-full border-background bg-gray-700`}
-        onclick={() => {
-          toggleMemberSelection(999);
-        }}
+        class="-ml-1 flex h-9 w-9 items-center justify-center rounded-full border text-[13px] font-semibold transition-colors duration-quick focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8] {selectedMembers.includes(
+          999
+        )
+          ? 'border-[#4f46e5] bg-[#4f46e5] text-white'
+          : 'border-dashed border-[#2b3a5c] bg-[#111b2e] text-[#54648a] hover:border-[#4f46e5]/70'}"
+        aria-pressed={selectedMembers.includes(999)}
+        onclick={() => toggleMemberSelection(999)}
       >
         ?
       </Tooltip.Trigger>

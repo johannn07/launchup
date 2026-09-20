@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { Badge } from '$lib/components/ui/badge';
-  import * as Card from '$lib/components/ui/card';
   import { RnaViewEditDeleteAiDialog, RnaViewEditDeleteDialog } from '.';
   import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
 
@@ -32,8 +30,8 @@
   );
 </script>
 
-<Card.Root
-  class="group h-full min-w-[calc(25%-1.25rem*3/4)] cursor-pointer overflow-hidden border-border/50 bg-card/60 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+<div
+  class="lu-card group flex h-full cursor-pointer flex-col gap-3 rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5 hover:border-[#2b3a5c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
   role="button"
   tabindex={0}
   onclick={() => {
@@ -46,41 +44,34 @@
     }
   }}
 >
-  <Card.Content class="flex h-full flex-col gap-3 p-5">
-    <div class="flex items-start justify-between gap-2">
-      <div class="flex items-center gap-3">
-        <div
-          class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 transition-colors group-hover:bg-primary/20"
-        >
-          <Icon class="h-4 w-4 text-primary" />
-        </div>
-        <h2 class="text-base font-semibold leading-none tracking-tight">
-          {rna.readinessLevel.readinessType}
-        </h2>
-      </div>
-      {#if rna.isAiGenerated}
-        <Badge
-          class="shrink-0 border border-amber-500/30 bg-amber-600/90 text-amber-100"
-          >AI Draft</Badge
-        >
-      {:else}
-        <Badge
-          class="shrink-0 border border-emerald-500/30 bg-emerald-600/90 text-emerald-100"
-          >Approved</Badge
-        >
-      {/if}
+  <div class="flex items-start justify-between gap-2">
+    <div class="flex min-w-0 items-center gap-3">
+      <span
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] border border-[#2b3a5c] bg-[#111b2e] transition-colors duration-quick group-hover:border-[#4f46e5]/70"
+        aria-hidden="true"
+      >
+        <Icon class="h-4 w-4 text-[#c7d2fe]" />
+      </span>
+      <h3 class="truncate text-[15px] font-semibold text-white">
+        {rna.readinessLevel.readinessType}
+      </h3>
     </div>
-    <p class="flex-1 break-words text-sm leading-relaxed text-muted-foreground">
-      {previewText(rna.rna)}
-    </p>
-    <div
-      class="flex items-center justify-between border-t border-border/50 pt-3 text-sm text-muted-foreground"
-    >
-      <span>Current Level</span>
-      <Badge variant="secondary">{rna.readinessLevel.level}</Badge>
-    </div>
-  </Card.Content>
-</Card.Root>
+    <span class="lu-chip-sm shrink-0">
+      {rna.isAiGenerated ? 'AI draft' : 'Approved'}
+    </span>
+  </div>
+
+  <p class="flex-1 break-words text-[13.5px] leading-relaxed text-[#94a3b8]">
+    {previewText(rna.rna)}
+  </p>
+
+  <div
+    class="flex items-center justify-between border-t border-[#17213a] pt-3 text-[12.5px] text-[#94a3b8]"
+  >
+    <span>Current level</span>
+    <span class="lu-chip-sm">{rna.readinessLevel.level}</span>
+  </div>
+</div>
 
 {#if role === 'Startup'}
   <RnaViewEditDeleteDialog

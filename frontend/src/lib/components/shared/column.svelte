@@ -1,5 +1,4 @@
 <script lang="ts">
-  import * as Card from '$lib/components/ui/card';
   import type { Role } from '$lib/types/user.types';
   let {
     children,
@@ -9,32 +8,48 @@
     updateStatus,
     statusId,
     role,
-    classNames = ''
+    classNames = '',
+    over = false
   }: {
     children: any;
     name: string;
-    itemCount: number;
+    itemCount?: number;
     showDialog: any;
     updateStatus: any;
     statusId: number;
     role: Role;
     classNames?: string;
+    /** A card is being dragged over this column. */
+    over?: boolean;
   } = $props();
+
+  // Status colour only where the status means something: done, late, stopped.
+  const TONES: Record<string, string> = {
+    Completed: 'done',
+    Delayed: 'late',
+    Discontinued: 'stopped'
+  };
 </script>
 
-<Card.Root
-  class={`h-full min-w-0 rounded-xl border bg-background shadow-sm ${classNames}`}
+<section
+  class="lu-col flex h-full min-w-0 flex-col rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] {classNames}"
+  data-tone={TONES[name]}
+  data-over={over || undefined}
+  aria-label="{name}, {itemCount} {itemCount === 1 ? 'item' : 'items'}"
 >
-  <Card.Header class="flex items-center justify-between px-4 pb-2 pt-4">
-    <div class="flex w-full items-center justify-between">
-      <h2 class="text-base font-semibold tracking-tight">{name}</h2>
-      <span
-        class="rounded border-2 border-sky-600 bg-blue-950 px-2 py-0.5 text-xs font-semibold text-sky-600"
-        >{itemCount} {itemCount === 1 ? 'Item' : 'Items'}</span
-      >
-    </div>
-  </Card.Header>
-  <Card.Content class="flex h-[430px] flex-col gap-3 overflow-y-auto px-4 pb-4">
+  <header class="flex items-center justify-between gap-2 px-4 pb-3 pt-3.5">
+    <h3
+      class="flex items-center gap-2 text-[13.5px] font-semibold text-[#f1f5f9]"
+    >
+      <span class="h-2 w-2 rounded-full" style="background: var(--st)"></span>
+      {name}
+    </h3>
+    <span
+      class="lu-num rounded-full bg-[#17213a] px-2 text-[12px] font-semibold text-[#94a3b8]"
+      >{itemCount}</span
+    >
+  </header>
+  <div class="relative min-h-0 flex-1 px-2.5 pb-2.5">
     {@render children()}
-  </Card.Content>
-</Card.Root>
+  </div>
+</section>

@@ -365,33 +365,18 @@ export const getPriorityStyles = (
 };
 
 export const getReadinessStyles = (
-  type:
+  _type:
     | 'Technology'
     | 'Market'
     | 'Acceptance'
     | 'Regulatory'
     | 'Organizational'
     | 'Investment'
-) => {
-  const readinessClasses = {
-    Technology:
-      'text-violet-100 bg-violet-600/90 hover:bg-violet-700 border border-violet-500/30',
-    Market:
-      'text-blue-100 bg-blue-600/90 hover:bg-blue-700 border border-blue-500/30',
-    Acceptance:
-      'text-emerald-100 bg-emerald-600/90 hover:bg-emerald-700 border border-emerald-500/30',
-    Regulatory:
-      'text-rose-100 bg-rose-600/90 hover:bg-rose-700 border border-rose-500/30',
-    Organizational:
-      'text-indigo-100 bg-indigo-600/90 hover:bg-indigo-700 border border-indigo-500/30',
-    Investment:
-      'text-amber-100 bg-amber-600/90 hover:bg-amber-700 border border-amber-500/30'
-  };
-  return (
-    readinessClasses[type] ||
-    'text-zinc-100 bg-zinc-600/90 hover:bg-zinc-700 border border-zinc-500/30'
-  );
-};
+) =>
+  // One neutral chip for every dimension. Six hues competed with the status
+  // colours, which are the only colours that carry meaning here.
+  'lu-chip-sm !font-semibold';
+
 
 export function getProfileColor(firstName: string) {
   if (!firstName || typeof firstName !== 'string') {

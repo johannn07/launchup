@@ -1,5 +1,6 @@
 import type { LayoutServerLoad } from './$types';
 import { env } from '$env/dynamic/public';
+import { tierOf } from '$lib/startup-status';
 const PUBLIC_API_URL = env.PUBLIC_API_URL || '';
 
 export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
@@ -10,6 +11,7 @@ export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
   // page instead of flashing "Loading".
   let qualificationStatus: number | null = null;
   let startupName: string | null = null;
+  let tier: string | null = null;
   try {
     const res = await fetch(`${PUBLIC_API_URL}/startups/${params.id}`, {
       headers: { Authorization: `Bearer ${access}` }
@@ -18,6 +20,7 @@ export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
       const startup = await res.json();
       qualificationStatus = startup.qualificationStatus ?? null;
       startupName = startup.name ?? null;
+      tier = tierOf(startup);
     }
   } catch {
     // Leave the nav unrestricted; the pages surface their own load errors.
@@ -27,7 +30,8 @@ export const load: LayoutServerLoad = async ({ cookies, params, fetch }) => {
     access,
     startupId: params.id,
     qualificationStatus,
-    startupName
+    startupName,
+    tier
   };
 };
 

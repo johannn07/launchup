@@ -2,6 +2,7 @@
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
   import { ChevronRight } from 'lucide-svelte';
   import { arrive } from '$lib/motion';
+  import { statusOf, tierOf, tierLine } from '$lib/startup-status';
 
   let {
     startup,
@@ -9,36 +10,12 @@
     initiatives
   }: { startup: any; role: any; initiatives: any[] } = $props();
 
-  // Same mapping as the .lu-status tokens in brand.css.
-  const STATUS: Record<number, { key: string; label: string }> = {
-    [QualificationStatus.PENDING]: { key: 'pending', label: 'Pending' },
-    [QualificationStatus.WAITLISTED]: {
-      key: 'waitlisted',
-      label: 'Waitlisted'
-    },
-    [QualificationStatus.QUALIFIED]: { key: 'qualified', label: 'Qualified' },
-    [QualificationStatus.COMPLETED]: { key: 'completed', label: 'Completed' }
-  };
-
-  const status = $derived(
-    STATUS[startup?.qualificationStatus] ?? STATUS[QualificationStatus.PENDING]
-  );
+  const status = $derived(statusOf(startup?.qualificationStatus));
   // Mentors only ever see qualified startups as the ones they are working with.
   const statusLabel = $derived(
     status.key === 'qualified' && role === 'Mentor' ? 'Active' : status.label
   );
-
-  // Two vocabularies that never share a word: status is where the startup is
-  // in the programme (the badge), tier is how ready it scored (this line).
-  const tier = $derived.by(() => {
-    if (
-      startup?.qualificationStatus !== QualificationStatus.QUALIFIED &&
-      startup?.qualificationStatus !== QualificationStatus.COMPLETED
-    )
-      return null;
-    const evals = startup?.readinessEvaluations;
-    return evals?.length ? evals[evals.length - 1].tierLabel : null;
-  });
+  const tier = $derived(tierOf(startup));
 
   const initials = $derived(
     (startup?.name ?? '?')
@@ -105,7 +82,7 @@
         {startup.name}
       </p>
       <p class="mt-0.5 truncate text-[12.5px] text-[#94a3b8]">
-        {tier ? `Readiness: ${tier}` : 'Readiness not scored'}
+        {tierLine(tier)}
       </p>
     </div>
   </div>

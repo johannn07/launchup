@@ -1,9 +1,5 @@
 <script lang="ts">
   import {
-    AIColumn,
-    AITabs,
-    Can,
-    Column,
     KanbanBoardNew,
     MembersFilter,
     ShowHideColumns
@@ -19,8 +15,6 @@
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
   import { useQueries } from '@sveltestack/svelte-query';
   import { page } from '$app/stores';
-  import * as Card from '$lib/components/ui/card';
-  import { Badge } from '$lib/components/ui/badge/index.js';
   import axiosInstance from '$lib/axios';
   import axios from 'axios';
   import { toast } from 'svelte-sonner';
@@ -29,20 +23,14 @@
     InitiativeCard,
     InitiativeCreateDialog
   } from '$lib/components/startups/initiatives';
+  import { ChevronDown, Loader, Sparkles, Plus } from 'lucide-svelte';
+  import { Segmented } from '$lib/motion';
   import {
-    Ellipsis,
-    Kanban,
-    TableIcon,
-    Loader,
-    Sparkles,
-    Plus
-  } from 'lucide-svelte';
-  import { Skeleton } from '$lib/components/ui/skeleton/index.js';
-  import * as Tabs from '$lib/components/ui/tabs/index.js';
+    BoardSkeleton,
+    StatePanel
+  } from '$lib/components/workspace';
   import * as Table from '$lib/components/ui/table';
   import HoveredRNSCard from '$lib/components/shared/hovered-rns-card.svelte';
-  import { ChevronDown } from 'lucide-svelte';
-  import { Button } from '$lib/components/ui/button';
 
 
   let dropdownOpen = $state(false);
@@ -154,7 +142,12 @@
   );
 
   let status = $state(1);
-  let selectedFormat = $state('board');
+  let selectedFormat: 'board' | 'table' = $state('board');
+  const viewOptions = [
+    { value: 'board' as const, label: 'Board' },
+    { value: 'table' as const, label: 'Table' }
+  ];
+  const canEdit = $derived(data.role !== 'Startup');
   const selectedMembers: any = $state([]);
 
   $effect(() => {
@@ -652,163 +645,88 @@
 {/snippet}
 
 {#snippet loading()}
-  <div class="flex h-full flex-col gap-3">
-    <div class="flex justify-between">
-      <div class="flex gap-3">
-        <div class="bg-background" class:hidden={data.role === 'Startup'}>
-          <Skeleton class="h-9 w-[126px]" />
-        </div>
-        <div class="bg-background">
-          <Skeleton class="h-9 w-[170px]" />
-        </div>
-        <div class="flex">
-          {#each [1, 2] as item, index}
-            <Skeleton
-              class={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-background ${
-                index !== 2 - 1 ? '-mr-1' : ''
-              } `}
-            >
-              ?
-            </Skeleton>
-          {/each}
-        </div>
-      </div>
-      <div class="ml-auto bg-background">
-        <Skeleton class="h-9 w-[90px]" />
-      </div>
-    </div>
-
-    <div class="glass-card grid h-full grid-cols-4 gap-5 p-5">
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-    </div>
-  </div>
+  <BoardSkeleton {canEdit} />
 {/snippet}
 
-{#snippet error()}{/snippet}
+{#snippet error()}
+  <StatePanel kind="error" title="Initiatives could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
+{/snippet}
 
 {#snippet accessible()}
-  <div class="flex items-center justify-between">
-    <div class="flex gap-3">
-      <div class="flex h-fit justify-between rounded-lg bg-background">
-        <Tabs.Root value={selectedFormat}>
-          <Tabs.List class="border bg-flutter-gray/20">
-            <Tabs.Trigger
-              class="flex items-center gap-1"
-              value="board"
-              onclick={() => (selectedFormat = 'board')}
-            >
-              <Kanban class="h-4 w-4" />
-              Board</Tabs.Trigger
-            >
-            <Tabs.Trigger
-              class="flex items-center gap-1"
-              value="table"
-              onclick={() => (selectedFormat = 'table')}
-            >
-              <TableIcon class="h-4 w-4" />
-              Table</Tabs.Trigger
-            >
-          </Tabs.List>
-        </Tabs.Root>
-      </div>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <Segmented options={viewOptions} bind:value={selectedFormat} label="View" />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
     </div>
-    <div class="flex items-center gap-4">
+    <div class="flex flex-wrap items-center gap-2.5">
       {#if selectedFormat === 'board'}
         <ShowHideColumns {views} />
       {/if}
-      {#if data.role !== 'Startup'}
-        <Button
-          class="gap-1.5"
-          variant="outline"
+      {#if canEdit}
+        <button
           type="button"
+          class="lu-btn lu-btn-secondary lu-btn-sm"
           onclick={() => showDialog()}
         >
           <Plus class="h-4 w-4" />
           Add
-        </Button>
-        <div class="flex gap-1">
-          <Button
-            variant="glass-primary"
-            class="gap-1.5 rounded-r-none"
+        </button>
+        <div class="lu-split">
+          <button
             type="button"
+            class="lu-btn lu-btn-primary lu-btn-sm"
             disabled={generatingInitiatives}
             onclick={() => generateInitiativesForSelected()}
           >
             {#if generatingInitiatives}
               <Loader class="h-4 w-4 animate-spin" />
-              Generating...
+              Generating…
             {:else}
-              <Sparkles class="h-4 w-4" />Generate
+              <Sparkles class="h-4 w-4" />
+              Generate
             {/if}
-          </Button>
+          </button>
           <DropdownMenu.Root bind:open={dropdownOpen}>
-            <DropdownMenu.Trigger>
-              <Button
-                variant="glass-primary"
-                class="rounded-l-none border-l border-primary/20"
-                type="button"
-                disabled={generatingInitiatives}
-              >
-                <ChevronDown class="h-4 w-4" />
-              </Button>
+            <DropdownMenu.Trigger
+              class="lu-btn lu-btn-primary lu-btn-sm"
+              disabled={generatingInitiatives}
+              aria-label="Choose next steps to generate from"
+            >
+              <ChevronDown class="h-4 w-4" />
             </DropdownMenu.Trigger>
             <DropdownMenu.Content
               align="end"
-              class="max-h-[300px] w-[300px] overflow-y-auto"
+              class="max-h-[320px] w-[320px] overflow-y-auto"
               closeOnItemClick={false}
             >
-              <DropdownMenu.Group class="space-y-1">
-                {#each tasks
-                  .filter((task) => task.status !== 7)
-                  .sort((a, b) => a.priorityNumber - b.priorityNumber) as task}
-                  <div
-                    class="cursor-pointer px-2 py-1.5 hover:bg-accent {$initiativesQueries[2].data?.some(
-                      (i: any) => i.rns === task.id
-                    )
-                      ? 'opacity-50'
-                      : ''}"
-                    onclick={(e) => { e.stopPropagation(); toggleRNSSelection(task.id); }}
-                    onkeydown={(e) => e.stopPropagation()}
-                  >
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedRNS.includes(task.id)}
-                        class="h-4 w-4"
-                      />
-                      <div class="flex flex-col gap-0.5">
-                        <div class="flex items-center gap-2">
-                          <span class="font-medium"
-                            >RNS #{task.priorityNumber}</span
-                          >
-                          {#if $initiativesQueries[2].data?.some((i: any) => i.rns === task.id)}
-                            <span class="text-xs text-muted-foreground"
-                              >(Has initiatives)</span
-                            >
-                          {/if}
-                        </div>
-                        <span
-                          class="line-clamp-2 text-xs text-muted-foreground"
-                        >
-                          {task.description}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                {/each}
-              </DropdownMenu.Group>
+              <DropdownMenu.Label class="text-[12.5px] text-[#94a3b8]"
+                >Next steps to generate from</DropdownMenu.Label
+              >
+              <DropdownMenu.Separator />
+              {#each tasks
+                .filter((task) => task.status !== 7)
+                .sort((a, b) => a.priorityNumber - b.priorityNumber) as task}
+                {@const taken = $initiativesQueries[2].data?.some(
+                  (i: any) => i.rns === task.id
+                )}
+                <DropdownMenu.CheckboxItem
+                  class="items-start gap-2.5 rounded-[10px] py-2"
+                  closeOnSelect={false}
+                  checked={selectedRNS.includes(task.id)}
+                  onCheckedChange={() => toggleRNSSelection(task.id)}
+                >
+                  <span class="flex flex-col gap-0.5 {taken ? 'opacity-50' : ''}">
+                    <span class="text-[13px] font-semibold text-[#f1f5f9]">
+                      RNS #{task.priorityNumber}{taken ? ' · has initiatives' : ''}
+                    </span>
+                    <span class="line-clamp-2 text-[12.5px] text-[#94a3b8]">
+                      {task.description}
+                    </span>
+                  </span>
+                </DropdownMenu.CheckboxItem>
+              {/each}
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </div>
@@ -828,35 +746,45 @@
         {selectedMembers}
       />
     {:else}
-      <div class="h-fit w-full rounded-md border">
-        <Table.Root class="rounded-lg bg-background">
+      <div
+        class="overflow-hidden rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220]"
+      >
+        <Table.Root>
           <Table.Header>
-            <Table.Row class="text-centery h-12">
-              <Table.Head class="pl-5">Description</Table.Head>
-              <Table.Head class="">Priority No.</Table.Head>
-              <Table.Head class="">Initiative No.</Table.Head>
-              <Table.Head class="">Assignee</Table.Head>
+            <Table.Row class="border-[#17213a] hover:bg-transparent">
+              <Table.Head class="h-11 pl-5 text-[12.5px] text-[#94a3b8]"
+                >Description</Table.Head
+              >
+              <Table.Head class="text-[12.5px] text-[#94a3b8]">RNS</Table.Head>
+              <Table.Head class="text-[12.5px] text-[#94a3b8]"
+                >Initiative</Table.Head
+              >
+              <Table.Head class="pr-5 text-[12.5px] text-[#94a3b8]"
+                >Assignee</Table.Head
+              >
             </Table.Row>
           </Table.Header>
           <Table.Body>
             {#each $initiativesQueries[2].data.filter((item: RNSTask) => item.isAiGenerated === false) as item}
               {#if selectedMembers.includes(item.assignee) || selectedMembers.length === 0}
-                <Table.Row class="h-14 cursor-pointer">
-                  <Table.Cell class="pl-5"
+                <Table.Row class="h-14 border-[#17213a]">
+                  <Table.Cell class="pl-5 text-[13.5px] text-[#f1f5f9]"
                     >{item.description.substring(0, 100)}</Table.Cell
                   >
-                  <Table.Cell class="">
-                    {tasks.filter((task: RNSTask) => task.id === item.rns)[0]
+                  <Table.Cell class="lu-num text-[13.5px] text-[#94a3b8]">
+                    #{tasks.filter((task: RNSTask) => task.id === item.rns)[0]
                       ?.priorityNumber}
                   </Table.Cell>
-                  <Table.Cell class="">{item?.initiativeNumber}</Table.Cell>
-                  <Table.Cell class="">
+                  <Table.Cell class="lu-num text-[13.5px] text-[#94a3b8]"
+                    >#{item?.initiativeNumber}</Table.Cell
+                  >
+                  <Table.Cell class="pr-5 text-[13.5px] text-[#94a3b8]">
                     {members.filter(
                       (member: Member) => member.userId === item.assignee
-                    )[0]?.firstName}
+                    )[0]?.firstName ?? 'Unassigned'}
                     {members.filter(
                       (member: Member) => member.userId === item.assignee
-                    )[0]?.lastName}
+                    )[0]?.lastName ?? ''}
                   </Table.Cell>
                 </Table.Row>
               {/if}
@@ -869,13 +797,13 @@
 {/snippet}
 
 {#snippet fallback()}
-  <div class="text-2xl font-bold mt-10 text-center">
+  <StatePanel title="No readiness and needs assessments yet">
     {#if data.role === 'Startup'}
-      Your mentor has not yet created Readiness and Needs Assessments.
-    {:else if data.role === 'Mentor' || data.role === 'Manager'}
-      Please create Readiness and Needs Assessments for your startup.
+      Your mentor has not created any yet. Initiatives are planned against
+      them, so this page opens once they exist.
     {:else}
-      Something went wrong...
+      Create readiness and needs assessments for this startup first —
+      initiatives are planned against them.
     {/if}
-  </div>
+  </StatePanel>
 {/snippet}

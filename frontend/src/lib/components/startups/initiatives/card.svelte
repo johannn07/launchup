@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { Badge } from '$lib/components/ui/badge';
-  import * as Card from '$lib/components/ui/card';
-  import { User } from 'lucide-svelte';
-  import { getProfileColor, getReadinessStyles, zIndex } from '$lib/utils';
+  import { WorkCard, Assignee } from '$lib/components/workspace';
   import {
     InitiativeViewEditDeleteDialog,
     InitiativeViewEditDeleteAiDialog
@@ -83,120 +80,64 @@
 
   let initiativesCopy = $state({ ...initiative });
 
+  const fields = $derived([
+    ['Description', initiative.description],
+    ['Measures', initiative.measures],
+    ['Targets', initiative.targets],
+    ['Remarks', initiative.remarks]
+  ] as [string, string | null][]);
+
   $effect(() => {
     initiativesCopy = { ...initiative };
   });
 </script>
 
-<Card.Root
-  class={`bg-accent cursor-pointer rounded-lg border shadow-sm
-  ${isNewCard() || initiativesCopy.approvalStatus !== 'Unchanged' ? 'border-3 animate-pulse' : ''} `}
-  onclick={() => {
+<WorkCard
+  onopen={() => {
     open = true;
     action = 'View';
   }}
+  flag={initiativesCopy.approvalStatus !== 'Unchanged'
+    ? 'Awaiting approval'
+    : isNewCard()
+      ? 'New'
+      : null}
 >
-  <Card.Content class="flex flex-col gap-2 p-4">
-    <div class="relative mb-1 flex items-center justify-between">
-      {#if isNewCard()}
-        <div
-          class="z-100 bg-primary absolute -right-5 -top-5 rounded-[2px] p-[1px] text-xs"
-        >
-          New
-        </div>
-      {/if}
-      {#if initiativesCopy.approvalStatus !== 'Unchanged'}
-        <div
-          class="z-100 bg-primary absolute -right-5 -top-5 rounded-[2px] p-[1px] text-xs"
-        >
-          Pending Approval
-        </div>
-      {/if}
-      <Badge
-        class="rounded border-2 border-sky-600 bg-blue-950 px-2 py-0.5 text-xs text-sky-600"
-      >
-        #{initiative.initiativeNumber ? initiative.initiativeNumber : ''}
-      </Badge>
-      <Badge
-        class="rounded border-2 border-sky-600 bg-blue-950 px-2 py-0.5 text-xs text-sky-600"
-        onmouseenter={handleMouseEnter}
-        onmouseleave={handleMouseLeave}
-        onclick={() => goto(`rns?tab=rns`)}
-      >
-        RNS #{assignedRNS?.priorityNumber ?? ''}
-      </Badge>
-      <Badge
-        class={`text-xs font-bold ${getReadinessStyles(assignedRNS.readinessType)}`}
-      >
-        {assignedRNS.readinessType}
-      </Badge>
-    </div>
-    <div class="whitespace-pre-wrap break-words text-sm">
-      Task: {@html assignedRNS?.description?.substring(0, 40) +
-        (assignedRNS?.description?.length > 40 ? '...' : '')}
-    </div>
-    {#if initiative.description}
-      <div class="whitespace-pre-wrap break-words text-xs">
-        Description: <span class="text-muted-foreground"
-          >{@html initiative.description.substring(0, 50) +
-            (initiative.description.length > 50 ? '...' : '')}</span
-        >
-      </div>
+  {#snippet chips()}
+    <span class="lu-chip-sm">#{initiative.initiativeNumber ?? ''}</span>
+    <button
+      type="button"
+      class="lu-chip-sm transition-colors duration-quick hover:border-[#4f46e5] hover:text-white"
+      onmouseenter={handleMouseEnter}
+      onmouseleave={handleMouseLeave}
+      onclick={(e) => {
+        e.stopPropagation();
+        goto(`rns?tab=rns`);
+      }}
+    >
+      RNS #{assignedRNS?.priorityNumber ?? ''}
+    </button>
+    <span class="lu-chip-sm">{assignedRNS.readinessType}</span>
+  {/snippet}
+
+  <p>
+    <span class="text-[#94a3b8]">Task</span>
+    {@html assignedRNS?.description?.substring(0, 60) +
+      (assignedRNS?.description?.length > 60 ? '…' : '')}
+  </p>
+  {#each fields as [label, value]}
+    {#if value}
+      <p class="mt-1.5 text-[12.5px] text-[#94a3b8]">
+        <span class="text-[#c7d2fe]">{label}</span>
+        {@html value.substring(0, 60) + (value.length > 60 ? '…' : '')}
+      </p>
     {/if}
-    {#if initiative.measures}
-      <div class="whitespace-pre-wrap break-words text-xs">
-        Measures: <span class="text-muted-foreground"
-          >{@html initiative.measures.substring(0, 50) +
-            (initiative.measures.length > 50 ? '...' : '')}</span
-        >
-      </div>
-    {/if}
-    {#if initiative.targets}
-      <div class="whitespace-pre-wrap break-words text-xs">
-        Targets: <span class="text-muted-foreground"
-          >{@html initiative.targets.substring(0, 50) +
-            (initiative.targets.length > 50 ? '...' : '')}</span
-        >
-      </div>
-    {/if}
-    {#if initiative.remarks}
-      <div class="whitespace-pre-wrap break-words text-xs">
-        Remarks: <span class="text-muted-foreground"
-          >{@html initiative.remarks.substring(0, 50) +
-            (initiative.remarks.length > 50 ? '...' : '')}</span
-        >
-      </div>
-    {/if}
-    <div class="mt-1 flex items-center gap-2 text-xs">
-      <div class="flex items-center gap-1">
-        {#if assignedMember}
-          <div
-            class={`flex h-5 w-5 items-center justify-center rounded-full ${getProfileColor(assignedMember.firstName)}`}
-          >
-            {assignedMember.firstName.charAt(0)}
-          </div>
-          <span class="text-muted-foreground">
-            {#if assignedMember.firstName.length + assignedMember.lastName.length + 1 > 15}
-              {(assignedMember.firstName + ' ' + assignedMember.lastName).slice(
-                0,
-                15
-              ) + '...'}
-            {:else}
-              {assignedMember.firstName} {assignedMember.lastName}
-            {/if}
-          </span>
-        {:else}
-          <div
-            class="bg-muted flex h-5 w-5 items-center justify-center rounded-full"
-          >
-            <User class="h-4 w-4" />
-          </div>
-          <span>Unassigned</span>
-        {/if}
-      </div>
-    </div>
-  </Card.Content>
-</Card.Root>
+  {/each}
+
+  {#snippet footer()}
+    <Assignee member={assignedMember} />
+  {/snippet}
+</WorkCard>
 
 {#if role === 'Startup'}
   <InitiativeViewEditDeleteDialog

@@ -2,26 +2,22 @@
   import { useQuery } from '@sveltestack/svelte-query';
   import axiosInstance from '$lib/axios';
   import { toast } from 'svelte-sonner';
-  import * as Card from '$lib/components/ui/card/index.js';
-  import ReadinessAssessmentCard from '$lib/components/startups/assessment/ReadinessAssessmentCard.svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import ReadinessAssessmentForm from '$lib/components/startups/assessment/ReadinessAssessmentForm.svelte';
   import type { Assessment } from '$lib/types/assessment.types';
-  import Loading from '$lib/components/startup/Loading.svelte';
   import {
     getReadinessTypes,
-    getReadinessStyles,
     canRateReadiness
   } from '$lib/utils';
   import ShortAnswerField from '$lib/components/startups/assessment/AssessmentTypes/ShortAnswerField.svelte';
   import LongAnswerField from '$lib/components/startups/assessment/AssessmentTypes/LongAnswerField.svelte';
   import FileUploadField from '$lib/components/startups/assessment/AssessmentTypes/FileUploadField.svelte';
-  import { Button } from '$lib/components/ui/button';
-  import { Badge } from '$lib/components/ui/badge';
   import * as Select from '$lib/components/ui/select';
   import { ReadinessLevelGuide } from '$lib/components/startups/readiness';
   import { Checkbox } from '$lib/components/ui/checkbox';
-  import { CircleCheck, Info, Loader } from 'lucide-svelte';
+  import { CircleCheck, Loader } from 'lucide-svelte';
+  import { arrive } from '$lib/motion';
+  import { StatePanel } from '$lib/components/workspace';
   import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
 
   const { data } = $props();
@@ -290,14 +286,15 @@
       }) || []
     );
   });
-  const typeConfig: Record<string, { icon: any; accent: string }> = {
-    Technology:     { icon: Cpu,          accent: 'border-indigo-500/20 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' },
-    Market:         { icon: TrendingUp,   accent: 'border-blue-500/20 bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-    Acceptance:     { icon: CheckCircle2, accent: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
-    Organizational: { icon: Building2,    accent: 'border-violet-500/20 bg-violet-500/10 text-violet-600 dark:text-violet-400' },
-    Regulatory:     { icon: ShieldCheck,  accent: 'border-rose-500/20 bg-rose-500/10 text-rose-600 dark:text-rose-400' },
-    Investment:     { icon: Wallet,       accent: 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400' }
+  const typeConfig: Record<string, { icon: any }> = {
+    Technology: { icon: Cpu },
+    Market: { icon: TrendingUp },
+    Acceptance: { icon: CheckCircle2 },
+    Organizational: { icon: Building2 },
+    Regulatory: { icon: ShieldCheck },
+    Investment: { icon: Wallet }
   };
+
   const readinessTypes = getReadinessTypes();
 
   const selectedTypeConfig = $derived(
@@ -339,34 +336,26 @@
 
 {#if isLoading}
   {@render loading()}
-{:else if hasAssessment}
-  {@render hasAssessments()}
-{:else if !hasAssessment}
-  {@render noAssessments()}
 {:else if isError}
   {@render error()}
+{:else if hasAssessment}
+  {@render hasAssessments()}
+{:else}
+  {@render noAssessments()}
 {/if}
 
 {#snippet hasAssessments()}
+  <p class="text-[14px] leading-relaxed text-[#94a3b8]">
     {#if data.role === 'Startup'}
-      <div class="mt-2 flex items-start gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
-        <CircleCheck class="mt-0.5 h-5 w-5 flex-shrink-0 text-emerald-400" />
-        <p class="text-sm font-medium text-emerald-100">
-          Your application has been approved. Please complete the following readiness assessments.
-        </p>
-      </div>
+      Your application is approved. Complete each dimension below; every answer
+      feeds the readiness level your mentor rates.
     {:else}
-      <div class="mt-2 flex items-start gap-3 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 py-3">
-        <Info class="mt-0.5 h-5 w-5 flex-shrink-0 text-indigo-400" />
-        <p class="text-sm font-medium text-indigo-100">
-          Here are the current assessments of the startup. Click on "View Assessment" to see their progress.
-        </p>
-      </div>
+      One card per dimension. Open one to read the answers and rate its
+      readiness level.
     {/if}
-  <h2 class="mt-6 text-xl font-bold">Required Assessments</h2>
+  </p>
 
-  <!-- Readiness Type Cards -->
-  <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
   {#each readinessTypes as type}
     {@const assessments = assessmentsByType()[type.name] || []}
     {@const applicableAssessments = assessments.filter((a: any) => a.isApplicable)}
@@ -374,7 +363,6 @@
       const hasAnswer = a.response?.answerValue && String(a.response.answerValue).trim() !== '';
       return a.status === 'Completed' && hasAnswer;
     }).length}
-    {@const pendingCount = applicableAssessments.length - completedCount}
     {@const currentLevel = readinessLevelsByType()[type.name]}
     {@const progress = applicableAssessments.length > 0
       ? Math.round((completedCount / applicableAssessments.length) * 100)
@@ -382,53 +370,58 @@
     {@const config = typeConfig[type.name] ?? typeConfig['Technology']}
     {@const Icon = config.icon}
 
-    <Card.Root
-      class="group cursor-pointer overflow-hidden rounded-xl border border-border/50 bg-card/60 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-card hover:shadow-md"
+    <div
+      class="lu-card group flex cursor-pointer flex-col rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5 hover:border-[#2b3a5c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
+      role="button"
+      tabindex="0"
       onclick={() => openTypeModal(type.name)}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          openTypeModal(type.name);
+        }
+      }}
     >
-      <Card.Content class="p-5">
-        <div class="mb-4 flex items-center gap-3">
-          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 transition-colors group-hover:bg-primary/20">
-            <Icon class="h-5 w-5 text-primary" />
-          </div>
-          <div class="min-w-0">
-            <h3 class="truncate text-base font-semibold text-foreground transition-colors group-hover:text-primary">{type.name}</h3>
-            {#if currentLevel}
-              <span class="text-xs font-medium text-muted-foreground">Readiness Level {currentLevel}</span>
-            {:else}
-              <span class="text-xs font-medium text-muted-foreground/70">Not yet rated</span>
-            {/if}
-          </div>
+      <div class="mb-4 flex items-center gap-3">
+        <span
+          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-[#2b3a5c] bg-[#111b2e] transition-colors duration-quick group-hover:border-[#4f46e5]/70"
+          aria-hidden="true"
+        >
+          <Icon class="h-4 w-4 text-[#c7d2fe]" />
+        </span>
+        <div class="min-w-0">
+          <h3 class="truncate text-[15px] font-semibold text-white">
+            {type.name}
+          </h3>
+          <span class="text-[12.5px] text-[#94a3b8]">
+            {currentLevel ? `Level ${currentLevel}` : 'Not yet rated'}
+          </span>
         </div>
+      </div>
 
-        <div class="mb-3 flex items-center justify-between text-sm">
-          <span class="text-muted-foreground">{assessments.length} assessment{assessments.length === 1 ? '' : 's'}</span>
-          {#if assessments.length > 0}
-            <div class="flex items-center gap-3">
-              {#if pendingCount > 0}
-                <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>{pendingCount} Pending
-                </span>
-              {/if}
-              {#if completedCount > 0}
-                <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>{completedCount} Done
-                </span>
-              {/if}
-            </div>
-          {/if}
-        </div>
-
+      <div class="mb-3 flex items-center justify-between gap-3 text-[12.5px]">
+        <span class="text-[#94a3b8]">
+          {assessments.length}
+          {assessments.length === 1 ? 'question' : 'questions'}
+        </span>
         {#if applicableAssessments.length > 0}
-          <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              class="h-full rounded-full bg-primary transition-all"
-              style={`width: ${progress}%`}
-            ></div>
-          </div>
+          <span class="lu-num text-[#94a3b8]">
+            <span class="text-[#f1f5f9]">{completedCount}</span>
+            / {applicableAssessments.length} answered
+          </span>
         {/if}
-      </Card.Content>
-    </Card.Root>
+      </div>
+
+      {#if applicableAssessments.length > 0}
+        <div class="mt-auto h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]">
+          <div
+            class="lu-fill h-full rounded-full bg-[#6366f1]"
+            style={`width: ${progress}%`}
+            use:arrive
+          ></div>
+        </div>
+      {/if}
+    </div>
   {/each}
 </div>
 
@@ -437,16 +430,17 @@
     <Dialog.Content size="full" class="flex flex-col">
       <Dialog.Header class="mb-1 shrink-0 text-left">
         <div class="flex items-center gap-3">
-          <div class={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${selectedTypeConfig.accent}`}>
-            <ModalTypeIcon class="h-5 w-5" />
-          </div>
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.8rem] border border-[#2b3a5c] bg-[#111b2e]"
+            aria-hidden="true"
+          >
+            <ModalTypeIcon class="h-5 w-5 text-[#c7d2fe]" />
+          </span>
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              {selectedReadinessType} Readiness
-            </p>
-            <Dialog.Title class="text-xl font-black tracking-tight text-foreground">
-              Assessments
+            <Dialog.Title class="lu-d-md text-[20px] leading-tight text-white">
+              {selectedReadinessType}
             </Dialog.Title>
+            <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">Assessment</p>
           </div>
         </div>
         <Dialog.Description class="mt-2 text-xs text-muted-foreground">
@@ -459,7 +453,7 @@
       </Dialog.Header>
 
       <div
-        class="assessment-scroll min-h-0 flex-1 overflow-y-auto glass-card p-5"
+        class="assessment-scroll min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5"
       >
         {#if selectedReadinessType && assessmentsByType()[selectedReadinessType]?.length > 0}
           <div class="flex flex-col gap-5">
@@ -475,7 +469,7 @@
               {@const isToggling =
                 togglingApplicable[assessmentData.id] || false}
 
-              <div class="glass-card p-4">
+              <div class="rounded-2xl border border-[#1f2c47] bg-[#111b2e] p-4">
                 <!-- Assessment Header -->
                 <div class="mb-3 flex items-start justify-between gap-3 border-b border-border/50 pb-3">
                   <div class="flex flex-1 items-start gap-3">
@@ -500,7 +494,7 @@
                       </p>
                       {#if !assessmentData.isApplicable}
                         <p
-                          class="mt-1.5 text-xs text-orange-600 dark:text-orange-400"
+                          class="mt-1.5 text-[12px] text-[#fbbf24]"
                         >
                           Not applicable to this startup
                         </p>
@@ -508,14 +502,9 @@
                     </div>
                   </div>
                   {#if assessmentData.isApplicable}
-                    <Badge
-                      variant={isCompleted ? 'default' : 'secondary'}
-                      class={isCompleted
-                        ? 'shrink-0 border border-emerald-500/30 bg-emerald-600/90 text-emerald-100'
-                        : 'shrink-0 border border-amber-500/30 bg-amber-600/90 text-amber-100'}
-                    >
-                      {isCompleted ? 'Completed' : 'Pending'}
-                    </Badge>
+                    <span class="lu-chip-sm shrink-0">
+                      {isCompleted ? 'Answered' : 'Not answered'}
+                    </span>
                   {/if}
                 </div>
 
@@ -552,21 +541,20 @@
                 <!-- Submit Button (Only for Startup) -->
                 {#if data.role === 'Startup'}
                   <div class="flex justify-end">
-                    <Button
-                      size="sm"
-                      class="gap-1.5"
-                      variant="glass-primary"
+                    <button
+                      type="button"
+                      class="lu-btn lu-btn-primary lu-btn-sm"
                       disabled={isSubmitting || !assessmentData.isApplicable}
                       onclick={() => submitSingleAssessment(assessmentData)}
                     >
                       {#if isSubmitting}
                         <Loader class="h-3.5 w-3.5 animate-spin" />
-                        Submitting...
+                        Submitting…
                       {:else}
                         <CircleCheck class="h-3.5 w-3.5" />
-                        Submit Assessment
+                        Submit
                       {/if}
-                    </Button>
+                    </button>
                   </div>
                 {/if}
               </div>
@@ -612,15 +600,14 @@
                 {/each}
               </Select.Content>
             </Select.Root>
-            <Button
-              size="sm"
-              variant="glass-primary"
-              class="gap-1.5"
+            <button
+              type="button"
+              class="lu-btn lu-btn-primary lu-btn-sm"
               disabled={isRatingAssessment || !hasApplicableAssessments}
               onclick={rateAssessmentType}
             >
-              {isRatingAssessment ? 'Rating...' : 'Rate'}
-            </Button>
+              {isRatingAssessment ? 'Rating…' : 'Rate'}
+            </button>
             {#if !hasApplicableAssessments}
               <span class="text-xs text-muted-foreground">
                 No applicable assessments to rate
@@ -635,12 +622,13 @@
           {modalProgress()}% complete
         </span>
 
-        <Button
-          variant="outline"
+        <button
+          type="button"
+          class="lu-btn lu-btn-secondary lu-btn-sm"
           onclick={closeTypeModal}
         >
           Close
-        </Button>
+        </button>
       </div>
     </Dialog.Content>
   </Dialog.Root>
@@ -664,24 +652,31 @@
 {/snippet}
 
 {#snippet noAssessments()}
-  <Card.Root class="h-full">
-    <Card.Content
-      class="flex h-full flex-col items-center justify-center gap-5"
-    >
-      <img src="/pending.svg" alt="pending" class="h-[300px] w-[300px]" />
-      <h1>
-        This startup is currently not assigned with an assessment right now.
-      </h1>
-    </Card.Content>
-  </Card.Root>
+  <StatePanel title="No assessments assigned yet">
+    {#if data.role === 'Startup'}
+      Nothing to complete right now. Your mentor assigns the questions for each
+      dimension.
+    {:else}
+      This startup has no assessment questions assigned yet.
+    {/if}
+  </StatePanel>
 {/snippet}
 
 {#snippet loading()}
-  <Loading {data}></Loading>
+  <div class="flex flex-col gap-4" role="status" aria-label="Loading assessments">
+    <span class="lu-skel h-4 w-80 max-w-full"></span>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {#each [0, 1, 2, 3, 4, 5] as i (i)}
+        <span class="lu-skel h-[9.5rem] rounded-2xl"></span>
+      {/each}
+    </div>
+  </div>
 {/snippet}
 
 {#snippet error()}
-  ERROR
+  <StatePanel kind="error" title="Assessments could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
 {/snippet}
 
 <style>

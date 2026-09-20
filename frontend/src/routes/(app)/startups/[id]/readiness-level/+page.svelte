@@ -4,15 +4,13 @@
     ReadinessLevelGuide,
     Stepper
   } from '$lib/components/startups/readiness';
-  import * as Tabs from '$lib/components/ui/tabs/index.js';
   import * as Select from '$lib/components/ui/select';
+  import { Segmented, SubmitButton } from '$lib/motion';
+  import { StatePanel } from '$lib/components/workspace';
   import { useQueries } from '@sveltestack/svelte-query';
   import { getData, canRateReadiness } from '$lib/utils';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
-  import { Button } from '$lib/components/ui/button/index.js';
   import Rubric from '$lib/components/startups/readiness/rubric.svelte';
-  import * as Card from '$lib/components/ui/card/index.js';
-  import { Skeleton } from '$lib/components/ui/skeleton/index.js';
   import { Can } from '$lib/components/shared';
   import ReadinessDashboard from '$lib/components/dashboard/ReadinessDashboard.svelte';
   import axiosInstance from '$lib/axios';
@@ -84,8 +82,17 @@
     return q.isSuccess && q.data?.length > 0;
   });
 
-  let selectedTab = $state('chart');
+  let selectedTab: 'chart' | 'detailed' = $state('chart');
   let selectedReadinessTab = $state('technology');
+  const viewOptions = [
+    { value: 'chart' as const, label: 'Dashboard' },
+    { value: 'detailed' as const, label: 'Levels' }
+  ];
+  // Spec order, from the one module that declares it.
+  const dimensionOptions = READINESS_TYPES.map((name) => ({
+    value: name.toLowerCase(),
+    label: name
+  }));
 
   const rubrics = $derived(() => {
     const query = $readinessLevelQueries[1];
@@ -224,30 +231,29 @@
   {:else if canRateReadiness(role)}
     {@render mentor()}
   {:else}
-    <div class="mt-10 text-center text-2xl font-bold">
-      <p>Looks like you haven't been rated yet...</p>
-    </div>
+    <StatePanel title="Readiness levels are not rated yet">
+      Your mentor sets a baseline level for each dimension. The dashboard and
+      the assessment open once that is done.
+    </StatePanel>
   {/if}
 </div>
 
 {#snippet loading()}
-  <div class="flex h-full flex-col gap-3">
+  <div class="flex flex-col gap-4" role="status" aria-label="Loading readiness">
     {#if role !== 'Startup'}
-      <div class="bg-background">
-        <Skeleton class="h-9 w-[147px]" />
-      </div>
+      <span class="lu-skel h-10 w-44 rounded-full"></span>
     {/if}
-    <div class="h-full w-full bg-background">
-      <Skeleton class="h-full w-full" />
+    <div class="grid gap-4 lg:grid-cols-[22rem_minmax(0,1fr)]">
+      <span class="lu-skel h-[22rem] rounded-[1.25rem]"></span>
+      <span class="lu-skel h-[22rem] rounded-[1.25rem]"></span>
     </div>
   </div>
 {/snippet}
 
 {#snippet error()}
-  <div class="glass-card flex flex-col items-center justify-center p-12 text-center">
-    <p class="text-lg font-semibold text-foreground">Failed to load readiness data</p>
-    <p class="mt-2 text-sm text-muted-foreground">Please try again or contact support.</p>
-  </div>
+  <StatePanel kind="error" title="Readiness data could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
 {/snippet}
 
 {#snippet rated()}
@@ -257,73 +263,26 @@
         {@render mentor(true)}
       {:else}
         <div class="flex justify-end">
-          <Button variant="outline" onclick={startRevision}>
-            Revise baseline scores
-          </Button>
+          <button
+            type="button"
+            class="lu-btn lu-btn-secondary lu-btn-sm"
+            onclick={startRevision}
+          >
+            Revise baseline levels
+          </button>
         </div>
       {/if}
     {/if}
     {#if !revising}
     <Can role={['Mentor', 'Manager']} userRole={role}>
-      <div class="flex justify-between">
-        <div class="flex h-fit justify-between rounded-lg bg-background">
-          <Tabs.Root value={selectedTab}>
-            <Tabs.List class="border border-border">
-              <Tabs.Trigger value="chart" onclick={() => updateTab('chart')}>
-                Dashboard
-              </Tabs.Trigger>
-              <Tabs.Trigger
-                value="detailed"
-                onclick={() => updateTab('detailed')}
-              >
-                Levels
-              </Tabs.Trigger>
-            </Tabs.List>
-          </Tabs.Root>
-        </div>
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <Segmented options={viewOptions} bind:value={selectedTab} label="View" />
         {#if selectedTab === 'detailed'}
-          <div class="flex h-fit justify-between rounded-lg bg-background">
-            <Tabs.Root value={selectedReadinessTab}>
-              <Tabs.List class="border border-border">
-                <Tabs.Trigger
-                  value="technology"
-                  class="capitalize"
-                  onclick={() => updateReadinessTab('technology')}
-                  >Technology</Tabs.Trigger
-                >
-                <Tabs.Trigger
-                  value="acceptance"
-                  class="capitalize"
-                  onclick={() => updateReadinessTab('acceptance')}
-                  >Acceptance</Tabs.Trigger
-                >
-                <Tabs.Trigger
-                  value="market"
-                  class="capitalize"
-                  onclick={() => updateReadinessTab('market')}
-                  >Market</Tabs.Trigger
-                >
-                <Tabs.Trigger
-                  value="organizational"
-                  class="capitalize"
-                  onclick={() => updateReadinessTab('organizational')}
-                  >Organizational</Tabs.Trigger
-                >
-                <Tabs.Trigger
-                  value="regulatory"
-                  class="capitalize"
-                  onclick={() => updateReadinessTab('regulatory')}
-                  >Regulatory</Tabs.Trigger
-                >
-                <Tabs.Trigger
-                  value="investment"
-                  class="capitalize"
-                  onclick={() => updateReadinessTab('investment')}
-                  >Investment</Tabs.Trigger
-                >
-              </Tabs.List>
-            </Tabs.Root>
-          </div>
+          <Segmented
+            options={dimensionOptions}
+            bind:value={selectedReadinessTab}
+            label="Dimension"
+          />
         {/if}
       </div>
     </Can>
@@ -379,26 +338,27 @@
 
 {#snippet mentor(isRevision = false)}
   <div
-    class="glass-card mx-auto w-full max-w-4xl p-6"
+    class="mx-auto w-full max-w-4xl space-y-6 rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] p-6 sm:p-7"
   >
     <div>
-      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-        Mentor action
-      </p>
-      <h2 class="mt-2 text-2xl font-black tracking-tight text-foreground">
-        {isRevision ? 'Revise baseline scores' : 'Assign baseline scores'}
-      </h2>
-      <p class="mt-1 text-sm text-muted-foreground">
+      <h3 class="lu-d-md text-[18px] leading-tight text-white">
+        {isRevision ? 'Revise baseline levels' : 'Assign baseline levels'}
+      </h3>
+      <p class="mt-1.5 text-[14px] leading-relaxed text-[#94a3b8]">
         {isRevision
-          ? 'These are the levels currently on record. Saving overwrites them for every dimension.'
-          : 'Set one baseline level per readiness dimension. These values unlock the weighted readiness dashboard and RNA generation.'}
+          ? 'These are the levels on record. Saving overwrites every dimension.'
+          : 'One baseline level per dimension. These unlock the weighted dashboard and the readiness and needs assessment.'}
       </p>
     </div>
 
     <div class="grid gap-4 md:grid-cols-2">
       {#each readinessTypeOptions as readinessType}
-        <div class="glass-card flex flex-col gap-2 p-4">
-          <span class="text-sm font-bold text-foreground">{readinessType}</span>
+        <div
+          class="flex flex-col gap-2 rounded-2xl border border-[#1f2c47] bg-[#111b2e] p-4"
+        >
+          <span class="text-[13.5px] font-semibold text-[#f1f5f9]"
+            >{readinessType}</span
+          >
           <Select.Root
             type="single"
             value={String(baselineScores[readinessType])}
@@ -429,25 +389,24 @@
 
     <div class="flex justify-end gap-2">
       {#if isRevision}
-        <Button
-          variant="outline"
+        <button
+          type="button"
+          class="lu-btn lu-btn-secondary lu-btn-sm"
           onclick={cancelRevision}
           disabled={savingBaselineScores}
         >
           Cancel
-        </Button>
+        </button>
       {/if}
-      <Button
-        variant="glass-primary"
+      <SubmitButton
+        small
+        type="button"
+        status={savingBaselineScores ? 'busy' : 'idle'}
+        label="Save baseline levels"
+        busyLabel="Saving…"
+        doneLabel="Saved"
         onclick={submitBaselineScores}
-        disabled={savingBaselineScores}
-      >
-        {#if savingBaselineScores}
-          Saving...
-        {:else}
-          Save baseline scores
-        {/if}
-      </Button>
+      />
     </div>
   </div>
 {/snippet}
