@@ -893,12 +893,13 @@ html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
     0 0 0 1px rgba(99, 102, 241, 0.35);
   animation: lu-lift var(--lu-quick) var(--lu-ease) both;
 }
-/* Where it will land: the card's own surface, outlined and emptied. Colour
-   overrides here lose to the card's utility classes, so this only changes what
-   it reliably can: the border style and the contents. */
+/* Where it will land: an outlined, emptied slot. The card transitions its
+   colours on the quick token, so the tint arrives a frame later than the
+   dashed border, which is not animatable. */
 [data-is-dnd-shadow-item-internal] .lu-card.lu-card {
   visibility: visible;
-  border-style: dashed;
+  border: 1px dashed rgba(129, 140, 248, 0.55);
+  background: rgba(79, 70, 229, 0.08);
   box-shadow: none;
 }
 [data-is-dnd-shadow-item-internal] .lu-card > * {
