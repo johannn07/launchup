@@ -1,10 +1,5 @@
 <script lang="ts">
-  import { Badge } from '$lib/components/ui/badge';
-  import * as Card from '$lib/components/ui/card';
-  import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
-  import * as Avatar from '$lib/components/ui/avatar';
-  import { Delete, Edit, Ellipsis, Plus, Trash, User } from 'lucide-svelte';
-  import { getProfileColor, zIndex } from '$lib/utils';
+  import { WorkCard, Assignee } from '$lib/components/workspace';
   import {
     RoadblocksCreateDialog,
     RoadblocksViewEditDialog,
@@ -69,100 +64,37 @@
   });
 </script>
 
-<Card.Root
-  class={`cursor-pointer rounded-lg border shadow-sm
-  ${isNewCard() || roadblocksCopy.approvalStatus !== 'Unchanged' ? 'border-3 animate-pulse' : ''} `}
-  onclick={() => {
+<WorkCard
+  onopen={() => {
     open = true;
     action = 'View';
   }}
+  flag={roadblocksCopy.approvalStatus !== 'Unchanged'
+    ? 'Awaiting approval'
+    : isNewCard()
+      ? 'New'
+      : null}
 >
-  <Card.Content class="flex flex-col gap-2">
-    <div class="relative mb-1 flex items-center justify-between">
-      <Badge
-        class="rounded border-2 border-sky-600 bg-blue-950 px-2 py-0.5 text-xs font-semibold text-sky-600"
-      >
-        Risk #{roadblocks.riskNumber ? roadblocks.riskNumber : ''}
-      </Badge>
-      {#if isNewCard()}
-        <div
-          class="z-100 bg-primary absolute -right-5 -top-5 rounded-[2px] p-[1px] text-xs"
-        >
-          New
-        </div>
-      {/if}
-      {#if roadblocksCopy.approvalStatus !== 'Unchanged'}
-        <div
-          class="z-100 bg-primary absolute -right-5 -top-5 rounded-[2px] p-[1px] text-xs"
-        >
-          Pending Approval
-        </div>
-      {/if}
-    </div>
-    <div class="mb-1 whitespace-pre-wrap break-words text-sm">
-      Description: {@html roadblocks?.description?.substring(0, 60) +
-        (roadblocks?.description?.length > 60 ? '...' : '')}
-    </div>
-    <div class="text-muted-foreground whitespace-pre-wrap break-words text-xs">
-      Fix: {@html roadblocks?.fix?.substring(0, 60) +
-        (roadblocks?.fix?.length > 60 ? '...' : '')}
-    </div>
-    <div class="mt-1 flex items-center gap-2 text-xs">
-      <div class="flex items-center gap-1">
-        {#if assignedMember}
-          <div
-            class={`flex h-5 w-5 items-center justify-center rounded-full ${getProfileColor(assignedMember.firstName)}`}
-          >
-            {assignedMember.firstName.charAt(0)}
-          </div>
-          <span class="text-muted-foreground">
-            {#if assignedMember.firstName.length + assignedMember.lastName.length + 1 > 15}
-              {(assignedMember.firstName + ' ' + assignedMember.lastName).slice(
-                0,
-                15
-              ) + '...'}
-            {:else}
-              {assignedMember.firstName} {assignedMember.lastName}
-            {/if}
-          </span>
-        {:else}
-          <div
-            class="bg-muted flex h-5 w-5 items-center justify-center rounded-full"
-          >
-            <User class="h-4 w-4" />
-          </div>
-          <span>Unassigned</span>
-        {/if}
-      </div>
-    </div>
+  {#snippet chips()}
+    <span class="lu-chip-sm">Risk #{roadblocks.riskNumber ?? ''}</span>
+  {/snippet}
 
-    <!-- <div class="flex items-center justify-between">
-      <h2 class="text-[15px] font-semibold leading-none tracking-tight">
-        Risk #{roadblocks.riskNumber}
-      </h2>
-    </div>
-    <div class="text-sm text-muted-foreground">
-      {roadblocks.description.substring(0, 150) +
-        `${roadblocks.description.length > 150 ? '...' : ''}`}
-    </div>
-    <div class="flex items-center justify-between">
-      <div class="flex flex-wrap items-center gap-2"></div>
-      {#if assignedMember}
-        <div
-          class={`flex h-8 w-8 items-center justify-center rounded-full ${getProfileColor(assignedMember.firstName)}`}
-        >
-          {assignedMember.firstName.charAt(0)}
-        </div>
-      {:else}
-        <div
-          class={`flex h-8 w-8 items-center justify-center rounded-full bg-muted ${zIndex[1]}`}
-        >
-          <User class="h-4 w-4" />
-        </div>
-      {/if}
-    </div> -->
-  </Card.Content>
-</Card.Root>
+  <p>
+    {@html roadblocks?.description?.substring(0, 80) +
+      (roadblocks?.description?.length > 80 ? '…' : '')}
+  </p>
+  {#if roadblocks?.fix}
+    <p class="mt-1.5 text-[12.5px] text-[#94a3b8]">
+      <span class="text-[#c7d2fe]">Fix</span>
+      {@html roadblocks.fix.substring(0, 80) +
+        (roadblocks.fix.length > 80 ? '…' : '')}
+    </p>
+  {/if}
+
+  {#snippet footer()}
+    <Assignee member={assignedMember} />
+  {/snippet}
+</WorkCard>
 
 {#if role === 'Startup'}
   <RoadblocksViewEditDialog

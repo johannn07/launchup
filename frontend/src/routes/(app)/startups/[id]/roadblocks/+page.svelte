@@ -17,20 +17,10 @@
   import { toast } from 'svelte-sonner';
   import { RoadblocksCard } from '$lib/components/startups/roadblocks';
   import { RoadblocksCreateDialog } from '$lib/components/startups/roadblocks';
-  import { Skeleton } from '$lib/components/ui/skeleton/index.js';
-  import {
-    Ellipsis,
-    Kanban,
-    Loader,
-    Sparkles,
-    TableIcon,
-    ChevronDown,
-    Check,
-    Plus
-  } from 'lucide-svelte';
-  import * as Tabs from '$lib/components/ui/tabs/index.js';
+  import { Loader, Sparkles, ChevronDown, Plus } from 'lucide-svelte';
   import * as Table from '$lib/components/ui/table';
-  import { Button } from '$lib/components/ui/button';
+  import { Segmented } from '$lib/motion';
+  import { BoardSkeleton, StatePanel } from '$lib/components/workspace';
 
   let dropdownOpen = $state(false);
 
@@ -455,7 +445,12 @@
       }
     }
   };
-  let selectedFormat = $state('board');
+  let selectedFormat: 'board' | 'table' = $state('board');
+  const viewOptions = [
+    { value: 'board' as const, label: 'Board' },
+    { value: 'table' as const, label: 'Table' }
+  ];
+  const canEdit = $derived(data.role !== 'Startup');
 </script>
 
 {#if isLoading}
@@ -490,138 +485,72 @@
 {/snippet}
 
 {#snippet loading()}
-  <div class="flex h-full flex-col gap-3">
-    <div class="flex justify-between">
-      <div class="flex gap-3">
-        <div class="bg-background" class:hidden={data.role === 'Startup'}>
-          <Skeleton class="h-9 w-[126px]" />
-        </div>
-        <div class="bg-background">
-          <Skeleton class="h-9 w-[170px]" />
-        </div>
-        <div class="flex">
-          {#each [1, 2] as item, index}
-            <Skeleton
-              class={`flex h-9 w-9 items-center justify-center rounded-full border-2 border-background ${
-                index !== 2 - 1 ? '-mr-1' : ''
-              }`}
-            />
-          {/each}
-        </div>
-      </div>
-      <div class="ml-auto bg-background">
-        <Skeleton class="h-9 w-[90px]" />
-      </div>
-    </div>
-
-    <div class="glass-card grid h-full grid-cols-4 gap-5 p-5">
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-full" />
-      </div>
-    </div>
-  </div>
+  <BoardSkeleton {canEdit} />
 {/snippet}
 
 {#snippet error()}
-  error
+  <StatePanel kind="error" title="Roadblocks could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
 {/snippet}
 
 {#snippet accessible()}
-  <div class="flex items-center justify-between">
-    <div class="flex gap-3">
-      <div class="flex h-fit justify-between rounded-lg bg-background">
-        <Tabs.Root value={selectedFormat}>
-          <Tabs.List class="bg-flutter-gray/20 border">
-            <Tabs.Trigger
-              class="flex items-center gap-1"
-              value="board"
-              onclick={() => (selectedFormat = 'board')}
-            >
-              <Kanban class="h-4 w-4" />
-              Board</Tabs.Trigger
-            >
-            <Tabs.Trigger
-              class="flex items-center gap-1"
-              value="table"
-              onclick={() => (selectedFormat = 'table')}
-            >
-              <TableIcon class="h-4 w-4" />
-              Table</Tabs.Trigger
-            >
-          </Tabs.List>
-        </Tabs.Root>
-      </div>
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <Segmented options={viewOptions} bind:value={selectedFormat} label="View" />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
     </div>
-    <div class="flex items-center gap-3">
-      <ShowHideColumns views={columns} />
-      {#if data.role !== 'Startup'}
-        <Button
-          class="gap-1.5"
-          variant="outline"
+    <div class="flex flex-wrap items-center gap-2.5">
+      {#if selectedFormat === 'board'}
+        <ShowHideColumns views={columns} />
+      {/if}
+      {#if canEdit}
+        <button
           type="button"
+          class="lu-btn lu-btn-secondary lu-btn-sm"
           onclick={() => showDialog()}
         >
           <Plus class="h-4 w-4" />
           Add
-        </Button>
-        <div class="flex gap-1">
-          <Button
-            class="gap-1.5 rounded-r-none"
-            variant="glass-primary"
+        </button>
+        <div class="lu-split">
+          <button
             type="button"
+            class="lu-btn lu-btn-primary lu-btn-sm"
             disabled={generatingRoadblocks}
             onclick={() => generateRoadblocks(numToGenerate)}
           >
             {#if generatingRoadblocks}
               <Loader class="h-4 w-4 animate-spin" />
-              Generating...
+              Generating…
             {:else}
-              <Sparkles class="h-4 w-4" />Generate
+              <Sparkles class="h-4 w-4" />
+              Generate {numToGenerate}
             {/if}
-          </Button>
+          </button>
           <DropdownMenu.Root bind:open={dropdownOpen}>
-            <DropdownMenu.Trigger>
-              <Button
-                class="rounded-l-none border-l border-primary/20"
-                variant="glass-primary"
-                type="button"
-                disabled={generatingRoadblocks}
-              >
-                <ChevronDown class="h-4 w-4" />
-              </Button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content
-              align="end"
-              class="max-h-[190px] w-[100px] overflow-y-auto"
+            <DropdownMenu.Trigger
+              class="lu-btn lu-btn-primary lu-btn-sm"
+              disabled={generatingRoadblocks}
+              aria-label="How many to generate"
             >
-              <DropdownMenu.Label
-                class="px-2 py-1.5 text-xs font-medium text-muted-foreground"
+              <ChevronDown class="h-4 w-4" />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" class="w-40">
+              <DropdownMenu.Label class="text-[12.5px] text-[#94a3b8]"
+                >How many</DropdownMenu.Label
               >
-                Quantity
-              </DropdownMenu.Label>
               <DropdownMenu.Separator />
               <DropdownMenu.RadioGroup
                 value={numToGenerate.toString()}
                 onValueChange={(val) => (numToGenerate = Number(val))}
-                class="space-y-1"
               >
                 {#each [1, 2, 3, 4, 5] as count}
                   <DropdownMenu.RadioItem
                     value={count.toString()}
-                    class="flex cursor-pointer items-center justify-between px-2 py-1.5 hover:bg-accent"
+                    class="cursor-pointer rounded-[10px]"
                   >
-                    <span>{count}</span>
-                    <!-- <Check class="h-4 w-4 ml-auto" /> -->
+                    {count}
                   </DropdownMenu.RadioItem>
                 {/each}
               </DropdownMenu.RadioGroup>
@@ -644,31 +573,37 @@
         {showDialog}
       />
     {:else}
-      <div class="h-fit w-full rounded-md border">
-        <Table.Root class="rounded-lg bg-background">
+      <div
+        class="overflow-hidden rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220]"
+      >
+        <Table.Root>
           <Table.Header>
-            <Table.Row class="text-centery h-12">
-              <Table.Head class="pl-5">Description</Table.Head>
-              <Table.Head class="">Risk Number</Table.Head>
-              <Table.Head class="">Assignee</Table.Head>
+            <Table.Row class="border-[#17213a] hover:bg-transparent">
+              <Table.Head class="h-11 pl-5 text-[12.5px] text-[#94a3b8]"
+                >Description</Table.Head
+              >
+              <Table.Head class="text-[12.5px] text-[#94a3b8]">Risk</Table.Head>
+              <Table.Head class="pr-5 text-[12.5px] text-[#94a3b8]"
+                >Assignee</Table.Head
+              >
             </Table.Row>
           </Table.Header>
           <Table.Body>
             {#each ($roadblocksQueries[1].data as Roadblock[]).filter((item: Roadblock) => item.isAiGenerated === false) as item}
               {#if selectedMembers.includes(item.assignee) || selectedMembers.length === 0}
-                <Table.Row class="h-14 cursor-pointer">
-                  <Table.Cell class="pl-5"
+                <Table.Row class="h-14 border-[#17213a]">
+                  <Table.Cell class="pl-5 text-[13.5px] text-[#f1f5f9]"
                     >{item.description.substring(0, 100)}</Table.Cell
                   >
-                  <Table.Cell class="">{item.riskNumber}</Table.Cell>
-                  <Table.Cell class=""
-                    >{members.filter(
-                      (member: Member) => member.userId === item.assignee
-                    )[0]?.firstName}
-                    {members.filter(
-                      (member: Member) => member.userId === item.assignee
-                    )[0]?.lastName}</Table.Cell
+                  <Table.Cell class="lu-num text-[13.5px] text-[#94a3b8]"
+                    >#{item.riskNumber}</Table.Cell
                   >
+                  <Table.Cell class="pr-5 text-[13.5px] text-[#94a3b8]">
+                    {members.filter((m: any) => m.userId === item.assignee)[0]
+                      ?.firstName ?? 'Unassigned'}
+                    {members.filter((m: any) => m.userId === item.assignee)[0]
+                      ?.lastName ?? ''}
+                  </Table.Cell>
                 </Table.Row>
               {/if}
             {/each}
@@ -680,13 +615,13 @@
 {/snippet}
 
 {#snippet fallback()}
-  <div class="text-2xl font-bold mt-10 text-center">
+  <StatePanel title="No readiness and needs assessments yet">
     {#if data.role === 'Startup'}
-      Your mentor has not yet created Readiness and Needs Assessments.
-    {:else if data.role === 'Mentor' || data.role === 'Manager'}
-      Please create Readiness and Needs Assessments for your startup.
+      Your mentor has not created any yet. Roadblocks are raised against them,
+      so this page opens once they exist.
     {:else}
-      Something went wrong...
+      Create readiness and needs assessments for this startup first —
+      roadblocks are raised against them.
     {/if}
-  </div>
+  </StatePanel>
 {/snippet}

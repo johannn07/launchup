@@ -300,17 +300,9 @@
                 RNA Details
               </h2>
               <div class="mt-1">
-                {#if rnaCopy.isAiGenerated}
-                  <Badge
-                    class="border border-amber-500/30 bg-amber-600/90 text-amber-100"
-                    >AI Draft &mdash; needs review</Badge
-                  >
-                {:else}
-                  <Badge
-                    class="border border-emerald-500/30 bg-emerald-600/90 text-emerald-100"
-                    >Approved</Badge
-                  >
-                {/if}
+                <span class="lu-chip-sm">
+                  {rnaCopy.isAiGenerated ? 'AI draft — needs review' : 'Approved'}
+                </span>
               </div>
             </div>
           </div>

@@ -69,6 +69,7 @@
   <a
     bind:this={ref}
     class={cn(buttonVariants({ variant, size, className }))}
+    data-lu-button
     {href}
     {...restProps}
   >
@@ -78,6 +79,7 @@
   <button
     bind:this={ref}
     class={cn(buttonVariants({ variant, size, className }))}
+    data-lu-button
     {type}
     {...restProps}
   >

@@ -3,12 +3,12 @@
   import { getData } from '$lib/utils';
   import { useQueries } from '@sveltestack/svelte-query';
   import { RnaCard, RnaCreateDialog } from '$lib/components/startups/rna';
-  import { Button } from '$lib/components/ui/button';
   import { ChevronDown, Loader, Plus, Sparkles } from 'lucide-svelte';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import axiosInstance from '$lib/axios';
   import { toast } from 'svelte-sonner';
-  import { Skeleton } from '$lib/components/ui/skeleton';
+  import { StatePanel } from '$lib/components/workspace';
+  import { READINESS_TYPES } from '$lib/readiness-dimensions';
 
   const { data } = $props();
   const { access, startupId } = data;
@@ -37,6 +37,16 @@
   ]);
 
   const { isLoading, isError } = $derived(useQueriesState($rnaQueries));
+
+  // Cards follow the canonical dimension order, like everything else that
+  // lists dimensions.
+  const ordered = $derived(
+    [...($rnaQueries[1].data ?? [])].sort(
+      (a: any, b: any) =>
+        READINESS_TYPES.indexOf(a.readinessLevel.readinessType) -
+        READINESS_TYPES.indexOf(b.readinessLevel.readinessType)
+    )
+  );
   $rnaQueries[0].refetch();
   const isAccessible = $derived($rnaQueries[0].data);
 
@@ -241,138 +251,128 @@
 />
 
 {#snippet loading()}
-  <div class="flex h-full flex-col gap-3">
+  <div class="flex flex-col gap-4" role="status" aria-label="Loading assessments">
     {#if data.role !== 'Startup'}
-      <div class="flex justify-between">
-        <div class="bg-background">
-          <Skeleton class="h-9 w-[127px]" />
-        </div>
-        <div class="ml-auto bg-background">
-          <Skeleton class="h-9 w-[82px]" />
-        </div>
+      <div class="flex justify-end gap-2.5">
+        <span class="lu-skel h-[38px] w-24 rounded-full"></span>
+        <span class="lu-skel h-[38px] w-36 rounded-full"></span>
       </div>
     {/if}
-
-    <div class="grid h-full grid-cols-4 gap-5">
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-[180px]" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-[180px]" />
-      </div>
-      <div class="h-full w-full bg-background">
-        <Skeleton class="h-[180px]" />
-      </div>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {#each [0, 1, 2] as i (i)}
+        <span class="lu-skel h-[11.5rem] rounded-2xl"></span>
+      {/each}
     </div>
   </div>
 {/snippet}
 
-{#snippet error()}{/snippet}
+{#snippet error()}
+  <StatePanel kind="error" title="This assessment could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
+{/snippet}
 
 {#snippet accessible()}
-  <div class="flex items-center justify-between">
-    <div class="ml-auto flex items-center gap-3">
-      {#if data.role !== 'Startup'}
-        <Button
-          class="gap-1.5"
-          variant="outline"
-          onclick={() => (open = true)}
+  {#if data.role !== 'Startup'}
+    <div class="flex flex-wrap items-center justify-end gap-2.5">
+      <button
+        type="button"
+        class="lu-btn lu-btn-secondary lu-btn-sm"
+        onclick={() => (open = true)}
+      >
+        <Plus class="h-4 w-4" />
+        Add
+      </button>
+      <div class="lu-split">
+        <button
+          type="button"
+          class="lu-btn lu-btn-primary lu-btn-sm"
+          onclick={generateRNA}
+          disabled={generatingRNA || selectedTypes.length === 0}
         >
-          <Plus class="h-4 w-4" />Add
-        </Button>
-
-        <div class="flex">
-          <Button
-            class="gap-1.5 rounded-r-none"
-            variant="glass-primary"
-            onclick={generateRNA}
-            disabled={generatingRNA || selectedTypes.length === 0}
+          {#if generatingRNA}
+            <Loader class="h-4 w-4 animate-spin" />
+            Generating…
+          {:else}
+            <Sparkles class="h-4 w-4" />
+            Generate{selectedTypes.length ? ` (${selectedTypes.length})` : ''}
+          {/if}
+        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger
+            class="lu-btn lu-btn-primary lu-btn-sm"
+            disabled={generatingRNA}
+            aria-label="Choose dimensions to generate"
           >
-            {#if generatingRNA}
-              <Loader class="h-4 w-4 animate-spin" />
-              Generating...
-            {:else}
-              <Sparkles class="h-4 w-4" />
-              Generate{selectedTypes.length ? ` (${selectedTypes.length})` : ''}
-            {/if}
-          </Button>
-
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger
-              class="flex h-10 items-center justify-center rounded-l-none rounded-r-xl border-l border-primary/20 bg-primary/90 px-2 text-primary-foreground backdrop-blur-xl transition-all hover:bg-primary disabled:opacity-50"
-              disabled={generatingRNA}
+            <ChevronDown class="h-4 w-4" />
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content align="end" class="w-72">
+            <DropdownMenu.Label class="text-[12.5px] text-[#94a3b8]"
+              >Dimensions to generate</DropdownMenu.Label
             >
-              <span class="sr-only">Choose dimensions</span>
-              <ChevronDown class="h-4 w-4" />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" class="glass-card w-72">
-              <DropdownMenu.Label>Dimensions to generate</DropdownMenu.Label>
-              <DropdownMenu.Separator />
-              {#each dimensionOptions as dimension}
-                <DropdownMenu.CheckboxItem
-                  class="pr-6 py-2"
-                  closeOnSelect={false}
-                  checked={selectedTypes.includes(dimension.readinessType)}
-                  onCheckedChange={(checked) =>
-                    toggleDimension(dimension.readinessType, checked)}
-                >
-                  <div class="flex w-full items-center justify-between gap-3">
-                    <span class="font-medium">{dimension.readinessType}</span>
-                    <span class="text-xs text-muted-foreground">
-                      Level {dimension.level}{dimension.hasRna
-                        ? ' · has RNA'
-                        : ''}
-                    </span>
-                  </div>
-                </DropdownMenu.CheckboxItem>
-              {/each}
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </div>
-      {/if}
-    </div>
-  </div>
-
-  <div
-    class="mt-5 grid max-h-[40rem] w-full grid-cols-4 gap-5 overflow-auto rounded-xl border border-border/50 p-10"
-  >
-    {#if $rnaQueries[1].data.length === 0}
-      <div class="col-span-full flex flex-col items-center justify-center py-12 text-center">
-        <div class="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <Sparkles class="h-8 w-8 text-primary/50" />
-        </div>
-        <p class="text-lg font-semibold text-foreground">No RNAs created yet</p>
-        <p class="mt-1 text-sm text-muted-foreground">Generate or add RNA entries to get started.</p>
+            <DropdownMenu.Separator />
+            {#each dimensionOptions as dimension}
+              <DropdownMenu.CheckboxItem
+                class="rounded-[10px] py-2"
+                closeOnSelect={false}
+                checked={selectedTypes.includes(dimension.readinessType)}
+                onCheckedChange={(checked) =>
+                  toggleDimension(dimension.readinessType, checked)}
+              >
+                <span class="flex w-full items-center justify-between gap-3">
+                  <span class="text-[13.5px] font-medium text-[#f1f5f9]"
+                    >{dimension.readinessType}</span
+                  >
+                  <span class="lu-num text-[12px] text-[#94a3b8]">
+                    Level {dimension.level}{dimension.hasRna ? ' · has one' : ''}
+                  </span>
+                </span>
+              </DropdownMenu.CheckboxItem>
+            {/each}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       </div>
-    {/if}
-    {#each $rnaQueries[1].data as rna}
-      <RnaCard
-        {rna}
-        {readinessData}
-        update={editRNA}
-        addToRna={addToRNA}
-        deleteRna={deleteRNA}
-        role={data.role}
-      ></RnaCard>
-    {/each}
-  </div>
+    </div>
+  {/if}
+
+  {#if $rnaQueries[1].data.length === 0}
+    <StatePanel title="No assessments written yet">
+      {#if data.role === 'Startup'}
+        Your mentor has not written any yet.
+      {:else}
+        Generate one per dimension, or add your own.
+      {/if}
+    </StatePanel>
+  {:else}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {#each ordered as rna (rna.id)}
+        <RnaCard
+          {rna}
+          {readinessData}
+          update={editRNA}
+          addToRna={addToRNA}
+          deleteRna={deleteRNA}
+          role={data.role}
+        />
+      {/each}
+    </div>
+  {/if}
 {/snippet}
 
 {#snippet inaccessible()}
-  <div class="mt-10 text-center text-2xl font-bold">
+  <StatePanel title="Readiness levels are not rated yet">
     {#if data.role === 'Startup'}
-      Your mentor has not yet rated your startup's readiness levels.
-    {:else if data.role === 'Mentor' || data.role === 'Manager'}
-      Please rate your startup's readiness levels to access the Readiness and
-      Needs Assessment.
+      Your mentor rates each dimension first. This assessment is written from
+      those levels.
     {:else}
-      Something went wrong...
+      Rate this startup's readiness levels first — the assessment is written
+      from them.
     {/if}
-  </div>
+  </StatePanel>
 {/snippet}
 
 {#snippet fallback()}
-  <div class="mt-10 text-center text-2xl font-bold">
-    Something went wrong...
-  </div>
+  <StatePanel kind="error" title="This assessment could not be loaded">
+    Refresh the page to try again.
+  </StatePanel>
 {/snippet}
