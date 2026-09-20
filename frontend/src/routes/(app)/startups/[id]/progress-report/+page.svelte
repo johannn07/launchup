@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from '$lib/components/ui/skeleton';
   import * as Card from '$lib/components/ui/card';
-  import Button from '$lib/components/ui/button/button.svelte';
   import { Download } from 'lucide-svelte';
   import { RadarChartV2 } from '$lib/components/shared';
   import { useQuery } from '@sveltestack/svelte-query';
@@ -104,17 +102,21 @@
 </script>
 
 <div class="flex">
-  <Button class="ml-auto" onclick={downloadMultiPagePDF}
-    ><Download class="h-4 w-4" /> Download PDF</Button
+  <button
+    type="button"
+    class="lu-btn lu-btn-secondary lu-btn-sm ml-auto"
+    onclick={downloadMultiPagePDF}
   >
+    <Download class="h-4 w-4" /> Download PDF
+  </button>
 </div>
 
 {#if $queryResult.isLoading}
-  <div class="flex h-full flex-col gap-3">
-    <div class="h-full w-full bg-background">
-      <Skeleton class="h-full w-full" />
-    </div>
-  </div>
+  <span
+    class="lu-skel h-[32rem] rounded-[1.25rem]"
+    role="status"
+    aria-label="Loading progress report"
+  ></span>
 {:else}
   <div class="h-full">
     <Card.Root class="pdf-page h-full">

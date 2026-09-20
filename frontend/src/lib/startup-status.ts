@@ -17,10 +17,12 @@ export function statusOf(qualificationStatus: number | null | undefined) {
 }
 
 /** Latest tier label, only for startups that can have been scored. */
-export function tierOf(startup: {
-  qualificationStatus?: number | null;
-  readinessEvaluations?: { tierLabel: string }[];
-} | null): string | null {
+export function tierOf(
+  startup: {
+    qualificationStatus?: number | null;
+    readinessEvaluations?: { tierLabel: string }[];
+  } | null
+): string | null {
   if (
     startup?.qualificationStatus !== QualificationStatus.QUALIFIED &&
     startup?.qualificationStatus !== QualificationStatus.COMPLETED

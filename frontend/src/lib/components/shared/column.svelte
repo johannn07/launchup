@@ -38,7 +38,9 @@
   aria-label="{name}, {itemCount} {itemCount === 1 ? 'item' : 'items'}"
 >
   <header class="flex items-center justify-between gap-2 px-4 pb-3 pt-3.5">
-    <h3 class="flex items-center gap-2 text-[13.5px] font-semibold text-[#f1f5f9]">
+    <h3
+      class="flex items-center gap-2 text-[13.5px] font-semibold text-[#f1f5f9]"
+    >
       <span class="h-2 w-2 rounded-full" style="background: var(--st)"></span>
       {name}
     </h3>

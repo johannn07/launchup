@@ -52,14 +52,21 @@
     handleDndConsider(e, index);
   }
 
-  function finalize(e: CustomEvent<DndEvent<RNSItem>>, index: number, value: number) {
+  function finalize(
+    e: CustomEvent<DndEvent<RNSItem>>,
+    index: number,
+    value: number
+  ) {
     overIndex = null;
     if (e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE) {
       const id = e.detail.info.id;
       settlingId = id;
-      setTimeout(() => {
-        if (settlingId === id) settlingId = null;
-      }, dur(MOVE) + 60);
+      setTimeout(
+        () => {
+          if (settlingId === id) settlingId = null;
+        },
+        dur(MOVE) + 60
+      );
     }
     handleDndFinalize(e, index, value);
   }
@@ -72,15 +79,24 @@
   // last. Wide columns lay their cards out in a grid rather than one tall list.
   const PLACE: Record<string, { cls: string; wide: boolean }> = {
     Delayed: { cls: 'sm:col-span-2 lg:col-start-1 lg:row-start-2', wide: true },
-    Discontinued: { cls: 'sm:col-span-2 lg:col-start-3 lg:row-start-2', wide: true },
-    'Long Term': { cls: 'sm:col-span-2 lg:col-span-4 lg:row-start-3', wide: true }
+    Discontinued: {
+      cls: 'sm:col-span-2 lg:col-start-3 lg:row-start-2',
+      wide: true
+    },
+    'Long Term': {
+      cls: 'sm:col-span-2 lg:col-span-4 lg:row-start-3',
+      wide: true
+    }
   };
 </script>
 
 <div class="lu-board mb-4 grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
   {#each columns as column, index}
     {#if column.show}
-      {@const place = PLACE[column.name] ?? { cls: 'lg:row-start-1', wide: false }}
+      {@const place = PLACE[column.name] ?? {
+        cls: 'lg:row-start-1',
+        wide: false
+      }}
       <div class="min-w-0 {place.cls}">
         <Column
           name={column.name}
@@ -104,9 +120,8 @@
               flipDurationMs,
               dropTargetStyle: {}
             }}
-            onconsider={(e: CustomEvent<DndEvent<RNSItem>>) => consider(e, index)}
-            onfinalize={(e: CustomEvent<DndEvent<RNSItem>>) =>
-              finalize(e, index, column.value)}
+            onconsider={(e: any) => consider(e, index)}
+            onfinalize={(e: any) => finalize(e, index, column.value)}
             class="max-h-[34rem] min-h-[6.5rem] gap-2.5 overflow-y-auto rounded-2xl {place.wide
               ? 'grid content-start [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]'
               : 'flex flex-col'}"

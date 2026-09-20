@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { Button } from '$lib/components/ui/button';
-  import * as Card from '$lib/components/ui/card';
-  import { cn } from '$lib/utils';
   import { cubicInOut } from 'svelte/easing';
   import { crossfade } from 'svelte/transition';
+  import { MOVE } from '$lib/motion';
   import { access } from '$lib/access';
   import { page } from '$app/stores';
 
   const { data, children } = $props();
   const { role } = data;
 
+  // The indicator slides between items on navigation, like the account nav.
   const [send, receive] = crossfade({
-    duration: 250,
+    duration: MOVE,
     easing: cubicInOut
   });
   const currentModule = $derived(
@@ -36,41 +35,38 @@
   })());
 </script>
 
-<Card.Root variant="glass" class="h-full">
-  <Card.Header>
-    <Card.Title class="text-xl">Overview</Card.Title>
-    <Card.Description>Manage your startup</Card.Description>
-  </Card.Header>
-  <Card.Content class="mt-1 grid w-full grid-cols-[250px_1fr] gap-10">
-    <nav class="flex flex-1 flex-col gap-3 text-sm text-muted-foreground">
-      {#each modules as item}
-        {@const isActive = currentModule === item.link}
-        <a
-          href={`/startups/${data.startupId}/overview/${item.link}`}
-          class="w-full"
-        >
-          <Button
-            variant="ghost"
-            class={cn(
-              'w-full hover:underline',
-              'relative w-full justify-start hover:bg-transparent'
-            )}
-            data-sveltekit-noscroll
-          >
-            {#if isActive}
-              <div
-                class="absolute inset-0 rounded-md bg-muted"
-                in:send={{ key: 'active-sidebar-tab' }}
-                out:receive={{ key: 'active-sidebar-tab' }}
-              ></div>
-            {/if}
-            <div class="relative flex items-center justify-center gap-3">
-              {item.name}
-            </div>
-          </Button>
-        </a>
-      {/each}
+<div
+  class="rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] p-5 sm:p-6"
+>
+  <div class="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+    <nav aria-label="Overview">
+      <ul class="flex gap-1 overflow-x-auto lg:flex-col">
+        {#each modules as item (item.link)}
+          {@const isActive = currentModule === item.link}
+          <li class="shrink-0">
+            <a
+              href={`/startups/${data.startupId}/overview/${item.link}`}
+              data-sveltekit-noscroll
+              aria-current={isActive ? 'page' : undefined}
+              class="relative flex items-center rounded-[10px] px-3 py-2.5 text-[14px] font-medium transition-colors duration-quick focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8] {isActive
+                ? 'text-white'
+                : 'text-[#94a3b8] hover:text-[#f1f5f9]'}"
+            >
+              {#if isActive}
+                <span
+                  class="absolute inset-0 rounded-[10px] border border-[#1f2c47] bg-[#111b2e]"
+                  in:send={{ key: 'active-sidebar-tab' }}
+                  out:receive={{ key: 'active-sidebar-tab' }}
+                ></span>
+              {/if}
+              <span class="relative">{item.name}</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
     </nav>
-    {@render children()}
-  </Card.Content>
-</Card.Root>
+    <div class="min-w-0">
+      {@render children()}
+    </div>
+  </div>
+</div>

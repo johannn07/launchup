@@ -2,7 +2,6 @@
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
   import { SlidersHorizontal } from 'lucide-svelte';
 
-
   let { views } = $props();
 
   let dropdownOpen = $state(false);
