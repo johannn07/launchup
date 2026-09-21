@@ -1,9 +1,8 @@
 <script lang="ts">
-  import { WorkCard, Assignee } from '$lib/components/workspace';
-  import {
-    InitiativeViewEditDeleteDialog,
-    InitiativeViewEditDeleteAiDialog
-  } from '.';
+  import WorkCard from '$lib/components/workspace/WorkCard.svelte';
+  import Assignee from '$lib/components/workspace/Assignee.svelte';
+  import InitiativeViewEditDeleteDialog from './view-edit-delete-dialog.svelte';
+  import InitiativeViewEditDeleteAiDialog from './view-edit-delete-ai-dialog.svelte';
   import type { Actions } from '$lib/types';
   import { goto } from '$app/navigation';
   import { hoveredRNSCard } from '$lib/stores/hoveredRNSCard';

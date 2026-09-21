@@ -56,9 +56,9 @@
       // Map solutionDescription from backend to solution in frontend
       solution = proposal.solutionDescription || '';
       // Join objectives array with newlines
-      objectives = Array.isArray(proposal.objectives) 
-        ? proposal.objectives.join('\n') 
-        : (proposal.objectives || '');
+      objectives = Array.isArray(proposal.objectives)
+        ? proposal.objectives.join('\n')
+        : proposal.objectives || '';
       scope = proposal.scope || '';
       methodology = proposal.methodology || '';
     }
@@ -103,24 +103,27 @@
     } catch (error: any) {
       console.error('Error saving capsule proposal:', error);
       console.error('Error response:', error.response?.data);
-      toast.error(error.response?.data?.message || 'Failed to save capsule proposal');
+      toast.error(
+        error.response?.data?.message || 'Failed to save capsule proposal'
+      );
     } finally {
       saving = false;
     }
   }
 </script>
 
-
 <div class="flex h-[90vh] flex-col gap-5 overflow-y-auto">
   {#if $queryResult.isError}
-    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+    <div
+      class="border-destructive/30 bg-destructive/10 rounded-md border p-4 text-destructive"
+    >
       <p class="font-medium">Failed to load capsule proposal data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>
   {:else}
     <div class="flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <h1 class="text-xl font-semibold">Capsule Proposal</h1>
+        <h1 class="lu-h2">Capsule Proposal</h1>
         {#if readOnly}
           <Badge variant="secondary" class="flex items-center gap-1">
             <Eye class="h-3 w-3" />
@@ -140,125 +143,125 @@
         </Button>
       {/if}
     </div>
-  <div class="grid w-[90%] grid-cols-1 gap-5">
-    <div class="grid gap-2">
-      <Label for="title">Title</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Input
-          name="title"
-          id="title"
-          type="text"
-          required
-          readonly={readOnly}
-          bind:value={title}
-        />
-      {/if}
-    </div>
+    <div class="grid w-[90%] grid-cols-1 gap-5">
+      <div class="grid gap-2">
+        <Label for="title">Title</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Input
+            name="title"
+            id="title"
+            type="text"
+            required
+            readonly={readOnly}
+            bind:value={title}
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="description">Description</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="description"
-          rows={8}
-          readonly={readOnly}
-          bind:value={description}
-          class="text-justify text-base"
-        />
-      {/if}
-    </div>
+      <div class="grid gap-2">
+        <Label for="description">Description</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="description"
+            rows={8}
+            readonly={readOnly}
+            bind:value={description}
+            class="text-justify text-base"
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="problemStatement">Problem Statement</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="problemStatement"
-          rows={8}
-          readonly={readOnly}
-          bind:value={problemStatement}
-          class="text-justify text-base"
-        />
-      {/if}
-    </div>
+      <div class="grid gap-2">
+        <Label for="problemStatement">Problem Statement</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="problemStatement"
+            rows={8}
+            readonly={readOnly}
+            bind:value={problemStatement}
+            class="text-justify text-base"
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="targetMarket">Target Market</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="targetMarket"
-          rows={8}
-          readonly={readOnly}
-          bind:value={targetMarket}
-          class="text-justify text-base"
-        />
-      {/if}
-    </div>
+      <div class="grid gap-2">
+        <Label for="targetMarket">Target Market</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="targetMarket"
+            rows={8}
+            readonly={readOnly}
+            bind:value={targetMarket}
+            class="text-justify text-base"
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="solution">Solution</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="solution"
-          rows={8}
-          readonly={readOnly}
-          bind:value={solution}
-          class="text-justify text-base"
-        />
-      {/if}
-    </div>
+      <div class="grid gap-2">
+        <Label for="solution">Solution</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="solution"
+            rows={8}
+            readonly={readOnly}
+            bind:value={solution}
+            class="text-justify text-base"
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="objectives">Objectives</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="objectives"
-          rows={8}
-          readonly={readOnly}
-          bind:value={objectives}
-          class="text-justify text-base"
-        />
-      {/if}
-    </div>
+      <div class="grid gap-2">
+        <Label for="objectives">Objectives</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="objectives"
+            rows={8}
+            readonly={readOnly}
+            bind:value={objectives}
+            class="text-justify text-base"
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="scope">Scope</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="scope"
-          rows={8}
-          readonly={readOnly}
-          bind:value={scope}
-          class="text-justify text-base"
-        />
-      {/if}
-    </div>
+      <div class="grid gap-2">
+        <Label for="scope">Scope</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="scope"
+            rows={8}
+            readonly={readOnly}
+            bind:value={scope}
+            class="text-justify text-base"
+          />
+        {/if}
+      </div>
 
-    <div class="grid gap-2">
-      <Label for="methodology">Methodology</Label>
-      {#if $queryResult.isLoading}
-        <Skeleton class="h-10" />
-      {:else}
-        <Textarea
-          id="methodology"
-          rows={8}
-          readonly={readOnly}
-          bind:value={methodology}
-          class="text-justify text-base"
-        />
+      <div class="grid gap-2">
+        <Label for="methodology">Methodology</Label>
+        {#if $queryResult.isLoading}
+          <Skeleton class="h-10" />
+        {:else}
+          <Textarea
+            id="methodology"
+            rows={8}
+            readonly={readOnly}
+            bind:value={methodology}
+            class="text-justify text-base"
+          />
         {/if}
       </div>
     </div>

@@ -3,7 +3,7 @@
 </script>
 
 <div class="flex w-4/6 flex-col gap-5">
-  <h1 class="text-2xl font-semibold">{label}</h1>
+  <h1 class="lu-h2">{label}</h1>
   <div class="flex h-[550px] flex-col gap-5 overflow-y-scroll">
     <slot />
   </div>

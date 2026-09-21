@@ -79,9 +79,12 @@
 
       if (response.ok) {
         // Existing members and the owner can't be added again.
-        const membersSet = new Set($queryResult.data.members.map((member: any) => member.id));
+        const membersSet = new Set(
+          $queryResult.data.members.map((member: any) => member.id)
+        );
         searchedUsers = users.filter(
-          (user: any) => !membersSet.has(user.id) && user.id !== $queryResult.data.user_id
+          (user: any) =>
+            !membersSet.has(user.id) && user.id !== $queryResult.data.user_id
         );
       }
     } catch (error) {
@@ -191,14 +194,16 @@
 
 <div class="flex flex-col gap-5">
   {#if $queryResult.isError}
-    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+    <div
+      class="border-destructive/30 bg-destructive/10 rounded-md border p-4 text-destructive"
+    >
       <p class="font-medium">Failed to load member data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>
   {:else}
     {#if $queryResult.isSuccess}
       {#if data.role === 'Mentor' || data.role === 'Manager' || data.user.id === $queryResult.data.user_id}
-        <h1 class="text-xl font-semibold">Invite Member</h1>
+        <h1 class="lu-h2">Invite Member</h1>
         <div class="flex items-center space-x-2">
           <Switch id="airplane-mode" bind:checked={outsideMember} />
           <Label for="airplane-mode">Contracted member</Label>
@@ -242,7 +247,7 @@
         {/if}
       {/if}
     {/if}
-    <h1 class="text-xl font-semibold">Members</h1>
+    <h1 class="lu-h2">Members</h1>
     <div class="w-2/3 rounded-md border">
       {#if $queryResult.isLoading}
         <Skeleton class="h-40" />
@@ -344,20 +349,27 @@
             <Skeleton class="h-10 w-full" />
           </div>
         {:else if search.length > 0 && searchedUsers.length === 0}
-          <div class="py-8 text-center text-sm text-muted-foreground">No users found</div>
+          <div class="py-8 text-center text-sm text-muted-foreground">
+            No users found
+          </div>
         {:else if searchedUsers.length > 0}
           <div class="space-y-2">
             {#each searchedUsers as user}
-              <div class="flex items-center justify-between rounded-lg border p-3">
+              <div
+                class="flex items-center justify-between rounded-lg border p-3"
+              >
                 <div class="flex flex-col">
                   <span class="font-medium">
-                    {user.firstName} {user.lastName}
+                    {user.firstName}
+                    {user.lastName}
                   </span>
                   <span class="text-sm text-muted-foreground">
                     {user.email}
                   </span>
                 </div>
-                <Button size="sm" onclick={() => addMember(user.id)}> Add </Button>
+                <Button size="sm" onclick={() => addMember(user.id)}>
+                  Add
+                </Button>
               </div>
             {/each}
           </div>
@@ -370,7 +382,9 @@
     </div>
 
     <Dialog.Footer>
-      <Button variant="outline" onclick={() => (dialogOpen = false)}>Close</Button>
+      <Button variant="outline" onclick={() => (dialogOpen = false)}
+        >Close</Button
+      >
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>
@@ -383,14 +397,16 @@
         >Are you absolutely sure to remove this member?</AlertDialog.Title
       >
       <AlertDialog.Description>
-        This action cannot be undone. This will permanently remove this member in your
-        startup.
+        This action cannot be undone. This will permanently remove this member
+        in your startup.
       </AlertDialog.Description>
     </AlertDialog.Header>
     <AlertDialog.Footer>
-      <AlertDialog.Cancel onclick={() => (open = false)}>Cancel</AlertDialog.Cancel>
+      <AlertDialog.Cancel onclick={() => (open = false)}
+        >Cancel</AlertDialog.Cancel
+      >
       <AlertDialog.Action
-        class="bg-destructive hover:bg-destructive/90"
+        class="hover:bg-destructive/90 bg-destructive"
         onclick={async () => {
           if (contracted) {
             await removeContractedMember(toBeDeletedId!);

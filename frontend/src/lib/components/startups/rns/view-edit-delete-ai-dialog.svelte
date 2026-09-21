@@ -54,9 +54,7 @@
   async function loadChatHistory() {
     isLoadingHistory = true;
     try {
-      const response = await fetch(
-        `/api/chat-history/rns/${rns.id}`
-      );
+      const response = await fetch(`/api/chat-history/rns/${rns.id}`);
       if (!response.ok) throw new Error('Failed to load chat history');
       const history = await response.json();
       chatHistory = history;
@@ -166,14 +164,18 @@
     <div class="flex h-[80vh] gap-0">
       <!-- AI Chat Section (left) -->
       <div class="flex w-1/2 flex-col border-r border-border p-6">
-        <h1 class="mb-4 text-2xl font-semibold">Suggested RNS</h1>
+        <h1 class="lu-h2 mb-4">Suggested RNS</h1>
         <div
           bind:this={chatHistoryContainer}
           class="flex-1 space-y-4 overflow-y-auto py-4"
         >
           {#if isLoadingHistory}
             <!-- Placeholder bubbles, alternating sides like the thread. -->
-            <div class="space-y-4" role="status" aria-label="Loading chat history">
+            <div
+              class="space-y-4"
+              role="status"
+              aria-label="Loading chat history"
+            >
               <span class="lu-skel h-16 w-3/4 rounded-lg"></span>
               <span class="lu-skel ml-auto h-10 w-1/2 rounded-lg"></span>
               <span class="lu-skel h-20 w-2/3 rounded-lg"></span>
@@ -269,7 +271,7 @@
       <!-- RNS Details -->
       <div class="flex w-1/2 flex-col p-6">
         <div class="flex justify-between">
-          <h2 class="mb-4 text-2xl font-semibold">RNS Details</h2>
+          <h2 class="lu-h2 mb-4">RNS Details</h2>
           <Button
             size="sm"
             variant="destructive"

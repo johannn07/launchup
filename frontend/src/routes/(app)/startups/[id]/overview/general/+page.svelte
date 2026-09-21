@@ -28,9 +28,11 @@
 </script>
 
 <div class="flex flex-col gap-5">
-  <h1 class="text-xl font-semibold">General</h1>
+  <h1 class="lu-h2">General</h1>
   {#if $queryResult.isError}
-    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+    <div
+      class="border-destructive/30 bg-destructive/10 rounded-md border p-4 text-destructive"
+    >
       <p class="font-medium">Failed to load startup data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>

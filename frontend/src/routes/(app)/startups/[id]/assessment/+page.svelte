@@ -5,10 +5,7 @@
   import * as Dialog from '$lib/components/ui/dialog';
   import ReadinessAssessmentForm from '$lib/components/startups/assessment/ReadinessAssessmentForm.svelte';
   import type { Assessment } from '$lib/types/assessment.types';
-  import {
-    getReadinessTypes,
-    canRateReadiness
-  } from '$lib/utils';
+  import { getReadinessTypes, canRateReadiness } from '$lib/utils';
   import ShortAnswerField from '$lib/components/startups/assessment/AssessmentTypes/ShortAnswerField.svelte';
   import LongAnswerField from '$lib/components/startups/assessment/AssessmentTypes/LongAnswerField.svelte';
   import FileUploadField from '$lib/components/startups/assessment/AssessmentTypes/FileUploadField.svelte';
@@ -18,7 +15,14 @@
   import { CircleCheck, Loader } from 'lucide-svelte';
   import { arrive } from '$lib/motion';
   import { StatePanel } from '$lib/components/workspace';
-  import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
+  import {
+    Cpu,
+    TrendingUp,
+    CheckCircle2,
+    Building2,
+    ShieldCheck,
+    Wallet
+  } from 'lucide-svelte';
 
   const { data } = $props();
   const { access, startupId } = data;
@@ -327,7 +331,8 @@
     const applicable = typeAssessments.filter((a: any) => a.isApplicable);
     if (applicable.length === 0) return 0;
     const completed = applicable.filter((a: any) => {
-      const hasAnswer = a.response?.answerValue && String(a.response.answerValue).trim() !== '';
+      const hasAnswer =
+        a.response?.answerValue && String(a.response.answerValue).trim() !== '';
       return a.status === 'Completed' && hasAnswer;
     }).length;
     return Math.round((completed / applicable.length) * 100);
@@ -356,74 +361,81 @@
   </p>
 
   <div class="lu-enter grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-  {#each readinessTypes as type}
-    {@const assessments = assessmentsByType()[type.name] || []}
-    {@const applicableAssessments = assessments.filter((a: any) => a.isApplicable)}
-    {@const completedCount = applicableAssessments.filter((a: any) => {
-      const hasAnswer = a.response?.answerValue && String(a.response.answerValue).trim() !== '';
-      return a.status === 'Completed' && hasAnswer;
-    }).length}
-    {@const currentLevel = readinessLevelsByType()[type.name]}
-    {@const progress = applicableAssessments.length > 0
-      ? Math.round((completedCount / applicableAssessments.length) * 100)
-      : 0}
-    {@const config = typeConfig[type.name] ?? typeConfig['Technology']}
-    {@const Icon = config.icon}
+    {#each readinessTypes as type}
+      {@const assessments = assessmentsByType()[type.name] || []}
+      {@const applicableAssessments = assessments.filter(
+        (a: any) => a.isApplicable
+      )}
+      {@const completedCount = applicableAssessments.filter((a: any) => {
+        const hasAnswer =
+          a.response?.answerValue &&
+          String(a.response.answerValue).trim() !== '';
+        return a.status === 'Completed' && hasAnswer;
+      }).length}
+      {@const currentLevel = readinessLevelsByType()[type.name]}
+      {@const progress =
+        applicableAssessments.length > 0
+          ? Math.round((completedCount / applicableAssessments.length) * 100)
+          : 0}
+      {@const config = typeConfig[type.name] ?? typeConfig['Technology']}
+      {@const Icon = config.icon}
 
-    <div
-      class="lu-card group flex cursor-pointer flex-col rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5 hover:border-[#2b3a5c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
-      role="button"
-      tabindex="0"
-      onclick={() => openTypeModal(type.name)}
-      onkeydown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          openTypeModal(type.name);
-        }
-      }}
-    >
-      <div class="mb-4 flex items-center gap-3">
-        <span
-          class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-[#2b3a5c] bg-[#111b2e] transition-colors duration-quick group-hover:border-[#4f46e5]/70"
-          aria-hidden="true"
-        >
-          <Icon class="h-4 w-4 text-[#c7d2fe]" />
-        </span>
-        <div class="min-w-0">
-          <h3 class="truncate text-[15px] font-semibold text-white">
-            {type.name}
-          </h3>
-          <span class="text-[12.5px] text-[#94a3b8]">
-            {currentLevel ? `Level ${currentLevel}` : 'Not yet rated'}
+      <div
+        class="lu-card group flex cursor-pointer flex-col rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5 hover:border-[#2b3a5c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#818cf8]"
+        role="button"
+        tabindex="0"
+        onclick={() => openTypeModal(type.name)}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openTypeModal(type.name);
+          }
+        }}
+      >
+        <div class="mb-4 flex items-center gap-3">
+          <span
+            class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.7rem] border border-[#2b3a5c] bg-[#111b2e] transition-colors duration-quick group-hover:border-[#4f46e5]/70"
+            aria-hidden="true"
+          >
+            <Icon class="h-4 w-4 text-[#c7d2fe]" />
           </span>
+          <div class="min-w-0">
+            <h3 class="truncate text-[15px] font-semibold text-white">
+              {type.name}
+            </h3>
+            <span class="text-[12.5px] text-[#94a3b8]">
+              {currentLevel ? `Level ${currentLevel}` : 'Not yet rated'}
+            </span>
+          </div>
         </div>
-      </div>
 
-      <div class="mb-3 flex items-center justify-between gap-3 text-[12.5px]">
-        <span class="text-[#94a3b8]">
-          {assessments.length}
-          {assessments.length === 1 ? 'question' : 'questions'}
-        </span>
-        {#if applicableAssessments.length > 0}
-          <span class="lu-num text-[#94a3b8]">
-            <span class="text-[#f1f5f9]">{completedCount}</span>
-            / {applicableAssessments.length} answered
+        <div class="mb-3 flex items-center justify-between gap-3 text-[12.5px]">
+          <span class="text-[#94a3b8]">
+            {assessments.length}
+            {assessments.length === 1 ? 'question' : 'questions'}
           </span>
+          {#if applicableAssessments.length > 0}
+            <span class="lu-num text-[#94a3b8]">
+              <span class="text-[#f1f5f9]">{completedCount}</span>
+              / {applicableAssessments.length} answered
+            </span>
+          {/if}
+        </div>
+
+        {#if applicableAssessments.length > 0}
+          <div
+            class="mt-auto h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]"
+          >
+            <div
+              class="lu-fill h-full rounded-full bg-[#6366f1]"
+              style={`width: ${progress}%`}
+              use:arrive
+            ></div>
+          </div>
         {/if}
       </div>
-
-      {#if applicableAssessments.length > 0}
-        <div class="mt-auto h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]">
-          <div
-            class="lu-fill h-full rounded-full bg-[#6366f1]"
-            style={`width: ${progress}%`}
-            use:arrive
-          ></div>
-        </div>
-      {/if}
-    </div>
-  {/each}
-</div>
+    {/each}
+  </div>
 
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
@@ -471,7 +483,9 @@
 
               <div class="rounded-2xl border border-[#1f2c47] bg-[#111b2e] p-4">
                 <!-- Assessment Header -->
-                <div class="mb-3 flex items-start justify-between gap-3 border-b border-border/50 pb-3">
+                <div
+                  class="border-border/50 mb-3 flex items-start justify-between gap-3 border-b pb-3"
+                >
                   <div class="flex flex-1 items-start gap-3">
                     <div class="flex items-center pt-1">
                       <Checkbox
@@ -486,16 +500,16 @@
                       />
                     </div>
                     <div class="min-w-0 flex-1">
-                      <h3 class="text-base font-bold leading-snug text-foreground">
+                      <h3
+                        class="text-base font-bold leading-snug text-foreground"
+                      >
                         {assessmentData.assessment.name}
                       </h3>
                       <p class="text-xs text-muted-foreground">
                         {assessmentData.assessment.answerType}
                       </p>
                       {#if !assessmentData.isApplicable}
-                        <p
-                          class="mt-1.5 text-[12px] text-[#fbbf24]"
-                        >
+                        <p class="mt-1.5 text-[12px] text-[#fbbf24]">
                           Not applicable to this startup
                         </p>
                       {/if}
@@ -514,13 +528,15 @@
                     <ShortAnswerField
                       description={assessmentData.assessment.name}
                       bind:value={assessmentAnswers[assessmentId]}
-                      isReadOnly={canRateReadiness(data.role) || !assessmentData.isApplicable}
+                      isReadOnly={canRateReadiness(data.role) ||
+                        !assessmentData.isApplicable}
                     />
                   {:else if assessmentData.assessment.answerType === 'LongAnswer'}
                     <LongAnswerField
                       description={assessmentData.assessment.name}
                       bind:value={assessmentAnswers[assessmentId]}
-                      isReadOnly={canRateReadiness(data.role) || !assessmentData.isApplicable}
+                      isReadOnly={canRateReadiness(data.role) ||
+                        !assessmentData.isApplicable}
                     />
                   {:else if assessmentData.assessment.answerType === 'File'}
                     <FileUploadField
@@ -528,7 +544,8 @@
                       description={assessmentData.assessment.name}
                       fileUrl={assessmentData.response?.fileUrl || ''}
                       bind:value={assessmentAnswers[assessmentId]}
-                      isReadOnly={canRateReadiness(data.role) || !assessmentData.isApplicable}
+                      isReadOnly={canRateReadiness(data.role) ||
+                        !assessmentData.isApplicable}
                       {access}
                       {startupId}
                       assessmentId={assessmentId.toString()}
@@ -577,7 +594,9 @@
         {/if}
       </div>
 
-      <div class="flex shrink-0 items-center justify-between gap-3 border-t border-border/50 pt-4">
+      <div
+        class="border-border/50 flex shrink-0 items-center justify-between gap-3 border-t pt-4"
+      >
         {#if canRateReadiness(data.role)}
           {@const typeAssessments = selectedReadinessType
             ? assessmentsByType()[selectedReadinessType] || []
@@ -663,7 +682,11 @@
 {/snippet}
 
 {#snippet loading()}
-  <div class="flex flex-col gap-4" role="status" aria-label="Loading assessments">
+  <div
+    class="flex flex-col gap-4"
+    role="status"
+    aria-label="Loading assessments"
+  >
     <span class="lu-skel h-4 w-80 max-w-full"></span>
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {#each [0, 1, 2, 3, 4, 5] as i (i)}
@@ -676,6 +699,15 @@
 {#snippet error()}
   <StatePanel kind="error" title="Assessments could not be loaded">
     Refresh the page to try again.
+    {#snippet action()}
+      <button
+        type="button"
+        class="lu-btn lu-btn-secondary lu-btn-sm"
+        onclick={() => $assessmentQuery.refetch()}
+      >
+        Try again
+      </button>
+    {/snippet}
   </StatePanel>
 {/snippet}
 

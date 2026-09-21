@@ -178,85 +178,87 @@
 </script>
 
 <div class="flex flex-col gap-5">
-  <h1 class="text-xl font-semibold">Elevate</h1>
+  <h1 class="lu-h2">Elevate</h1>
   {#if $readinessData.isError || $elevateData.isError || $queryResult.isError}
-    <div class="rounded-md border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+    <div
+      class="border-destructive/30 bg-destructive/10 rounded-md border p-4 text-destructive"
+    >
       <p class="font-medium">Failed to load elevation data</p>
       <p class="text-sm">Please try refreshing the page</p>
     </div>
   {:else}
     <div class="flex items-center justify-between">
-    {#if $readinessData.isLoading}
-      <Skeleton class="h-10" />
-    {:else}
-      <div class="w-3/4 rounded-md border">
-        <Table.Root class="rounded-lg bg-background">
-          <Table.Header>
-            <Table.Row class="text-centery h-12">
-              <Table.Head class="pl-5">Type</Table.Head>
-              <Table.Head class="">Initial Level</Table.Head>
-              <Table.Head class="">Current Level</Table.Head>
-              {#if data.role !== 'Startup'}
-                <Table.Head class="">Next Level</Table.Head>
-              {/if}
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {#if $queryResult.isLoading && $elevateData.isLoading}
-              <Skeleton class="h-40" />
-            {:else}
-              {#each $readinessData.data.sort( (a, b) => a.readinessLevel.readinessType.localeCompare(b.readinessLevel.readinessType) ) as r, index}
-                {@const initial = $readinessData.data[index]}
-                <Table.Row class="h-14 cursor-pointer">
-                  <Table.Cell class="pl-5"
-                    >{r.readinessLevel.readinessType}</Table.Cell
-                  >
-                  <Table.Cell class=""
-                    >{initial.readinessLevel.level}</Table.Cell
-                  >
-                  <Table.Cell class="">
-                    {#if $elevateData.data}
-                      {getCurrentLevel(
-                        $elevateData.data,
-                        r.readinessLevel.readinessType,
-                        r
-                      )}
-                    {:else}
-                      <Skeleton class="h-6" />
-                    {/if}
-                  </Table.Cell>
-                  {#if data.role !== 'Startup'}
+      {#if $readinessData.isLoading}
+        <Skeleton class="h-10" />
+      {:else}
+        <div class="w-3/4 rounded-md border">
+          <Table.Root class="rounded-lg bg-background">
+            <Table.Header>
+              <Table.Row class="text-centery h-12">
+                <Table.Head class="pl-5">Type</Table.Head>
+                <Table.Head class="">Initial Level</Table.Head>
+                <Table.Head class="">Current Level</Table.Head>
+                {#if data.role !== 'Startup'}
+                  <Table.Head class="">Next Level</Table.Head>
+                {/if}
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {#if $queryResult.isLoading && $elevateData.isLoading}
+                <Skeleton class="h-40" />
+              {:else}
+                {#each $readinessData.data.sort( (a, b) => a.readinessLevel.readinessType.localeCompare(b.readinessLevel.readinessType) ) as r, index}
+                  {@const initial = $readinessData.data[index]}
+                  <Table.Row class="h-14 cursor-pointer">
+                    <Table.Cell class="pl-5"
+                      >{r.readinessLevel.readinessType}</Table.Cell
+                    >
+                    <Table.Cell class=""
+                      >{initial.readinessLevel.level}</Table.Cell
+                    >
                     <Table.Cell class="">
-                      <Select.Root
-                        type="single"
-                        bind:value={elevatedReadiness[index]}
-                      >
-                        <Select.Trigger class="w-[100px]">
-                          {#if elevatedReadiness[index] !== r.readinessLevel.id}
-                            {getLevel(
-                              getReadinessLevels(
-                                r.readinessLevel.readinessType
-                              ),
-                              elevatedReadiness[index]
-                            )}
-                          {/if}
-                        </Select.Trigger>
-                        <Select.Content>
-                          {#each getReadinessLevels(r.readinessLevel.readinessType) as item}
-                            <Select.Item value={item.id}
-                              >{item.level}</Select.Item
-                            >
-                          {/each}
-                        </Select.Content>
-                      </Select.Root>
+                      {#if $elevateData.data}
+                        {getCurrentLevel(
+                          $elevateData.data,
+                          r.readinessLevel.readinessType,
+                          r
+                        )}
+                      {:else}
+                        <Skeleton class="h-6" />
+                      {/if}
                     </Table.Cell>
-                  {/if}
-                </Table.Row>
-              {/each}
-            {/if}
-          </Table.Body>
-        </Table.Root>
-      </div>
+                    {#if data.role !== 'Startup'}
+                      <Table.Cell class="">
+                        <Select.Root
+                          type="single"
+                          bind:value={elevatedReadiness[index]}
+                        >
+                          <Select.Trigger class="w-[100px]">
+                            {#if elevatedReadiness[index] !== r.readinessLevel.id}
+                              {getLevel(
+                                getReadinessLevels(
+                                  r.readinessLevel.readinessType
+                                ),
+                                elevatedReadiness[index]
+                              )}
+                            {/if}
+                          </Select.Trigger>
+                          <Select.Content>
+                            {#each getReadinessLevels(r.readinessLevel.readinessType) as item}
+                              <Select.Item value={item.id}
+                                >{item.level}</Select.Item
+                              >
+                            {/each}
+                          </Select.Content>
+                        </Select.Root>
+                      </Table.Cell>
+                    {/if}
+                  </Table.Row>
+                {/each}
+              {/if}
+            </Table.Body>
+          </Table.Root>
+        </div>
       {/if}
     </div>
     {#if data.role !== 'Startup'}

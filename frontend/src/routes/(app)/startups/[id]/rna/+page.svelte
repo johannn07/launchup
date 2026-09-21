@@ -266,6 +266,15 @@
 {#snippet error()}
   <StatePanel kind="error" title="This assessment could not be loaded">
     Refresh the page to try again.
+    {#snippet action()}
+      <button
+        type="button"
+        class="lu-btn lu-btn-secondary lu-btn-sm"
+        onclick={() => $rnaQueries.forEach((q) => q.refetch())}
+      >
+        Try again
+      </button>
+    {/snippet}
   </StatePanel>
 {/snippet}
 

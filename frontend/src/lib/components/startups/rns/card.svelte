@@ -1,7 +1,9 @@
 <script lang="ts">
   import { Target } from 'lucide-svelte';
-  import { WorkCard, Assignee } from '$lib/components/workspace';
-  import { RnsViewEditDeleteDialog, RnsViewEditDeleteAiDialog } from '.';
+  import WorkCard from '$lib/components/workspace/WorkCard.svelte';
+  import Assignee from '$lib/components/workspace/Assignee.svelte';
+  import RnsViewEditDeleteDialog from './view-edit-delete-dialog.svelte';
+  import RnsViewEditDeleteAiDialog from './view-edit-delete-ai-dialog.svelte';
   import type { Actions } from '$lib/types';
   let { rns, members, update, ai, addToRns, deleteRns, role, index } = $props();
 
@@ -75,7 +77,9 @@
   {#snippet chips()}
     <span class="lu-chip-sm">#{rns.priorityNumber ?? ''}</span>
     <span class="lu-chip-sm">{rns.readinessType}</span>
-    <span class="lu-chip-sm">{rns.status === 7 ? 'Long term' : 'Short term'}</span>
+    <span class="lu-chip-sm"
+      >{rns.status === 7 ? 'Long term' : 'Short term'}</span
+    >
   {/snippet}
 
   <p>

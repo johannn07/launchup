@@ -1,6 +1,14 @@
 <script lang="ts">
-  import { RnaViewEditDeleteAiDialog, RnaViewEditDeleteDialog } from '.';
-  import { Cpu, TrendingUp, CheckCircle2, Building2, ShieldCheck, Wallet } from 'lucide-svelte';
+  import RnaViewEditDeleteAiDialog from './view-edit-delete-ai-dialog.svelte';
+  import RnaViewEditDeleteDialog from './view-edit-delete-dialog.svelte';
+  import {
+    Cpu,
+    TrendingUp,
+    CheckCircle2,
+    Building2,
+    ShieldCheck,
+    Wallet
+  } from 'lucide-svelte';
 
   let { rna, update, deleteRna, addToRna, role, readinessData } = $props();
 
@@ -25,9 +33,7 @@
     Regulatory: ShieldCheck,
     Investment: Wallet
   };
-  const Icon = $derived(
-    dimensionIcon[rna.readinessLevel.readinessType] ?? Cpu
-  );
+  const Icon = $derived(dimensionIcon[rna.readinessLevel.readinessType] ?? Cpu);
 </script>
 
 <div

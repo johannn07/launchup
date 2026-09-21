@@ -17,7 +17,10 @@
   } from '$lib/components/startups/rns/index.js';
   import { Loader, ChevronDown, Sparkles, Plus } from 'lucide-svelte';
   import * as Table from '$lib/components/ui/table';
-  import { Segmented, flash } from '$lib/motion';
+  import { Segmented } from '$lib/motion';
+  // flash from core, not the barrel: the barrel pulls components back in and
+  // Vite SSR fails on the cycle (see lib/motion/core.ts).
+  import { flash } from '$lib/motion/core';
   import { BoardSkeleton, StatePanel } from '$lib/components/workspace';
   import { goto } from '$app/navigation';
 
@@ -438,6 +441,16 @@
     { value: 'table' as const, label: 'Table' }
   ];
   const canEdit = $derived(data.role !== 'Startup');
+  // Waiting on a mentor's decision; counted from the same rows the board shows.
+  let awaitingOnly = $state(false);
+  const awaitingCount = $derived(
+    ($rnsQueries[1].data ?? []).filter(
+      (i: any) =>
+        i.isAiGenerated === false &&
+        i.approvalStatus &&
+        i.approvalStatus !== 'Unchanged'
+    ).length
+  );
 
   // A table row is a summary of a card. Clicking one switches to the board and
   // flashes that card, so there is one dialog implementation, not two.
@@ -506,6 +519,15 @@
 {#snippet error()}
   <StatePanel kind="error" title="Recommended next steps could not be loaded">
     Refresh the page to try again.
+    {#snippet action()}
+      <button
+        type="button"
+        class="lu-btn lu-btn-secondary lu-btn-sm"
+        onclick={() => $rnsQueries.forEach((q) => q.refetch())}
+      >
+        Try again
+      </button>
+    {/snippet}
   </StatePanel>
 {/snippet}
 
@@ -518,6 +540,17 @@
         label="View"
       />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
+      {#if canEdit && awaitingCount > 0}
+        <button
+          type="button"
+          class="lu-chip-sm h-9 px-3 transition-colors duration-quick"
+          data-flag={awaitingOnly ? '' : undefined}
+          aria-pressed={awaitingOnly}
+          onclick={() => (awaitingOnly = !awaitingOnly)}
+        >
+          {awaitingCount} awaiting approval
+        </button>
+      {/if}
     </div>
     <div class="flex flex-wrap items-center gap-2.5">
       {#if selectedFormat === 'board'}
@@ -551,6 +584,9 @@
             <DropdownMenu.Trigger
               class="lu-btn lu-btn-primary lu-btn-sm"
               disabled={generatingRNS}
+              title={selectedRNA.length === 0
+                ? 'Select at least one assessment first'
+                : undefined}
               aria-label="Choose assessments to generate from"
             >
               <ChevronDown class="h-4 w-4" />
@@ -595,6 +631,13 @@
       {/if}
     </div>
   </div>
+  {#if canEdit}
+    <p class="-mt-1 text-[12.5px] text-[#94a3b8]">
+      Generates next steps from the selected assessments. Drafts are editable,
+      and you can delete them.
+    </p>
+  {/if}
+
   <div class="block w-full">
     {#if selectedFormat === 'board'}
       <KanbanBoardNew
@@ -606,6 +649,7 @@
         role={data.role}
         {updateStatus}
         {selectedMembers}
+        {awaitingOnly}
         {taskType}
       />
     {:else}

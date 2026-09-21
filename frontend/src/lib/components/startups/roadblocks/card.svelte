@@ -1,10 +1,8 @@
 <script lang="ts">
-  import { WorkCard, Assignee } from '$lib/components/workspace';
-  import {
-    RoadblocksCreateDialog,
-    RoadblocksViewEditDialog,
-    RoadblocksViewEditAIDialog
-  } from '.';
+  import WorkCard from '$lib/components/workspace/WorkCard.svelte';
+  import Assignee from '$lib/components/workspace/Assignee.svelte';
+  import RoadblocksViewEditDialog from './view-edit-delete-dialog.svelte';
+  import RoadblocksViewEditAIDialog from './view-edit-delete-ai-dialog.svelte';
   import type { Actions } from '$lib/types';
   let { roadblocks, members, update, ai, deleteRoadblocks, role, index } =
     $props();

@@ -86,7 +86,8 @@
 
       const currentLevel = response.data.find(
         (rl: any) =>
-          rl.readinessLevel.readinessType === assessment.assessment.assessmentType
+          rl.readinessLevel.readinessType ===
+          assessment.assessment.assessmentType
       );
 
       if (currentLevel) {
@@ -169,7 +170,7 @@
 
 <form class="flex flex-col gap-5 p-3" enctype="multipart/form-data">
   <Dialog.Header>
-    <Dialog.Title class="text-2xl font-semibold">
+    <Dialog.Title class="lu-h2">
       {assessment.assessment.name}
     </Dialog.Title>
     {#if isRater}
@@ -228,7 +229,7 @@
             Level {readinessLevel}
           </Select.Trigger>
           <Select.Content>
-            {#each Array.from({ length: 9 }, (_, i) => (i + 1).toString()) as level}
+            {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
               <Select.Item value={level}>Level {level}</Select.Item>
             {/each}
           </Select.Content>

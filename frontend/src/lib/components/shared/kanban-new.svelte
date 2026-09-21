@@ -14,7 +14,8 @@
     showDialog,
     role,
     updateStatus,
-    selectedMembers
+    selectedMembers,
+    awaitingOnly = false
   }: {
     handleDndConsider: any;
     handleDndFinalize: any;
@@ -24,6 +25,8 @@
     role: any;
     updateStatus: any;
     selectedMembers: any;
+    /** Show only records waiting on an approval decision. */
+    awaitingOnly?: boolean;
   } = $props();
 
   // Reorders use the move token; dur() makes it 0 under reduced motion.
@@ -72,8 +75,9 @@
   }
 
   const isHidden = (item: any) =>
-    !selectedMembers.includes(item.assigneeId ? item.assigneeId : 999) &&
-    selectedMembers.length !== 0;
+    (!selectedMembers.includes(item.assigneeId ? item.assigneeId : 999) &&
+      selectedMembers.length !== 0) ||
+    (awaitingOnly && item.approvalStatus === 'Unchanged');
 
   // An empty board says so once, rather than seven times over.
   const boardEmpty = $derived(columns.every((c: any) => c.items.length === 0));

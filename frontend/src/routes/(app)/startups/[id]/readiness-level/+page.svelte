@@ -220,7 +220,6 @@
   };
 </script>
 
-
 <div class="flex h-full flex-col">
   {#if isLoading}
     {@render loading()}
@@ -253,6 +252,15 @@
 {#snippet error()}
   <StatePanel kind="error" title="Readiness data could not be loaded">
     Refresh the page to try again.
+    {#snippet action()}
+      <button
+        type="button"
+        class="lu-btn lu-btn-secondary lu-btn-sm"
+        onclick={() => $readinessLevelQueries.forEach((q) => q.refetch())}
+      >
+        Try again
+      </button>
+    {/snippet}
   </StatePanel>
 {/snippet}
 
@@ -274,64 +282,68 @@
       {/if}
     {/if}
     {#if !revising}
-    <Can role={['Mentor', 'Manager']} userRole={role}>
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <Segmented options={viewOptions} bind:value={selectedTab} label="View" />
-        {#if selectedTab === 'detailed'}
+      <Can role={['Mentor', 'Manager']} userRole={role}>
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <Segmented
-            options={dimensionOptions}
-            bind:value={selectedReadinessTab}
-            label="Dimension"
+            options={viewOptions}
+            bind:value={selectedTab}
+            label="View"
           />
-        {/if}
-      </div>
-    </Can>
-    {#if selectedTab === 'chart'}
-      <ReadinessDashboard startupId={Number(startupId)} />
-    {:else}
-      <div class="flex h-full flex-col gap-3">
-        <div class="flex h-full flex-col overflow-scroll">
-          <div class="flex flex-1 flex-col">
-            <RatedRubric
-              questionnaires={rubrics().technology}
-              type={'technology'}
-              current={selectedReadinessTab}
-              scores={scores().technology}
+          {#if selectedTab === 'detailed'}
+            <Segmented
+              options={dimensionOptions}
+              bind:value={selectedReadinessTab}
+              label="Dimension"
             />
-            <RatedRubric
-              questionnaires={rubrics().acceptance}
-              type={'acceptance'}
-              current={selectedReadinessTab}
-              scores={scores().acceptance}
-            />
-            <RatedRubric
-              questionnaires={rubrics().market}
-              type={'market'}
-              current={selectedReadinessTab}
-              scores={scores().market}
-            />
-            <RatedRubric
-              questionnaires={rubrics().regulatory}
-              type={'regulatory'}
-              current={selectedReadinessTab}
-              scores={scores().regulatory}
-            />
-            <RatedRubric
-              questionnaires={rubrics().organizational}
-              type={'organizational'}
-              current={selectedReadinessTab}
-              scores={scores().organizational}
-            />
-            <RatedRubric
-              questionnaires={rubrics().investment}
-              type={'investment'}
-              current={selectedReadinessTab}
-              scores={scores().investment}
-            />
+          {/if}
+        </div>
+      </Can>
+      {#if selectedTab === 'chart'}
+        <ReadinessDashboard startupId={Number(startupId)} />
+      {:else}
+        <div class="flex h-full flex-col gap-3">
+          <div class="flex h-full flex-col overflow-scroll">
+            <div class="flex flex-1 flex-col">
+              <RatedRubric
+                questionnaires={rubrics().technology}
+                type={'technology'}
+                current={selectedReadinessTab}
+                scores={scores().technology}
+              />
+              <RatedRubric
+                questionnaires={rubrics().acceptance}
+                type={'acceptance'}
+                current={selectedReadinessTab}
+                scores={scores().acceptance}
+              />
+              <RatedRubric
+                questionnaires={rubrics().market}
+                type={'market'}
+                current={selectedReadinessTab}
+                scores={scores().market}
+              />
+              <RatedRubric
+                questionnaires={rubrics().regulatory}
+                type={'regulatory'}
+                current={selectedReadinessTab}
+                scores={scores().regulatory}
+              />
+              <RatedRubric
+                questionnaires={rubrics().organizational}
+                type={'organizational'}
+                current={selectedReadinessTab}
+                scores={scores().organizational}
+              />
+              <RatedRubric
+                questionnaires={rubrics().investment}
+                type={'investment'}
+                current={selectedReadinessTab}
+                scores={scores().investment}
+              />
+            </div>
           </div>
         </div>
-      </div>
-    {/if}
+      {/if}
     {/if}
   </div>
 {/snippet}

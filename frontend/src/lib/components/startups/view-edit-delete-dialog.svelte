@@ -54,7 +54,7 @@
   <Dialog.Content class="h-4/6 max-w-[1200px] overflow-auto">
     <div class="flex max-w-[1100px] gap-10">
       <div class="flex w-4/6 flex-col gap-5">
-        <h1 class="text-2xl font-semibold">{title}</h1>
+        <h1 class="lu-h2">{title}</h1>
         <!-- Labels -->
         <div class="flex h-[550px] flex-col gap-5 overflow-y-scroll">
           {#each fields as field}

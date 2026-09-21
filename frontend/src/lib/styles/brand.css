@@ -89,6 +89,39 @@ html:has(.lu-root) {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
+/* ---- Three heading roles ----
+   Page names the screen, section names a block inside it, sub names a group
+   inside that. Replaces a dozen ad hoc sizes and weights. */
+.lu-root .lu-h1,
+.lu-ws .lu-h1 {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  font-variation-settings:
+    'wdth' 118,
+    'wght' 800;
+  letter-spacing: -0.028em;
+  font-size: 28px;
+  line-height: 1.15;
+  color: #fff;
+}
+.lu-root .lu-h2,
+.lu-ws .lu-h2 {
+  font-family: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  font-variation-settings:
+    'wdth' 108,
+    'wght' 600;
+  letter-spacing: -0.012em;
+  font-size: 20px;
+  line-height: 1.25;
+  color: #fff;
+}
+.lu-root .lu-h3,
+.lu-ws .lu-h3 {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--lu-cloud, #f1f5f9);
+}
+
 /* ---- One button system: primary and secondary share a base ---- */
 .lu-root .lu-btn {
   position: relative;
@@ -859,8 +892,9 @@ html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
 /* ---- Board ----
    Every duration is a motion token, so reduced motion flattens all of it. */
 .lu-root .lu-col {
-  /* Neutral by default: colour is for the three states that mean something. */
-  --st: var(--lu-step);
+  /* Neutral by default: colour is for the states that mean something. Dimmer
+     than 'stopped', so Discontinued still reads apart from the working ones. */
+  --st: #2b3a5c;
   transition:
     border-color var(--lu-quick) var(--lu-ease),
     background-color var(--lu-quick) var(--lu-ease);
