@@ -56,7 +56,7 @@
       class="w-80 rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.6)]"
     >
       <div class="flex flex-wrap items-center gap-1.5">
-        <span class="lu-chip-sm">RNS #{rns.priorityNumber ?? ''}</span>
+        <span class="lu-chip-sm">Step #{rns.priorityNumber ?? ''}</span>
         <span class="lu-chip-sm">{rns.readinessType}</span>
       </div>
       <p class="mt-2.5 text-[13px] font-medium leading-snug text-white">

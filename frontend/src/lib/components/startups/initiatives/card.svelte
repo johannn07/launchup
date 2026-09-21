@@ -115,7 +115,7 @@
         goto(`rns?tab=rns`);
       }}
     >
-      RNS #{assignedRNS?.priorityNumber ?? ''}
+      Step #{assignedRNS?.priorityNumber ?? ''}
     </button>
     <span class="lu-chip-sm">{assignedRNS.readinessType}</span>
   {/snippet}

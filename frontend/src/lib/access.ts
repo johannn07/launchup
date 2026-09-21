@@ -19,7 +19,7 @@ const startupModule = {
       subModule: []
     },
     {
-      name: 'RNS',
+      name: 'Next steps',
       link: 'rns',
       subModule: []
     },

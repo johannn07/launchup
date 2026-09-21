@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     KanbanBoardNew,
     MembersFilter,
@@ -24,14 +25,10 @@
     InitiativeCreateDialog
   } from '$lib/components/startups/initiatives';
   import { ChevronDown, Loader, Sparkles, Plus } from 'lucide-svelte';
-  import { Segmented } from '$lib/motion';
-  import {
-    BoardSkeleton,
-    StatePanel
-  } from '$lib/components/workspace';
+  import { Segmented, flash } from '$lib/motion';
+  import { BoardSkeleton, StatePanel } from '$lib/components/workspace';
   import * as Table from '$lib/components/ui/table';
   import HoveredRNSCard from '$lib/components/shared/hovered-rns-card.svelte';
-
 
   let dropdownOpen = $state(false);
 
@@ -148,6 +145,17 @@
     { value: 'table' as const, label: 'Table' }
   ];
   const canEdit = $derived(data.role !== 'Startup');
+
+  // A table row is a summary of a card. Clicking one switches to the board and
+  // flashes that card, so there is one dialog implementation, not two.
+  async function openOnBoard(id: number | string) {
+    selectedFormat = 'board';
+    await tick();
+    const el = document.querySelector<HTMLElement>(`[data-item-id="${id}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flash(el?.querySelector('.lu-card') ?? null);
+  }
+
   const selectedMembers: any = $state([]);
 
   $effect(() => {
@@ -533,7 +541,7 @@
 
   const generateInitiativesForSelected = async () => {
     if (selectedRNS.length === 0) {
-      toast.error('No RNS selected');
+      toast.error('No next step selected');
       return;
     }
 
@@ -597,7 +605,7 @@
       // }
 
       // selectedRNS = [];
-      toast.success('Successfully generated initiatives for selected RNS');
+      toast.success('Generated initiatives for the selected next steps');
     } catch (error: any) {
       toast.error(
         error.response?.data?.message || 'Failed to generate initiatives'
@@ -657,7 +665,11 @@
 {#snippet accessible()}
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex flex-wrap items-center gap-3">
-      <Segmented options={viewOptions} bind:value={selectedFormat} label="View" />
+      <Segmented
+        options={viewOptions}
+        bind:value={selectedFormat}
+        label="View"
+      />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
     </div>
     <div class="flex flex-wrap items-center gap-2.5">
@@ -717,9 +729,13 @@
                   checked={selectedRNS.includes(task.id)}
                   onCheckedChange={() => toggleRNSSelection(task.id)}
                 >
-                  <span class="flex flex-col gap-0.5 {taken ? 'opacity-50' : ''}">
+                  <span
+                    class="flex flex-col gap-0.5 {taken ? 'opacity-50' : ''}"
+                  >
                     <span class="text-[13px] font-semibold text-[#f1f5f9]">
-                      RNS #{task.priorityNumber}{taken ? ' · has initiatives' : ''}
+                      Step #{task.priorityNumber}{taken
+                        ? ' · has initiatives'
+                        : ''}
                     </span>
                     <span class="line-clamp-2 text-[12.5px] text-[#94a3b8]">
                       {task.description}
@@ -755,7 +771,7 @@
               <Table.Head class="h-11 pl-5 text-[12.5px] text-[#94a3b8]"
                 >Description</Table.Head
               >
-              <Table.Head class="text-[12.5px] text-[#94a3b8]">RNS</Table.Head>
+              <Table.Head class="text-[12.5px] text-[#94a3b8]">Step</Table.Head>
               <Table.Head class="text-[12.5px] text-[#94a3b8]"
                 >Initiative</Table.Head
               >
@@ -767,7 +783,17 @@
           <Table.Body>
             {#each $initiativesQueries[2].data.filter((item: RNSTask) => item.isAiGenerated === false) as item}
               {#if selectedMembers.includes(item.assignee) || selectedMembers.length === 0}
-                <Table.Row class="h-14 border-[#17213a]">
+                <Table.Row
+                  class="lu-row h-14 cursor-pointer border-[#17213a]"
+                  tabindex={0}
+                  onclick={() => openOnBoard(item.id)}
+                  onkeydown={(e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openOnBoard(item.id);
+                    }
+                  }}
+                >
                   <Table.Cell class="pl-5 text-[13.5px] text-[#f1f5f9]"
                     >{item.description.substring(0, 100)}</Table.Cell
                   >
@@ -799,8 +825,8 @@
 {#snippet fallback()}
   <StatePanel title="No readiness and needs assessments yet">
     {#if data.role === 'Startup'}
-      Your mentor has not created any yet. Initiatives are planned against
-      them, so this page opens once they exist.
+      Your mentor has not created any yet. Initiatives are planned against them,
+      so this page opens once they exist.
     {:else}
       Create readiness and needs assessments for this startup first —
       initiatives are planned against them.

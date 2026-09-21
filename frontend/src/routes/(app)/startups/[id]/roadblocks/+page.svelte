@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     KanbanBoardNew,
     MembersFilter,
@@ -19,7 +20,7 @@
   import { RoadblocksCreateDialog } from '$lib/components/startups/roadblocks';
   import { Loader, Sparkles, ChevronDown, Plus } from 'lucide-svelte';
   import * as Table from '$lib/components/ui/table';
-  import { Segmented } from '$lib/motion';
+  import { Segmented, flash } from '$lib/motion';
   import { BoardSkeleton, StatePanel } from '$lib/components/workspace';
 
   let dropdownOpen = $state(false);
@@ -451,6 +452,16 @@
     { value: 'table' as const, label: 'Table' }
   ];
   const canEdit = $derived(data.role !== 'Startup');
+
+  // A table row is a summary of a card. Clicking one switches to the board and
+  // flashes that card, so there is one dialog implementation, not two.
+  async function openOnBoard(id: number | string) {
+    selectedFormat = 'board';
+    await tick();
+    const el = document.querySelector<HTMLElement>(`[data-item-id="${id}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flash(el?.querySelector('.lu-card') ?? null);
+  }
 </script>
 
 {#if isLoading}
@@ -497,7 +508,11 @@
 {#snippet accessible()}
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex flex-wrap items-center gap-3">
-      <Segmented options={viewOptions} bind:value={selectedFormat} label="View" />
+      <Segmented
+        options={viewOptions}
+        bind:value={selectedFormat}
+        label="View"
+      />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
     </div>
     <div class="flex flex-wrap items-center gap-2.5">
@@ -591,7 +606,17 @@
           <Table.Body>
             {#each ($roadblocksQueries[1].data as Roadblock[]).filter((item: Roadblock) => item.isAiGenerated === false) as item}
               {#if selectedMembers.includes(item.assignee) || selectedMembers.length === 0}
-                <Table.Row class="h-14 border-[#17213a]">
+                <Table.Row
+                  class="lu-row h-14 cursor-pointer border-[#17213a]"
+                  tabindex={0}
+                  onclick={() => openOnBoard(item.id)}
+                  onkeydown={(e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openOnBoard(item.id);
+                    }
+                  }}
+                >
                   <Table.Cell class="pl-5 text-[13.5px] text-[#f1f5f9]"
                     >{item.description.substring(0, 100)}</Table.Cell
                   >
@@ -620,8 +645,8 @@
       Your mentor has not created any yet. Roadblocks are raised against them,
       so this page opens once they exist.
     {:else}
-      Create readiness and needs assessments for this startup first —
-      roadblocks are raised against them.
+      Create readiness and needs assessments for this startup first — roadblocks
+      are raised against them.
     {/if}
     {#snippet action()}
       {#if data.role !== 'Startup'}

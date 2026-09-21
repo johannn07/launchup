@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     KanbanBoardNew,
     MembersFilter,
@@ -16,7 +17,7 @@
   } from '$lib/components/startups/rns/index.js';
   import { Loader, ChevronDown, Sparkles, Plus } from 'lucide-svelte';
   import * as Table from '$lib/components/ui/table';
-  import { Segmented } from '$lib/motion';
+  import { Segmented, flash } from '$lib/motion';
   import { BoardSkeleton, StatePanel } from '$lib/components/workspace';
   import { goto } from '$app/navigation';
 
@@ -438,6 +439,16 @@
   ];
   const canEdit = $derived(data.role !== 'Startup');
 
+  // A table row is a summary of a card. Clicking one switches to the board and
+  // flashes that card, so there is one dialog implementation, not two.
+  async function openOnBoard(id: number | string) {
+    selectedFormat = 'board';
+    await tick();
+    const el = document.querySelector<HTMLElement>(`[data-item-id="${id}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    flash(el?.querySelector('.lu-card') ?? null);
+  }
+
   let taskType = $state(3);
 
   const updateTaskType = (newType: number) => {
@@ -465,7 +476,6 @@
 {:else}
   {@render fallback()}
 {/if}
-
 
 <RnsCreateDialog
   {open}
@@ -502,7 +512,11 @@
 {#snippet accessible()}
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="flex flex-wrap items-center gap-3">
-      <Segmented options={viewOptions} bind:value={selectedFormat} label="View" />
+      <Segmented
+        options={viewOptions}
+        bind:value={selectedFormat}
+        label="View"
+      />
       <MembersFilter {members} {toggleMemberSelection} {selectedMembers} />
     </div>
     <div class="flex flex-wrap items-center gap-2.5">
@@ -561,7 +575,9 @@
                   checked={selectedRNA.includes(rna.id)}
                   onCheckedChange={() => toggleRNSSelection(rna.id)}
                 >
-                  <span class="flex flex-col gap-0.5 {taken ? 'opacity-50' : ''}">
+                  <span
+                    class="flex flex-col gap-0.5 {taken ? 'opacity-50' : ''}"
+                  >
                     <span class="text-[13px] font-semibold text-[#f1f5f9]">
                       {rna.readinessLevel.readinessType}{taken
                         ? ' · has next steps'
@@ -617,7 +633,17 @@
           <Table.Body>
             {#each $rnsQueries[1].data.filter((data: any) => data.isAiGenerated === false) as item}
               {#if selectedMembers.includes(item.assignee.id) || selectedMembers.length === 0}
-                <Table.Row class="h-14 border-[#17213a]">
+                <Table.Row
+                  class="lu-row h-14 cursor-pointer border-[#17213a]"
+                  tabindex={0}
+                  onclick={() => openOnBoard(item.id)}
+                  onkeydown={(e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openOnBoard(item.id);
+                    }
+                  }}
+                >
                   <Table.Cell class="pl-5 text-[13.5px] text-[#f1f5f9]"
                     >{item.readinessType}</Table.Cell
                   >
@@ -653,11 +679,11 @@
 {#snippet fallback()}
   <StatePanel title="No readiness and needs assessments yet">
     {#if data.role === 'Startup'}
-      Your mentor has not created any yet. Next steps are recommended from
-      them, so this page opens once they exist.
+      Your mentor has not created any yet. Next steps are recommended from them,
+      so this page opens once they exist.
     {:else}
-      Create readiness and needs assessments for this startup first — next
-      steps are recommended from them.
+      Create readiness and needs assessments for this startup first — next steps
+      are recommended from them.
     {/if}
     {#snippet action()}
       {#if data.role !== 'Startup'}

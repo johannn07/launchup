@@ -137,6 +137,7 @@
               <div
                 animate:flip={{ duration: flipDurationMs, easing: cubicOut }}
                 class:hidden={isHidden(item)}
+                data-item-id={item.id}
                 data-settling={settlingId === item.id || undefined}
               >
                 {@render card(item, false, index)}
