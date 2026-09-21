@@ -801,6 +801,14 @@ html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
   backdrop-filter: none;
   border-radius: 1rem;
 }
+/* 10px is something you type into: the shadcn input is rounded-xl, which the
+   remap turns into 16px — a surface radius on a field. */
+.lu-ws input:not([type='checkbox']):not([type='radio']),
+.lu-ws textarea,
+.lu-ws select {
+  border-radius: 10px;
+}
+
 /* 999px is an action. */
 .lu-ws [data-lu-button] {
   border-radius: 999px;

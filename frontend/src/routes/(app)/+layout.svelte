@@ -14,13 +14,17 @@
     const html = document.documentElement;
     const added = !html.classList.contains('dark');
     html.classList.add('dark');
+    // .lu-ws points the shadcn variables at brand tokens; on <body> it reaches
+    // the portalled surfaces too.
+    document.body.classList.add('lu-ws');
     return () => {
       if (added) html.classList.remove('dark');
+      document.body.classList.remove('lu-ws');
     };
   });
 </script>
 
-<div class="dark flex h-full flex-col overflow-x-hidden bg-[#07111f]">
+<div class="dark lu-ws flex h-full flex-col overflow-x-hidden bg-[#07111f]">
   <div
     aria-hidden="true"
     class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,#07111f_0%,#0b1220_45%,#050816_100%)]"

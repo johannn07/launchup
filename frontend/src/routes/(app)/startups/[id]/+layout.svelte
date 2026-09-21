@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { getData } from '$lib/utils';
   import { useQuery } from '@sveltestack/svelte-query';
@@ -80,19 +79,13 @@
   const section = $derived(SECTIONS[leaf] ?? 'Overview');
   // Overview has its own heading and sub-navigation.
   const inOverview = $derived(segments.includes('overview'));
-
-  // Dialogs and menus render outside this tree; give them the same theme.
-  onMount(() => {
-    document.body.classList.add('lu-ws');
-    return () => document.body.classList.remove('lu-ws');
-  });
 </script>
 
 <svelte:head>
   <title>{section}{name ? ` · ${name}` : ''} — LaunchUp</title>
 </svelte:head>
 
-<div class="lu-root lu-ws flex flex-1 flex-col bg-transparent pb-12">
+<div class="lu-root flex flex-1 flex-col bg-transparent pb-12">
   <nav aria-label="Breadcrumb" class="pt-2 text-[13px] text-[#94a3b8]">
     <ol class="flex min-w-0 items-center gap-2">
       <li>
