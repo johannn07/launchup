@@ -75,6 +75,9 @@
     !selectedMembers.includes(item.assigneeId ? item.assigneeId : 999) &&
     selectedMembers.length !== 0;
 
+  // An empty board says so once, rather than seven times over.
+  const boardEmpty = $derived(columns.every((c: any) => c.items.length === 0));
+
   // Four working columns across the top, the two exits beneath, long-term
   // last. Wide columns lay their cards out in a grid rather than one tall list.
   const PLACE: Record<string, { cls: string; wide: boolean }> = {
@@ -90,7 +93,18 @@
   };
 </script>
 
-<div class="lu-board mb-4 grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4">
+{#if boardEmpty}
+  <p
+    class="lu-enter rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] px-6 py-5 text-[14px] text-[#94a3b8]"
+  >
+    Nothing on the board yet. Anything added or generated lands in the first
+    column.
+  </p>
+{/if}
+
+<div
+  class="lu-board lu-enter mb-4 grid w-full gap-4 sm:grid-cols-2 lg:grid-cols-4"
+>
   {#each columns as column, index}
     {#if column.show}
       {@const place = PLACE[column.name] ?? {
@@ -107,13 +121,6 @@
           {role}
           over={overIndex === index}
         >
-          {#if column.items.length === 0}
-            <p
-              class="pointer-events-none absolute inset-x-0 top-7 text-center text-[12.5px] text-[#54648a]"
-            >
-              Nothing here
-            </p>
-          {/if}
           <div
             use:dndzone={{
               items: column.items,

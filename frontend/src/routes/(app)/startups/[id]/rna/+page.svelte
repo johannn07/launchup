@@ -84,9 +84,7 @@
 
   const addToRNA = async (id: number) => {
     try {
-      const toBeAdded = $rnaQueries[1].data.find(
-        (item: any) => item.id === id
-      );
+      const toBeAdded = $rnaQueries[1].data.find((item: any) => item.id === id);
       const existingItem = $rnaQueries[1].data.find(
         (d: any) =>
           d.isAiGenerated === false &&
@@ -118,8 +116,7 @@
       $rnaQueries[1].refetch().then(() => (open = false));
     } catch (error: any) {
       console.error(error);
-      const msg =
-        error.response?.data?.message || 'Failed to add this RNA';
+      const msg = error.response?.data?.message || 'Failed to add this RNA';
       toast.error(msg);
     }
   };
@@ -146,8 +143,7 @@
       $rnaQueries[1].refetch();
     } catch (error: any) {
       console.error(error);
-      const msg =
-        error.response?.data?.message || 'Failed to create the RNA';
+      const msg = error.response?.data?.message || 'Failed to create the RNA';
       toast.error(msg);
     }
   };
@@ -164,8 +160,7 @@
       $rnaQueries[1].refetch();
     } catch (error: any) {
       console.error(error);
-      const msg =
-        error.response?.data?.message || 'Failed to update the RNA';
+      const msg = error.response?.data?.message || 'Failed to update the RNA';
       toast.error(msg);
     }
   };
@@ -181,8 +176,7 @@
       $rnaQueries[1].refetch();
     } catch (error: any) {
       console.error(error);
-      const msg =
-        error.response?.data?.message || 'Failed to delete the RNA';
+      const msg = error.response?.data?.message || 'Failed to delete the RNA';
       toast.error(msg);
     }
   };
@@ -229,7 +223,6 @@
   };
 </script>
 
-
 {#if isLoading}
   {@render loading()}
 {:else if isError}
@@ -251,7 +244,11 @@
 />
 
 {#snippet loading()}
-  <div class="flex flex-col gap-4" role="status" aria-label="Loading assessments">
+  <div
+    class="flex flex-col gap-4"
+    role="status"
+    aria-label="Loading assessments"
+  >
     {#if data.role !== 'Startup'}
       <div class="flex justify-end gap-2.5">
         <span class="lu-skel h-[38px] w-24 rounded-full"></span>
@@ -324,7 +321,9 @@
                     >{dimension.readinessType}</span
                   >
                   <span class="lu-num text-[12px] text-[#94a3b8]">
-                    Level {dimension.level}{dimension.hasRna ? ' · has one' : ''}
+                    Level {dimension.level}{dimension.hasRna
+                      ? ' · has one'
+                      : ''}
                   </span>
                 </span>
               </DropdownMenu.CheckboxItem>
@@ -344,7 +343,7 @@
       {/if}
     </StatePanel>
   {:else}
-    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="lu-enter grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {#each ordered as rna (rna.id)}
         <RnaCard
           {rna}
@@ -368,6 +367,14 @@
       Rate this startup's readiness levels first — the assessment is written
       from them.
     {/if}
+    {#snippet action()}
+      {#if data.role !== 'Startup'}
+        <a
+          class="lu-btn lu-btn-secondary lu-btn-sm"
+          href="/startups/{startupId}/readiness-level">Go to readiness levels</a
+        >
+      {/if}
+    {/snippet}
   </StatePanel>
 {/snippet}
 

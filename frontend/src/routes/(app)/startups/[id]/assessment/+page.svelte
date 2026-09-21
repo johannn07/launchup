@@ -355,7 +355,7 @@
     {/if}
   </p>
 
-  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  <div class="lu-enter grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
   {#each readinessTypes as type}
     {@const assessments = assessmentsByType()[type.name] || []}
     {@const applicableAssessments = assessments.filter((a: any) => a.isApplicable)}

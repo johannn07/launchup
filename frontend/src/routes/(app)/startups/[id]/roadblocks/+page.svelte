@@ -623,5 +623,13 @@
       Create readiness and needs assessments for this startup first —
       roadblocks are raised against them.
     {/if}
+    {#snippet action()}
+      {#if data.role !== 'Startup'}
+        <a
+          class="lu-btn lu-btn-secondary lu-btn-sm"
+          href="/startups/{startupId}/rna">Go to the assessment</a
+        >
+      {/if}
+    {/snippet}
   </StatePanel>
 {/snippet}

@@ -859,7 +859,8 @@ html.js:not([data-motion='reduce']) .lu-fill:not([data-ready]) {
 /* ---- Board ----
    Every duration is a motion token, so reduced motion flattens all of it. */
 .lu-root .lu-col {
-  --st: var(--lu-indigo-lite);
+  /* Neutral by default: colour is for the three states that mean something. */
+  --st: var(--lu-step);
   transition:
     border-color var(--lu-quick) var(--lu-ease),
     background-color var(--lu-quick) var(--lu-ease);
