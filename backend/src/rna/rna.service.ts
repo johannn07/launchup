@@ -16,6 +16,7 @@ import { GroundedPromptBuilderService } from './grounded-prompt-builder.service'
 import { OutputValidatorService } from './output-validator.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { JSON_NO_CHANGE_RULE } from '../ai/refine-chat';
 import { RNA_MAX_LENGTH } from './rna.constants';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
 
@@ -358,7 +359,8 @@ export class RnaService {
       1. Only refine the RNA description that the user explicitly asks to modify
       2. Do not modify any other fields
       3. Respond with a JSON object containing ONLY the requested refinements
-      4. If the user did not specify what to refine, refine the RNA description
+      4. If the user asks for a change without naming what to change, refine the RNA description
+         ${JSON_NO_CHANGE_RULE}
       5. Use the exact field name shown in the example
       6. You can use HTML formatting in your refined text:
          - <p> for paragraphs

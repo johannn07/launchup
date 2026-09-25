@@ -18,6 +18,7 @@ import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { RoadblockChatHistory } from 'src/entities/roadblock-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { JSON_NO_CHANGE_RULE } from '../ai/refine-chat';
 import { OutputValidatorService } from '../rna/output-validator.service';
 import { ROADBLOCK_MAX_LENGTH } from './roadblock.constants';
 
@@ -336,7 +337,8 @@ export class RoadblockService {
         1. Only refine the specific fields that the user explicitly asks to modify
         2. Do not modify any other fields
         3. Respond with a JSON object containing ONLY the requested refinements
-        4. If the user did not specify a field to refine, refine all fields.
+        4. If the user asks for a change without naming a field, refine all fields.
+           ${JSON_NO_CHANGE_RULE}
         5. Use the exact field names shown in the example
         6. You can use HTML formatting in your refined text:
            - <p> for paragraphs

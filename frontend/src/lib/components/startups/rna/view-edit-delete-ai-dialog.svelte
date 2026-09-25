@@ -214,8 +214,8 @@
                     <div
                       class="rounded-2xl rounded-tl-sm bg-white px-4 py-3 text-sm text-slate-700 shadow-sm dark:bg-white/[0.06] dark:text-white/80"
                     >
-                      Here's my suggestion for improving your RNA:
                       {#if message.refinedRna}
+                        Here's my suggestion for improving your RNA:
                         <div
                           class="prose prose-sm dark:prose-invert group relative my-2 max-w-none rounded-xl border border-slate-200/70 bg-slate-50 p-4 pb-9 dark:border-white/10 dark:bg-slate-950/40"
                         >

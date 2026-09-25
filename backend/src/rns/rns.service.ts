@@ -21,6 +21,7 @@ import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.ser
 import { OutputValidatorService } from '../rna/output-validator.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
+import { TEXT_NO_CHANGE_RULE } from '../ai/refine-chat';
 import { RNS_MAX_LENGTH } from './rns.constants';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 
@@ -547,6 +548,7 @@ Requirement note:
     prompt += `
       User: ${latestPrompt}\n
       Please rewrite or refine the RNS description according to the user's instructions. Just write the refined description, no other text.
+      ${TEXT_NO_CHANGE_RULE}
 
       FORMATTING INSTRUCTIONS:
       You can use HTML formatting in your refined text:
@@ -575,7 +577,7 @@ Requirement note:
         rns,
         role: 'Ai',
         content: result.aiCommentary,
-        refinedDescription: result.refinedDescription,
+        refinedDescription: result.refinedDescription || undefined,
       }),
     ];
 

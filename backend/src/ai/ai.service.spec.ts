@@ -1024,4 +1024,43 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     expect(request.config).not.toHaveProperty('responseMimeType');
     expect(request.config).not.toHaveProperty('responseSchema');
   });
+
+  // "bro" and "secret" used to rewrite the item (2026-09-26).
+  describe('refine replies that change nothing', () => {
+    it.each(['NO_CHANGE', '<p>NO_CHANGE</p>'])(
+      'RNS treats %s as no rewrite',
+      async (marker) => {
+        generateContent.mockResolvedValue({
+          text: `${marker}\n=========\nWhat would you like changed?`,
+        });
+
+        await expect(service.refineRnsDescription(ctxWith(), 'p')).resolves.toEqual({
+          refinedDescription: '',
+          aiCommentary: 'What would you like changed?',
+        });
+      },
+    );
+
+    it.each([
+      ['RNA', (ctx: AiRunContext) => service.refineRna(ctx, 'p')],
+      ['Roadblock', (ctx: AiRunContext) => service.refineRoadblock(ctx, 'p')],
+      ['Initiative', (ctx: AiRunContext) => service.refineInitiative(ctx, 'p')],
+    ])('%s returns only the reply for an empty object', async (_name, refine) => {
+      generateContent.mockResolvedValue({
+        text: '{}\n=========\nWhat would you like changed?',
+      });
+
+      await expect(refine(ctxWith())).resolves.toEqual({
+        aiCommentary: 'What would you like changed?',
+      });
+    });
+
+    it('does not claim changes were applied when nothing was refined', async () => {
+      generateContent.mockResolvedValue({ text: '{}' });
+
+      const result = await service.refineRna(ctxWith(), 'p');
+
+      expect(result.aiCommentary).not.toMatch(/applied/i);
+    });
+  });
 });

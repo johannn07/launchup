@@ -181,7 +181,9 @@
                     </div>
                   {:else}
                     <div class="rounded-lg bg-[#1e293b] p-4 text-white">
-                      Here's my suggestion for improving your Initiative:
+                      {#if message.refinedDescription || message.refinedMeasures || message.refinedTargets || message.refinedRemarks}
+                        Here's my suggestion for improving your Initiative:
+                      {/if}
                       {#if message.refinedDescription}
                         <div
                           class="group relative my-2 rounded-lg bg-[#0a1729] p-4 pb-8"
