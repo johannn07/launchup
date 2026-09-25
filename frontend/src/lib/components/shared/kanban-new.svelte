@@ -125,6 +125,9 @@
           {role}
           over={overIndex === index}
         >
+          <!-- The library only accepts a drop inside this element's box, so it
+               fills the column; a short list otherwise leaves most of the
+               visible column dead. -->
           <div
             use:dndzone={{
               items: column.items,
@@ -133,7 +136,7 @@
             }}
             onconsider={(e: any) => consider(e, index)}
             onfinalize={(e: any) => finalize(e, index, column.value)}
-            class="max-h-[34rem] min-h-[6.5rem] gap-2.5 overflow-y-auto rounded-2xl {place.wide
+            class="max-h-[34rem] min-h-[6.5rem] flex-1 gap-2.5 overflow-y-auto rounded-2xl {place.wide
               ? 'grid content-start [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]'
               : 'flex flex-col'}"
           >

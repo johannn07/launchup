@@ -335,9 +335,9 @@
         );
       }
 
-      updatePriorityNumber();
+      // A refetch landing mid-renumber re-sorts the board on half-written numbers.
+      await updatePriorityNumber();
       $rnsQueries[1].refetch();
-      // setTimeout(() => $rnsQueries[1].refetch(), 250);
     }
   }
 
