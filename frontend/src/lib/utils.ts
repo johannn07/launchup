@@ -233,6 +233,16 @@ export const getData = async (url: string, access?: string) => {
   return response.data;
 };
 
+// Nest puts a readable reason in `message` (an array for validation errors);
+// the bare status is only the fallback.
+export const errorFromResponse = async (response: Response) => {
+  const body = await response.json().catch(() => null);
+  const message = Array.isArray(body?.message)
+    ? body.message.join(', ')
+    : body?.message;
+  return new Error(message || `API Error: ${response.status}`);
+};
+
 export const zIndex = ['z-50', 'z-40', 'z-30', 'z-20', 'z-10', 'z-0'];
 
 export const getBadgeColorObject = (

@@ -12,6 +12,7 @@
   import { tick } from 'svelte';
   import { RnsStatus } from '$lib/components/shared/rns.enum';
   import { Input } from '$lib/components/ui/input';
+  import { errorFromResponse } from '$lib/utils';
 
   type ChatMessage = {
     id?: number;
@@ -118,9 +119,7 @@
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw await errorFromResponse(response);
 
       await loadChatHistory();
     } catch (error) {

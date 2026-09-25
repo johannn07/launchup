@@ -4,7 +4,11 @@
   import { Textarea } from '$lib/components/ui/textareav2';
   import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
   import { Label } from '$lib/components/ui/label/index.js';
-  import { getReadinessLevels, getReadinessTypes } from '$lib/utils';
+  import {
+    errorFromResponse,
+    getReadinessLevels,
+    getReadinessTypes
+  } from '$lib/utils';
   import * as Select from '$lib/components/ui/select/index.js';
   import { Card } from '$lib/components/ui/card';
   import { Separator } from '$lib/components/ui/separator';
@@ -140,9 +144,7 @@
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw await errorFromResponse(response);
 
       // Reload chat history after successful message
       await loadChatHistory();
