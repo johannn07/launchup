@@ -43,6 +43,9 @@ Cross-session gotchas. These cost real time when rediscovered.
 - **The Browser pane does not composite while hidden**, so CSS animations never advance and `requestAnimationFrame` never fires (`visibilityState: hidden`; a rAF loop ticks exactly once). Any library behaviour gated on `animationend` or rAF looks permanently stuck — bits-ui menus never unmount and leave `body { pointer-events: none }`, which reads exactly like a real freeze and **reproduces on unmodified code**. Install a rAF counter before believing any "the page is frozen" finding.
 - **A plain `let` in a runes-mode component does not re-render when reassigned.** Nothing errors; the UI just never updates — the Applications details dialog never opened because of this. `npx svelte-check --output machine | grep non_reactive` lists every instance.
 - **A capsule-proposal vision call took 175 s.** Budget client/HTTP timeouts well beyond a default before blaming the pipeline.
+- **When an AI feature fails, read `ai_generation_runs.error` first.** Every generation and refine call opens a row there, so the upstream reason (Gemini 503 "high demand", 429 quota) is recorded even after the backend log has rotated. Query it through `@mikro-orm/knex`'s bundled `knex` (resolve it from `@mikro-orm/postgresql`'s directory) — no `dist/` build needed. `gemini-3.6-flash` 503s are frequent, not rare: four refine runs failed that way on 2026-09-25/26.
+- **PowerShell 5.1 corrupts files and arguments.** `Get-Content -Raw` reads UTF-8 as ANSI, so a read-modify-write turns every `—` into `â€"` (it reached a Gemini prompt string once before `git diff` caught it). Double quotes inside a native argument are split, so `git commit -m "…\"x\"…"` fails — use `git commit -F <file>`. Edit with the Edit tool, or Node with explicit `utf8`.
+- **The Browser pane's `left_click_drag` cannot drive `svelte-dnd-action`.** It jumps with no intermediate `mousemove`, so nothing registers. Dispatch `mousedown` on the card, then ~25 stepped `mousemove`s on `window`, then `mouseup`, with the target inside the viewport — the library auto-scrolls near the edge and moves the target out from under the pointer.
 
 ---
 
@@ -341,276 +344,30 @@ deployed current `master` on 2026-09-18.
 
 ---
 
-## 2026-09-07 — five defects fixed, a sixth reframed, three diagnoses corrected
+## Compressed — 2026-09-07 (six defects, quota costed, dimension order settled)
 
-Zero Gemini generation calls. No measurement. Started from a quota question, ended
-with six branches off `master`, each verified live against Neon and a real browser.
-All six tested by John and **merged to `master` (`b8a091e`)**, which John pushed.
+Zero Gemini generation calls. Six branches merged `b8a091e` after John tested each:
+`debug` flags made real dry runs, level criteria served from the corpus, placeholder
+level names replaced, remove-member's wrong verb (plus two further faults in the
+same function), the unguarded `readinesslevel` controller, and the extraction review
+no longer claiming fields are "Verified". **Three recorded diagnoses were wrong** —
+impact (the empty criteria table was unreachable), scope, and risk (guarding the
+controller could not break the apply flow, because the `/api` proxy authenticates
+bare fetches). **Quota costed:** 20 `generateContent` calls/day; a photo intake costs
+2, a full 6-dimension workflow ~23, so it does not fit in one day
+(`AI_BIAS_REVIEW_ENABLED=false` → 14). ⚠️ **`master` renames all 54
+`readiness_levels.name` values on boot** — idempotent, but visible on any teammate's
+Neon branch.
 
-### What started it
-
-John asked whether the 10-startups-per-day ceiling was real. It is, and it is not an
-OCR limit: `gemini-3.6-flash` free tier is **20 `generateContent` calls/day**
-(quotaId `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, per model per project),
-and adding a startup from a photo costs **2** — the Vision extract on
-`/parse-capsule-proposal` plus `generateStartupAnalysisSummary` on `/apply`. Scanning
-alone is 1, so 20 scans/day if you never submit.
-
-**A full 6-dimension workflow costs ~23 calls and does not fit in a day.** RNA 1
-(all six in one prompt), RNS 12 (6 generations + 6 bias reviews at 1 task each),
-Initiatives 6 (one per RNS), Roadblocks 4 (1 + 3 bias reviews). 23 is the floor —
-every JSON call retries once on a bad parse, and generating RNA per-dimension adds 5.
-`AI_BIAS_REVIEW_ENABLED=false` drops it to 14, which fits, at the cost of objective
-4b. Embeddings have their own bucket and were separately exhausted on 2026-07-28.
-
-### The six branches
-
-| Branch | Defect | Verified |
-|---|---|---|
-| `fix/generation-debug-dry-run` | `debug` flags spent full quota anyway | Runs 42/43/44 null tokens vs 2731/117 real; 0 rows written |
-| `fix/level-criteria-from-corpus` | Empty criteria table under every level | Live as mentor; svelte-check 113 vs master 117 |
-| `fix/readiness-level-names` | 49/54 names restated their own number | 54 updated, 0 placeholders left, second run 0/54 |
-| `fix/remove-member-verb` | Remove member always 404'd | Old call 404, new 201, full UI path |
-| `fix/guard-readinesslevel-controller` | 4 routes answered unauthenticated | All five 401 without token, 200 with |
-| `fix/field-confidence-claim` | The review screen claimed invented fields were Verified | Stubbed render, zero quota: 0 emerald cards, correct badges |
-
-### Three diagnoses in `TODO_CHECKLIST.md` were wrong, each caught by one check
-
-- **Reachability (defect 1).** "Every URAT criteria table renders nothing… a mentor
-  sees a broken rating screen" — true of the code, false of the app. `RatedRubric`
-  sits behind `selectedTab === 'detailed'` and `updateTab`
-  (`readiness-level/+page.svelte:169`) was **defined and never called**; the
-  non-rated `Rubric` had no importer at all. Nobody had ever seen the empty table.
-  **Sixth instance** of this project's recurring shape: the symptom is real and the
-  reachability was never checked.
-- **Scope (defect 4).** The wrong verb was one of **three** faults in the same
-  function, and either of the others would have kept it silent after a verb fix:
-  `res.status === 200` against a POST that answers 201, and
-  `removeMemberFromStartup` returning nothing at all.
-- **Risk (defect 5).** "Guarding it will break the application flow" is **stale**.
-  It predates the same-origin proxy: `routes/api/[...path]/+server.ts` swaps the
-  httpOnly `Access` cookie for a Bearer header, so `Application.svelte`'s bare
-  fetches have been authenticated since `5a453d2`. Verified: through the proxy those
-  calls return 200/18 rows; anonymous, `/apply` is 302'd to `/` by the `(app)` layout
-  before the component mounts, so no real user meets the new 401.
-
-### Two findings worth carrying
-
-**A property assigned onto a MikroORM entity is dropped by serialization.**
-`getReadinessLevels` did `Object.assign(level, { rubric })`; the unit test stubbed
-`findAll` with POJOs and passed, and the live route answered without `rubric`.
-Only the live check caught it. Same class as the existing `populate` note — see
-standing notes.
-
-**The `/api` proxy authenticates bare fetches.** Worth knowing before writing another
-"this caller sends no credentials" diagnosis: through `/api/...` it does.
-
-### `SUPPORT_THRESHOLD` — the claim changed, the metric did not
-
-The number stays 0.5. What the UI asserts off it does not, and the change needs
-no new data because the existing measurement already licenses it.
-
-Read directionally, 100% sensitivity and 30.8% specificity give **one sound
-claim and one unusable one**: below 0.5 no grounded field was observed, at or
-above it 18 of 26 invented fields also land. So the vocabulary is now
-`unsupported` / `unverified` / `failed`, and nothing says "verified".
-`unsupported` — rendered "Not on the page" — is the only badge that asserts
-anything. A high ratio and an unrunnable check share one state deliberately:
-both mean no finding, and splitting them invites reading the first as a result.
-
-**A second source of the same false claim, found while doing it.**
-`getReviewStatus` in `ProjectDetails.svelte` was still the pre-2026-08-22
-`length < 40` rule, driving the *card* tint. The backend replaced that rule in
-August; the card tone never followed, so every field card rendered green — and
-since the prompt mandates 40 characters, that meant every card, always. It was
-more visually dominant than the badge sitting on it. Deleted.
-
-⚠️ **This does not fix the metric, and §2 stays open.** `supportRatio` still
-cannot separate grounded from invented above the line. Raising the number
-remains the wrong move: the classes cross *between* fields — an invented `scope`
-averages 0.632 against a grounded `methodology`'s 0.575 — because the ratio has
-a field-dependent baseline. Per-field thresholds are the open hypothesis and
-need a pre-registered design on new data. What changed is that the product no
-longer tells a Manager to trust content the page never carried.
-
-### Merge order
-
-`fix/level-criteria-from-corpus` and `fix/readiness-level-names` **want to land
-together**: the names are only visible through the toggle the first adds, and the
-first's panel assumes the second's backfill. The other four are independent.
-
-`fix/field-confidence-claim` touches `ocr/field-confidence.ts`, `startup.service.ts`
-and `ProjectDetails.svelte`, none of which the other five touch.
-
-### Neon was written to this session
-
-All 54 `readiness_levels.name` values were rewritten, and a member was added then
-removed on startup 1 (membership left exactly as found). Anyone on the same Neon
-branch sees the renames.
-
-### Outcome — tested, merged, landed
-
-John tested all six on the branches before anything reached `master`, which is
-the rule this project keeps and the reason nothing was merged on my say-so.
-Two throwaway branches carried the coupled pairs so they could be tested in one
-pass each — `test/readiness-pair` and `test/guard-and-confidence` — both deleted
-after, local and remote, having held nothing but their own merge commits.
-
-Test fixtures made for the pass, in the scratchpad rather than the repo: a
-1300x1060 sample capsule proposal (**HarvestLink PH**, deliberately missing its
-Scope and Methodology sections so both must badge "Not on the page"), and 18
-matching URAT answers written to a deliberately early-but-real profile. ⚠️ **The
-proposal is a font render, not handwriting** — your own note records that the one
-synthetic render ever tested behaved unlike real handwriting on sketch
-detection, so it proves the badge logic and nothing about OCR on real writing.
-
-Merged in dependency order — the readiness pair first, then the four
-independents, docs last. `master` at `b8a091e`: **375/375 backend tests**,
-`svelte-check` **113 errors against the 117 it started at**.
-
-⚠️ **`master` now renames readiness levels on boot.** `seedReadinessLevelNames`
-rewrites all 54 `readiness_levels.name` values the first time any developer boots
-off `master`. Idempotent, and it logs what it did, but a teammate on their own
-Neon branch will see the rename happen to them.
-
-### Found during testing, unfixed — the URAT dimension order
-
-John noticed the apply flow steps **TRL → MRL → RRL → ARL → ORL → IRL**, putting
-Regulatory third. It is worse than one wrong array: **three places in the
-codebase disagree, and none of them matches another.**
-
-| Source | Order |
-|---|---|
-| `ReadinessType` enum, and the seeded `URAT_QUESTIONS` bank | T, M, **A, O, R**, I |
-| Apply flow — `Application.svelte:71` (steps) and `:280` (markup) | T, M, **R, A, O**, I |
-| `READINESS_TYPES`, driving the readiness-level tabs | T, **A, M**, O, R, I |
-
-The apply flow has it in two places that agree with each other, so it reads as
-deliberate rather than a typo. The `READINESS_TYPES` swap of Acceptance and
-Market is a third instance nobody has reported, probably because that page prints
-the dimension name beside each tab.
-
-**Blocked on the SDD, not on effort.** `CLAUDE.md` contradicts itself here —
-it writes the acronyms "TRL/MRL/RRL/ARL/ORL/IRL" and then names them Technology,
-Market, Acceptance, Organizational, Regulatory, Investment in the same sentence —
-and the authoritative documents are the PDFs outside the repo. Read the SDD
-before changing anything: if it really does put Regulatory third, the enum and
-the question bank are what is wrong, and that is a far larger change than the
-apply flow. Tracked in `TODO_CHECKLIST.md` §2.
-
-### Next step
-
-1. **Settle the dimension order against the SDD**, then decide whether to fix
-   only the apply flow or make one order canonical and derive the other two from
-   it. The disagreement is the defect; the visible symptom is one instance.
-2. **`supportRatio` stays §2's open measurement problem.** The false "Verified"
-   badge is gone without touching the threshold, so it is no longer demo-visible,
-   but the metric still cannot separate grounded from invented above the line.
-   Per-field thresholds need their own pre-registered design on new data.
-3. **The critical path is unchanged and still unstarted:** the SPMP and the
-   traceability matrix, competing for the same weeks as the 30-user study.
-
----
-
-## 2026-09-07 (later) — the dimension order settled, and unified
-
-### The block came off by reading the SDD
-
-The defect was recorded as "blocked on the SDD". It was blocked on nobody having
-opened it. The documents are in `Downloads\capstone\`, and `pdftotext -layout`
-reads all three in seconds.
-
-**The specification is unanimous: TRL, MRL, RRL, ARL, ORL.** Ten-plus
-occurrences across the SRS (the five-dimension sentence in §1.2 Scope, and the
-scoring descriptions in §3), the SDD (§2.2 — the bias-correction and
-classification-engine descriptions, the Manager URAT rating panel, and the
-`urat_questions.dimension` column definition) and the proposal. No
-counter-example. Regulatory is third.
-
-⚠️ **The §1.3 acronym lists in both documents are alphabetical** (ARL, MRL, ORL,
-RRL, TRL) and are not evidence of order. Only the prose is.
-
-**Honest limit on that evidence:** these are *listing* orders in prose, not a
-requirement that says the wizard shall present them in this sequence. What makes
-it decisive is the unanimity plus the fact that the apply flow already matched.
-
-### The apply flow was the thing that was right
-
-The checklist assumed patching the apply flow might be the fix. Backwards. And
-the count was low — **eight declaration sites, four different orders**, not three:
-
-| Site | Was | Visible |
-|---|---|---|
-| `Application.svelte:71` + `:280` | T M R A O I ✅ | apply wizard |
-| `Pie.svelte:5`, `BarChart.svelte:7` | T M R A O I ✅ | charts |
-| backend `ReadinessType` → `DIMENSION_ORDER` → rubric endpoint | T M **A O R** I | rubric guide |
-| `getReadinessTypes()` → assessment page + 2 RNS dropdowns | T M **A O R** I | yes |
-| URAT seed bank | T M **A O R** I | no |
-| `READINESS_TYPES` → readiness-level tabs | T **A M** O R I | yes |
-| frontend `ReadinessType` enum | T M A **R O** I | no |
-
-Two of the three "nobody has reported it" sites were invisible for a reason: the
-seed bank is filtered by name, and the frontend enum is used only as a type.
-
-### What was done — `fix/readiness-dimension-order`, one commit, local
-
-Option B of three: unify all eight, one canonical source per app, **no wizard
-refactor**. The wizard's URAT steps are interleaved with consent/details/
-calculator steps, so deriving them would have meant refactoring a working
-component for no visible gain.
-
-- Backend: the enum is already the single source — reordering it moved
-  `DIMENSION_ORDER` and the rubric endpoint with it. Seed bank reordered to match.
-- Frontend: new `readiness-dimensions.ts` owns the order; `readiness-baseline.ts`
-  re-exports it and `utils.ts` derives from it.
-
-**One judgement call worth recording.** Deriving `getReadinessTypes()`'s ids from
-array position would have silently remapped them (Regulatory 6 → 4). Nothing
-reads `id` — both consumers select on `name` — but changing a mapping quietly is
-worse than leaving it, so the ids are **pinned by name**. A future reorder cannot
-move them.
-
-### Verification, and what it does not cover
-
-- Backend **375/375**, unchanged from `master`.
-- `svelte-check` **113 errors / 15 warnings** — measured on the branch *and* on a
-  stashed working tree, identical. The "14 warnings" in older notes is stale; no
-  diagnostic mentions any changed file.
-- **Live against Neon:** `GET /readinesslevel/rubrics` returns its 54 rows as
-  Technology → Market → Regulatory → Acceptance → Organizational → Investment.
-- **Live in the browser:** the four frontend sources read out of the running Vite
-  module graph, all agreeing, with `getReadinessTypes()` still carrying ids
-  2/3/6/4/5/7 in the new order.
-
-⚠️ **The mentor-side click-through is not done.** The readiness-level tabs and the
-RNS dropdown are gated to Mentor/Manager, and reaching them means typing a
-password into the login form, which I don't do. The rendering is a direct map over
-the constant that was verified at runtime, but seeing the tabs in that order is
-still owed — and John tests the branch before merge anyway.
-
-### Not in this branch, on purpose
-
-- **"Acceptance" vs the spec's "Adoption Readiness Level".** A rename with a data
-  migration behind it — stored `readinessType` values and RAG corpus keys. Own
-  branch, own decision.
-- **IRL is not in the specification at all** (§0 has carried this since 2026-07-28).
-  Keeping Investment last is a superset of the spec order, so it did not block.
-
-### Corrected in `CLAUDE.md`
-
-The line that read "TRL/MRL/RRL/ARL/ORL/IRL — Technology, Market, Acceptance,
-Organizational, Regulatory, and Investment" contradicted itself in one sentence,
-and was the reason the defect read as unsettleable. It now states the canonical
-order once and names the two files that declare it.
-
-### Next step
-
-1. ~~**John tests `fix/readiness-dimension-order`**~~ — tested and merged
-   (`f14beda`, 2026-09-17).
-2. **`supportRatio` remains §2's open measurement problem**, unchanged: per-field
-   thresholds need their own pre-registered design on new data.
-3. **The critical path is still unstarted:** the SPMP and the traceability matrix,
-   competing for the same weeks as the 30-user study.
+**The dimension order, settled by reading the SDD** (`fix/readiness-dimension-order`,
+merged `f14beda`). SRS §1.2, SDD §2.2 and the proposal agree: TRL, MRL, RRL, ARL,
+ORL (the §1.3 acronym lists are alphabetical and not evidence). Eight declaration
+sites held four orders; now one canonical source per app, with
+`getReadinessTypes()` ids pinned by name. **Still open, each its own decision:**
+"Acceptance" vs the spec's "Adoption" (a rename with a data migration), IRL is not in
+the specification, and `supportRatio` cannot separate grounded from invented fields
+above 0.5 (the false badge is gone; per-field thresholds need a pre-registered design
+on new data).
 
 ---
 
@@ -721,3 +478,63 @@ Manager screenshots that surfaced both findings came from John's own browser.
 3. `supportRatio` stays §2's open measurement problem, and the critical path is
    unchanged: the SPMP and the traceability matrix, competing for the same weeks
    as the 30-user study.
+
+---
+
+## 2026-09-26 — Kanban drops, and two refine-chat defects
+
+Three branches off `master`, merged to local `master` (`d08863d`) for John to test
+and push. About 10 Gemini calls, most of them 503s.
+
+| Branch | Defect | Cause | Verified |
+|---|---|---|---|
+| `fix/kanban-drop-target` | Cards only dropped on part of a column; a card could not return to the column it left | The dnd zone was only as tall as its cards (`min-h` 6.5rem) while the visible column stretched to the row; the library accepts a drop only inside the zone's box | Live on MediSync, RNS and Roadblocks round trips dropped low in short columns; John confirmed |
+| `fix/refine-chat-ai-busy` | Mentor chat showed "API Error: 500" | Gemini **503 "high demand"** — every failed refine run in `ai_generation_runs` was this; the chats never retried and passed it on as a 500 | Live, against a real 503: 3 attempts (~10s), readable 503, run log keeps both messages |
+| `fix/refine-chat-non-instructions` | "bro" / "secret" rewrote the RNS/RNA | All four refine prompts said "if the user names no field, refine everything" | Live: "bro" got a plain reply, no rewrite, no prefix |
+
+### Kanban
+
+- Also fixed: after a drop, renumbering and the refetch ran concurrently, so the
+  board could re-sort on half-written numbers. Renumber is now awaited first;
+  Roadblocks and Initiatives renumbered twice per drop (the source zone's finalize
+  fires too) and now renumber once.
+- ❓ **On hold — John's decision:** the `#N` label *is* `priorityNumber`, renumbered
+  across the whole board on every drop, so moving a card changes its number and the
+  "Step #N" initiatives show. Proposed: a separate stable `rnsNumber` label,
+  `priorityNumber` kept for ordering. Tracked in `TODO_CHECKLIST.md` §3.
+
+### Refine chats
+
+- `generateForChat` wraps the four refine calls in the existing `withRetry` (2s, 4s;
+  429 never retried) and maps a service failure to `ServiceUnavailableException`.
+  Deliberately **not** applied to `generate()`, which every generation path shares.
+- The upstream error rides as `cause`; `AiRunService.track` records
+  `message (cause: …)`. Without that, the readable message erased the raw Gemini
+  error — the very record that diagnosed this bug.
+- Non-requests: one shared rule in `ai/refine-chat.ts`. JSON prompts answer `{}`,
+  the plain-text RNS prompt answers a `NO_CHANGE` sentinel (tolerated inside `<p>`).
+  "Here's my suggestion…" now renders only when something was refined.
+- **The "mentor" framing was wrong.** Nothing is role-specific; the 500 was Gemini
+  load, and John's first mentor retest happened to succeed.
+
+### Verification limits
+
+- **Not verified live: a real request still producing a rewrite after the prompt
+  change.** Gemini returned 503 on all three attempts (runs 61–63). Unit tests
+  cover the parser; the model's reading of the new instruction is untested.
+- Kanban drags were driven with stepped synthetic mouse events — the pane's
+  `left_click_drag` sends no intermediate moves. John's real-mouse test is the
+  proof. Initiatives had no items on MediSync, so its identical change was not
+  dragged.
+- Gates on merged `master`: backend **400/400** (40 suites); `svelte-check`
+  **110 errors / 9 warnings**, unchanged by this work.
+
+### Next step
+
+1. **John tests on local `master`, then pushes:** a real refine request as mentor
+   ("Make it shorter") must rewrite; "bro" must not; Kanban drags on all three boards.
+2. **Decide the stable-number change** (§3). If yes, it is `feat/stable-item-numbers`,
+   covering `rnsNumber` and roadblocks' `riskNumber`; initiatives number per RNS and
+   need their own look.
+3. The critical path is unchanged: the SPMP and the traceability matrix, competing
+   for the same weeks as the 30-user study.
