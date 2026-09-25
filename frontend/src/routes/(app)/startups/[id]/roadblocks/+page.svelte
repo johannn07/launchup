@@ -203,11 +203,13 @@
           }
         }
       );
-    }
 
-    updateRiskNumber();
-    $roadblocksQueries[1].refetch();
-    $roadblocksQueries[2].refetch();
+      // Only the receiving zone renumbers: the source zone's finalize fires too,
+      // and a refetch landing mid-renumber re-sorts on half-written numbers.
+      await updateRiskNumber();
+      $roadblocksQueries[1].refetch();
+      $roadblocksQueries[2].refetch();
+    }
   }
 
   const updateRiskNumber = async () => {

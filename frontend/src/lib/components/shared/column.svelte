@@ -49,7 +49,8 @@
       >{itemCount}</span
     >
   </header>
-  <div class="relative min-h-0 flex-1 px-2.5 pb-2.5">
+  <!-- flex so the drop zone can grow to the column's full height -->
+  <div class="relative flex min-h-0 flex-1 flex-col px-2.5 pb-2.5">
     {@render children()}
   </div>
 </section>

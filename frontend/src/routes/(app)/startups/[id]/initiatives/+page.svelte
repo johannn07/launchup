@@ -306,11 +306,13 @@
           }
         }
       );
-    }
 
-    updateInitiativeNumber();
-    $initiativesQueries[1].refetch();
-    $initiativesQueries[2].refetch();
+      // Only the receiving zone renumbers: the source zone's finalize fires too,
+      // and a refetch landing mid-renumber re-sorts on half-written numbers.
+      await updateInitiativeNumber();
+      $initiativesQueries[1].refetch();
+      $initiativesQueries[2].refetch();
+    }
   }
 
   const updateInitiativeNumber = async () => {
