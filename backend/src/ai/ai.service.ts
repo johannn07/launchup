@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 // undefined at module load and the whole suite fails to run.
 import type { GenerateContentConfig, Schema, Type } from '@google/genai';
 import { EntityManager } from '@mikro-orm/core';
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { AiMetricsService } from './ai-metrics.service';
 import { BaselineService } from './baseline.service';
 import { ConfigService } from '@nestjs/config';
@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
-import { withRetry } from './retry-transient';
+import { isQuotaError, isServiceFailure, withRetry } from './retry-transient';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
@@ -312,6 +312,8 @@ const biasReviewSchema = z.object({
 @Injectable()
 export class AiService {
   private readonly ai: GoogleGenAI;
+  /** Base backoff for refine-chat retries; tests zero it. */
+  private refineRetryDelayMs = 2000;
 
   constructor(
     private config: ConfigService,
@@ -692,6 +694,27 @@ export class AiService {
   }
 
   /**
+   * generate() for the interactive refine chats. A busy model is retried
+   * briefly, and a failure the user can only wait out becomes a 503 they can
+   * read rather than a bare 500.
+   */
+  private async generateForChat(ctx: AiRunContext, prompt: string) {
+    try {
+      return await withRetry(() => this.generate(ctx, prompt), {
+        delayMs: this.refineRetryDelayMs,
+      });
+    } catch (e) {
+      if (!isServiceFailure(e)) throw e;
+      throw new ServiceUnavailableException(
+        isQuotaError(e)
+          ? 'The AI service has reached its daily quota. Please try again after it resets.'
+          : 'The AI service is busy right now. Please try again in a moment.',
+        { cause: e },
+      );
+    }
+  }
+
+  /**
    * Accumulates rather than overwrites: `callAiExpectJson` retries and batch
    * generation loops, so one run routinely makes several calls.
    *
@@ -1035,7 +1058,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     ctx: AiRunContext,
     prompt: string,
   ): Promise<{ refinedDescription: string; aiCommentary: string }> {
-    const res = await this.generate(ctx, prompt);
+    const res = await this.generateForChat(ctx, prompt);
 
     if (!res.text) {
       throw new Error('AI response did not contain any text');
@@ -1203,7 +1226,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     refinedRemarks?: string;
     aiCommentary: string;
   }> {
-    const response = await this.generate(ctx, prompt);
+    const response = await this.generateForChat(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');
@@ -1246,7 +1269,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     refinedFix?: string;
     aiCommentary: string;
   }> {
-    const response = await this.generate(ctx, prompt);
+    const response = await this.generateForChat(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');
@@ -1284,7 +1307,7 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
     refinedRna?: string;
     aiCommentary: string;
   }> {
-    const response = await this.generate(ctx, prompt);
+    const response = await this.generateForChat(ctx, prompt);
 
     const content = response.text;
     if (!content) throw new Error('No content in response');

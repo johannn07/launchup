@@ -209,6 +209,24 @@ describe('AiRunService.track', () => {
     );
   });
 
+  // A user-facing message must not erase the upstream error from the run log.
+  it('records the cause alongside the message when the error carries one', async () => {
+    const em = emMock();
+    const service = new AiRunService(em as unknown as EntityManager, configService());
+
+    await expect(
+      service.track(7, 'rns_refine', undefined, false, async () => {
+        throw new Error('busy', { cause: new Error('got status: 503') });
+      }),
+    ).rejects.toThrow('busy');
+
+    expect(em.forkedEm.nativeUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      { id: 42 },
+      expect.objectContaining({ error: 'busy (cause: got status: 503)' }),
+    );
+  });
+
   // Why durable attribution exists: a refine handler attributes the run, then
   // the model call throws. Nothing flushes the request EM here, so a bare
   // assignment would leave status='failed' with startup_id NULL — invisible to

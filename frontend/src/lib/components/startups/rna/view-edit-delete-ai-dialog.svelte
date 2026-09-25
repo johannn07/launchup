@@ -11,6 +11,7 @@
   import { TextEditor } from '$lib/components/shared';
   import { tick } from 'svelte';
   import { Input } from '$lib/components/ui/input';
+  import { errorFromResponse } from '$lib/utils';
 
   const dimensionIcon: Record<string, any> = {
     Technology: Cpu,
@@ -133,9 +134,7 @@
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
-      }
+      if (!response.ok) throw await errorFromResponse(response);
 
       await loadChatHistory();
     } catch (error) {

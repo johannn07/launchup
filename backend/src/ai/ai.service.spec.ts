@@ -1024,4 +1024,51 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     expect(request.config).not.toHaveProperty('responseMimeType');
     expect(request.config).not.toHaveProperty('responseSchema');
   });
+
+  // The refine chats used to surface Gemini's 503 as a bare 500 (2026-09-25).
+  describe('refine calls when Gemini is busy', () => {
+    const busy = new Error(
+      'got status: 503 Service Unavailable. {"error":{"code":503,"status":"UNAVAILABLE"}}',
+    );
+    const quota = new Error('got status: 429 Too Many Requests. RESOURCE_EXHAUSTED');
+
+    beforeEach(() => {
+      (service as unknown as { refineRetryDelayMs: number }).refineRetryDelayMs = 0;
+    });
+
+    const refines: [string, (ctx: AiRunContext) => Promise<unknown>, string][] = [
+      ['RNS', (ctx) => service.refineRnsDescription(ctx, 'p'), 'new\n=====\nwhy'],
+      ['RNA', (ctx) => service.refineRna(ctx, 'p'), '{"refinedRna":"x"}'],
+      ['Roadblock', (ctx) => service.refineRoadblock(ctx, 'p'), '{"refinedFix":"x"}'],
+      ['Initiative', (ctx) => service.refineInitiative(ctx, 'p'), '{"refinedTargets":"x"}'],
+    ];
+
+    it.each(refines)('%s retries a 503 and succeeds', async (_name, refine, text) => {
+      generateContent.mockRejectedValueOnce(busy).mockResolvedValueOnce({ text });
+
+      await expect(refine(ctxWith())).resolves.toBeDefined();
+      expect(generateContent).toHaveBeenCalledTimes(2);
+    });
+
+    it.each(refines)('%s reports a persistent 503 as a readable 503', async (_name, refine) => {
+      generateContent.mockRejectedValue(busy);
+
+      await expect(refine(ctxWith())).rejects.toMatchObject({
+        status: 503,
+        message: expect.stringMatching(/busy/i),
+        cause: busy,
+      });
+      expect(generateContent).toHaveBeenCalledTimes(3);
+    });
+
+    it.each(refines)('%s does not retry a 429', async (_name, refine) => {
+      generateContent.mockRejectedValue(quota);
+
+      await expect(refine(ctxWith())).rejects.toMatchObject({
+        status: 503,
+        message: expect.stringMatching(/quota/i),
+      });
+      expect(generateContent).toHaveBeenCalledTimes(1);
+    });
+  });
 });

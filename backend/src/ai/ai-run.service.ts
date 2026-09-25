@@ -49,6 +49,14 @@ export type AiRunOutcome =
       completionTokens?: number;
     };
 
+// A user-facing message wraps the upstream error as `cause`; the run log keeps both.
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const { cause } = error;
+  if (cause === undefined) return error.message;
+  return `${error.message} (cause: ${cause instanceof Error ? cause.message : String(cause)})`;
+}
+
 @Injectable()
 export class AiRunService {
   constructor(
@@ -179,7 +187,7 @@ export class AiRunService {
       await this.finish(ctx, {
         status: 'failed',
         latencyMs: Date.now() - startedAt,
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
         ...this.tokenTotals(ctx),
       });
       throw error;
