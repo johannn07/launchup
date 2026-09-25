@@ -16,6 +16,7 @@ import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
 import { isQuotaError, isServiceFailure, withRetry } from './retry-transient';
+import { RNS_NO_CHANGE } from './refine-chat';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
 import { AiGenerationRun } from 'src/entities/ai-generation-run.entity';
@@ -1066,9 +1067,10 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
 
     const [refinedDescriptionRaw, aiCommentaryRaw] =
       res.text.split(/\n?={5,}\n?/);
-    const refinedDescription = refinedDescriptionRaw
-      ? refinedDescriptionRaw.trim()
-      : '';
+    const trimmed = refinedDescriptionRaw ? refinedDescriptionRaw.trim() : '';
+    // The model may wrap the sentinel in the <p> the prompt asks it to use.
+    const refinedDescription =
+      trimmed.replace(/<[^>]*>/g, '').trim() === RNS_NO_CHANGE ? '' : trimmed;
     const aiCommentary = aiCommentaryRaw ? aiCommentaryRaw.trim() : '';
     return {
       refinedDescription,
@@ -1246,13 +1248,12 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
         refinements.refinedTargets ||
         refinements.refinedRemarks;
 
-      if (!hasRefinements) {
-        console.warn('AI response contained no refinements');
-      }
-
+      // No refinements is a normal reply to a message that asked for nothing.
       return {
         ...refinements,
-        aiCommentary: commentary || 'Changes applied successfully.',
+        aiCommentary:
+          commentary ||
+          (hasRefinements ? 'Changes applied successfully.' : 'No changes made.'),
       };
     } catch (err) {
       console.error('Failed to parse AI response:', content);
@@ -1285,13 +1286,12 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
       const hasRefinements =
         refinements.refinedDescription || refinements.refinedFix;
 
-      if (!hasRefinements) {
-        console.warn('AI response contained no refinements');
-      }
-
+      // No refinements is a normal reply to a message that asked for nothing.
       return {
         ...refinements,
-        aiCommentary: commentary || 'Changes applied successfully.',
+        aiCommentary:
+          commentary ||
+          (hasRefinements ? 'Changes applied successfully.' : 'No changes made.'),
       };
     } catch (err) {
       console.error('Failed to parse AI response:', content);
@@ -1322,13 +1322,12 @@ JSON format: {"title": "", "startup_description": "", "problem_statement": "", "
 
       const hasRefinements = refinements.refinedRna;
 
-      if (!hasRefinements) {
-        console.warn('AI response contained no refinements');
-      }
-
+      // No refinements is a normal reply to a message that asked for nothing.
       return {
         ...refinements,
-        aiCommentary: commentary || 'Changes applied successfully.',
+        aiCommentary:
+          commentary ||
+          (hasRefinements ? 'Changes applied successfully.' : 'No changes made.'),
       };
     } catch (err) {
       console.error('Failed to parse AI response:', content);

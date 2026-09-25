@@ -207,9 +207,9 @@
                   {:else}
                     <div class="rounded-lg bg-[#1e293b] p-4 text-white">
                       <!-- {@html message.content} -->
-                      Here's my suggestion for improving your {rns.readinessType}
-                      RNS description:
                       {#if message.refinedDescription}
+                        Here's my suggestion for improving your {rns.readinessType}
+                        RNS description:
                         <div
                           class="group relative my-2 rounded-lg bg-[#0a1729] p-4 pb-8"
                         >
