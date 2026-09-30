@@ -371,60 +371,16 @@ on new data).
 
 ---
 
-## 2026-09-17 — four reported UI issues, fixed on four branches
+## Compressed — 2026-09-17 (four reported UI issues)
 
-Zero Gemini calls. Frontend only, no schema change. Each issue got its own branch
-off `master`. Merged locally 2026-09-18 (`331851d`), then pushed and deployed by
-John.
-
-| Branch | Defect | Cause | Verified |
-|---|---|---|---|
-| `fix/header-dropdown-lock` | Page unclickable after using the avatar menu | Desktop and mobile menus shared one `bind:open`; one click opened both, and the hidden one's modal lock stayed on `body` | Browser, desktop and mobile: one menu, `pointer-events` back to `auto` after Esc and outside click |
-| `fix/applications-dialog-state` | Manager → Applications never opened startup details | `showDialog`, `selectedStartup`, `startupAssessments`, `dialogLoading` were plain `let` in a runes component | `svelte-check` warnings for all four gone; not clicked through as Manager |
-| `fix/startup-overview-access` | No overview for unqualified startups | Every non-QUALIFIED card linked to the `/pending` placeholder, where the header hides the nav; completed startups landed there too | Browser as Startup: pending → `overview/general`, Overview-only nav, banner; qualified unchanged |
-| `feat/startups-pagination` | Startups grid unbounded | — | 8 per page, checked with a temporary page size of 1; tab or search change resets to page 1 |
-
-### Design of the overview fix
-
-- `startups/[id]/+layout.server.ts` returns `qualificationStatus`; the header reads
-  it from `page.data`, so the nav is correct on first render.
-- Pending/waitlisted: Overview-only nav plus a status banner. Completed: full view.
-  Waitlisted founders still get the reapply form from the card; other roles go to
-  Overview.
-- No backend change — `assertCanAccessStartup` does not check qualification status.
-
-### Verification limits
-
-- **No Manager-side click-through by Claude.** The pane was signed in as the
-  Startup demo user, and Claude doesn't type passwords.
-- **Issue 1 was reproduced in the Browser pane, which a standing note warns can
-  fake this exact freeze.** The evidence does not depend on animation: before the
-  fix one click rendered **two** `[role=menu]` elements, and under the same
-  instrument the fixed build unlocks while the old one stayed locked. John
-  reported it from a real browser.
-- `svelte-check` after merge: **113 errors / 22 warnings**. No diagnostics in
-  touched files. The warning count was 15 on 2026-09-07; this session removed four,
-  so the rise came from other merges.
-
-### Found, not fixed
-
-- **Eleven more `non_reactive_update` warnings — the same defect as issue 2.**
-  `admin/ocr-documents` (`previewOpen`, `previewUrl` — the preview dialog likely
-  never opens), `admin/tiers` (`tiers`, `saving`, `saveSuccess`),
-  `admin/ai/bias-audits` (four override-state variables), `overview/elevate`
-  (`elevatedReadiness`), `landing/Header` (`isBlurred`). Not browser-checked.
-  TODO §2.
-- The Startups page fetches initiatives once per startup, for every startup, on
-  every visit. TODO §4.
-- `/startups/[id]/pending` is now unlinked; kept so old links still work. TODO §4.
-
-### Next step
-
-1. **Fix the eleven non-reactive state variables** on their own branch. Cheap, and
-   the OCR preview is likely a visible break. Click-test each as Manager.
-2. `supportRatio` stays §2's open measurement problem.
-3. **The critical path is unchanged and still unstarted:** the SPMP and the
-   traceability matrix, competing for the same weeks as the 30-user study.
+Zero Gemini calls, frontend only. Four branches merged `331851d`, deployed by John
+2026-09-18: the avatar menu no longer locks the page (two menus shared one
+`bind:open`), the Manager's Applications dialog opens (state was plain `let` in a
+runes component), unqualified startups get an Overview-only view instead of the
+`/pending` placeholder, and the Startups grid pages at 8. The Manager side was not
+clicked through by Claude. Found-not-fixed items went to TODO: the eleven
+non-reactive variables (§2, fixed 2026-09-18), the per-startup initiatives fetch
+and the orphaned `/pending` route (§4).
 
 ---
 
@@ -538,3 +494,70 @@ and push. About 10 Gemini calls, most of them 503s.
    need their own look.
 3. The critical path is unchanged: the SPMP and the traceability matrix, competing
    for the same weeks as the 30-user study.
+
+---
+
+## 2026-09-30 → 10-01 — application submissions that never saved
+
+Reported: applying as `chanlance.school@gmail.com` "does not register". Two
+branches, both merged, pushed and deployed; **John tested the application on the
+deployed server.** About a dozen Gemini calls, most returning 503 "high demand",
+then 429 once `gemini-3.6-flash` hit its daily quota.
+
+| Branch | Defect | Cause | Verified |
+|---|---|---|---|
+| `fix/apply-submit-url` (`f7eb460`) | `/apply` form: submit did nothing, no message | The server action posted through `$lib/axios`, whose `baseURL` became the relative `/api` in `5a453d2`; Node cannot resolve it ("Invalid URL"). The failure was returned outside superforms' `message`, so the page dropped it | Live: submit lands on `/startups`; with the API stopped, the error toast shows |
+| `fix/startup-wizard-submit` (`ba770ab`) | Wizard: reload to `/startups`, nothing saved, locally and deployed | (1) The SO 4.2 summary ran **inside** the create transaction, so any Gemini 503/429 rolled back the application; the page's error toast was commented out. (2) `/startups/apply` returned no `id`, so all 18 URAT and 7 calculator answers were posted with `startupId: undefined` — the local Neon branch held **zero** of either, for any startup | Live on Neon at 429: startup, 18 + 7 answers and a failed run linked to it all saved; Manager dialog showed the pending state, returned the quota message as a 503, then generated the summary and badge |
+
+### Design of the wizard fix
+
+- `create()` makes no AI call. The summary runs after commit in its own
+  `analysis_summary` run, opened with the startup id — which also ends the FK error
+  from attributing a run to an uncommitted startup.
+- On failure `aiAnalysisSummary` stays null (column now nullable) and `/apply`
+  returns `{ id, summaryPending: true }`. Chosen by John over "fail with a clear
+  message": the summary is the Manager's SO 4.2/4.4 aid, not the founder's.
+- Managers fill a pending summary from any of the four Applications dialogs via
+  `POST /startups/:id/analysis-summary` (`AdminGuard`). It refuses to replace an
+  existing summary, since the SO 4.4 approval gate may already be acknowledged
+  against it. Input is built from the saved proposal, so submit and regenerate give
+  the model the same text.
+- Also: the PDF upload retries a busy model and returns a readable 503 instead of
+  a 500 with Gemini's raw body; the URAT answer DTO gained `@ValidateNested`, and
+  its `response` went from `@IsNumber` to `@IsString` — otherwise nested validation
+  would have rejected every text answer.
+
+### Verification limits
+
+- **The summary's success path used `gemini-3.5-flash-lite`**, not the production
+  model — `3.6-flash` was at quota. `backend/.env` was switched for the test and
+  restored byte-for-byte (same checksum).
+- Playwright mouse clicks on the Applications cards did not open the dialog;
+  `element.click()` did, on this branch and with master's dialogs stashed. Treated
+  as a test-driver artifact, not investigated further.
+- Deployed passwords were typed by John, not Claude; the deployed wizard was filled
+  by Claude in the Browser pane.
+- Gates: backend **407/407** (40 suites); `svelte-check` **110 errors**, unchanged.
+
+### Found, not fixed
+
+- **The apply page's `load` also returns the `Access` token as `data.access`** —
+  the same leak as §1's P1 "stop shipping the raw JWT", one more call site.
+- **SO 4.4 flagged a critical summary as "Predominantly positive"** — run 100, lite
+  model, text opening "The proposal fails to provide actionable information…". The
+  next generation read Balanced. n = 1, unconfirmed; TODO §2.
+- `StartupService` still injects `AiRunService` and no longer uses it. TODO §4.
+- The Render backend took **53 s** to answer after idling (free-tier spin-down).
+
+### Next step
+
+1. **Nothing owed on these two branches.** Remove the untracked
+   `sample-application/` (test PDF and answers) and `.playwright-mcp/` (test
+   screenshots and logs) when done with them.
+2. **Check the SO 4.4 misread** against the production model before it reaches a
+   demo — it is the badge a Manager acts on.
+3. Carried from 2026-09-26: the live refine-chat check, and the stable item-number
+   decision (§3).
+4. The critical path is unchanged: the SPMP and the traceability matrix, competing
+   for the same weeks as the 30-user study.
+
