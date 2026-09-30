@@ -15,6 +15,7 @@ import { z } from 'zod';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
+import { VectorEmbedding } from 'src/entities/vector-embeddings.entity';
 import { isQuotaError, isServiceFailure, withRetry } from './retry-transient';
 import { RNS_NO_CHANGE } from './refine-chat';
 import { AiRunContext } from './ai-run.service';
@@ -505,6 +506,41 @@ export class AiService {
     await this.embeddingIndex.indexRagContext(ragContext);
 
     return ragContext;
+  }
+
+  /**
+   * A startup's context of this source type after its text changed, e.g. an
+   * edited capsule proposal. Updated in place so retrieval never sees the old
+   * and new text side by side.
+   */
+  async refreshRagContext(input: {
+    startupId: number;
+    sourceType: string;
+    title: string;
+    content: string;
+    metadata?: Record<string, unknown> | null;
+    confidence?: number;
+  }) {
+    const existing = await this.em.findOne(
+      RagContext,
+      { startup: input.startupId, sourceType: input.sourceType },
+      { orderBy: { createdAt: 'DESC' } },
+    );
+    if (!existing) return this.recordRagContext(input);
+
+    existing.title = input.title;
+    existing.content = input.content;
+    existing.metadata = input.metadata ?? undefined;
+    // Dropped first: if embedding fails, the boot backfill finds a row with no
+    // vector, rather than this row paired with a vector of the old text.
+    await this.em.nativeDelete(VectorEmbedding, {
+      source_type: RAG_CONTEXT_SOURCE,
+      source_id: String(existing.id),
+    });
+    await this.em.flush();
+
+    await this.embeddingIndex.indexRagContext(existing);
+    return existing;
   }
 
   private scoreRagMatch(query: string, candidate: string) {

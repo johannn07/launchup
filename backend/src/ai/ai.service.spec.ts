@@ -1111,3 +1111,94 @@ describe('generateStartupAnalysisSummary — adversarial arm (SO 4.2)', () => {
     });
   });
 });
+
+describe('AiService.refreshRagContext', () => {
+  const input = {
+    startupId: 42,
+    sourceType: 'capsule_proposal',
+    title: 'PondSense',
+    content: 'Solar sensor buoys for tilapia ponds.',
+    metadata: { project: 'PondSense' },
+    confidence: 1,
+  };
+
+  function build(existing: Record<string, unknown> | null) {
+    const calls: string[] = [];
+    const em = {
+      findOne: jest.fn().mockResolvedValue(existing),
+      nativeDelete: jest.fn(async () => {
+        calls.push('delete-vector');
+        return 1;
+      }),
+      flush: jest.fn(async () => {
+        calls.push('flush');
+      }),
+      create: jest.fn((_entity: unknown, data: Record<string, unknown>) => ({
+        id: 9,
+        ...data,
+      })),
+      persist: jest.fn(),
+      getReference: jest.fn((_entity: unknown, id: number) => ({ id })),
+    };
+    const embeddingIndex = {
+      indexRagContext: jest.fn(async () => {
+        calls.push('index');
+        return true;
+      }),
+    };
+    const service = new AiService(
+      { get: jest.fn() } as unknown as ConfigService,
+      {} as AiMetricsService,
+      {} as any,
+      em as any,
+      new AiConfigService(undefinedConfigService),
+      embeddingIndex as any,
+      {} as any,
+    );
+    return { service, em, embeddingIndex, calls };
+  }
+
+  it('rewrites the existing row in place and re-embeds it', async () => {
+    const row: any = {
+      id: 81,
+      title: 'Old',
+      content: 'Pending AI Generation',
+      metadata: null,
+    };
+    const { service, em, embeddingIndex } = build(row);
+
+    await service.refreshRagContext(input);
+
+    expect(row.content).toBe(input.content);
+    expect(em.create).not.toHaveBeenCalled();
+    expect(embeddingIndex.indexRagContext).toHaveBeenCalledWith(row);
+  });
+
+  // If embedding then fails, the row has no vector for the boot backfill to
+  // fill, rather than a vector of the old text.
+  it('drops the old vector before embedding the new text', async () => {
+    const { service, em, calls } = build({
+      id: 81,
+      title: 'Old',
+      content: 'x',
+      metadata: null,
+    });
+
+    await service.refreshRagContext(input);
+
+    expect(em.nativeDelete).toHaveBeenCalledWith(expect.anything(), {
+      source_type: 'rag_context',
+      source_id: '81',
+    });
+    expect(calls.indexOf('delete-vector')).toBeLessThan(calls.indexOf('index'));
+  });
+
+  it('creates the row when the startup has none', async () => {
+    const { service, em, embeddingIndex } = build(null);
+
+    await service.refreshRagContext(input);
+
+    expect(em.create).toHaveBeenCalled();
+    expect(embeddingIndex.indexRagContext).toHaveBeenCalledTimes(1);
+  });
+});
