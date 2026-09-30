@@ -209,8 +209,12 @@
   $effect(() => {
     if ($message && !$submitting && !isEditMode) {
       toast.dismiss();
-      toast.success('Application submitted');
-      goto('/startups');
+      if ($message.success) {
+        toast.success('Application submitted');
+        goto('/startups');
+      } else {
+        toast.error($message.text);
+      }
     }
   });
 
