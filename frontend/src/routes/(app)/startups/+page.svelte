@@ -180,25 +180,12 @@
     };
   });
 
-  // $effect(() => {
-  //   const success = page.url.searchParams.get('success');
-
-  //   if (form?.error) {
-  //     let formError =
-  //       form.error.length > 60
-  //         ? form.error.substring(0, 60) + '...'
-  //         : form.error;
-  //     toast.error(formError);
-  //   }
-
-  //   if (success === 'true') {
-  //     toast.success('Application successfull.');
-  //     // Remove the 'success' parameter from the URL
-  //     const url = new URL(page.url.href);
-  //     url.searchParams.delete('success');
-  //     history.replaceState(null, '', url);
-  //   }
-  // });
+  // The form posts natively, so the action's result arrives as `form` after
+  // the reload. Without this a failed submit just showed the list again.
+  $effect(() => {
+    if (form?.error) toast.error(form.error);
+    else if (form?.success) toast.success(form.message);
+  });
 
   $effect(() => {
     async function fetchInitiatives() {

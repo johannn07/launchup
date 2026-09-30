@@ -46,7 +46,11 @@ import {
   scoreFields,
   type FieldConfidence,
 } from 'src/ocr/field-confidence';
-import { isQuotaError, isServiceFailure } from '../ai/retry-transient';
+import {
+  isQuotaError,
+  isServiceFailure,
+  withRetry,
+} from '../ai/retry-transient';
 
 // OcrService returns this sentinel instead of throwing when no engine resolves.
 // It is truthy, so it wins any `||` fallback unless matched explicitly.
@@ -188,7 +192,12 @@ export class StartupService {
     return startup;
   }
 
-  async create(dto: StartupApplicationDto, userId: number, ctx: AiRunContext) {
+  /**
+   * No AI call in here: a Gemini failure inside the transaction rolled back the
+   * founder's whole application. The summary runs after commit, in
+   * generateAnalysisSummary().
+   */
+  async create(dto: StartupApplicationDto, userId: number) {
     return this.em.transactional(async () => {
       const user = await this.em.findOne(User, { id: userId });
       if (!user) {
@@ -208,14 +217,10 @@ export class StartupService {
 
       await this.em.persistAndFlush(startup);
 
-      // Run opened before the startup had an id; attribute now or a failed
-      // application leaves a run row no startup-filtered query can find.
-      await this.aiRunService.attribute(ctx, startup);
-
       startup.members.add(user);
       await this.em.flush();
 
-      await this.createStartupProposal(startup, dto, ctx);
+      await this.createStartupProposal(startup, dto);
 
       if (startup.capsuleProposal) {
         await this.aiService.recordRagContext({
@@ -362,7 +367,7 @@ export class StartupService {
       }
 
       if (!aiPayload && parsedText) {
-        aiPayload = await this.aiService.getCapsuleProposalInfo(ctx, parsedText);
+        aiPayload = await this.extractFieldsFromText(ctx, parsedText);
       }
     } else {
       try {
@@ -422,7 +427,7 @@ export class StartupService {
         };
       }
 
-      aiPayload = await this.aiService.getCapsuleProposalInfo(ctx, parsedText);
+      aiPayload = await this.extractFieldsFromText(ctx, parsedText);
     }
 
     const cleanPayload = aiPayload
@@ -517,84 +522,124 @@ export class StartupService {
   private async createStartupProposal(
     startup: Startup,
     dto: StartupApplicationDto,
-    ctx: AiRunContext,
   ) {
-    try {
-      const analysis = await this.aiService.generateStartupAnalysisSummary(
-        ctx,
-        dto,
+    const proposal = this.em.create(CapsuleProposal, {
+      title: dto.title,
+      description: dto.description,
+      problemStatement: dto.problemStatement,
+      targetMarket: dto.targetMarket,
+      solutionDescription: dto.solutionDescription,
+      objectives: Array.isArray(dto.objectives) ? dto.objectives : [],
+      historicalTimeline: Array.isArray(dto.historicalTimeline)
+        ? dto.historicalTimeline
+        : [],
+      competitiveAdvantageAnalysis: Array.isArray(
+        dto.competitiveAdvantageAnalysis,
+      )
+        ? dto.competitiveAdvantageAnalysis
+        : [],
+      members: Array.isArray(dto.members) ? dto.members : [],
+      intellectualPropertyStatus:
+        dto.intellectualPropertyStatus ?? 'Pending AI Generation',
+      scope: dto.proposalScope ?? 'Pending AI Generation',
+      methodology: dto.methodology ?? 'Pending AI Generation',
+      curriculumVitae: dto.curriculumVitae ?? undefined,
+      // Pending until generateAnalysisSummary() succeeds.
+      aiAnalysisSummary: null,
+      startup,
+    });
+
+    await this.em.persistAndFlush(proposal);
+    return proposal;
+  }
+
+  /**
+   * SO 4.2 summary for a saved proposal. Runs after submit, and again from the
+   * Manager's regenerate button when the first attempt found Gemini busy.
+   *
+   * Built from the saved proposal rather than the request body so both callers
+   * give the model the same input.
+   */
+  async generateAnalysisSummary(
+    startupId: number,
+    ctx: AiRunContext,
+  ): Promise<CapsuleProposal> {
+    const startup = await this.em.findOne(
+      Startup,
+      { id: startupId },
+      { populate: ['capsuleProposal'] },
+    );
+    const proposal = startup?.capsuleProposal;
+    if (!startup || !proposal) {
+      throw new NotFoundException(
+        `Startup with ID ${startupId} has no capsule proposal`,
       );
-
-        if (startup.capsuleProposal) {
-        const proposal = startup.capsuleProposal;
-        proposal.title = dto.title;
-        proposal.description = dto.description;
-        proposal.targetMarket = dto.targetMarket;
-        proposal.solutionDescription = dto.solutionDescription;
-
-        proposal.objectives = Array.isArray(dto.objectives)
-          ? dto.objectives
-          : [];
-
-        proposal.historicalTimeline = Array.isArray(dto.historicalTimeline)
-          ? dto.historicalTimeline
-          : [];
-
-        proposal.competitiveAdvantageAnalysis = Array.isArray(
-          dto.competitiveAdvantageAnalysis,
-        )
-          ? dto.competitiveAdvantageAnalysis
-          : [];
-
-        proposal.members = Array.isArray(dto.members) ? dto.members : [];
-
-        proposal.intellectualPropertyStatus = dto.intellectualPropertyStatus ?? 'Pending AI Generation';
-        proposal.scope = dto.proposalScope ?? 'Pending AI Generation';
-        proposal.methodology = dto.methodology ?? 'Pending AI Generation';
-        proposal.curriculumVitae = dto.curriculumVitae ?? undefined;
-        proposal.aiAnalysisSummary = analysis.summary;
-
-        await this.em.flush();
-        await this.recordSummaryProvenance(startup, analysis, ctx);
-        return proposal;
-      }
-
-      const proposal = this.em.create(CapsuleProposal, {
-        title: dto.title,
-        description: dto.description,
-        problemStatement: dto.problemStatement,
-        targetMarket: dto.targetMarket,
-        solutionDescription: dto.solutionDescription,
-
-        objectives: Array.isArray(dto.objectives) ? dto.objectives : [],
-
-        historicalTimeline: Array.isArray(dto.historicalTimeline)
-          ? dto.historicalTimeline
-          : [],
-
-        competitiveAdvantageAnalysis: Array.isArray(
-          dto.competitiveAdvantageAnalysis,
-        )
-          ? dto.competitiveAdvantageAnalysis
-          : [],
-
-        members: Array.isArray(dto.members) ? dto.members : [],
-
-        intellectualPropertyStatus: dto.intellectualPropertyStatus ?? 'Pending AI Generation',
-        scope: dto.proposalScope ?? 'Pending AI Generation',
-        methodology: dto.methodology ?? 'Pending AI Generation',
-        curriculumVitae: dto.curriculumVitae ?? undefined,
-        aiAnalysisSummary: analysis.summary,
-        startup,
-      });
-
-      await this.em.persistAndFlush(proposal);
-      await this.recordSummaryProvenance(startup, analysis, ctx);
-      return proposal;
-    } catch (err) {
-      console.error(`Error creating capsule proposal`, err);
-      throw err;
     }
+    // A Manager may already have acknowledged this text at the SO 4.4 gate.
+    if (proposal.aiAnalysisSummary?.trim()) {
+      throw new ConflictException(
+        `Startup with ID ${startupId} already has a summary`,
+      );
+    }
+
+    const input: StartupApplicationDto = {
+      title: proposal.title,
+      description: proposal.description,
+      problemStatement: proposal.problemStatement,
+      targetMarket: proposal.targetMarket,
+      solutionDescription: proposal.solutionDescription,
+      objectives: proposal.objectives ?? [],
+      historicalTimeline: proposal.historicalTimeline ?? [],
+      competitiveAdvantageAnalysis: proposal.competitiveAdvantageAnalysis ?? [],
+      intellectualPropertyStatus: proposal.intellectualPropertyStatus,
+      proposalScope: proposal.scope,
+      methodology: proposal.methodology,
+      members: proposal.members ?? [],
+      curriculumVitae: proposal.curriculumVitae,
+    };
+
+    let analysis: StartupAnalysisSummary;
+    try {
+      analysis = await withRetry(
+        () => this.aiService.generateStartupAnalysisSummary(ctx, input),
+        { delayMs: this.aiRetryDelayMs },
+      );
+    } catch (err) {
+      throw this.aiUnavailable(err);
+    }
+
+    proposal.aiAnalysisSummary = analysis.summary;
+    await this.em.flush();
+    await this.recordSummaryProvenance(startup, analysis, ctx);
+    return proposal;
+  }
+
+  /** Retried briefly like the vision path; a 503 used to reach the founder as a raw 500. */
+  private async extractFieldsFromText(ctx: AiRunContext, text: string) {
+    try {
+      return await withRetry(
+        () => this.aiService.getCapsuleProposalInfo(ctx, text),
+        {
+          delayMs: this.aiRetryDelayMs,
+        },
+      );
+    } catch (err) {
+      throw this.aiUnavailable(err);
+    }
+  }
+
+  // Overridden to 0 in specs.
+  private aiRetryDelayMs = 2000;
+
+  /** A Gemini outage as a 503 the user can read; anything else unchanged. */
+  private aiUnavailable(err: unknown): unknown {
+    if (!isServiceFailure(err)) return err;
+    return new ServiceUnavailableException(
+      isQuotaError(err)
+        ? 'The AI service has reached its daily quota. Please try again after it resets.'
+        : 'The AI service is busy right now. Please try again in a moment.',
+      { cause: err },
+    );
   }
 
   /**
@@ -603,11 +648,9 @@ export class StartupService {
    * summary per generation run, so the (generationRun, dimensionKey) collision
    * open on the validator path cannot occur here.
    *
-   * Never fails the submission. The proposal and its summary are written by the
-   * time this runs, but not committed — create() wraps everything in
-   * em.transactional(), which commits only when its callback returns. This row
-   * is supplementary provenance, so losing it costs the Manager a flag, whereas
-   * throwing here rolls back the founder's whole application. Logged loudly
+   * Never throws. The summary is already flushed when this runs, and this row
+   * is supplementary provenance: losing it costs the Manager a flag, whereas
+   * throwing would report a saved summary as a failed run. Logged loudly
    * because nothing else would show the flag went missing.
    */
   private async recordSummaryProvenance(
@@ -645,7 +688,7 @@ export class StartupService {
         `Failed to record the analysis-summary provenance for startup ${startup.id} ` +
           `(run ${ctx.runId}): the SO 4.4 tone verdict "${tone.flagged ? 'positive-language-flagged' : 'balanced'}" ` +
           `and ${analysis.unmetCriteria.length} unmet criteria were not persisted. ` +
-          `The proposal and its summary were written; whether they commit depends on the rest of create().`,
+          `The summary itself was saved.`,
         err,
       );
     }

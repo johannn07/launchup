@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button/index.js';
   import SummaryToneBadge from './SummaryToneBadge.svelte';
+  import PendingSummary from './PendingSummary.svelte';
   import * as Select from '$lib/components/ui/select';
   import ConfirmCompleteDialog from './sub/ConfirmCompleteDialog.svelte';
   import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -11,6 +12,8 @@
   import { Edit2 } from 'lucide-svelte';
 
   export let startup: any;
+  // The page owns `startup`, so it applies the update.
+  export let onSummaryGenerated: (summary: string, verdict: unknown) => void;
   export let showDialog: boolean = false;
   export let toggleDialog: () => void;
   export let mentors: any[] = [];
@@ -317,6 +320,11 @@
               {startup.capsuleProposal.aiAnalysisSummary}
             </p>
           </div>
+        {:else if startup.capsuleProposal}
+          <PendingSummary
+            startupId={startup.id}
+            onGenerated={onSummaryGenerated}
+          />
         {/if}
 
         <!-- Detailed Application Information -->

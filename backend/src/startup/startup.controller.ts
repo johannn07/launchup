@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Headers,
+  Logger,
   Param,
   ParseIntPipe,
   Post,
@@ -21,6 +22,7 @@ import { AdminGuard, JwtGuard } from 'src/auth/guard';
 import { GetUser } from 'src/auth/decorator';
 import { ApproveApplicantDto } from './dto';
 import { Role } from 'src/entities/enums/role.enum';
+import { Startup } from 'src/entities/startup.entity';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UploadedFile } from '@nestjs/common';
 import { UpdateStartupDto } from '../admin/dto/update-startup.dto';
@@ -91,18 +93,54 @@ export class StartupController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
-    const userId = req.user.id;
     const isPrivileged = req.user?.role === Role.Manager;
-    // Null startupId — create() calls aiRunService.attribute() once it has an id.
-    await this.aiRunService.track(
-      null,
+    const startup = await this.startupService.create(dto, req.user.id);
+
+    // The application is committed; a failed summary leaves it pending for the
+    // Manager to regenerate rather than failing the submit.
+    let summaryPending = false;
+    try {
+      await this.aiRunService.track(
+        startup.id,
+        'analysis_summary',
+        pipelineConfig,
+        isPrivileged,
+        (ctx) => this.startupService.generateAnalysisSummary(startup.id, ctx),
+      );
+    } catch (error) {
+      summaryPending = true;
+      new Logger('StartupController').warn(
+        `Analysis summary pending for startup ${startup.id}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    // `id` is what the application form attaches its URAT and calculator answers to.
+    return {
+      message: 'Application submitted',
+      id: startup.id,
+      summaryPending,
+    };
+  }
+
+  @UseGuards(AdminGuard)
+  @Post(':id/analysis-summary')
+  async generateAnalysisSummary(
+    @Param('id', ParseIntPipe) id: number,
+    @Headers('x-ai-pipeline-config') pipelineConfig?: string,
+  ) {
+    const proposal = await this.aiRunService.track(
+      id,
       'analysis_summary',
       pipelineConfig,
-      isPrivileged,
-      (ctx) => this.startupService.create(dto, userId, ctx),
+      true,
+      (ctx) => this.startupService.generateAnalysisSummary(id, ctx),
     );
+    // The same SO 4.4 verdict the Applications list attaches, so the badge shows without a reload.
+    const startup = proposal.startup as Startup & { summaryVerdict?: unknown };
+    await this.startupService.attachSummaryVerdicts([startup]);
     return {
-      message: 'yeahhhhhhhhhhhhh created startup',
+      aiAnalysisSummary: proposal.aiAnalysisSummary,
+      summaryVerdict: startup.summaryVerdict,
     };
   }
 

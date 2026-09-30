@@ -54,6 +54,13 @@
     showDialog = true;
   }
 
+  // A regenerated summary lands on the open startup without refetching the list.
+  function onSummaryGenerated(summary: string, verdict: unknown) {
+    if (!selectedStartup?.capsuleProposal) return;
+    selectedStartup.capsuleProposal.aiAnalysisSummary = summary;
+    selectedStartup.summaryVerdict = verdict;
+  }
+
   function toggleDialog() {
     showDialog = !showDialog;
     if (!showDialog) {
@@ -376,6 +383,7 @@
   {#if selectedTab === 'pending'}
     <PendingDialog
       startup={selectedStartup}
+      {onSummaryGenerated}
       {showDialog}
       {toggleDialog}
       {waitlistStartup}
@@ -387,6 +395,7 @@
   {:else if selectedTab === 'waitlisted'}
     <WaitlistedDialog
       startup={selectedStartup}
+      {onSummaryGenerated}
       {showDialog}
       {toggleDialog}
       mentors={mentors || []}
@@ -397,6 +406,7 @@
   {:else if selectedTab === 'qualified'}
     <QualifiedDialog
       startup={selectedStartup}
+      {onSummaryGenerated}
       {showDialog}
       {toggleDialog}
       mentors={mentors || []}
@@ -410,6 +420,7 @@
   {:else if selectedTab === 'completed'}
     <CompletedDialog
       startup={selectedStartup}
+      {onSummaryGenerated}
       {showDialog}
       {toggleDialog}
       {startupAssessments}

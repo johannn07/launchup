@@ -58,14 +58,15 @@ class UratQuestionnswer {
   @Type(() => Number)
   uratQuestionId: number;
 
-  @IsNumber()
-  @IsNotEmpty()
-  @Type(() => String)
+  // Blank is allowed: the form doesn't require every answer.
+  @IsString()
   response: string;
 }
 
 export class UratQuestionAnswerDto {
+  // Without this, an answer missing its startupId reached the service unchecked.
   @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => UratQuestionnswer)
   answers: UratQuestionnswer[];
 }
