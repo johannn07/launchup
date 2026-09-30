@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Button } from '$lib/components/ui/button/index.js';
   import SummaryToneBadge from './SummaryToneBadge.svelte';
+  import PendingSummary from './PendingSummary.svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import WaitlistDialog from './sub/WaitlistDialog.svelte';
   import ApprovalDialog from './sub/ApprovalDialog.svelte';
@@ -8,6 +9,8 @@
   import { getBadgeColorObject, getStartupMemberCount } from '$lib/utils';
 
   export let startup: any;
+  // The page owns `startup`, so it applies the update.
+  export let onSummaryGenerated: (summary: string, verdict: unknown) => void;
   export let showDialog: boolean = false;
   export let toggleDialog: () => void;
   export let waitlistStartup: (
@@ -96,6 +99,11 @@
               {startup.capsuleProposal.aiAnalysisSummary}
             </p>
           </div>
+        {:else if startup.capsuleProposal}
+          <PendingSummary
+            startupId={startup.id}
+            onGenerated={onSummaryGenerated}
+          />
         {/if}
 
         <!-- Detailed Application Information -->

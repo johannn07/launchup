@@ -6,7 +6,11 @@ import { StartupAnalysisSummary } from '../ai/ai.service';
 import { OcrDocument } from 'src/entities/ocr-document.entity';
 import { ActivityLog } from 'src/entities/activity-log.entity';
 import { QualificationStatus } from 'src/entities/enums/qualification-status.enum';
-import { ConflictException } from '@nestjs/common';
+import {
+  ConflictException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { createHash } from 'crypto';
 
 /**
@@ -50,11 +54,15 @@ function build(analysis: StartupAnalysisSummary) {
 
   const em = {
     transactional: jest.fn((cb: (em: unknown) => unknown) => cb(em)),
-    findOne: jest.fn().mockResolvedValue({ id: 7 }),
+    findOne: jest.fn(async (entity: unknown) =>
+      entity === Startup ? startup : { id: 7 },
+    ),
     create: jest.fn((entity: unknown, data: Record<string, unknown>) => {
       if (entity === Startup) return Object.assign(startup, data);
       const proposal = { ...data };
       proposals.push(proposal);
+      // Stands in for the owning side of the one-to-one.
+      startup.capsuleProposal = proposal;
       return proposal;
     }),
     persistAndFlush: jest.fn().mockResolvedValue(undefined),
@@ -67,16 +75,23 @@ function build(analysis: StartupAnalysisSummary) {
     recordRagContext: jest.fn().mockResolvedValue(undefined),
   };
 
-  const aiRunService = { attribute: jest.fn().mockResolvedValue(undefined) };
-
   const service = new StartupService(
     em as any,
     aiService as any,
-    aiRunService as any,
+    {} as any, // AiRunService — the summary's run is opened by the controller
     {} as any, // OcrService — the summary path never reaches it
   );
+  (service as any).aiRetryDelayMs = 0;
 
-  return { service, em, aiService, proposals };
+  return { service, em, aiService, proposals, startup };
+}
+
+/** create() then generateAnalysisSummary(), the order the apply endpoint runs them. */
+async function submit(analysis: StartupAnalysisSummary) {
+  const built = build(analysis);
+  await built.service.create(dto, 7);
+  await built.service.generateAnalysisSummary(42, ctx);
+  return built;
 }
 
 const notesOf = (aiService: { recordAiRecommendation: jest.Mock }) =>
@@ -261,16 +276,36 @@ describe('StartupService.attachSummaryVerdicts', () => {
   });
 });
 
-describe('StartupService analysis summary persistence', () => {
-  it('stores only the summary text on the proposal', async () => {
+describe('StartupService.create', () => {
+  // A 503 from Gemini inside the save used to roll the whole application back.
+  it('saves the startup and proposal without calling the AI', async () => {
     const { service, aiService, proposals } = build({
+      summary: 'S.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+
+    const startup = await service.create(dto, 7);
+
+    expect(startup.id).toBe(42);
+    expect(proposals).toHaveLength(1);
+    expect(proposals[0].aiAnalysisSummary).toBeNull();
+    expect(aiService.generateStartupAnalysisSummary).not.toHaveBeenCalled();
+  });
+});
+
+describe('StartupService.generateAnalysisSummary', () => {
+  const BUSY =
+    'got status: 503 Service Unavailable. {"error":{"code":503,"status":"UNAVAILABLE"}}';
+
+  it('stores only the summary text on the proposal', async () => {
+    const { aiService, proposals } = await submit({
       summary: 'S.',
       unmetCriteria: [{ criterion: 'c', proposalField: 'f', whyUnmet: 'w' }],
       criticalRisks: [],
       source: 'schema',
     });
-
-    await service.create(dto, 7, ctx);
 
     expect(proposals).toHaveLength(1);
     // The whole return object in a text column reaches Postgres as
@@ -279,17 +314,34 @@ describe('StartupService analysis summary persistence', () => {
     expect(aiService.generateStartupAnalysisSummary).toHaveBeenCalledTimes(1);
   });
 
+  it('builds the prompt input from the saved proposal', async () => {
+    const { aiService } = await submit({
+      summary: 'S.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+
+    // The entity calls it `scope`; the prompt reads `proposalScope`.
+    expect(aiService.generateStartupAnalysisSummary).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({
+        title: dto.title,
+        problemStatement: dto.problemStatement,
+        proposalScope: 'Pending AI Generation',
+      }),
+    );
+  });
+
   it('records the criteria and the tone verdict as an ai_recommendation', async () => {
     // Verified against the real analyzeTone: positiveCount 1, criticalCount 0.
     const summary = 'The venture shows strong potential.';
-    const { service, aiService, proposals } = build({
+    const { aiService, proposals } = await submit({
       summary,
       unmetCriteria: [{ criterion: 'No revenue evidence', proposalField: 'historicalTimeline', whyUnmet: 'no figure given' }],
       criticalRisks: [{ risk: 'Buyer demand unvalidated', severity: 'high' }],
       source: 'legacy',
     });
-
-    await service.create(dto, 7, ctx);
 
     expect(proposals).toHaveLength(1);
     expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
@@ -314,20 +366,83 @@ describe('StartupService analysis summary persistence', () => {
 
   it('does not flag a summary carrying a critical observation', async () => {
     // Verified against the real analyzeTone: criticalCount 1, so flagged false.
-    const { service, aiService, proposals } = build({
+    const { aiService, proposals } = await submit({
       summary: 'Strong team, but buyer demand is unvalidated and there is no revenue.',
       unmetCriteria: [],
       criticalRisks: [],
       source: 'schema',
     });
 
-    await service.create(dto, 7, ctx);
-
     expect(proposals).toHaveLength(1);
     expect(aiService.recordAiRecommendation).toHaveBeenCalledWith(
       expect.objectContaining({ confidenceStatus: 'balanced' }),
     );
     expect(notesOf(aiService).tone.criticalCount).toBe(1);
+  });
+
+  it('retries a busy model before giving up', async () => {
+    const { service, aiService, proposals } = build({
+      summary: 'S.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+    aiService.generateStartupAnalysisSummary.mockRejectedValueOnce(
+      new Error(BUSY),
+    );
+
+    await service.create(dto, 7);
+    await service.generateAnalysisSummary(42, ctx);
+
+    expect(aiService.generateStartupAnalysisSummary).toHaveBeenCalledTimes(2);
+    expect(proposals[0].aiAnalysisSummary).toBe('S.');
+  });
+
+  it('reports a model that stays busy as a 503 and leaves the proposal pending', async () => {
+    const { service, aiService, proposals } = build({
+      summary: 'S.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+    aiService.generateStartupAnalysisSummary.mockRejectedValue(new Error(BUSY));
+
+    await service.create(dto, 7);
+
+    await expect(
+      service.generateAnalysisSummary(42, ctx),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(proposals[0].aiAnalysisSummary).toBeNull();
+    expect(aiService.recordAiRecommendation).not.toHaveBeenCalled();
+  });
+
+  // Overwriting would replace the text a Manager may already have acknowledged
+  // at the SO 4.4 gate.
+  it('refuses to replace a summary that already exists', async () => {
+    const { service, aiService } = await submit({
+      summary: 'S.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+
+    await expect(
+      service.generateAnalysisSummary(42, ctx),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(aiService.generateStartupAnalysisSummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('is a 404 for a startup without a proposal', async () => {
+    const { service } = build({
+      summary: 'S.',
+      unmetCriteria: [],
+      criticalRisks: [],
+      source: 'schema',
+    });
+
+    await expect(
+      service.generateAnalysisSummary(42, ctx),
+    ).rejects.toBeInstanceOf(NotFoundException);
   });
 });
 
@@ -336,7 +451,12 @@ describe('StartupService analysis summary persistence', () => {
  * and Gemini Vision's `raw_transcription` — and stores one of them on the
  * OcrDocument. Which one it stores is the thing under test.
  */
-function buildOcr(opts: { tesseractText: string; visionJson: string; visionError?: string }) {
+function buildOcr(opts: {
+  tesseractText: string;
+  visionJson: string;
+  visionError?: string;
+  textError?: string;
+}) {
   const ocrDocs: any[] = [];
   const sketchInputs: string[] = [];
 
@@ -373,11 +493,14 @@ function buildOcr(opts: { tesseractText: string; visionJson: string; visionError
     getCapsuleProposalInfoFromImage: opts.visionError
       ? jest.fn().mockRejectedValue(new Error(opts.visionError))
       : jest.fn().mockResolvedValue(opts.visionJson),
-    getCapsuleProposalInfo: jest.fn().mockResolvedValue(opts.visionJson),
+    getCapsuleProposalInfo: opts.textError
+      ? jest.fn().mockRejectedValue(new Error(opts.textError))
+      : jest.fn().mockResolvedValue(opts.visionJson),
   };
 
   const service = new StartupService(em as any, aiService as any, {} as any, ocrService as any);
-  return { service, ocrDocs, sketchInputs };
+  (service as any).aiRetryDelayMs = 0;
+  return { service, ocrDocs, sketchInputs, aiService };
 }
 
 const imageFile = {
@@ -482,6 +605,23 @@ describe('StartupService.parseCapsuleProposal — when Gemini Vision is unavaila
     });
 
     await expect(service.parseCapsuleProposal(imageFile, ctx)).rejects.toThrow();
+  });
+
+  // The PDF path and the Tesseract fallback share this call. It used to reach
+  // the founder as a 500 carrying Gemini's raw error body.
+  it('reports a busy model on text extraction as a readable 503', async () => {
+    const { service, ocrDocs, aiService } = buildOcr({
+      tesseractText: 'legible typed text about a startup',
+      visionJson: VISION_JSON,
+      visionError: 'Unexpected token < in JSON at position 0',
+      textError: BUSY,
+    });
+
+    const failure = service.parseCapsuleProposal(imageFile, ctx);
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow(/busy right now/);
+    expect(aiService.getCapsuleProposalInfo).toHaveBeenCalledTimes(3);
+    expect(ocrDocs).toHaveLength(0);
   });
 
   it('still falls back to Tesseract for a non-service failure', async () => {

@@ -155,12 +155,13 @@ Those gates now name `Manager` directly (`utils.ts`'s `canRateReadiness`, the `<
 3.  /startups  →  empty state  →  /apply
 
 4.  Wizard submit:
-      POST /startups/apply                                  → Startup{PENDING}
+      POST /startups/apply                                  → Startup{PENDING}, returns { id, summaryPending }
+                   (SO 4.2 summary runs after commit; a Gemini failure leaves it pending)
       POST /readinesslevel/urat-question-answers/create      → 18 UratQuestionAnswer rows (6 types × 3)
       POST /readinesslevel/calculator-question-answers/create→ 7 CalculatorQuestionAnswer rows
       [optional] POST /startups/parse-capsule-proposal
                    → pdf-parse → Gemini → CapsuleProposal
-      (frontend/src/routes/(app)/startups/+page.server.ts:216-258)
+      (frontend/src/routes/(app)/startups/+page.server.ts)
 
 5.  → /startups/[id]/pending  (waiting room)
 
@@ -439,7 +440,8 @@ capsule_proposals                      capsule-proposal.entity.ts
   solutionDescription, objectives(json), historicalTimeline(json),
   competitiveAdvantageAnalysis(json), members(json),
   intellectualPropertyStatus, curriculumVitae?, scope, methodology,
-  aiAnalysisSummary   ← the Gemini-written summary
+  aiAnalysisSummary?  ← the Gemini-written summary; null while pending, which a
+                        Manager fills via POST /startups/:id/analysis-summary
 
 urat_questions / urat_question_answers
   question + readinessType; answer has response(text) + score (default 1)

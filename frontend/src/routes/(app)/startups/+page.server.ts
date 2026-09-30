@@ -114,8 +114,9 @@ export const actions: Actions = {
     }
 
     if (!response.ok) {
-      let errorMessage = data?.message || 'Failed to create or update startup.';
-      return fail(400, { error: errorMessage });
+      return fail(400, {
+        error: apiMessage(data, 'Failed to create or update startup.')
+      });
     }
 
     const types = [
@@ -202,6 +203,14 @@ export const actions: Actions = {
       }
 
     } else {
+      // Without it every answer below was posted with startupId: undefined.
+      if (!data?.id) {
+        return fail(500, {
+          error:
+            'Your application was saved, but its answers could not be attached to it.'
+        });
+      }
+
       const answers: {
         startupId: number;
         uratQuestionId: number;
@@ -247,7 +256,14 @@ export const actions: Actions = {
         }
       );
 
-      const urat_res = await urat_answers.json();
+      if (!urat_answers.ok) {
+        return fail(400, {
+          error: `Your application was saved, but its readiness answers were not: ${apiMessage(
+            await urat_answers.json().catch(() => null),
+            urat_answers.statusText
+          )}`
+        });
+      }
 
       const calculator_answers = await fetch(
         `${PUBLIC_API_URL}/readinesslevel/calculator-question-answers/create`,
@@ -263,7 +279,23 @@ export const actions: Actions = {
         }
       );
 
-      const res = await calculator_answers.json();
+      if (!calculator_answers.ok) {
+        return fail(400, {
+          error: `Your application was saved, but its calculator answers were not: ${apiMessage(
+            await calculator_answers.json().catch(() => null),
+            calculator_answers.statusText
+          )}`
+        });
+      }
     }
+
+    return { success: true, message: 'Application submitted' };
   }
 };
+
+// Nest's ValidationPipe sends `message` as an array.
+function apiMessage(data: any, fallback: string): string {
+  const message = data?.message;
+  if (Array.isArray(message)) return message.join('; ');
+  return message || fallback;
+}

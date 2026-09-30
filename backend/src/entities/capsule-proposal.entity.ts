@@ -49,8 +49,9 @@ export class CapsuleProposal {
   @Property({ type: 'text' })
   methodology!: string;
 
-  @Property({ type: 'text' })
-  aiAnalysisSummary!: string;
+  // Null while pending: saved before Gemini is asked, so an outage can't lose the application.
+  @Property({ type: 'text', nullable: true })
+  aiAnalysisSummary?: string | null;
 
   @OneToOne(() => Startup, (startup) => startup.capsuleProposal, {
     owner: true,
