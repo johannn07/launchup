@@ -9,7 +9,7 @@
   import { useQuery } from '@sveltestack/svelte-query';
   import type { PageData } from './$types';
   import { toast } from 'svelte-sonner';
-  import { Save, Loader, Eye } from 'lucide-svelte';
+  import { Save, Loader, Eye, Upload } from 'lucide-svelte';
 
   let { data }: { data: PageData } = $props();
 
@@ -44,6 +44,62 @@
   let scope = $state('');
   let methodology = $state('');
   let saving = $state(false);
+  let extracting = $state(false);
+  // Name of the file the unsaved fields came from; cleared on save.
+  let extractedFrom = $state('');
+  let fileInput: HTMLInputElement | undefined = $state();
+
+  // Fills the form from a new file without saving, so the founder reviews the
+  // extraction first. Saving goes through the same PATCH as a typed edit.
+  async function extractFromFile(event: Event) {
+    const file = (event.currentTarget as HTMLInputElement).files?.[0];
+    (event.currentTarget as HTMLInputElement).value = '';
+    if (!file) return;
+
+    extracting = true;
+    try {
+      const body = new FormData();
+      body.append('capsuleProposal', file);
+      // fetch, not axios: the instance's JSON Content-Type would override the
+      // multipart boundary.
+      const response = await fetch('/api/startups/parse-capsule-proposal', {
+        method: 'POST',
+        body
+      });
+      const extracted = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        toast.error(
+          `${extracted?.message || 'Could not read that file.'} You can still edit the fields directly.`
+        );
+        return;
+      }
+      if (extracted.legibilityStatus === 'failed') {
+        toast.error(
+          `That image could not be read${extracted.legibilityReason ? `: ${extracted.legibilityReason}` : '.'} Try a clearer image or a PDF.`
+        );
+        return;
+      }
+
+      title = extracted.title || title;
+      description = extracted.startup_description || '';
+      problemStatement = extracted.problem_statement || '';
+      targetMarket = extracted.target_market || '';
+      solution = extracted.solution_description || '';
+      objectives = Array.isArray(extracted.objectives)
+        ? extracted.objectives.join('\n')
+        : extracted.objectives || '';
+      scope = extracted.scope || '';
+      methodology = extracted.methodology || '';
+      extractedFrom = file.name;
+    } catch {
+      toast.error(
+        'Network error while reading the file. You can still edit the fields directly.'
+      );
+    } finally {
+      extracting = false;
+    }
+  }
 
   // Update local state when data loads
   $effect(() => {
@@ -99,6 +155,7 @@
 
       console.log('Capsule proposal saved successfully:', response.data);
       toast.success('Capsule proposal saved successfully');
+      extractedFrom = '';
       $queryResult.refetch();
     } catch (error: any) {
       console.error('Error saving capsule proposal:', error);
@@ -132,17 +189,47 @@
         {/if}
       </div>
       {#if $queryResult.isSuccess && !readOnly}
-        <Button onclick={saveCapsuleProposal} disabled={saving}>
-          {#if saving}
-            <Loader class="mr-2 h-4 w-4 animate-spin" />
-            Saving...
-          {:else}
-            <Save class="mr-2 h-4 w-4" />
-            Save Changes
-          {/if}
-        </Button>
+        <div class="flex items-center gap-2">
+          <input
+            bind:this={fileInput}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            class="hidden"
+            onchange={extractFromFile}
+          />
+          <Button
+            variant="outline"
+            onclick={() => fileInput?.click()}
+            disabled={extracting || saving}
+          >
+            {#if extracting}
+              <Loader class="mr-2 h-4 w-4 animate-spin" />
+              Reading file...
+            {:else}
+              <Upload class="mr-2 h-4 w-4" />
+              Upload new version
+            {/if}
+          </Button>
+          <Button onclick={saveCapsuleProposal} disabled={saving || extracting}>
+            {#if saving}
+              <Loader class="mr-2 h-4 w-4 animate-spin" />
+              Saving...
+            {:else}
+              <Save class="mr-2 h-4 w-4" />
+              Save Changes
+            {/if}
+          </Button>
+        </div>
       {/if}
     </div>
+    {#if extractedFrom}
+      <div
+        class="w-[90%] rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-100/40 dark:bg-amber-900/40 dark:text-amber-100"
+      >
+        Filled from <span class="font-semibold">{extractedFrom}</span> by the AI.
+        Not saved yet: check each field against your document, then Save Changes.
+      </div>
+    {/if}
     <div class="grid w-[90%] grid-cols-1 gap-5">
       <div class="grid gap-2">
         <Label for="title">Title</Label>
