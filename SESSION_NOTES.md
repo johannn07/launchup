@@ -497,17 +497,20 @@ and push. About 10 Gemini calls, most of them 503s.
 
 ---
 
-## 2026-09-30 → 10-01 — application submissions that never saved
+## 2026-09-30 → 10-01 — application submissions that never saved, and empty proposals
 
-Reported: applying as `chanlance.school@gmail.com` "does not register". Two
-branches, both merged, pushed and deployed; **John tested the application on the
-deployed server.** About a dozen Gemini calls, most returning 503 "high demand",
-then 429 once `gemini-3.6-flash` hit its daily quota.
+Reported: applying as `chanlance.school@gmail.com` "does not register". Four
+branches, all merged to `master` and pushed. The first two were deployed and
+**tested by John on the deployed server**; the last two were not yet at the time
+of writing. About two dozen Gemini calls, most returning 503 "high demand", then
+429 once `gemini-3.6-flash` hit its daily quota.
 
 | Branch | Defect | Cause | Verified |
 |---|---|---|---|
 | `fix/apply-submit-url` (`f7eb460`) | `/apply` form: submit did nothing, no message | The server action posted through `$lib/axios`, whose `baseURL` became the relative `/api` in `5a453d2`; Node cannot resolve it ("Invalid URL"). The failure was returned outside superforms' `message`, so the page dropped it | Live: submit lands on `/startups`; with the API stopped, the error toast shows |
 | `fix/startup-wizard-submit` (`ba770ab`) | Wizard: reload to `/startups`, nothing saved, locally and deployed | (1) The SO 4.2 summary ran **inside** the create transaction, so any Gemini 503/429 rolled back the application; the page's error toast was commented out. (2) `/startups/apply` returned no `id`, so all 18 URAT and 7 calculator answers were posted with `startupId: undefined` — the local Neon branch held **zero** of either, for any startup | Live on Neon at 429: startup, 18 + 7 answers and a failed run linked to it all saved; Manager dialog showed the pending state, returned the quota message as a 503, then generated the summary and badge |
+| `fix/empty-capsule-proposal` (`ed33526`) | A failed upload let the founder submit anyway; every proposal field became "Pending AI Generation", which the Manager reviewed, the summary described and RAG indexed | The upload was marked required but nothing enforced it, and the action substituted placeholders | Live: Next gated until name + 5 fields; typed application saved real text + 18/7 answers; an edit cleared a stand-in summary and rewrote the same RAG row; a proposal-less post refused |
+| `feat/capsule-proposal-reupload` (`0e560ca`) | No way to upload the proposal after applying | The attach-a-file endpoint for an existing startup is commented out | Live: at 429 the upload showed the quota message and changed nothing; with quota it filled all 8 fields, saved nothing until Save, then saved, cleared the summary and refreshed RAG |
 
 ### Design of the wizard fix
 
@@ -527,17 +530,38 @@ then 429 once `gemini-3.6-flash` hit its daily quota.
   its `response` went from `@IsNumber` to `@IsString` — otherwise nested validation
   would have rejected every text answer.
 
+### Design of the empty-proposal fix and re-upload
+
+- The wizard's Details step offers "Type the proposal in instead", with or without
+  a failed upload; Next stays disabled until the startup name, title, description,
+  problem, market and solution are filled. The action rejects a submission
+  missing any of them rather than substituting placeholders.
+- Editing a saved proposal (Overview → Capsule Proposal, or a waitlisted reapply)
+  clears the summary while Pending or Waitlisted, and refreshes the proposal's RAG
+  row in place (`AiService.refreshRagContext`), dropping the old vector first so a
+  failed embed leaves a row for the boot backfill, not a vector of the old text.
+  After approval the summary is kept. A no-op save does neither. Saving never
+  regenerates the summary: repeated saves would each spend a call of the 20/day.
+- Re-upload is frontend-only: "Upload new version" runs the existing parse
+  endpoint, fills the fields unsaved with an "AI-filled, check it" notice, and
+  Save goes through the same PATCH as a typed edit.
+- Applications already saved with placeholders can now be repaired: the founder
+  uploads or types, then a Manager generates the summary.
+
 ### Verification limits
 
 - **The summary's success path used `gemini-3.5-flash-lite`**, not the production
-  model — `3.6-flash` was at quota. `backend/.env` was switched for the test and
-  restored byte-for-byte (same checksum).
+  model — `3.6-flash` was at quota. So did the re-upload's success path.
+  `backend/.env` was switched for each test and restored byte-for-byte (same
+  checksum).
 - Playwright mouse clicks on the Applications cards did not open the dialog;
   `element.click()` did, on this branch and with master's dialogs stashed. Treated
   as a test-driver artifact, not investigated further.
 - Deployed passwords were typed by John, not Claude; the deployed wizard was filled
   by Claude in the Browser pane.
-- Gates: backend **407/407** (40 suites); `svelte-check` **110 errors**, unchanged.
+- Gates: backend **416/416** (40 suites); `svelte-check` **110 errors**, unchanged.
+- All test startups (27, 33, 35) and their answers, runs, RAG rows and the
+  re-upload's OCR row were deleted from Neon.
 
 ### Found, not fixed
 
@@ -548,10 +572,15 @@ then 429 once `gemini-3.6-flash` hit its daily quota.
   next generation read Balanced. n = 1, unconfirmed; TODO §2.
 - `StartupService` still injects `AiRunService` and no longer uses it. TODO §4.
 - The Render backend took **53 s** to answer after idling (free-tier spin-down).
+- **The wizard's "Startup name" field is ignored** — `create()` names the startup
+  after the proposal title. Pre-existing. TODO §2.
 
 ### Next step
 
-1. **Nothing owed on these two branches.** Remove the untracked
+1. **John tests the last two branches on the deployed server:** type a proposal in
+   the wizard (Next must stay disabled until it is complete), then "Upload new
+   version" on Capsule Proposal once Gemini has quota, save, and check the
+   Manager sees "Generate summary". Remove the untracked
    `sample-application/` (test PDF and answers) and `.playwright-mcp/` (test
    screenshots and logs) when done with them.
 2. **Check the SO 4.4 misread** against the production model before it reaches a
