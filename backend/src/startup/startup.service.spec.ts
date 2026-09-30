@@ -446,6 +446,126 @@ describe('StartupService.generateAnalysisSummary', () => {
   });
 });
 
+/** A startup with a saved proposal, for the edit paths. */
+function buildForEdit(
+  status: QualificationStatus,
+  summary: string | null = 'Old summary.',
+) {
+  const proposal: any = {
+    title: 'PondSense',
+    description: 'Pending AI Generation',
+    problemStatement: 'Pending AI Generation',
+    targetMarket: 'Pending AI Generation',
+    solutionDescription: 'Pending AI Generation',
+    objectives: [],
+    scope: 'Pending AI Generation',
+    methodology: 'Pending AI Generation',
+    aiAnalysisSummary: summary,
+  };
+  const startup: any = {
+    id: 42,
+    name: 'PondSense',
+    qualificationStatus: status,
+    capsuleProposal: proposal,
+  };
+  const em = {
+    findOne: jest.fn().mockResolvedValue(startup),
+    flush: jest.fn().mockResolvedValue(undefined),
+  };
+  const aiService = {
+    refreshRagContext: jest.fn().mockResolvedValue(undefined),
+  };
+  const service = new StartupService(
+    em as any,
+    aiService as any,
+    {} as any,
+    {} as any,
+  );
+  return { service, startup, proposal, aiService, em };
+}
+
+const realProposal = {
+  description: 'Solar sensor buoys for tilapia ponds.',
+  problemStatement: 'Overnight oxygen crashes kill stock.',
+};
+
+describe('StartupService — editing a saved proposal', () => {
+  // The summary described the placeholder text; leaving it would show the
+  // Manager an assessment of a proposal that no longer exists.
+  it("clears a pending application's summary and refreshes its RAG context", async () => {
+    const { service, proposal, aiService } = buildForEdit(
+      QualificationStatus.PENDING,
+    );
+
+    await service.updateCapsuleProposalFields(42, realProposal);
+
+    expect(proposal.description).toBe(realProposal.description);
+    expect(proposal.aiAnalysisSummary).toBeNull();
+    expect(aiService.refreshRagContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startupId: 42,
+        sourceType: 'capsule_proposal',
+        content: expect.stringContaining('Solar sensor buoys'),
+      }),
+    );
+  });
+
+  it("clears a waitlisted application's summary too", async () => {
+    const { service, proposal } = buildForEdit(QualificationStatus.WAITLISTED);
+
+    await service.updateCapsuleProposalFields(42, realProposal);
+
+    expect(proposal.aiAnalysisSummary).toBeNull();
+  });
+
+  // After approval the summary is part of what the Manager approved on.
+  it('keeps the summary of an approved startup but still refreshes RAG', async () => {
+    const { service, proposal, aiService } = buildForEdit(
+      QualificationStatus.QUALIFIED,
+    );
+
+    await service.updateCapsuleProposalFields(42, realProposal);
+
+    expect(proposal.aiAnalysisSummary).toBe('Old summary.');
+    expect(aiService.refreshRagContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('changes nothing on a save that edits nothing', async () => {
+    const { service, proposal, aiService } = buildForEdit(
+      QualificationStatus.PENDING,
+    );
+
+    await service.updateCapsuleProposalFields(42, { title: 'PondSense' });
+
+    expect(proposal.aiAnalysisSummary).toBe('Old summary.');
+    expect(aiService.refreshRagContext).not.toHaveBeenCalled();
+  });
+
+  it('saves the proposal even when the RAG refresh fails', async () => {
+    const { service, proposal, aiService } = buildForEdit(
+      QualificationStatus.PENDING,
+    );
+    aiService.refreshRagContext.mockRejectedValue(new Error('embedding down'));
+
+    await expect(
+      service.updateCapsuleProposalFields(42, realProposal),
+    ).resolves.toBe(proposal);
+    expect(proposal.description).toBe(realProposal.description);
+  });
+
+  it('clears the summary when a waitlisted startup reapplies', async () => {
+    const { service, startup, proposal, aiService } = buildForEdit(
+      QualificationStatus.WAITLISTED,
+    );
+
+    await service.updateCapsuleProposal(42, { ...dto, ...realProposal });
+
+    expect(startup.qualificationStatus).toBe(QualificationStatus.PENDING);
+    expect(proposal.aiAnalysisSummary).toBeNull();
+    expect(aiService.refreshRagContext).toHaveBeenCalledTimes(1);
+  });
+});
+
 /**
  * Objective 3a. `parseCapsuleProposal` computes two transcriptions — Tesseract's
  * and Gemini Vision's `raw_transcription` — and stores one of them on the

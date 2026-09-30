@@ -86,12 +86,25 @@ export const actions: Actions = {
       }
       data = await response.json();
     } else {
+      const text = (key: string) => String(formData.get(key) ?? '').trim();
+      // No placeholder fallback: "Pending AI Generation" in every field was
+      // saved as the proposal a Manager reviews.
+      const proposal = {
+        title: text('title') || text('startup_name'),
+        description: text('startupDescription'),
+        problemStatement: text('problemStatement'),
+        targetMarket: text('targetMarket'),
+        solutionDescription: text('solutionDescription')
+      };
+      if (Object.values(proposal).some((value) => !value)) {
+        return fail(400, {
+          error:
+            'Add your capsule proposal before submitting: upload it, or type in its title, description, problem statement, target market and solution.'
+        });
+      }
+
       const createPayload = {
-        title: formData.get('title') || formData.get('startup_name'),
-        description: formData.get('startupDescription') || 'Pending AI Generation',
-        problemStatement: formData.get('problemStatement') || 'Pending AI Generation',
-        targetMarket: formData.get('targetMarket') || 'Pending AI Generation',
-        solutionDescription: formData.get('solutionDescription') || 'Pending AI Generation',
+        ...proposal,
         objectives: formData.get('objectives') ? (formData.get('objectives') as string).split('\n').filter(o => o.trim()) : [],
         proposalScope: formData.get('scope') || '',
         methodology: formData.get('methodology') || '',

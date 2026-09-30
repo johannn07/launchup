@@ -223,26 +223,9 @@ export class StartupService {
       await this.createStartupProposal(startup, dto);
 
       if (startup.capsuleProposal) {
-        await this.aiService.recordRagContext({
-          startupId: startup.id,
-          sourceType: 'capsule_proposal',
-          title: startup.capsuleProposal.title,
-          content: [
-            startup.capsuleProposal.description,
-            startup.capsuleProposal.problemStatement,
-            startup.capsuleProposal.targetMarket,
-            startup.capsuleProposal.solutionDescription,
-            startup.capsuleProposal.scope,
-            startup.capsuleProposal.methodology,
-          ]
-            .filter(Boolean)
-            .join(' '),
-          metadata: {
-            project: startup.name,
-            objectives: startup.capsuleProposal.objectives,
-          },
-          confidence: 1,
-        });
+        await this.aiService.recordRagContext(
+          this.capsuleRagInput(startup, startup.capsuleProposal),
+        );
       }
 
       return startup;
@@ -1590,7 +1573,7 @@ export class StartupService {
     // Editing the proposal is a reapplication, so it re-enters review.
     startup.qualificationStatus = QualificationStatus.PENDING;
 
-    await this.em.flush();
+    await this.afterProposalEdit(startup, proposal);
 
     return startup;
   }
@@ -1641,6 +1624,7 @@ export class StartupService {
     }
 
     const proposal = startup.capsuleProposal;
+    const before = this.proposalText(proposal);
 
     if (dto.title !== undefined) proposal.title = dto.title;
     if (dto.description !== undefined) proposal.description = dto.description;
@@ -1659,7 +1643,74 @@ export class StartupService {
     if (dto.scope !== undefined) proposal.scope = dto.scope;
     if (dto.methodology !== undefined) proposal.methodology = dto.methodology;
 
-    await this.em.flush();
+    if (this.proposalText(proposal) === before) {
+      await this.em.flush();
+      return proposal;
+    }
+    await this.afterProposalEdit(startup, proposal);
     return proposal;
+  }
+
+  /**
+   * The summary and the RAG row both describe the proposal text, so an edit
+   * leaves both stale. The summary is cleared only while the application is
+   * under review; after approval it is part of what the Manager approved on.
+   *
+   * Not regenerated here: a founder saving repeatedly would spend a Gemini
+   * call per save against a 20-a-day quota. The Manager generates it once.
+   */
+  private async afterProposalEdit(startup: Startup, proposal: CapsuleProposal) {
+    if (
+      startup.qualificationStatus === QualificationStatus.PENDING ||
+      startup.qualificationStatus === QualificationStatus.WAITLISTED
+    ) {
+      proposal.aiAnalysisSummary = null;
+    }
+    await this.em.flush();
+
+    // Retrieval bookkeeping must not fail the founder's save.
+    try {
+      await this.aiService.refreshRagContext(
+        this.capsuleRagInput(startup, proposal),
+      );
+    } catch (err) {
+      console.error(
+        `Failed to refresh the RAG context for startup ${startup.id}; peer retrieval still sees the old proposal text.`,
+        err,
+      );
+    }
+  }
+
+  private proposalText(proposal: CapsuleProposal): string {
+    return JSON.stringify([
+      proposal.title,
+      proposal.description,
+      proposal.problemStatement,
+      proposal.targetMarket,
+      proposal.solutionDescription,
+      proposal.objectives,
+      proposal.scope,
+      proposal.methodology,
+    ]);
+  }
+
+  private capsuleRagInput(startup: Startup, proposal: CapsuleProposal) {
+    return {
+      startupId: startup.id,
+      sourceType: 'capsule_proposal',
+      title: proposal.title,
+      content: [
+        proposal.description,
+        proposal.problemStatement,
+        proposal.targetMarket,
+        proposal.solutionDescription,
+        proposal.scope,
+        proposal.methodology,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      metadata: { project: startup.name, objectives: proposal.objectives },
+      confidence: 1,
+    };
   }
 }

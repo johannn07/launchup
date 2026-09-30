@@ -110,6 +110,7 @@
 
   let currentActive = 0;
   let currentStep = steps[currentActive];
+  let detailsComplete = false;
 
   let formData = {
     dataPrivacy: startup?.dataPrivacy ?? false,
@@ -274,7 +275,13 @@
       {toggleEligibility}
       eligibility={formData.eligibility}
     />
-    <ProjectDetails stepName="project-details" {currentStep} {access} {startup} />
+    <ProjectDetails
+      stepName="project-details"
+      {currentStep}
+      {access}
+      {startup}
+      bind:detailsComplete
+    />
     <GroupInformation stepName="group-information" {currentStep} {access} {startup} />
     {#if doneFetching && data}
       <Technology stepName="technology" {currentStep} question={data.technologyQuestions} {startup} />
@@ -323,7 +330,7 @@
           ? true
           : currentActive == 1 && !formData.eligibility
             ? true
-            : false}
+            : currentStep === 'project-details' && !detailsComplete}
       >
         Next
         <ChevronRight class="h-4 w-4" />

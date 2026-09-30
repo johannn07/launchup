@@ -8,6 +8,9 @@
   let files: any;
   export let access: string;
   export let startup: any = null;
+  // Bound by Application.svelte to gate Next: without it an empty proposal
+  // was saved as "Pending AI Generation" in every field.
+  export let detailsComplete = false;
   let processing = false;
   let information: {
     title: string;
@@ -23,6 +26,8 @@
     legibilityReason?: string | null;
     sketchDetected?: boolean;
     sketchConfidence?: number;
+    // Typed by the founder rather than extracted, so no confidence badges.
+    manual?: boolean;
   };
 
   const reviewFields = [
@@ -98,11 +103,15 @@
           sketchConfidence: data.sketchConfidence || 0,
         };
       } else {
-        toast.error(data.message || 'Failed to process document. Please try again.');
+        toast.error(
+          `${data.message || 'Failed to process document.'} You can type the proposal in instead.`
+        );
         resetUpload();
       }
     } catch (err) {
-      toast.error('Network error occurred while processing document.');
+      toast.error(
+        'Network error occurred while processing document. You can type the proposal in instead.'
+      );
       resetUpload();
     } finally {
       processing = false;
@@ -113,6 +122,37 @@
     files = null;
     information = undefined as never;
   }
+
+  // The fallback when the AI can't extract the file: no model call needed.
+  function typeInstead() {
+    files = null;
+    information = {
+      title: '',
+      startup_description: '',
+      problem_statement: '',
+      target_market: '',
+      solution_description: '',
+      objectives: '',
+      scope: '',
+      methodology: '',
+      manual: true
+    };
+  }
+
+  // What the backend DTO requires; objectives, scope and methodology may be blank.
+  const requiredKeys = [
+    'title',
+    'startup_description',
+    'problem_statement',
+    'target_market',
+    'solution_description'
+  ] as const;
+
+  $: detailsComplete =
+    !!formData.name.trim() &&
+    !!information &&
+    information.legibilityStatus !== 'failed' &&
+    requiredKeys.every((key) => !!information[key]?.trim());
 
   // No green, and no "Verified". Measured 2026-09-05: at the shipped threshold
   // 18 of 26 invented fields cleared it, so a high support ratio cannot claim
@@ -175,8 +215,13 @@
     </div>
 
     <div class="grid gap-2">
-      <Label class="text-sm font-semibold text-slate-700 dark:text-white/70">Capsule proposal <span class="text-red-500">*</span></Label>
-      <p class="text-xs text-slate-500 dark:text-white/40">Upload a typed PDF or an image of a handwritten/annotated canvas document.</p>
+      <Label class="text-sm font-semibold text-slate-700 dark:text-white/70"
+        >Capsule proposal <span class="text-red-500">*</span></Label
+      >
+      <p class="text-xs text-slate-500 dark:text-white/40">
+        Upload a typed PDF or an image of a handwritten/annotated canvas
+        document, or type it in.
+      </p>
       <label
         for="capsuleProposal"
         class="flex h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200/70 bg-slate-50/40 transition-all duration-200 hover:border-[#6366f1]/40 hover:bg-[#6366f1]/5 dark:border-white/10 dark:bg-white/5 dark:hover:border-[#6366f1]/30"
@@ -213,14 +258,31 @@
         accept=".pdf,.jpg,.jpeg,.png"
         bind:files
       />
+      {#if !information && !processing}
+        <button
+          type="button"
+          class="justify-self-start text-sm font-semibold text-[#4f46e5] hover:underline dark:text-[#a5b4fc]"
+          onclick={typeInstead}
+        >
+          Can't upload it? Type the proposal in instead
+        </button>
+      {/if}
     </div>
 
     {#if information}
       <div class="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-white/40">OCR review</p>
-            <h3 class="mt-1 text-lg font-bold text-slate-900 dark:text-white">Review the extracted proposal before continuing</h3>
+            <p
+              class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-white/40"
+            >
+              {information.manual ? 'Capsule proposal' : 'OCR review'}
+            </p>
+            <h3 class="mt-1 text-lg font-bold text-slate-900 dark:text-white">
+              {information.manual
+                ? 'Type your capsule proposal'
+                : 'Review the extracted proposal before continuing'}
+            </h3>
             {#if information.legibilityStatus === 'failed'}
               <p class="mt-2 max-w-2xl text-sm leading-6 text-rose-700 dark:text-rose-300">
                 The image quality check failed{information.legibilityReason ? `: ${information.legibilityReason}` : '.'} Re-upload a clearer image or switch to a PDF.
@@ -237,7 +299,7 @@
             class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-[#6366f1]/30 hover:text-[#4f46e5] dark:border-white/10 dark:text-white/70"
             onclick={resetUpload}
           >
-            Re-upload file
+            {information.manual ? 'Upload a file instead' : 'Re-upload file'}
           </button>
         </div>
 
@@ -254,17 +316,26 @@
                     placeholder="No text extracted yet"
                   ></textarea>
                 </div>
-                <span
-                  class={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${getConfidenceTone(field.key)}`}
-                  title={getConfidenceHint(field.key)}
-                >
-                  {getConfidenceLabel(field.key)}
-                </span>
+                {#if !information.manual}
+                  <span
+                    class={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${getConfidenceTone(field.key)}`}
+                    title={getConfidenceHint(field.key)}
+                  >
+                    {getConfidenceLabel(field.key)}
+                  </span>
+                {/if}
               </div>
             </div>
           {/each}
         </div>
       </div>
+    {/if}
+
+    {#if !detailsComplete && !processing}
+      <p class="text-sm text-slate-500 dark:text-white/50">
+        To continue, add a startup name and the proposal's title, description,
+        problem statement, target market and solution.
+      </p>
     {/if}
 
     {#if information}
