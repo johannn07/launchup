@@ -1,16 +1,23 @@
 import { RnaController } from './rna.controller';
 import { Role } from '../entities/enums/role.enum';
+import { StartupService } from '../startup/startup.service';
 
 // `track` wraps the service call, so invoking the callback is what lets these
 // tests observe what the controller forwarded to RnaService.
 function buildController() {
-  const rnaService = { generateRNA: jest.fn().mockResolvedValue([]) };
+  const rnaService = { 
+    generateRNA: jest.fn().mockResolvedValue([]),
+    findOneWithStartup: jest.fn().mockResolvedValue({ startup: { id: 1 } }),
+  };
   const aiRunService = {
     track: jest.fn((_id, _kind, _cfg, _priv, fn) =>
       fn({ run: {}, config: {} }),
     ),
   };
-  const controller = new RnaController(rnaService as any, aiRunService as any);
+  const startupService = {
+    assertCanAccessStartup: jest.fn().mockResolvedValue(undefined),
+  };
+  const controller = new RnaController(rnaService as any, aiRunService as any, startupService as any);
   return { controller, rnaService };
 }
 

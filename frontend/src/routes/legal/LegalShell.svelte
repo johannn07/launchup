@@ -82,11 +82,11 @@
 >
   <div
     aria-hidden="true"
-    class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,#07111f_0%,#0b1220_45%,#050816_100%)]"
+    class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,var(--lu-navy)_0%,var(--lu-navy-2)_45%,var(--lu-ink)_100%)]"
   ></div>
 
   <header
-    class="sticky top-0 z-40 border-b border-[#17213a]/70 bg-[#07111f]/85 backdrop-blur-lg"
+    class="sticky top-0 z-40 border-b border-[var(--lu-line)]/70 bg-[var(--lu-navy)]/85 backdrop-blur-lg"
   >
     <div class="mx-auto flex h-16 w-[min(62rem,90vw)] items-center">
       <BrandMark />
@@ -112,14 +112,14 @@
         >
           {title}
         </h1>
-        <p class="mt-3 max-w-[36rem] text-[16px] leading-[1.65] text-[#94a3b8]">
+        <p class="mt-3 max-w-[36rem] text-[16px] leading-[1.65] text-[var(--lu-mute)]">
           {summary}
         </p>
 
         <p
-          class="lu-num mt-5 inline-flex items-center rounded-full border border-[#1f2c47] bg-[#0b1220] px-3 py-1 text-[13px] text-[#94a3b8]"
+          class="lu-num mt-5 inline-flex items-center rounded-full border border-[var(--lu-line-2)] bg-[var(--lu-navy-2)] px-3 py-1 text-[13px] text-[var(--lu-mute)]"
         >
-          Last updated&nbsp;<time datetime={lastUpdated} class="text-[#f1f5f9]"
+          Last updated&nbsp;<time datetime={lastUpdated} class="text-[var(--lu-cloud)]"
             >{formatted}</time
           >
         </p>
@@ -137,7 +137,7 @@
         <!-- Below lg the rail has nowhere to sit, so it becomes a block here. -->
         {#if sections.length}
           <nav
-            class="lu-toc mt-9 max-w-[36rem] rounded-[1rem] border border-[#1f2c47] bg-[#0b1220]/60 p-5 lg:hidden"
+            class="lu-toc mt-9 max-w-[36rem] rounded-[1rem] border border-[var(--lu-line-2)] bg-[var(--lu-navy-2)]/60 p-5 lg:hidden"
             aria-label="On this page"
           >
             <p class="lu-d-md mb-3 text-[13.5px] text-white">On this page</p>
@@ -155,7 +155,7 @@
                     onclick={() => jump(s.id)}
                     aria-current={activeId === s.id ? 'true' : undefined}
                   >
-                    <span class="lu-num text-[#818cf8]">{i + 1}.</span>
+                    <span class="lu-num text-[var(--lu-indigo-lite)]">{i + 1}.</span>
                     {s.text}
                   </a>
                 </li>
@@ -198,7 +198,7 @@
                     onclick={() => jump(s.id)}
                     aria-current={activeId === s.id ? 'true' : undefined}
                   >
-                    <span class="lu-num text-[#818cf8]">{i + 1}.</span>
+                    <span class="lu-num text-[var(--lu-indigo-lite)]">{i + 1}.</span>
                     {s.text}
                   </a>
                 </li>
@@ -210,18 +210,18 @@
     </div>
   </main>
 
-  <footer class="border-t border-[#17213a]/70">
+  <footer class="border-t border-[var(--lu-line)]/70">
     <div
       class="mx-auto flex w-[min(62rem,90vw)] items-center justify-between gap-3 py-6"
     >
-      <p class="lu-num text-[13px] text-[#94a3b8]">
+      <p class="lu-num text-[13px] text-[var(--lu-mute)]">
         © {new Date().getFullYear()} LaunchUp
       </p>
-      <nav class="flex gap-5 text-[13px] text-[#94a3b8]" aria-label="Footer">
-        <a href="/#howitwork" class="transition-colors hover:text-[#818cf8]"
+      <nav class="flex gap-5 text-[13px] text-[var(--lu-mute)]" aria-label="Footer">
+        <a href="/#howitwork" class="transition-colors hover:text-[var(--lu-indigo-lite)]"
           >How it Works</a
         >
-        <a href="/#aboutus" class="transition-colors hover:text-[#818cf8]"
+        <a href="/#aboutus" class="transition-colors hover:text-[var(--lu-indigo-lite)]"
           >About LaunchUp</a
         >
       </nav>

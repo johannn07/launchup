@@ -17,10 +17,10 @@
 >
   <div
     aria-hidden="true"
-    class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,#07111f_0%,#0b1220_45%,#050816_100%)]"
+    class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,var(--lu-navy)_0%,var(--lu-navy-2)_45%,var(--lu-ink)_100%)]"
   ></div>
 
-  <header class="border-b border-[#17213a]/70">
+  <header class="border-b border-[var(--lu-line)]/70">
     <div class="mx-auto flex h-16 w-[min(74rem,92vw)] items-center">
       <BrandMark />
       <a
@@ -43,16 +43,16 @@
             Readiness dashboard
           </h1>
           <p
-            class="mt-2.5 max-w-[56ch] text-[15px] leading-[1.6] text-[#94a3b8]"
+            class="mt-2.5 max-w-[56ch] text-[15px] leading-[1.6] text-[var(--lu-mute)]"
           >
             A weighted view across six dimensions, so the gap that costs you the
             most is the one you see first.
           </p>
         </div>
         <p
-          class="lu-num rounded-full border border-[#1f2c47] bg-[#0b1220] px-3 py-1 text-[13px] text-[#94a3b8]"
+          class="lu-num rounded-full border border-[var(--lu-line-2)] bg-[var(--lu-navy-2)] px-3 py-1 text-[13px] text-[var(--lu-mute)]"
         >
-          Startup&nbsp;<span class="text-[#f1f5f9]">#1</span>
+          Startup&nbsp;<span class="text-[var(--lu-cloud)]">#1</span>
         </p>
       </div>
 

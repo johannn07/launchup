@@ -151,6 +151,18 @@ export class InitiativeService {
     return { message: 'Initiative deleted successfully' };
   }
 
+  async findOneWithStartup(id: number) {
+    const initiative = await this.em.findOne(Initiative, { id }, { populate: ['startup'] });
+    if (!initiative) throw new NotFoundException(`Initiative with ID ${id} not found`);
+    return initiative;
+  }
+
+  async getRnsWithStartup(rnsId: number) {
+    const rns = await this.em.findOne(Rns, { id: rnsId }, { populate: ['startup'] });
+    if (!rns) throw new NotFoundException(`RNS with ID ${rnsId} not found`);
+    return rns;
+  }
+
   async generateInitiatives(dto: GenerateInitiativeDto, ctx: AiRunContext) {
     const debugPrompts: string[] = [];
     if (dto.rnsIds && dto.rnsIds.length > 0) {

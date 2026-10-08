@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LaunchUp Enhanced</title>
+<meta name="description" content="LaunchUp Enhanced gives founders a sharper application journey, a clearer readiness signal, and a calmer path from first impression to funding conversation." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Public+Sans:wght@300..800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        /* Existing navy base — unchanged */
+        ink:     '#050816',
+        navy:    '#07111f',
+        navy2:   '#0b1220',
+        navy3:   '#111b2e',
+        line:    '#17213a',
+        line2:   '#1f2c47',
+        stepnum: '#54648a',
+        /* Existing indigo brand — unchanged values, assigned by contrast role */
+        indigo:  '#6366f1',
+        indigoDeep: '#4f46e5',
+        indigoDark: '#4338ca',
+        indigoLite: '#818cf8',
+        sky:     '#0ea5e9',
+        /* Single added state colour, used only for readiness gap flags */
+        flag:    '#fbbf24',
+        /* Text */
+        cloud:   '#f1f5f9',
+        mute:    '#94a3b8'
+      },
+      fontFamily: {
+        display: ['Archivo', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body:    ['"Public Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif']
+      },
+      maxWidth: { shell: '72rem' }
+    }
+  }
+}
+</script>
+<style>
+  :root { --ease: cubic-bezier(.2,.7,.3,1); }
+  html { scroll-behavior: smooth; }
+  body { background:#07111f; color:#f1f5f9; font-family:'Public Sans',sans-serif; -webkit-font-smoothing:antialiased; }
+
+  /* Typography carried forward unchanged: Archivo display / Public Sans body */
+  .d    { font-family:'Archivo',sans-serif; font-variation-settings:'wdth' 112,'wght' 700; letter-spacing:-.021em; }
+  .d-xw { font-family:'Archivo',sans-serif; font-variation-settings:'wdth' 118,'wght' 800; letter-spacing:-.028em; }
+  .d-md { font-family:'Archivo',sans-serif; font-variation-settings:'wdth' 108,'wght' 600; letter-spacing:-.012em; }
+  .num  { font-variant-numeric: tabular-nums lining-nums; }
+
+  /* ---------- ONE button system. Pill shape kept from the existing brand. ---------- */
+  .btn { position:relative; display:inline-flex; align-items:center; justify-content:center; gap:.5rem;
+         height:44px; padding:0 22px; border-radius:999px; font-size:15px; font-weight:650;
+         border:1px solid transparent; white-space:nowrap;
+         transition:background-color .18s var(--ease), border-color .18s var(--ease),
+                    color .18s var(--ease), box-shadow .18s var(--ease), transform .08s var(--ease); }
+  .btn:active { transform:translateY(1px); }
+  .btn:focus-visible { outline:2px solid #818cf8; outline-offset:3px; }
+
+  .btn-primary { background:#4f46e5; color:#ffffff; }
+  .btn-primary:hover { background:#4338ca; box-shadow:0 0 0 4px rgba(99,102,241,.22); }
+
+  .btn-secondary { background:transparent; color:#c7d2fe; border-color:#1f2c47; }
+  .btn-secondary:hover { border-color:#4f46e5; color:#ffffff; background:rgba(99,102,241,.10); }
+
+  .btn-sm { height:38px; padding:0 18px; font-size:14px; }
+
+  /* CTA arrow nudges on hover — the only decorative motion kept, and it is on the control itself */
+  .btn .arw { transition:transform .18s var(--ease); }
+  .btn:hover .arw { transform:translateX(3px); }
+
+  /* ---------- Reveals: opacity + 8px, fire once ---------- */
+  .rv { opacity:0; transform:translateY(8px); transition:opacity .5s var(--ease), transform .5s var(--ease); }
+  .rv.in { opacity:1; transform:none; }
+  .rv-1 { transition-delay:.06s } .rv-2 { transition-delay:.12s } .rv-3 { transition-delay:.18s }
+
+  /* ---------- Readiness meter (hero product evidence) ---------- */
+  .meter > i { display:block; height:100%; width:0; border-radius:999px;
+               transition:width .9s var(--ease); }
+
+  .chip { display:inline-flex; align-items:center; gap:.5rem; border-radius:999px;
+          border:1px solid #1f2c47; background:#0b1220; padding:.5rem 1rem;
+          font-size:13.5px; font-weight:600; color:#94a3b8; }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior:auto; }
+    *, *::before, *::after { transition-duration:.001ms !important; animation-duration:.001ms !important; }
+    .rv { opacity:1; transform:none; }
+  }
+</style>
+</head>
+<body class="font-body antialiased">
+
+<a href="#hero" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-indigoDeep focus:px-5 focus:py-3 focus:text-white">Skip to content</a>
+
+<!-- Static base wash + dot grid, carried over from the existing landing. Nothing here animates. -->
+<div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10
+     bg-[radial-gradient(circle_at_top_left,rgba(99,102,241,.20),transparent_32%),radial-gradient(circle_at_top_right,rgba(14,165,233,.14),transparent_28%),linear-gradient(to_bottom,#07111f_0%,#0b1220_28%,#050816_100%)]"></div>
+<div aria-hidden="true" class="pointer-events-none fixed inset-0 -z-10
+     bg-[radial-gradient(#17213a_1px,transparent_1px)] [background-size:2.5rem_2.5rem]
+     [mask-image:radial-gradient(ellipse_90%_50%_at_50%_0%,#000_60%,transparent_100%)]"></div>
+
+<!-- ============================ HEADER (locked) ============================ -->
+<header class="sticky top-0 z-40 border-b border-line/70 bg-navy/80 backdrop-blur-lg">
+  <div class="mx-auto flex h-16 max-w-shell items-center px-5 sm:px-8">
+    <a href="#hero" class="flex items-center gap-2">
+      <svg class="h-4 w-4 -rotate-12 text-indigo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z"/>
+        <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+      </svg>
+      <span class="d-xw text-xl text-white">LaunchUp</span>
+    </a>
+
+    <nav class="ml-auto hidden items-center gap-7 text-[15px] font-medium md:flex" aria-label="Primary">
+      <a href="#hero" class="text-cloud transition-colors hover:text-indigoLite">Home</a>
+      <a href="#howitwork" class="text-mute transition-colors hover:text-indigoLite">How it Works</a>
+      <a href="#aboutus" class="text-mute transition-colors hover:text-indigoLite">About Us</a>
+      <a href="#footer" class="text-mute transition-colors hover:text-indigoLite">Login</a>
+    </nav>
+
+    <a href="#start" class="btn btn-primary btn-sm ml-auto md:ml-7">Get Started</a>
+  </div>
+</header>
+
+<main>
+
+<!-- ================================ HERO ================================ -->
+<section id="hero" class="scroll-mt-16">
+  <div class="mx-auto grid max-w-shell items-center gap-12 px-5 pb-20 pt-14 sm:px-8 sm:pb-24 sm:pt-20 lg:grid-cols-[1.02fr_.98fr] lg:gap-14">
+
+    <!-- Left column: existing hero copy, unchanged -->
+    <div>
+      <p class="chip rv">
+        <svg class="h-4 w-4 text-indigo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/>
+        </svg>
+        Precision for founders who need clarity fast
+      </p>
+
+      <h1 class="d-xw rv rv-1 mt-6 text-[38px] leading-[1.02] text-white sm:text-[50px] lg:text-[56px]">
+        A better way to launch, judge, and grow serious startups.
+      </h1>
+
+      <p class="rv rv-2 mt-6 max-w-[54ch] text-[17px] leading-[1.7] text-mute">
+        LaunchUp Enhanced gives founders a sharper application journey, a clearer readiness
+        signal, and a calmer path from first impression to funding conversation.
+      </p>
+
+      <div class="rv rv-3 mt-8 flex flex-wrap items-center gap-3">
+        <a href="#start" class="btn btn-primary">
+          Get Started
+          <svg class="arw h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a href="#howitwork" class="btn btn-secondary">See the flow</a>
+      </div>
+
+      <dl class="rv rv-3 mt-10 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-line2 bg-navy2 p-4">
+          <dt class="text-[12.5px] font-semibold text-indigoLite">AI grounded</dt>
+          <dd class="d mt-1.5 text-[19px] text-white">Less noise</dd>
+        </div>
+        <div class="rounded-2xl border border-line2 bg-navy2 p-4">
+          <dt class="text-[12.5px] font-semibold text-indigoLite">Readiness</dt>
+          <dd class="d mt-1.5 text-[19px] text-white">Sharper signal</dd>
+        </div>
+        <div class="rounded-2xl border border-line2 bg-navy2 p-4">
+          <dt class="text-[12.5px] font-semibold text-indigoLite">Outcome</dt>
+          <dd class="d mt-1.5 text-[19px] text-white">Better decisions</dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Right column: real product evidence, replacing the isometric illustration -->
+    <div class="rv rv-2">
+      <div id="panel" class="overflow-hidden rounded-[1.75rem] border border-line2 bg-navy2">
+
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4 sm:px-6">
+          <div>
+            <p class="d-md text-[15px] text-white">Readiness assessment</p>
+            <p class="num mt-0.5 text-[12.5px] text-mute">Northwind Grid, application 4182</p>
+          </div>
+          <span class="rounded-full border border-line2 px-2.5 py-1 text-[11px] font-semibold text-mute">Sample</span>
+        </div>
+
+        <!-- composite -->
+        <div class="flex items-end justify-between gap-6 border-b border-line px-5 py-5 sm:px-6">
+          <div>
+            <p class="text-[12.5px] font-semibold text-indigoLite">Composite readiness level</p>
+            <p class="d-xw num mt-1 text-[42px] leading-none text-white">
+              <span id="composite">0.0</span><span class="text-[20px] text-mute"> / 9</span>
+            </p>
+          </div>
+          <p class="inline-flex items-center gap-1.5 rounded-full border border-flag/30 bg-flag/10 px-3 py-1.5 text-[12.5px] font-semibold text-flag">
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>
+            2 gaps found
+          </p>
+        </div>
+
+        <!-- six scales -->
+        <div id="scales" class="divide-y divide-line"></div>
+
+        <div class="border-t border-line bg-navy3 px-5 py-4 sm:px-6">
+          <p class="text-[12.5px] leading-[1.6] text-mute">
+            Each level cites the passage in the application behind it. Gaps are returned
+            where no passage supports a score.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div class="mx-auto h-px w-[min(72rem,86vw)] bg-gradient-to-r from-transparent via-indigo/60 to-transparent"></div>
+
+<!-- ============================= HOW IT WORKS ============================= -->
+<section id="howitwork" class="scroll-mt-16">
+  <div class="mx-auto max-w-shell px-5 py-24 sm:px-8">
+
+    <div class="grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-end">
+      <div class="rv max-w-xl">
+        <p class="chip">
+          <svg class="h-4 w-4 text-indigo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg>
+          Designed to reduce friction
+        </p>
+        <h2 class="d-xw mt-6 text-[32px] leading-[1.08] text-white sm:text-[42px]">
+          How it works should feel obvious, not administrative.
+        </h2>
+        <p class="mt-5 max-w-[56ch] text-[17px] leading-[1.7] text-mute">
+          LaunchUp turns the startup review journey into a clear sequence with enough
+          structure to trust and enough warmth to feel human.
+        </p>
+      </div>
+      <div class="rv flex lg:justify-end">
+        <a href="#start" class="btn btn-secondary">
+          Get started
+          <svg class="arw h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <ol class="mt-12 grid gap-5 lg:grid-cols-3">
+
+      <li class="rv rv-1 group relative overflow-hidden rounded-[1.75rem] border border-line2 bg-navy2 p-7 transition-colors duration-300 hover:border-indigo/45">
+        <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo/60 to-transparent"></div>
+        <div class="flex items-center justify-between">
+          <p class="d-xw num text-[44px] leading-none text-stepnum transition-colors duration-300 group-hover:text-indigoLite">01</p>
+          <span class="flex h-10 w-10 items-center justify-center rounded-full border border-line2 bg-navy3 text-mute transition-colors duration-300 group-hover:border-indigo/40 group-hover:text-indigoLite">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/></svg>
+          </span>
+        </div>
+        <h3 class="d mt-7 text-[22px] text-white">Application</h3>
+        <p class="mt-3.5 text-[15.5px] leading-[1.65] text-mute">
+          Start by submitting your startup application to LaunchUp for evaluation and confirmation.
+        </p>
+      </li>
+
+      <li class="rv rv-2 group relative overflow-hidden rounded-[1.75rem] border border-line2 bg-navy2 p-7 transition-colors duration-300 hover:border-indigo/45">
+        <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo/60 to-transparent"></div>
+        <div class="flex items-center justify-between">
+          <p class="d-xw num text-[44px] leading-none text-stepnum transition-colors duration-300 group-hover:text-indigoLite">02</p>
+          <span class="flex h-10 w-10 items-center justify-center rounded-full border border-line2 bg-navy3 text-mute transition-colors duration-300 group-hover:border-indigo/40 group-hover:text-indigoLite">
+            <svg class="h-4 w-4 -rotate-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+          </span>
+        </div>
+        <h3 class="d mt-7 text-[22px] text-white">Incubation and Acceleration</h3>
+        <p class="mt-3.5 text-[15.5px] leading-[1.65] text-mute">
+          Accepted startups enter the program, gaining mentorship and resources to nurture
+          their concepts towards success.
+        </p>
+      </li>
+
+      <li class="rv rv-3 group relative overflow-hidden rounded-[1.75rem] border border-line2 bg-navy2 p-7 transition-colors duration-300 hover:border-indigo/45">
+        <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-indigo/60 to-transparent"></div>
+        <div class="flex items-center justify-between">
+          <p class="d-xw num text-[44px] leading-none text-stepnum transition-colors duration-300 group-hover:text-indigoLite">03</p>
+          <span class="flex h-10 w-10 items-center justify-center rounded-full border border-line2 bg-navy3 text-mute transition-colors duration-300 group-hover:border-indigo/40 group-hover:text-indigoLite">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 7h6v6"/><path d="M22 7l-8.5 8.5-5-5L2 17"/></svg>
+          </span>
+        </div>
+        <h3 class="d mt-7 text-[22px] text-white">Investment-Ready</h3>
+        <p class="mt-3.5 text-[15.5px] leading-[1.65] text-mute">
+          Incubation and acceleration make your startup investment-ready, benefiting your
+          business and the startup ecosystem.
+        </p>
+      </li>
+
+    </ol>
+  </div>
+</section>
+
+<div class="mx-auto h-px w-[min(72rem,86vw)] bg-gradient-to-r from-transparent via-indigo/60 to-transparent"></div>
+
+<!-- ============================= SOCIAL PROOF ============================= -->
+<section id="proof" class="scroll-mt-16">
+  <div class="mx-auto max-w-shell px-5 py-24 sm:px-8">
+
+    <p class="rv mb-9 inline-block rounded-full border border-line2 px-3 py-1 text-[12px] font-semibold text-mute">
+      Placeholder content &mdash; partners, figures and quote are illustrative
+    </p>
+
+    <ul class="rv flex flex-wrap items-center gap-x-9 gap-y-4 border-y border-line py-6">
+      <li class="d-md text-[16px] text-mute">Meridian Ventures</li>
+      <li class="d-md text-[16px] text-mute">Batangas Innovation Hub</li>
+      <li class="d-md text-[16px] text-mute">Northgate Capital</li>
+      <li class="d-md text-[16px] text-mute">Cordillera Seed</li>
+      <li class="d-md text-[16px] text-mute">DOST Region&nbsp;IV</li>
+    </ul>
+
+    <div class="mt-14 grid gap-12 lg:grid-cols-[1.05fr_.95fr] lg:gap-16">
+
+      <dl class="rv rv-1 num grid gap-5 sm:grid-cols-3">
+        <div class="rounded-2xl border border-line2 bg-navy2 p-6">
+          <dd class="d-xw whitespace-nowrap text-[30px] leading-none lg:text-[34px] text-white">12,480</dd>
+          <dt class="mt-2.5 text-[13.5px] font-semibold text-cloud">Applications reviewed</dt>
+          <p class="mt-1 text-[12.5px] text-mute">Since 2024</p>
+        </div>
+        <div class="rounded-2xl border border-line2 bg-navy2 p-6">
+          <dd class="d-xw whitespace-nowrap text-[30px] leading-none lg:text-[34px] text-white">214</dd>
+          <dt class="mt-2.5 text-[13.5px] font-semibold text-cloud">Founders funded</dt>
+          <p class="mt-1 text-[12.5px] text-mute">Through partner funds</p>
+        </div>
+        <div class="rounded-2xl border border-indigo/35 bg-indigo/10 p-6">
+          <dd class="d-xw whitespace-nowrap text-[30px] leading-none lg:text-[34px] text-indigoLite">6 days</dd>
+          <dt class="mt-2.5 text-[13.5px] font-semibold text-cloud">Median time to decision</dt>
+          <p class="mt-1 text-[12.5px] text-mute">Was 31 days in 2023</p>
+        </div>
+      </dl>
+
+      <figure class="rv rv-2 border-l-2 border-indigo pl-6">
+        <blockquote class="text-[18px] leading-[1.6] text-cloud">
+          <p>
+            We scored ourselves at 7 on regulatory. The review put us at 3 and quoted the
+            paragraph where we said we were &ldquo;exploring&rdquo; accreditation. That was
+            annoying on a Tuesday and correct by the following quarter.
+          </p>
+        </blockquote>
+        <figcaption class="mt-5 text-[14px] leading-[1.55]">
+          <span class="d-md block text-white">Ilya Gutierrez</span>
+          <span class="block text-mute">Co-founder, Northwind Grid, cohort 06</span>
+        </figcaption>
+      </figure>
+
+    </div>
+  </div>
+</section>
+
+<div class="mx-auto h-px w-[min(72rem,86vw)] bg-gradient-to-r from-transparent via-indigo/60 to-transparent"></div>
+
+<!-- ================================ ABOUT ================================ -->
+<section id="aboutus" class="scroll-mt-16">
+  <div class="mx-auto grid max-w-shell items-center gap-12 px-5 py-24 sm:px-8 lg:grid-cols-[1fr_.92fr] lg:gap-16">
+
+    <div class="rv">
+      <p class="chip">About the platform</p>
+      <h2 class="d-xw mt-6 text-[32px] leading-[1.08] text-white sm:text-[42px]">About LaunchUp</h2>
+      <p class="mt-5 max-w-[56ch] text-[17.5px] leading-[1.75] text-mute">
+        LaunchUp is a dedicated program designed to support startups on their path to
+        success. It provides essential resources and guidance to innovative entrepreneurs,
+        with a specific focus on incubation and acceleration.
+      </p>
+      <dl class="mt-8 grid gap-3 sm:grid-cols-3">
+        <div class="rounded-2xl border border-line2 bg-navy2 p-4">
+          <dt class="text-[13px] text-mute">Focus</dt>
+          <dd class="d-md mt-1.5 text-[15px] text-white">Founders first</dd>
+        </div>
+        <div class="rounded-2xl border border-line2 bg-navy2 p-4">
+          <dt class="text-[13px] text-mute">Method</dt>
+          <dd class="d-md mt-1.5 text-[15px] text-white">Grounded scoring</dd>
+        </div>
+        <div class="rounded-2xl border border-line2 bg-navy2 p-4">
+          <dt class="text-[13px] text-mute">Outcome</dt>
+          <dd class="d-md mt-1.5 text-[15px] text-white">Clear next steps</dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- Replaces aboutus.svg: what the rubric is built from, which the hero never shows -->
+    <div class="rv rv-1">
+      <div class="overflow-hidden rounded-[1.75rem] border border-line2 bg-navy2">
+        <div class="border-b border-line px-6 py-4">
+          <p class="d-md text-[15px] text-white">What each scale is measured against</p>
+        </div>
+        <ul class="divide-y divide-line text-[14px]">
+          <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+            <span class="font-semibold text-cloud">Technology <span class="num text-[12px] font-medium text-indigoLite">TRL</span></span>
+            <span class="text-right text-mute">EU Horizon Europe, ISO&nbsp;16290</span>
+          </li>
+          <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+            <span class="font-semibold text-cloud">Market <span class="num text-[12px] font-medium text-indigoLite">MRL</span></span>
+            <span class="text-right text-mute">Authored against BRLa (2021)</span>
+          </li>
+          <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+            <span class="font-semibold text-cloud">Acceptance <span class="num text-[12px] font-medium text-indigoLite">ARL</span></span>
+            <span class="text-right text-mute">Authored against BRLa (2021)</span>
+          </li>
+          <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+            <span class="font-semibold text-cloud">Organizational <span class="num text-[12px] font-medium text-indigoLite">ORL</span></span>
+            <span class="text-right text-mute">Authored against BRLa (2021)</span>
+          </li>
+          <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+            <span class="font-semibold text-cloud">Regulatory <span class="num text-[12px] font-medium text-indigoLite">RRL</span></span>
+            <span class="text-right text-mute">Authored against BRLa (2021)</span>
+          </li>
+          <li class="flex items-baseline justify-between gap-4 px-6 py-3.5">
+            <span class="font-semibold text-cloud">Investment <span class="num text-[12px] font-medium text-indigoLite">IRL</span></span>
+            <span class="text-right text-flag">Authored in-house, no external standard</span>
+          </li>
+        </ul>
+        <div class="border-t border-line bg-navy3 px-6 py-4">
+          <p class="text-[12.5px] leading-[1.6] text-mute">
+            Published per scale so a score can be argued with rather than taken on trust.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ================================= CTA ================================= -->
+<section id="start" class="scroll-mt-16 border-y border-line">
+  <div class="mx-auto flex max-w-shell flex-wrap items-center justify-between gap-6 px-5 py-14 sm:px-8">
+    <div class="rv">
+      <h2 class="d-xw max-w-[22ch] text-[26px] leading-[1.12] text-white sm:text-[30px]">
+        Get a readiness signal on your application in six days.
+      </h2>
+      <p class="mt-2.5 text-[15.5px] text-mute">No fee to apply. Applications close 14 November.</p>
+    </div>
+    <div class="rv flex flex-wrap items-center gap-3">
+      <a href="#start" class="btn btn-primary">
+        Get Started
+        <svg class="arw h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+      <a href="#proof" class="btn btn-secondary">See a sample report</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================================ FOOTER ================================ -->
+<footer id="footer" class="scroll-mt-16 bg-ink/60">
+  <div class="mx-auto max-w-shell px-5 py-16 sm:px-8">
+
+    <div class="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+
+      <div>
+        <div class="flex items-center gap-2">
+          <svg class="h-4 w-4 -rotate-12 text-indigo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z"/>
+            <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+            <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+            <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+          </svg>
+          <span class="d-xw text-xl text-white">LaunchUp</span>
+        </div>
+        <p class="mt-3 max-w-[32ch] text-[14.5px] leading-[1.65] text-mute">
+          Fueling startup success &mdash; readiness assessment, incubation and acceleration
+          for early-stage founders.
+        </p>
+        <address class="mt-6 not-italic text-[14.5px] leading-[1.75] text-mute">
+          4F Innovation Center, Ayala&nbsp;Ave.<br />
+          Makati City 1226, Philippines<br />
+          <a href="mailto:hello@launchup.ph" class="mt-1 inline-block text-indigoLite underline decoration-indigo/40 underline-offset-4 transition-colors hover:text-white hover:decoration-white">hello@launchup.ph</a>
+        </address>
+      </div>
+
+      <nav aria-label="Program">
+        <h2 class="d-md text-[14px] text-white">Program</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-mute">
+          <li><a href="#howitwork" class="transition-colors hover:text-indigoLite">Application</a></li>
+          <li><a href="#howitwork" class="transition-colors hover:text-indigoLite">Incubation</a></li>
+          <li><a href="#howitwork" class="transition-colors hover:text-indigoLite">Acceleration</a></li>
+          <li><a href="#proof" class="transition-colors hover:text-indigoLite">Cohorts</a></li>
+          <li><a href="#proof" class="transition-colors hover:text-indigoLite">Partner funds</a></li>
+        </ul>
+      </nav>
+
+      <nav aria-label="Platform">
+        <h2 class="d-md text-[14px] text-white">Platform</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-mute">
+          <li><a href="#aboutus" class="transition-colors hover:text-indigoLite">Readiness scales</a></li>
+          <li><a href="#aboutus" class="transition-colors hover:text-indigoLite">Rubric sources</a></li>
+          <li><a href="#aboutus" class="transition-colors hover:text-indigoLite">Grounded scoring</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-indigoLite">For mentors</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-indigoLite">For partners</a></li>
+        </ul>
+      </nav>
+
+      <nav aria-label="Company">
+        <h2 class="d-md text-[14px] text-white">Company</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-mute">
+          <li><a href="#footer" class="transition-colors hover:text-indigoLite">Login</a></li>
+          <li><a href="#aboutus" class="transition-colors hover:text-indigoLite">About us</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-indigoLite">Careers</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-indigoLite">Press kit</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-indigoLite">Contact</a></li>
+        </ul>
+      </nav>
+
+    </div>
+
+    <div class="mt-14 flex flex-col gap-6 border-t border-line pt-7 sm:flex-row sm:items-center sm:justify-between">
+      <ul class="flex flex-wrap items-center gap-x-6 gap-y-2 text-[13.5px] text-mute">
+        <li><a href="#footer" class="transition-colors hover:text-indigoLite">Privacy notice</a></li>
+        <li><a href="#footer" class="transition-colors hover:text-indigoLite">Terms of service</a></li>
+        <li><a href="#footer" class="transition-colors hover:text-indigoLite">Data processing</a></li>
+        <li><a href="#footer" class="transition-colors hover:text-indigoLite">Accessibility</a></li>
+        <li class="num">&copy; 2026 LaunchUp</li>
+      </ul>
+
+      <ul class="flex items-center gap-2">
+        <li><a href="#footer" aria-label="LaunchUp on LinkedIn" class="flex h-10 w-10 items-center justify-center rounded-full border border-line2 text-mute transition-colors hover:border-indigo/45 hover:text-indigoLite focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigoLite">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.82-2.05 3.75-2.05C20.5 8.65 21 11 21 14.1V21h-4v-6.1c0-1.45-.03-3.3-2-3.3s-2.3 1.57-2.3 3.2V21H9z"/></svg>
+        </a></li>
+        <li><a href="#footer" aria-label="LaunchUp on X" class="flex h-10 w-10 items-center justify-center rounded-full border border-line2 text-mute transition-colors hover:border-indigo/45 hover:text-indigoLite focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigoLite">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.9 2H22l-7.1 8.1L23 22h-6.5l-5.1-6.6L5.5 22H2.4l7.6-8.7L1.6 2h6.7l4.6 6.1zm-1.1 18h1.8L7.3 3.8H5.4z"/></svg>
+        </a></li>
+        <li><a href="#footer" aria-label="LaunchUp on GitHub" class="flex h-10 w-10 items-center justify-center rounded-full border border-line2 text-mute transition-colors hover:border-indigo/45 hover:text-indigoLite focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigoLite">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48l-.01-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85l-.01 2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg>
+        </a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- Hero readiness scales: the one product-tied animation ---- */
+  var SCALES = [
+    { name:'Technology',     code:'TRL', v:6 },
+    { name:'Market',         code:'MRL', v:7 },
+    { name:'Acceptance',     code:'ARL', v:5 },
+    { name:'Organizational', code:'ORL', v:3, gap:'No named operations lead' },
+    { name:'Regulatory',     code:'RRL', v:4, gap:'Accreditation described as "exploring"' },
+    { name:'Investment',     code:'IRL', v:5 }
+  ];
+
+  var wrap = document.getElementById('scales');
+  SCALES.forEach(function (s) {
+    var el = document.createElement('div');
+    el.className = 'px-5 py-3 sm:px-6';
+    el.innerHTML =
+      '<div class="flex items-baseline justify-between gap-4">' +
+        '<p class="text-[14px] font-semibold text-cloud">' + s.name +
+          ' <span class="num text-[12px] font-medium ' + (s.gap ? 'text-flag' : 'text-indigoLite') + '">' + s.code + '</span></p>' +
+        '<p class="num d text-[16px] ' + (s.gap ? 'text-flag' : 'text-white') + '">' + s.v + '</p>' +
+      '</div>' +
+      '<div class="meter mt-2 h-1.5 w-full overflow-hidden rounded-full bg-line" aria-hidden="true">' +
+        '<i style="background:' + (s.gap ? '#fbbf24' : '#6366f1') + '"></i>' +
+      '</div>' +
+      (s.gap ? '<p class="mt-1.5 text-[12.5px] text-flag">' + s.gap + '</p>' : '');
+    wrap.appendChild(el);
+  });
+
+  var bars = wrap.querySelectorAll('.meter > i');
+  var composite = document.getElementById('composite');
+  var target = SCALES.reduce(function (a, s) { return a + s.v; }, 0) / SCALES.length;
+
+  function runPanel() {
+    SCALES.forEach(function (s, i) {
+      var w = (s.v / 9) * 100;
+      if (reduce) { bars[i].style.width = w + '%'; return; }
+      setTimeout(function () { bars[i].style.width = w + '%'; }, 80 + i * 90);
+    });
+
+    if (reduce) { composite.textContent = target.toFixed(1); return; }
+    var t0 = null;
+    requestAnimationFrame(function step(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min((ts - t0) / 1000, 1);
+      composite.textContent = (target * (1 - Math.pow(1 - p, 3))).toFixed(1);
+      if (p < 1) requestAnimationFrame(step);
+    });
+  }
+
+  var panelSeen = false;
+  new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting && !panelSeen) { panelSeen = true; runPanel(); } });
+  }, { threshold: .3 }).observe(document.getElementById('panel'));
+
+  /* ---- Scroll reveals ---- */
+  var obs = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); }
+    });
+  }, { threshold: .1, rootMargin: '0px 0px -40px 0px' });
+  Array.prototype.forEach.call(document.querySelectorAll('.rv'), function (el) { obs.observe(el); });
+
+  /* ---- Nav active state, carried over from the existing header ---- */
+  var ids = ['hero', 'howitwork', 'aboutus'];
+  var links = {};
+  ids.forEach(function (id) { links[id] = document.querySelector('header a[href="#' + id + '"]'); });
+  window.addEventListener('scroll', function () {
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (!el) continue;
+      var r = el.getBoundingClientRect();
+      if (r.top <= 80 && r.bottom >= 80) {
+        ids.forEach(function (id) {
+          if (!links[id]) return;
+          links[id].classList.toggle('text-cloud', id === ids[i]);
+          links[id].classList.toggle('text-mute', id !== ids[i]);
+        });
+        break;
+      }
+    }
+  }, { passive: true });
+})();
+</script>
+</body>
+</html>

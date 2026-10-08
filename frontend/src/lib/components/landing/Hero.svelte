@@ -10,7 +10,7 @@
   >
     <div>
       <p class="lu-chip" use:reveal>
-        <Sparkles class="h-4 w-4 text-[#6366f1]" />
+        <Sparkles class="h-4 w-4 text-[var(--lu-indigo)]" />
         Precision for founders who need clarity fast
       </p>
 
@@ -22,7 +22,7 @@
       </h1>
 
       <p
-        class="mt-6 max-w-[54ch] text-[17px] leading-[1.7] text-[#94a3b8]"
+        class="mt-6 max-w-[54ch] text-[17px] leading-[1.7] text-[var(--lu-mute)]"
         use:reveal={120}
       >
         LaunchUp Enhanced gives founders a sharper application journey, a
@@ -39,18 +39,18 @@
       </div>
 
       <dl class="mt-10 grid gap-3 sm:grid-cols-3" use:reveal={180}>
-        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
-          <dt class="text-[12.5px] font-semibold text-[#818cf8]">
+        <div class="rounded-2xl border border-[var(--lu-line-2)] bg-[var(--lu-navy-2)] p-4">
+          <dt class="text-[12.5px] font-semibold text-[var(--lu-indigo-lite)]">
             AI grounded
           </dt>
           <dd class="lu-d mt-1.5 text-[19px] text-white">Less noise</dd>
         </div>
-        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
-          <dt class="text-[12.5px] font-semibold text-[#818cf8]">Readiness</dt>
+        <div class="rounded-2xl border border-[var(--lu-line-2)] bg-[var(--lu-navy-2)] p-4">
+          <dt class="text-[12.5px] font-semibold text-[var(--lu-indigo-lite)]">Readiness</dt>
           <dd class="lu-d mt-1.5 text-[19px] text-white">Sharper signal</dd>
         </div>
-        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
-          <dt class="text-[12.5px] font-semibold text-[#818cf8]">Outcome</dt>
+        <div class="rounded-2xl border border-[var(--lu-line-2)] bg-[var(--lu-navy-2)] p-4">
+          <dt class="text-[12.5px] font-semibold text-[var(--lu-indigo-lite)]">Outcome</dt>
           <dd class="lu-d mt-1.5 text-[19px] text-white">Better decisions</dd>
         </div>
       </dl>

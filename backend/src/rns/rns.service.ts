@@ -116,6 +116,12 @@ export class RnsService {
     return { message: `RNS with ID ${rnsId} deleted successfully.` };
   }
 
+  async findOneWithStartup(id: number) {
+    const rns = await this.em.findOne(Rns, { id }, { populate: ['startup'] });
+    if (!rns) throw new NotFoundException(`RNS with ID ${id} not found`);
+    return rns;
+  }
+
   async updateRns(rnsId: number, dto: UpdateRnsDto) {
     const rns = await this.em.findOne(Rns, { id: rnsId });
 

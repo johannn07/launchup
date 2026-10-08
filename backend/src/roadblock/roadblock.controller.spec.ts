@@ -1,14 +1,20 @@
 import { RoadblockController } from './roadblock.controller';
 import { Role } from '../entities/enums/role.enum';
 import { RnsStatus } from '../entities/enums/rns.enum';
+import { StartupService } from '../startup/startup.service';
 
 function buildController() {
   const roadblockService = {
     statusChange: jest.fn().mockResolvedValue({ id: 7 }),
+    findOneWithStartup: jest.fn().mockResolvedValue({ startup: { id: 1 } }),
+  };
+  const startupService = {
+    assertCanAccessStartup: jest.fn().mockResolvedValue(undefined),
   };
   const controller = new RoadblockController(
     roadblockService as any,
     {} as any,
+    startupService as any,
   );
   return { controller, roadblockService };
 }

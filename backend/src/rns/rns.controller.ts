@@ -2,8 +2,10 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Headers,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Patch,
@@ -17,6 +19,8 @@ import { RnsService } from './rns.service';
 import { CreateRnsDto, UpdateRnsDto, GenerateTasksDto } from './dto';
 import { AiRunService } from '../ai/ai-run.service';
 import { Role } from '../entities/enums/role.enum';
+import { StartupService } from '../startup/startup.service';
+import { Rns } from '../entities/rns.entity';
 
 @UseGuards(JwtGuard)
 @Controller('rns')
@@ -24,15 +28,23 @@ export class RnsController {
   constructor(
     private rnsService: RnsService,
     private readonly aiRunService: AiRunService,
+    private readonly startupService: StartupService,
   ) {}
 
+  private async assertAccess(entity: { startup: { id: number } | number }, req: any) {
+    const startupId = typeof entity.startup === 'number' ? entity.startup : entity.startup.id;
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
+  }
+
   @Get()
-  async getStartupRns(@Query('startupId', ParseIntPipe) startupId: number) {
+  async getStartupRns(@Query('startupId', ParseIntPipe) startupId: number, @Req() req: any) {
+    await this.startupService.assertCanAccessStartup(startupId, req.user);
     return await this.rnsService.getStartupRns(startupId);
   }
 
   @Post()
-  async createRns(@Body() dto: CreateRnsDto) {
+  async createRns(@Body() dto: CreateRnsDto, @Req() req: any) {
+    await this.startupService.assertCanAccessStartup(dto.startupId, req.user);
     return await this.rnsService.createRns(dto);
   }
 
@@ -42,6 +54,8 @@ export class RnsController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
+    await this.startupService.assertCanAccessStartup(dto.startup_id, req.user);
+
     const isPrivileged = req.user?.role === Role.Manager;
     return this.aiRunService.track(
       dto.startup_id,
@@ -53,7 +67,9 @@ export class RnsController {
   }
 
   @Delete(':id')
-  async deleteRns(@Param('id', ParseIntPipe) id: number) {
+  async deleteRns(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const rns = await this.rnsService.findOneWithStartup(id);
+    await this.assertAccess(rns, req);
     return await this.rnsService.deleteRns(id);
   }
 
@@ -61,7 +77,10 @@ export class RnsController {
   async updateRns(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateRnsDto,
+    @Req() req: any,
   ) {
+    const rns = await this.rnsService.findOneWithStartup(id);
+    await this.assertAccess(rns, req);
     return await this.rnsService.updateRns(id, dto);
   }
 
@@ -80,6 +99,9 @@ export class RnsController {
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
+    const rns = await this.rnsService.findOneWithStartup(id);
+    await this.assertAccess(rns, req);
+
     const isPrivileged = req.user?.role === Role.Manager;
     // No startup id is available here: the only route param is the Rns id.
     // We still open the run with startupId: null rather than duplicating a
@@ -99,7 +121,10 @@ export class RnsController {
     @Param('id', ParseIntPipe) id: number,
     @Query('role') role: string,
     @Body() dto: UpdateRnsDto,
+    @Req() req: any,
   ) {
+    const rns = await this.rnsService.findOneWithStartup(id);
+    await this.assertAccess(rns, req);
     return this.rnsService.statusChange(id, role, dto);
   }
 }

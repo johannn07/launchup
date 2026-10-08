@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LaunchUp — readiness assessment for founders</title>
+<meta name="description" content="LaunchUp scores your startup across six readiness scales, places you on a 1–9 level for each, and cites the passage behind every placement." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Public+Sans:wght@300..800&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        concrete:  '#F2F3EE',
+        concrete2: '#E6E8E0',
+        concrete3: '#D7DACF',
+        slate:     '#16201E',
+        slate2:    '#20302C',
+        slate3:    '#2E423C',
+        moss:      '#2F6B4F',
+        mossDeep:  '#1E4A36',
+        mossLite:  '#8FCBAE',
+        mark:      '#F2255F',
+        markLite:  '#FF6D94',
+        markDark:  '#C2003F',
+        bronze:    '#7A5B28',
+        bronzeLite:'#C9A96A'
+      },
+      fontFamily: {
+        display: ['Archivo', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body:    ['"Public Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif']
+      },
+      borderRadius: { none: '0px', chip: '3px', ctl: '6px' },
+      maxWidth: { plate: '1200px', measure: '62ch' }
+    }
+  }
+}
+</script>
+<style>
+  :root { --ease: cubic-bezier(.2,.7,.3,1); }
+
+  html { scroll-behavior: smooth; }
+  body { background:#F2F3EE; color:#16201E; font-family:'Public Sans',sans-serif; -webkit-font-smoothing:antialiased; }
+
+  /* Display type: Archivo pushed wide. Width carries the personality, not a gradient. */
+  .d    { font-family:'Archivo',sans-serif; font-variation-settings:'wdth' 112,'wght' 700; letter-spacing:-.021em; }
+  .d-xw { font-family:'Archivo',sans-serif; font-variation-settings:'wdth' 118,'wght' 800; letter-spacing:-.028em; }
+  .d-md { font-family:'Archivo',sans-serif; font-variation-settings:'wdth' 108,'wght' 600; letter-spacing:-.012em; }
+  .num  { font-variant-numeric: tabular-nums lining-nums; }
+
+  /* One button. Moss fill; a surveyor-mark bar wipes in underneath on hover. No lift, no shadow. */
+  .btn { position:relative; display:inline-flex; align-items:center; justify-content:center;
+         min-height:44px; padding:0 22px; border-radius:6px; background:#2F6B4F; color:#F2F3EE;
+         font-weight:650; font-size:15px; overflow:hidden; white-space:nowrap;
+         transition:background-color .16s var(--ease), transform .08s var(--ease); }
+  .btn::after { content:""; position:absolute; left:0; right:0; bottom:0; height:2px; background:#F2255F;
+                transform:scaleX(0); transform-origin:left; transition:transform .12s var(--ease); }
+  .btn:hover { background:#1E4A36; }
+  .btn:hover::after { transform:scaleX(1); }
+  .btn:active { transform:translateY(1px); }
+  .btn:focus-visible { outline:2px solid #F2255F; outline-offset:2px; }
+
+  /* The secondary path is deliberately not a button. */
+  .lnk { display:inline-block; font-weight:600; font-size:15px; color:#16201E;
+         border-bottom:1px solid #7A5B28; padding-bottom:2px;
+         transition:border-color .16s var(--ease), color .16s var(--ease); }
+  .lnk:hover { color:#2F6B4F; border-bottom-width:2px; padding-bottom:1px; border-bottom-color:#2F6B4F; }
+  .lnk:focus-visible { outline:2px solid #F2255F; outline-offset:3px; }
+  .lnk-inv { color:#F2F3EE; border-bottom-color:#C9A96A; }
+  .lnk-inv:hover { color:#8FCBAE; border-bottom-color:#8FCBAE; }
+
+  /* Scroll reveal: opacity + 6px, once. Nothing scales, nothing blurs. */
+  .rv { opacity:0; transform:translateY(6px); transition:opacity .42s var(--ease), transform .42s var(--ease); }
+  .rv.in { opacity:1; transform:none; }
+
+  /* Readiness plate */
+  .needle { transition:left .7s var(--ease); }
+  .rowline { transition:background-color .3s var(--ease); }
+
+  /* Segmented control (Draft / Reviewed) */
+  .seg { position:relative; border-radius:6px; padding:0 14px; height:34px; display:inline-flex; align-items:center;
+         font-size:13.5px; font-weight:650; color:#C9A96A; transition:color .18s var(--ease); }
+  .seg[aria-pressed="true"] { color:#16201E; background:#F2F3EE; }
+  .seg:focus-visible { outline:2px solid #FF6D94; outline-offset:2px; }
+
+  /* Survey traverse: each station drops a riser to a shared datum line. */
+  .station { position:relative; }
+  @media (min-width:1024px) {
+    .station::after { content:""; position:absolute; left:50%; top:100%; width:1px; background:#2E423C; }
+    .station::before { content:""; position:absolute; left:50%; top:100%; width:9px; height:9px; margin-left:-4px;
+                       margin-top:-4px; border-radius:50%; background:#16201E; border:2px solid #F2255F; z-index:2; }
+    .st-1::after { height:44px; }
+    .st-2::after { height:100px; }
+    .st-3::after { height:156px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior:auto; }
+    *, *::before, *::after { animation-duration:.001ms !important; transition-duration:.001ms !important; }
+    .rv { opacity:1; transform:none; }
+  }
+</style>
+</head>
+<body class="font-body antialiased">
+
+<a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-ctl focus:bg-slate focus:px-4 focus:py-3 focus:text-concrete">Skip to content</a>
+
+<!-- ============================== HEADER ============================== -->
+<header class="sticky top-0 z-40 border-b border-concrete3 bg-concrete/95 backdrop-blur-[2px]">
+  <div class="mx-auto flex h-16 max-w-plate items-center gap-8 px-5 sm:px-8">
+    <a href="#main" class="flex items-baseline gap-2.5">
+      <span class="d-xw text-[21px] text-moss">LaunchUp</span>
+    </a>
+    <nav class="ml-auto hidden items-center gap-7 text-[14.5px] font-medium md:flex" aria-label="Primary">
+      <a href="#process" class="text-slate/80 transition-colors hover:text-moss">Process</a>
+      <a href="#proof" class="text-slate/80 transition-colors hover:text-moss">Results</a>
+      <a href="#method" class="text-slate/80 transition-colors hover:text-moss">Method</a>
+      <a href="#footer" class="text-slate/80 transition-colors hover:text-moss">Sign in</a>
+    </nav>
+    <a href="#start" class="btn ml-auto md:ml-0">Start an assessment</a>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ================================ HERO ================================ -->
+<section class="border-b border-concrete3">
+  <div class="mx-auto max-w-plate px-5 pb-20 pt-14 sm:px-8 sm:pb-28 sm:pt-20">
+    <div class="grid gap-14 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] lg:gap-16">
+
+      <!-- The claim -->
+      <div class="rv">
+        <h1 class="d-xw max-w-[15ch] text-[38px] leading-[1.0] text-slate sm:text-[52px] sm:leading-[.98] lg:text-[58px]">
+          Find out what your application is missing before a committee does.
+        </h1>
+        <p class="mt-7 max-w-measure text-[17px] leading-[1.65] text-slate/75">
+          LaunchUp scores your startup across six readiness scales, places you on a 1&ndash;9
+          level for each, and cites the passage in your own application behind every
+          placement &mdash; including the ones you left blank.
+        </p>
+
+        <div class="mt-9 flex flex-wrap items-center gap-x-8 gap-y-5">
+          <a href="#start" class="btn">Start an assessment</a>
+          <a href="#proof" class="lnk">See a sample report</a>
+        </div>
+
+        <dl class="num mt-12 grid max-w-[31rem] grid-cols-3 gap-px border-y border-concrete3 bg-concrete3">
+          <div class="bg-concrete py-4 pr-4">
+            <dt class="text-[12.5px] font-semibold text-bronze">Scales</dt>
+            <dd class="d mt-1 text-[26px] text-slate">6</dd>
+          </div>
+          <div class="bg-concrete px-4 py-4">
+            <dt class="text-[12.5px] font-semibold text-bronze">Levels each</dt>
+            <dd class="d mt-1 text-[26px] text-slate">9</dd>
+          </div>
+          <div class="bg-concrete py-4 pl-4">
+            <dt class="text-[12.5px] font-semibold text-bronze">Median decision</dt>
+            <dd class="d mt-1 text-[26px] text-slate">6 days</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- The instrument: a live readiness plate -->
+      <div class="rv">
+        <div class="border border-slate bg-slate text-concrete">
+          <!-- plate header -->
+          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate3 px-5 py-4 sm:px-6">
+            <div>
+              <p class="d-md text-[15px] text-concrete">Readiness profile</p>
+              <span class="mt-1.5 inline-block rounded-chip border border-bronzeLite/40 px-2 py-0.5 text-[11px] font-semibold text-bronzeLite">Placeholder data</span>
+              <p class="num mt-0.5 text-[12.5px] text-bronzeLite">Northwind Grid, application 4182</p>
+            </div>
+            <div class="flex items-center gap-1 rounded-ctl bg-slate2 p-1" role="group" aria-label="Assessment stage">
+              <button type="button" class="seg" data-stage="draft" aria-pressed="false">Self-reported</button>
+              <button type="button" class="seg" data-stage="reviewed" aria-pressed="true">LaunchUp reviewed</button>
+            </div>
+          </div>
+
+          <!-- scale rows are injected here -->
+          <div id="plate-rows" class="divide-y divide-slate3"></div>
+
+          <!-- composite -->
+          <div class="flex flex-wrap items-end justify-between gap-6 border-t border-slate3 bg-slate2 px-5 py-5 sm:px-6">
+            <div>
+              <p class="text-[12.5px] font-semibold text-bronzeLite">Composite readiness level</p>
+              <p class="d-xw num mt-1 text-[44px] leading-none text-concrete">
+                <span id="composite">4.5</span><span class="text-[22px] text-bronzeLite"> / 9</span>
+              </p>
+            </div>
+            <div class="text-right">
+              <p class="text-[12.5px] font-semibold text-bronzeLite">Recommended stage</p>
+              <p id="stage-name" class="d-md mt-1 text-[19px] text-mossLite">Incubation</p>
+            </div>
+          </div>
+        </div>
+
+        <p id="plate-note" class="mt-3 max-w-[54ch] text-[13.5px] leading-[1.6] text-bronze">
+          Review drops four of six scales. Every level below cites the sentence it came from; two cite nothing, because nothing in the application supports them.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ============================ HOW IT WORKS ============================ -->
+<section id="process" class="bg-slate text-concrete">
+  <div class="mx-auto max-w-plate px-5 py-24 sm:px-8 sm:py-28">
+
+    <div class="rv max-w-[46rem]">
+      <h2 class="d-xw text-[32px] leading-[1.05] text-concrete sm:text-[42px]">
+        Three stations between a submitted form and a term sheet.
+      </h2>
+      <p class="mt-5 max-w-measure text-[16.5px] leading-[1.65] text-concrete/70">
+        Each stage closes with a re-score, so you can see the ground you gained rather than
+        being told you progressed.
+      </p>
+    </div>
+
+    <!-- Traverse: stations rise left to right, each dropping a riser to a shared datum. -->
+    <div class="rv mt-20 hidden lg:block">
+      <div class="grid grid-cols-3 items-end gap-8">
+
+        <div class="station st-1 mb-[44px]">
+          <p class="num d text-[13px] text-markLite">Station 01</p>
+          <h3 class="d-md mt-3 text-[22px] text-concrete">Application</h3>
+          <p class="mt-3 text-[15px] leading-[1.6] text-concrete/70">
+            Submit the form, your deck, and any evidence you already have. Scanned notebooks
+            and whiteboard photos are read too. You get a first profile in six days.
+          </p>
+          <p class="num mt-4 text-[13px] text-bronzeLite">Typical entry level <span class="text-concrete">2.8</span></p>
+        </div>
+
+        <div class="station st-2 mb-[100px]">
+          <p class="num d text-[13px] text-markLite">Station 02</p>
+          <h3 class="d-md mt-3 text-[22px] text-concrete">Incubation &amp; acceleration</h3>
+          <p class="mt-3 text-[15px] leading-[1.6] text-concrete/70">
+            Your lowest two scales set the curriculum. Mentors are matched to the gap, not to
+            your sector. Re-scored at the close of each block.
+          </p>
+          <p class="num mt-4 text-[13px] text-bronzeLite">Typical exit level <span class="text-concrete">5.9</span></p>
+        </div>
+
+        <div class="station st-3 mb-[156px] border-l-2 border-mark pl-5">
+          <p class="num d text-[13px] text-markLite">Station 03</p>
+          <h3 class="d-md mt-3 text-[22px] text-mossLite">Investment-ready</h3>
+          <p class="mt-3 text-[15px] leading-[1.6] text-concrete/75">
+            You leave with a profile an investment committee can read in one page, and a
+            written record of what moved each scale and when.
+          </p>
+          <p class="num mt-4 text-[13px] text-bronzeLite">Release threshold <span class="text-concrete">7.0</span></p>
+        </div>
+
+      </div>
+      <!-- shared datum -->
+      <div class="mt-0 border-t border-dashed border-bronze/60 pt-3">
+        <p class="num text-[12px] text-bronzeLite">Datum: readiness level 1.0</p>
+      </div>
+    </div>
+
+    <!-- Mobile: the traverse turns vertical -->
+    <ol class="rv mt-14 space-y-0 border-l border-slate3 lg:hidden">
+      <li class="relative pb-10 pl-7">
+        <span class="absolute left-0 top-1.5 h-[9px] w-[9px] -translate-x-1/2 rounded-full border-2 border-mark bg-slate"></span>
+        <p class="num d text-[13px] text-markLite">Station 01</p>
+        <h3 class="d-md mt-2 text-[20px] text-concrete">Application</h3>
+        <p class="mt-2 text-[15px] leading-[1.6] text-concrete/70">Submit the form, your deck, and any evidence you already have. Scanned notebooks and whiteboard photos are read too. First profile in six days.</p>
+        <p class="num mt-3 text-[13px] text-bronzeLite">Typical entry level <span class="text-concrete">2.8</span></p>
+      </li>
+      <li class="relative pb-10 pl-7">
+        <span class="absolute left-0 top-1.5 h-[9px] w-[9px] -translate-x-1/2 rounded-full border-2 border-mark bg-slate"></span>
+        <p class="num d text-[13px] text-markLite">Station 02</p>
+        <h3 class="d-md mt-2 text-[20px] text-concrete">Incubation &amp; acceleration</h3>
+        <p class="mt-2 text-[15px] leading-[1.6] text-concrete/70">Your lowest two scales set the curriculum. Mentors are matched to the gap, not to your sector. Re-scored each block.</p>
+        <p class="num mt-3 text-[13px] text-bronzeLite">Typical exit level <span class="text-concrete">5.9</span></p>
+      </li>
+      <li class="relative pl-7">
+        <span class="absolute left-0 top-1.5 h-[9px] w-[9px] -translate-x-1/2 rounded-full border-2 border-mark bg-slate"></span>
+        <p class="num d text-[13px] text-markLite">Station 03</p>
+        <h3 class="d-md mt-2 text-[20px] text-mossLite">Investment-ready</h3>
+        <p class="mt-2 text-[15px] leading-[1.6] text-concrete/75">A profile an investment committee can read in one page, plus a written record of what moved each scale and when.</p>
+        <p class="num mt-3 text-[13px] text-bronzeLite">Release threshold <span class="text-concrete">7.0</span></p>
+      </li>
+    </ol>
+
+  </div>
+</section>
+
+<!-- ============================ SOCIAL PROOF ============================ -->
+<section id="proof" class="border-b border-concrete3 bg-concrete2">
+  <div class="mx-auto max-w-plate px-5 py-24 sm:px-8 sm:py-28">
+
+    <p class="rv mb-10 inline-block rounded-chip border border-bronze/40 px-2.5 py-1 text-[12px] font-semibold text-bronze">
+      Placeholder content &mdash; partners, figures and quote are illustrative
+    </p>
+
+    <!-- partner wordmarks -->
+    <div class="rv flex flex-wrap items-center gap-x-10 gap-y-5 border-y border-concrete3 py-7">
+      <span class="d-md text-[17px] text-slate/45">Meridian Ventures</span>
+      <span class="d-md text-[17px] text-slate/45">Batangas Innovation Hub</span>
+      <span class="d-md text-[17px] text-slate/45">Northgate Capital</span>
+      <span class="d-md text-[17px] text-slate/45">Cordillera Seed</span>
+      <span class="d-md text-[17px] text-slate/45">DOST Region&nbsp;IV</span>
+    </div>
+
+    <div class="mt-16 grid gap-16 lg:grid-cols-[1.15fr_.85fr] lg:gap-20">
+
+      <!-- measured figures -->
+      <div class="rv">
+        <dl class="num grid gap-px border border-concrete3 bg-concrete3 sm:grid-cols-3">
+          <div class="bg-concrete2 p-6">
+            <dd class="d-xw text-[38px] leading-none text-slate">12,480</dd>
+            <dt class="mt-2.5 text-[13.5px] font-semibold text-slate/65">Applications reviewed</dt>
+            <p class="mt-1 text-[12.5px] text-bronze">Since 2024</p>
+          </div>
+          <div class="bg-concrete2 p-6">
+            <dd class="d-xw text-[38px] leading-none text-slate">214</dd>
+            <dt class="mt-2.5 text-[13.5px] font-semibold text-slate/65">Founders funded</dt>
+            <p class="mt-1 text-[12.5px] text-bronze">Through partner funds</p>
+          </div>
+          <div class="bg-concrete2 p-6">
+            <dd class="d-xw text-[38px] leading-none text-markDark">6 days</dd>
+            <dt class="mt-2.5 text-[13.5px] font-semibold text-slate/65">Median time to decision</dt>
+            <p class="mt-1 text-[12.5px] text-bronze">Was 31 days in 2023</p>
+          </div>
+        </dl>
+
+        <p class="mt-6 max-w-measure text-[15px] leading-[1.65] text-slate/70">
+          The decision window matters more than the acceptance rate. A founder who waits a
+          month for a no has lost a month of runway to find out something a rubric could
+          have told them in a week.
+        </p>
+      </div>
+
+      <!-- one quote -->
+      <figure class="rv border-l-2 border-moss pl-6">
+        <blockquote class="text-[19px] leading-[1.55] text-slate">
+          <p>
+            We scored ourselves at 7 on regulatory. The review put us at 3 and quoted the
+            paragraph where we said we were &ldquo;exploring&rdquo; accreditation. That was
+            annoying on a Tuesday and correct by the following quarter.
+          </p>
+        </blockquote>
+        <figcaption class="mt-5 text-[14px] leading-[1.5]">
+          <span class="d-md block text-slate">Ilya Gutierrez</span>
+          <span class="block text-slate/60">Co-founder, Northwind Grid, cohort 06</span>
+        </figcaption>
+      </figure>
+
+    </div>
+  </div>
+</section>
+
+<!-- =============================== METHOD =============================== -->
+<section id="method" class="border-b border-concrete3">
+  <div class="mx-auto max-w-plate px-5 py-24 sm:px-8 sm:py-28">
+
+    <div class="grid gap-14 lg:grid-cols-[.85fr_1.15fr] lg:gap-20">
+      <div class="rv">
+        <h2 class="d-xw text-[32px] leading-[1.05] text-slate sm:text-[40px]">
+          Where each rubric comes from, including the parts we wrote ourselves.
+        </h2>
+        <p class="mt-6 max-w-measure text-[16.5px] leading-[1.65] text-slate/75">
+          A readiness score is only worth the rubric behind it. Ours is published per scale,
+          with its source named. One of the six has no external standard to draw on &mdash;
+          we say so rather than implying otherwise.
+        </p>
+        <p class="mt-5 max-w-measure text-[16.5px] leading-[1.65] text-slate/75">
+          Scoring is checked against the rubric before it reaches you. When a level has no
+          supporting passage in your application, it is returned as a gap, not as a number.
+        </p>
+        <a href="#start" class="lnk mt-8">Read the full rubric</a>
+      </div>
+
+      <div class="rv">
+        <table class="w-full border-collapse text-left">
+          <caption class="sr-only">Rubric source by readiness scale</caption>
+          <thead>
+            <tr class="border-b border-slate/25">
+              <th scope="col" class="py-3 pr-4 text-[12.5px] font-semibold text-bronze">Scale</th>
+              <th scope="col" class="py-3 pr-4 text-[12.5px] font-semibold text-bronze">Rubric source</th>
+              <th scope="col" class="num py-3 text-right text-[12.5px] font-semibold text-bronze">Levels</th>
+            </tr>
+          </thead>
+          <tbody class="text-[14.5px]">
+            <tr class="border-b border-concrete3">
+              <th scope="row" class="py-3.5 pr-4 font-semibold text-slate">Technology</th>
+              <td class="py-3.5 pr-4 text-slate/70">EU Horizon Europe TRL, ISO&nbsp;16290:2013</td>
+              <td class="num py-3.5 text-right text-slate/70">9</td>
+            </tr>
+            <tr class="border-b border-concrete3 bg-concrete2/60">
+              <th scope="row" class="py-3.5 pr-4 font-semibold text-slate">Market</th>
+              <td class="py-3.5 pr-4 text-slate/70">Authored against BRLa (2021) dimensions</td>
+              <td class="num py-3.5 text-right text-slate/70">9</td>
+            </tr>
+            <tr class="border-b border-concrete3">
+              <th scope="row" class="py-3.5 pr-4 font-semibold text-slate">Acceptance</th>
+              <td class="py-3.5 pr-4 text-slate/70">Authored against BRLa (2021) dimensions</td>
+              <td class="num py-3.5 text-right text-slate/70">9</td>
+            </tr>
+            <tr class="border-b border-concrete3 bg-concrete2/60">
+              <th scope="row" class="py-3.5 pr-4 font-semibold text-slate">Organizational</th>
+              <td class="py-3.5 pr-4 text-slate/70">Authored against BRLa (2021) dimensions</td>
+              <td class="num py-3.5 text-right text-slate/70">9</td>
+            </tr>
+            <tr class="border-b border-concrete3">
+              <th scope="row" class="py-3.5 pr-4 font-semibold text-slate">Regulatory</th>
+              <td class="py-3.5 pr-4 text-slate/70">Authored against BRLa (2021) dimensions</td>
+              <td class="num py-3.5 text-right text-slate/70">9</td>
+            </tr>
+            <tr class="border-b border-concrete3 bg-concrete2/60">
+              <th scope="row" class="py-3.5 pr-4 font-semibold text-slate">Investment</th>
+              <td class="py-3.5 pr-4 text-markDark">Authored in-house &mdash; no external standard exists</td>
+              <td class="num py-3.5 text-right text-slate/70">9</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="mt-8 border-t-2 border-slate pt-6">
+          <p class="text-[13px] font-semibold text-bronze">Internal grounding check, n=3 applications</p>
+          <div class="num mt-4 grid gap-6 sm:grid-cols-2">
+            <div>
+              <p class="d-xw text-[30px] leading-none text-slate">0.22 <span class="text-[15px] font-normal text-slate/50">vs 0.69</span></p>
+              <p class="mt-2 text-[13.5px] leading-[1.5] text-slate/70">Mean level error against reviewer placement, rubric-grounded vs ungrounded.</p>
+            </div>
+            <div>
+              <p class="d-xw text-[30px] leading-none text-markDark">0% <span class="text-[15px] font-normal text-slate/50">vs 61%</span></p>
+              <p class="mt-2 text-[13.5px] leading-[1.5] text-slate/70">Placements asserting evidence absent from the source document.</p>
+            </div>
+          </div>
+          <p class="mt-5 text-[12.5px] leading-[1.5] text-bronze">
+            Small sample, measured in-house and published so it can be argued with. Method notes are in the rubric appendix.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================================ CTA ================================ -->
+<section id="start" class="border-b border-concrete3 bg-concrete2">
+  <div class="mx-auto flex max-w-plate flex-wrap items-center justify-between gap-8 px-5 py-16 sm:px-8">
+    <div class="rv">
+      <h2 class="d-xw max-w-[20ch] text-[26px] leading-[1.1] text-slate sm:text-[32px]">
+        Six days from submission to a profile you can argue with.
+      </h2>
+      <p class="mt-3 text-[15.5px] text-slate/70">No fee to apply. Applications close 14 November.</p>
+    </div>
+    <a href="#start" class="btn rv">Start an assessment</a>
+  </div>
+</section>
+
+</main>
+
+<!-- =============================== FOOTER =============================== -->
+<footer id="footer" class="bg-slate text-concrete">
+  <div class="mx-auto max-w-plate px-5 py-16 sm:px-8">
+
+    <div class="grid gap-12 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
+
+      <div>
+        <p class="d-xw text-[21px] text-mossLite">LaunchUp</p>
+        <p class="mt-3 max-w-[30ch] text-[14.5px] leading-[1.6] text-concrete/60">
+          Readiness assessment and acceleration for early-stage founders.
+        </p>
+        <address class="mt-6 not-italic text-[14.5px] leading-[1.7] text-concrete/60">
+          4F Innovation Center, Ayala&nbsp;Ave.<br />
+          Makati City 1226, Philippines<br />
+          <a href="mailto:hello@launchup.ph" class="lnk lnk-inv mt-2">hello@launchup.ph</a>
+        </address>
+      </div>
+
+      <nav aria-label="Programs">
+        <h2 class="d-md text-[14px] text-concrete">Programs</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-concrete/60">
+          <li><a href="#process" class="transition-colors hover:text-mossLite">Application</a></li>
+          <li><a href="#process" class="transition-colors hover:text-mossLite">Incubation</a></li>
+          <li><a href="#process" class="transition-colors hover:text-mossLite">Acceleration</a></li>
+          <li><a href="#proof" class="transition-colors hover:text-mossLite">Cohorts</a></li>
+          <li><a href="#proof" class="transition-colors hover:text-mossLite">Partner funds</a></li>
+        </ul>
+      </nav>
+
+      <nav aria-label="Method">
+        <h2 class="d-md text-[14px] text-concrete">Method</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-concrete/60">
+          <li><a href="#method" class="transition-colors hover:text-mossLite">Readiness scales</a></li>
+          <li><a href="#method" class="transition-colors hover:text-mossLite">Rubric sources</a></li>
+          <li><a href="#method" class="transition-colors hover:text-mossLite">Grounding checks</a></li>
+          <li><a href="#method" class="transition-colors hover:text-mossLite">Scoring appeals</a></li>
+          <li><a href="#method" class="transition-colors hover:text-mossLite">Changelog</a></li>
+        </ul>
+      </nav>
+
+      <nav aria-label="Company">
+        <h2 class="d-md text-[14px] text-concrete">Company</h2>
+        <ul class="mt-4 space-y-2.5 text-[14.5px] text-concrete/60">
+          <li><a href="#footer" class="transition-colors hover:text-mossLite">Sign in</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-mossLite">About</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-mossLite">Mentors</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-mossLite">Careers</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-mossLite">Press kit</a></li>
+          <li><a href="#footer" class="transition-colors hover:text-mossLite">Contact</a></li>
+        </ul>
+      </nav>
+
+    </div>
+
+    <div class="mt-14 flex flex-col gap-6 border-t border-slate3 pt-7 sm:flex-row sm:items-center sm:justify-between">
+      <ul class="flex flex-wrap gap-x-6 gap-y-2 text-[13.5px] text-concrete/55">
+        <li><a href="#footer" class="transition-colors hover:text-mossLite">Privacy notice</a></li>
+        <li><a href="#footer" class="transition-colors hover:text-mossLite">Terms</a></li>
+        <li><a href="#footer" class="transition-colors hover:text-mossLite">Data processing</a></li>
+        <li><a href="#footer" class="transition-colors hover:text-mossLite">Accessibility</a></li>
+        <li class="num text-concrete/40">&copy; 2026 LaunchUp Inc.</li>
+      </ul>
+
+      <ul class="flex items-center gap-2">
+        <li>
+          <a href="#footer" aria-label="LaunchUp on LinkedIn" class="flex h-10 w-10 items-center justify-center rounded-ctl border border-slate3 text-concrete/70 transition-colors hover:border-mossLite hover:text-mossLite focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.82-2.05 3.75-2.05C20.5 8.65 21 11 21 14.1V21h-4v-6.1c0-1.45-.03-3.3-2-3.3s-2.3 1.57-2.3 3.2V21H9z"/></svg>
+          </a>
+        </li>
+        <li>
+          <a href="#footer" aria-label="LaunchUp on X" class="flex h-10 w-10 items-center justify-center rounded-ctl border border-slate3 text-concrete/70 transition-colors hover:border-mossLite hover:text-mossLite focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.9 2H22l-7.1 8.1L23 22h-6.5l-5.1-6.6L5.5 22H2.4l7.6-8.7L1.6 2h6.7l4.6 6.1zm-1.1 18h1.8L7.3 3.8H5.4z"/></svg>
+          </a>
+        </li>
+        <li>
+          <a href="#footer" aria-label="LaunchUp on GitHub" class="flex h-10 w-10 items-center justify-center rounded-ctl border border-slate3 text-concrete/70 transition-colors hover:border-mossLite hover:text-mossLite focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-mark">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48l-.01-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85l-.01 2.75c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg>
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------------- Readiness plate ---------------- */
+  var SCALES = [
+    { code:'TRL', name:'Technology',     draft:7, reviewed:4,
+      d:'Self-reported', r:'"working prototype on the bench, no field trial yet"' },
+    { code:'MRL', name:'Market',         draft:8, reviewed:7,
+      d:'Self-reported', r:'"31 paid pilots across two provinces"' },
+    { code:'ARL', name:'Acceptance',     draft:6, reviewed:5,
+      d:'Self-reported', r:'"two of five pilot sites renewed"' },
+    { code:'ORL', name:'Organizational', draft:6, reviewed:2, gap:true,
+      d:'Self-reported', r:'No supporting passage — no named operations lead' },
+    { code:'RRL', name:'Regulatory',     draft:7, reviewed:3, gap:true,
+      d:'Self-reported', r:'No supporting passage — accreditation described as "exploring"' },
+    { code:'IRL', name:'Investment',     draft:7, reviewed:6,
+      d:'Self-reported', r:'"term sheet from one partner fund, unsigned"' }
+  ];
+
+  var rowsEl = document.getElementById('plate-rows');
+  var compEl = document.getElementById('composite');
+  var stageEl = document.getElementById('stage-name');
+  var noteEl = document.getElementById('plate-note');
+  var stage = 'reviewed';
+
+  var NOTES = {
+    reviewed: 'Review drops four of six scales. Every level below cites the sentence it came from; two cite nothing, because nothing in the application supports them.',
+    draft: 'Self-reported levels, straight from the form. Nothing here is checked against the rubric or against the application text.'
+  };
+
+  SCALES.forEach(function (s, i) {
+    var row = document.createElement('div');
+    row.className = 'px-5 py-3.5 sm:px-6';
+    row.innerHTML =
+      '<div class="flex items-baseline justify-between gap-4">' +
+        '<p class="text-[14px] font-semibold text-concrete">' + s.name +
+          ' <span class="num text-[12px] font-medium text-bronzeLite">' + s.code + '</span></p>' +
+        '<p class="num d text-[17px] tabular-nums" data-val="' + i + '">&mdash;</p>' +
+      '</div>' +
+      '<div class="relative mt-2.5 h-[18px]" aria-hidden="true">' +
+        '<div class="absolute inset-x-0 top-1/2 flex -translate-y-1/2 justify-between">' +
+          Array.from({length:9}).map(function(){
+            return '<span class="h-[7px] w-px bg-concrete opacity-25"></span>';
+          }).join('') +
+        '</div>' +
+        '<div class="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-concrete opacity-15"></div>' +
+        '<span class="needle absolute top-1/2 h-[13px] w-[3px] -translate-x-1/2 -translate-y-1/2" data-needle="' + i + '" style="left:0%"></span>' +
+      '</div>' +
+      '<p class="mt-1.5 text-[12.5px] leading-[1.5] text-concrete/55" data-cite="' + i + '"></p>';
+    rowsEl.appendChild(row);
+  });
+
+  function paint(animate) {
+    var sum = 0;
+    SCALES.forEach(function (s, i) {
+      var v = stage === 'reviewed' ? s.reviewed : s.draft;
+      sum += v;
+      var isGap = stage === 'reviewed' && s.gap;
+
+      var needle = rowsEl.querySelector('[data-needle="' + i + '"]');
+      var val    = rowsEl.querySelector('[data-val="' + i + '"]');
+      var cite   = rowsEl.querySelector('[data-cite="' + i + '"]');
+
+      needle.style.background = isGap ? '#F2255F' : '#8FCBAE';
+      val.textContent = v;
+      val.style.color = isGap ? '#FF6D94' : '#F2F3EE';
+      cite.textContent = stage === 'reviewed' ? s.r : s.d;
+      cite.style.color = isGap ? '#FF6D94' : '';
+
+      var left = ((v - 1) / 8) * 100;
+      if (animate && !reduce) {
+        needle.style.left = '0%';
+        setTimeout(function () { needle.style.left = left + '%'; }, 60 + i * 70);
+      } else {
+        needle.style.left = left + '%';
+      }
+    });
+
+    var target = sum / SCALES.length;
+    stageEl.textContent = stage === 'reviewed' ? 'Incubation' : 'Acceleration';
+    stageEl.style.color = stage === 'reviewed' ? '#8FCBAE' : '#C9A96A';
+    noteEl.textContent = NOTES[stage];
+
+    if (!animate || reduce) { compEl.textContent = target.toFixed(1); return; }
+    var from = parseFloat(compEl.textContent) || 0, t0 = null;
+    requestAnimationFrame(function step(ts) {
+      if (t0 === null) t0 = ts;
+      var p = Math.min((ts - t0) / 700, 1);
+      var e = 1 - Math.pow(1 - p, 3);
+      compEl.textContent = (from + (target - from) * e).toFixed(1);
+      if (p < 1) requestAnimationFrame(step);
+    });
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.seg'), function (btn) {
+    btn.addEventListener('click', function () {
+      stage = btn.dataset.stage;
+      Array.prototype.forEach.call(document.querySelectorAll('.seg'), function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.stage === stage));
+      });
+      paint(true);
+    });
+  });
+
+  paint(false);
+
+  /* Score animates in the first time the plate is actually on screen. */
+  var fired = false;
+  var plateObs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting && !fired) { fired = true; compEl.textContent = '0.0'; paint(true); }
+    });
+  }, { threshold: 0.35 });
+  plateObs.observe(rowsEl);
+
+  /* ---------------- Section reveals ---------------- */
+  var revObs = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) { e.target.classList.add('in'); revObs.unobserve(e.target); }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+
+  Array.prototype.forEach.call(document.querySelectorAll('.rv'), function (el) { revObs.observe(el); });
+})();
+</script>
+</body>
+</html>

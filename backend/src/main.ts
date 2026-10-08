@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { ConfigService } from '@nestjs/config';
 import { EntityManager, MikroORM } from '@mikro-orm/core';
 import { hash } from 'argon2';
 import { User } from './entities/user.entity';
@@ -385,6 +386,7 @@ async function retireAdminRole(orm: MikroORM) {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.setGlobalPrefix('v1');
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -407,6 +409,13 @@ async function bootstrap() {
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
+
+  const configService = app.get(ConfigService);
+  const backendJwtSecret = configService.get<string>('JWT_SECRET');
+  const frontendJwtSecret = process.env.FRONTEND_JWT_SECRET;
+  if (frontendJwtSecret && backendJwtSecret !== frontendJwtSecret) {
+    throw new Error('JWT_SECRET mismatch between frontend and backend');
+  }
 
   const orm = app.get(MikroORM);
   await retireAdminRole(orm);

@@ -23,7 +23,7 @@
 </script>
 
 <header
-  class="sticky top-0 z-40 border-b border-[#17213a]/70 bg-[#07111f]/80 backdrop-blur-lg"
+  class="sticky top-0 z-40 border-b border-[var(--lu-line)]/70 bg-[var(--lu-navy)]/80 backdrop-blur-lg"
 >
   <nav class="mx-auto flex h-16 w-[min(72rem,88vw)] items-center">
     <a href="/" class="flex items-center gap-2">
@@ -37,35 +37,39 @@
       <li>
         <a
           href="#hero"
-          class="transition-colors hover:text-[#818cf8] {activeSection ===
+          class="transition-colors hover:text-[var(--lu-indigo-lite)] {activeSection ===
           'hero'
-            ? 'text-[#f1f5f9]'
-            : 'text-[#94a3b8]'}">Home</a
+            ? 'text-[var(--lu-cloud)]'
+            : 'text-[var(--lu-mute)]}"
+        >Home</a
         >
       </li>
       <li>
         <a
           href="#howitwork"
-          class="transition-colors hover:text-[#818cf8] {activeSection ===
+          class="transition-colors hover:text-[var(--lu-indigo-lite)] {activeSection ===
           'howitwork'
-            ? 'text-[#f1f5f9]'
-            : 'text-[#94a3b8]'}">How it Works</a
+            ? 'text-[var(--lu-cloud)]'
+            : 'text-[var(--lu-mute)]}"
+        >How it Works</a
         >
       </li>
       <li>
         <a
           href="#aboutus"
-          class="transition-colors hover:text-[#818cf8] {activeSection ===
+          class="transition-colors hover:text-[var(--lu-indigo-lite)] {activeSection ===
           'aboutus'
-            ? 'text-[#f1f5f9]'
-            : 'text-[#94a3b8]'}">About Us</a
+            ? 'text-[var(--lu-cloud)]'
+            : 'text-[var(--lu-mute)]}"
+        >About Us</a
         >
       </li>
       <li>
         <a
           data-sveltekit-reload
           href="/login"
-          class="text-[#94a3b8] transition-colors hover:text-[#818cf8]">Login</a
+          class="text-[var(--lu-mute)] transition-colors hover:text-[var(--lu-indigo-lite)]"
+        >Login</a
         >
       </li>
     </ul>

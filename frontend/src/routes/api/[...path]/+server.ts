@@ -59,7 +59,7 @@ const proxy: RequestHandler = async ({ request, params, url, cookies }) => {
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}/${params.path}${url.search}`, init);
+    response = await fetch(`${API_URL}/v1/${params.path}${url.search}`, init);
   } catch (cause) {
     // The API being unreachable is a gateway failure, not a 500 from this app.
     throw error(502, `API unreachable: ${cause instanceof Error ? cause.message : cause}`);

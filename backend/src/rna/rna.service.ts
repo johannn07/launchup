@@ -123,6 +123,12 @@ export class RnaService {
     return rna;
   }
 
+  async findOneWithStartup(id: number) {
+    const rna = await this.em.findOne(StartupRNA, { id }, { populate: ['startup'] });
+    if (!rna) throw new NotFoundException(`RNA with ID ${id} not found`);
+    return rna;
+  }
+
   async generateRNA(
     id: number,
     ctx: AiRunContext,

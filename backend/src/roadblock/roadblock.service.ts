@@ -129,6 +129,12 @@ export class RoadblockService {
     return { message: 'Roadblock deleted successfully' };
   }
 
+  async findOneWithStartup(id: number) {
+    const roadblock = await this.em.findOne(Roadblock, { id }, { populate: ['startup'] });
+    if (!roadblock) throw new NotFoundException(`Roadblock with ID ${id} not found`);
+    return roadblock;
+  }
+
   async generateRoadblocks(dto: GenerateRoadblocksDto, ctx: AiRunContext) {
     // No attribute() call needed: GenerateRoadblocksDto carries startupId, so
     // the controller already passed it to track() when opening the run.
