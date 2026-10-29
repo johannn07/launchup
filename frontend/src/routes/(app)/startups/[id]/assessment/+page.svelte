@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { useQuery } from '@sveltestack/svelte-query';
+  import { useQuery, useQueryClient } from '@sveltestack/svelte-query';
   import axiosInstance from '$lib/axios';
+  import { refreshAfterRating } from '$lib/readiness-refresh';
   import { toast } from 'svelte-sonner';
   import * as Dialog from '$lib/components/ui/dialog';
   import ReadinessAssessmentForm from '$lib/components/startups/assessment/ReadinessAssessmentForm.svelte';
@@ -26,6 +27,7 @@
 
   const { data } = $props();
   const { access, startupId } = data;
+  const queryClient = useQueryClient();
 
   let showAssessmentForm = $state(false);
   let showTypeModal = $state(false);
@@ -149,8 +151,27 @@
       toast.success(
         `${selectedReadinessType} readiness level set to ${readinessLevel}`
       );
-      await $assessmentQuery.refetch();
-      await $readinessLevelQuery.refetch();
+      // Show the saved level now rather than after two round trips.
+      const ratedType = selectedReadinessType;
+      queryClient.setQueryData(
+        ['startupReadinessLevels', startupId],
+        (rows: any[] = []) =>
+          rows.map((row) =>
+            row.readinessLevel?.readinessType === ratedType
+              ? {
+                  ...row,
+                  readinessLevel: {
+                    ...row.readinessLevel,
+                    level: Number(readinessLevel)
+                  }
+                }
+              : row
+          )
+      );
+      await Promise.all([
+        $assessmentQuery.refetch(),
+        refreshAfterRating(queryClient, startupId)
+      ]);
     } catch (error) {
       console.error('Error rating assessment:', error);
       toast.error('Failed to rate assessment');

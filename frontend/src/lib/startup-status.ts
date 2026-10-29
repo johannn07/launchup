@@ -20,7 +20,7 @@ export function statusOf(qualificationStatus: number | null | undefined) {
 export function tierOf(
   startup: {
     qualificationStatus?: number | null;
-    readinessEvaluations?: { tierLabel: string }[];
+    readinessEvaluations?: { id: number; tierLabel: string }[];
   } | null
 ): string | null {
   if (
@@ -29,7 +29,9 @@ export function tierOf(
   )
     return null;
   const evals = startup?.readinessEvaluations;
-  return evals?.length ? evals[evals.length - 1].tierLabel : null;
+  if (!evals?.length) return null;
+  // The API returns the collection unordered, so "last" was an arbitrary row.
+  return evals.reduce((a, b) => (b.id > a.id ? b : a)).tierLabel;
 }
 
 export const tierLine = (tier: string | null) =>
