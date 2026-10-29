@@ -563,30 +563,7 @@
 
     generatingInitiatives = true;
     try {
-      const currentItems = await axiosInstance.get(
-        `/initiatives/?startupId=${startupId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${data.access}`
-          }
-        }
-      );
-
-      // Shift existing items down so new initiatives land at the top.
-      const updatePromises = currentItems.data.map((item: any) =>
-        axiosInstance.patch(
-          `/initiatives/${item.id}/`,
-          { priorityNumber: (item.priorityNumber || 0) + selectedRNS.length }, // Increment by number of new items
-          {
-            headers: {
-              Authorization: `Bearer ${data.access}`
-            }
-          }
-        )
-      );
-
-      await Promise.all(updatePromises);
-
+      // The server renumbers this startup's initiatives after the AI succeeds.
       await axiosInstance.post(
         `/initiatives/generate-initiatives/`,
         {

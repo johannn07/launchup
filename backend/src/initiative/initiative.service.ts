@@ -192,9 +192,11 @@ export class InitiativeService {
         }
       }
 
+      // This startup's only: the query was unfiltered, so every generation
+      // renumbered every startup's initiatives.
       const existingInitiatives = await this.em.find(
         Initiative,
-        {},
+        { startup: rnsList[0].startup },
         { orderBy: { initiativeNumber: 'ASC' } },
       );
       let minInitiativeNumber =
@@ -203,25 +205,22 @@ export class InitiativeService {
           : 1;
       if (minInitiativeNumber > 1) minInitiativeNumber = 1;
 
-      // Shift existing rows up so the new initiatives can take the low numbers.
-      if (!dto.debug) {
-        for (const initiative of existingInitiatives) {
-          initiative.initiativeNumber += dto.rnsIds.length;
-          await this.em.persistAndFlush(initiative);
-        }
-      }
+      // Each next step's initiatives take one number and save as they go, so
+      // existing rows shift by the numbers taken, after the AI calls — also
+      // when a later call fails. Shifting first left gaps on every failure.
+      let numbersTaken = 0;
+      try {
+        for (let i = 0; i < rnsList.length; i++) {
+          const rns = rnsList[i];
 
-      for (let i = 0; i < rnsList.length; i++) {
-        const rns = rnsList[i];
+          const maxInitiativeNumber =
+            (await this.em.count(Initiative, { startup: rns.startup })) + 1;
 
-        const maxInitiativeNumber =
-          (await this.em.count(Initiative, { startup: rns.startup })) + 1;
+          const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
+          if (!basePrompt)
+            throw new BadRequestException('No capsule proposal found');
 
-        const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
-        if (!basePrompt)
-          throw new BadRequestException('No capsule proposal found');
-
-        const rnsPrompt = `
+          const rnsPrompt = `
             priorityNumber: ${rns.priorityNumber}
             readinessType: ${rns.readinessType}
             targetLevel: ${rns.targetLevel.level}
@@ -229,7 +228,7 @@ export class InitiativeService {
             taskType: ${RnsStatus[rns.status]}
             `;
 
-        const prompt = `
+          const prompt = `
             ${basePrompt}   
 
             Based on this RNS:
@@ -244,34 +243,38 @@ export class InitiativeService {
             - measures, targets, and remarks max 150
             `;
 
-        if (dto.debug) {
-          debugPrompts.push(prompt);
-          continue;
+          if (dto.debug) {
+            debugPrompts.push(prompt);
+            continue;
+          }
+
+          const resultText = await withAiRetry(() =>
+            this.aiService.generateInitiativesFromPrompt(ctx, prompt),
+          );
+
+          for (const entry of resultText) {
+            const initiative = new Initiative();
+            initiative.initiativeNumber = minInitiativeNumber + i;
+            initiative.description = entry.description;
+            initiative.measures = entry.measures;
+            initiative.targets = entry.targets;
+            initiative.remarks = entry.remarks;
+            initiative.rns = rns;
+            initiative.isAiGenerated = false;
+            initiative.startup = rns.startup;
+            initiative.assignee = rns.startup.user;
+            initiative.status = 1;
+            initiative.priorityNumber = 0;
+            initiative.requestedStatus = 1;
+            initiative.generationRun = ctx.run;
+
+            await this.em.persistAndFlush(initiative);
+            initiatives.push(initiative);
+          }
+          if (resultText.length > 0) numbersTaken = i + 1;
         }
-
-        const resultText = await withAiRetry(() =>
-          this.aiService.generateInitiativesFromPrompt(ctx, prompt),
-        );
-
-        for (const entry of resultText) {
-          const initiative = new Initiative();
-          initiative.initiativeNumber = minInitiativeNumber + i;
-          initiative.description = entry.description;
-          initiative.measures = entry.measures;
-          initiative.targets = entry.targets;
-          initiative.remarks = entry.remarks;
-          initiative.rns = rns;
-          initiative.isAiGenerated = false;
-          initiative.startup = rns.startup;
-          initiative.assignee = rns.startup.user;
-          initiative.status = 1;
-          initiative.priorityNumber = 0;
-          initiative.requestedStatus = 1;
-          initiative.generationRun = ctx.run;
-
-          await this.em.persistAndFlush(initiative);
-          initiatives.push(initiative);
-        }
+      } finally {
+        await this.shiftInitiativeNumbers(existingInitiatives, numbersTaken);
       }
 
       if (dto.debug) return { prompts: debugPrompts };
@@ -298,7 +301,7 @@ export class InitiativeService {
 
       const existingInitiatives = await this.em.find(
         Initiative,
-        {},
+        { startup: rns.startup },
         { orderBy: { initiativeNumber: 'ASC' } },
       );
       let minInitiativeNumber =
@@ -306,13 +309,6 @@ export class InitiativeService {
           ? existingInitiatives[0].initiativeNumber
           : 1;
       if (minInitiativeNumber > 1) minInitiativeNumber = 1;
-
-      if (!dto.debug) {
-        for (const initiative of existingInitiatives) {
-          initiative.initiativeNumber += 1;
-          await this.em.persistAndFlush(initiative);
-        }
-      }
 
       const basePrompt = await this.aiService.createBasePrompt(ctx, rns.startup, this.em);
       if (!basePrompt)
@@ -370,11 +366,22 @@ export class InitiativeService {
         await this.em.persistAndFlush(initiative);
         initiatives.push(initiative);
       }
+      await this.shiftInitiativeNumbers(
+        existingInitiatives,
+        initiatives.length > 0 ? 1 : 0,
+      );
 
       return initiatives;
     } else {
       throw new BadRequestException('Either rnsId or rnsIds must be provided');
     }
+  }
+
+  /** Moves existing initiatives past the numbers new ones just took. */
+  private async shiftInitiativeNumbers(existing: Initiative[], by: number) {
+    if (by === 0 || existing.length === 0) return;
+    for (const initiative of existing) initiative.initiativeNumber += by;
+    await this.em.flush();
   }
 
   async refineInitiative(

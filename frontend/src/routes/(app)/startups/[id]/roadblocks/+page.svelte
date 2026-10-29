@@ -381,27 +381,14 @@
   const generateRoadblocks = async (count: number) => {
     generatingRoadblocks = true;
     try {
-      // Shift existing rows so new roadblocks take the low risk numbers.
       const currentItems = await axiosInstance.get(
         `/roadblocks/?startupId=${startupId}`,
         {
           headers: { Authorization: `Bearer ${access}` }
         }
       );
-      const updatePromises = currentItems.data.map((item: any) =>
-        axiosInstance.patch(
-          `/roadblocks/${item.id}/`,
-          {
-            riskNumber: (item.riskNumber || 0) + count
-          },
-          {
-            headers: { Authorization: `Bearer ${access}` }
-          }
-        )
-      );
-      await Promise.all(updatePromises);
 
-      await axiosInstance.post(
+      const generated = await axiosInstance.post(
         `/roadblocks/generate-roadblocks/`,
         {
           startupId: data.startupId,
@@ -412,6 +399,20 @@
             Authorization: `Bearer ${data.access}`
           }
         }
+      );
+
+      // Shift existing rows so new roadblocks take the low risk numbers, only
+      // after the AI succeeded and by how many it made: shifting first left
+      // the board renumbered with nothing added whenever generation failed.
+      const created = Array.isArray(generated.data) ? generated.data.length : 0;
+      await Promise.all(
+        currentItems.data.map((item: any) =>
+          axiosInstance.patch(
+            `/roadblocks/${item.id}/`,
+            { riskNumber: (item.riskNumber || 0) + created },
+            { headers: { Authorization: `Bearer ${access}` } }
+          )
+        )
       );
 
       await $roadblocksQueries[1].refetch(); // Refetch all roadblocks including new AI-generated ones

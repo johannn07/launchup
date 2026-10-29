@@ -449,3 +449,92 @@ describe('InitiativeService.generateInitiatives when Gemini refuses', () => {
     await expect(failure).rejects.toThrow('daily quota');
   });
 });
+
+// A failed generation used to leave the board shifted with nothing inserted,
+// and every generation shifted every startup's initiatives, not just this one's.
+describe('InitiativeService.generateInitiatives renumbering', () => {
+  const startup = { id: 1, name: 'AgroLink', user: { id: 5 }, capsuleProposal: { title: 't' } };
+  const rnsById: Record<number, any> = {
+    10: { id: 10, priorityNumber: 1, readinessType: 'Technology', status: 1, targetLevel: { level: 3 }, description: 'a', startup },
+    11: { id: 11, priorityNumber: 2, readinessType: 'Market', status: 1, targetLevel: { level: 3 }, description: 'b', startup },
+  };
+  const QUOTA = new Error('got status: 429 Too Many Requests');
+  const entry = { description: 'Run pilots', measures: 'm', targets: 't', remarks: 'r' };
+
+  function build(generate: jest.Mock) {
+    const existing = [
+      { id: 501, initiativeNumber: 1 },
+      { id: 502, initiativeNumber: 2 },
+    ];
+    const em = {
+      find: jest.fn().mockResolvedValue(existing),
+      count: jest.fn().mockResolvedValue(0),
+      findOneOrFail: jest.fn((_e: any, where: any) => Promise.resolve(rnsById[where.id])),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+    const aiService = {
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+      generateInitiativesFromPrompt: generate,
+    };
+    const service = new InitiativeService(
+      em as any,
+      aiService as any,
+      buildAiRunService().aiRunService,
+    );
+    const ctx = { runId: 77, run: {} as any, config: Object.freeze({ model: 'm', temperature: 0 }) } as any;
+    return { em, existing, service, ctx };
+  }
+
+  it('reads only this startup\'s initiatives for renumbering', async () => {
+    const { em, service, ctx } = build(jest.fn().mockResolvedValue([entry]));
+
+    await service.generateInitiatives({ rnsIds: [10], no_of_initiatives_to_create: 1 } as any, ctx);
+
+    expect(em.find).toHaveBeenCalledWith(
+      Initiative,
+      { startup: startup },
+      expect.anything(),
+    );
+  });
+
+  it('leaves existing numbers untouched when the AI call fails (rnsIds)', async () => {
+    const { existing, service, ctx } = build(jest.fn().mockRejectedValue(QUOTA));
+
+    await expect(
+      service.generateInitiatives({ rnsIds: [10], no_of_initiatives_to_create: 1 } as any, ctx),
+    ).rejects.toThrow();
+
+    expect(existing.map((i) => i.initiativeNumber)).toEqual([1, 2]);
+  });
+
+  it('leaves existing numbers untouched when the AI call fails (rnsId)', async () => {
+    const { existing, service, ctx } = build(jest.fn().mockRejectedValue(QUOTA));
+
+    await expect(
+      service.generateInitiatives({ rnsId: 10, no_of_initiatives_to_create: 1 } as any, ctx),
+    ).rejects.toThrow();
+
+    expect(existing.map((i) => i.initiativeNumber)).toEqual([1, 2]);
+  });
+
+  // The first next step's initiatives are saved before the second call fails.
+  it('shifts by what was saved when a later AI call fails', async () => {
+    const generate = jest.fn().mockResolvedValueOnce([entry]).mockRejectedValueOnce(QUOTA);
+    const { existing, service, ctx } = build(generate);
+
+    await expect(
+      service.generateInitiatives({ rnsIds: [10, 11], no_of_initiatives_to_create: 1 } as any, ctx),
+    ).rejects.toThrow();
+
+    expect(existing.map((i) => i.initiativeNumber)).toEqual([2, 3]);
+  });
+
+  it('shifts by one after a successful single generation', async () => {
+    const { existing, service, ctx } = build(jest.fn().mockResolvedValue([entry]));
+
+    await service.generateInitiatives({ rnsId: 10, no_of_initiatives_to_create: 1 } as any, ctx);
+
+    expect(existing.map((i) => i.initiativeNumber)).toEqual([2, 3]);
+  });
+});
