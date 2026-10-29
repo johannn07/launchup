@@ -75,6 +75,14 @@
     return levels;
   });
 
+  const selectedRubric = $derived(
+    ($rubricsQuery.data ?? []).find(
+      (r: any) =>
+        r.readinessType === selectedReadinessType &&
+        r.level === Number(readinessLevel)
+    )
+  );
+
   function toggleAssessmentForm(): void {
     showAssessmentForm = !showAssessmentForm;
   }
@@ -461,83 +469,34 @@
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
     <Dialog.Content size="full" class="flex flex-col">
-      <!-- pr-10 keeps the rating controls clear of the corner close icon. -->
-      <Dialog.Header
-        class="mb-1 flex shrink-0 flex-row flex-wrap items-start justify-between gap-x-6 gap-y-4 space-y-0 pr-10 text-left"
-      >
-        <div class="min-w-0">
-          <div class="flex items-center gap-3">
-            <span
-              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.8rem] border border-[#2b3a5c] bg-[#111b2e]"
-              aria-hidden="true"
-            >
-              <ModalTypeIcon class="h-5 w-5 text-[#c7d2fe]" />
-            </span>
-            <div>
-              <Dialog.Title
-                class="lu-d-md text-[20px] leading-tight text-white"
-              >
-                {selectedReadinessType}
-              </Dialog.Title>
-              <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">
-                Assessment · {modalProgress()}% complete
-              </p>
-            </div>
+      <Dialog.Header class="mb-1 shrink-0 text-left">
+        <div class="flex items-center gap-3">
+          <span
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.8rem] border border-[#2b3a5c] bg-[#111b2e]"
+            aria-hidden="true"
+          >
+            <ModalTypeIcon class="h-5 w-5 text-[#c7d2fe]" />
+          </span>
+          <div>
+            <Dialog.Title class="lu-d-md text-[20px] leading-tight text-white">
+              {selectedReadinessType}
+            </Dialog.Title>
+            <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">
+              Assessment · {modalProgress()}% complete
+            </p>
           </div>
-          <Dialog.Description class="mt-2 text-xs text-muted-foreground">
-            {#if data.role === 'Startup'}
-              Complete all assessments below to improve your readiness level
-            {:else}
-              View and rate the startup's assessment responses
-            {/if}
-          </Dialog.Description>
         </div>
-
-        {#if canRateReadiness(data.role)}
-          {@const typeAssessments = selectedReadinessType
-            ? assessmentsByType()[selectedReadinessType] || []
-            : []}
-          {@const hasApplicableAssessments = typeAssessments.some(
-            (a: any) => a.isApplicable
-          )}
-          <!-- lu-root: the dialog portals outside the page's .lu-root, which
-               left .lu-btn unstyled and Rate reading as plain text. -->
-          <div class="lu-root flex flex-col items-end gap-1.5 !bg-transparent">
-            <div class="flex items-center gap-2.5">
-              <span class="whitespace-nowrap text-[12.5px] text-[#94a3b8]"
-                >Readiness level</span
-              >
-              <Select.Root type="single" bind:value={readinessLevel}>
-                <Select.Trigger
-                  class="w-[110px]"
-                  disabled={!hasApplicableAssessments}
-                >
-                  Level {readinessLevel}
-                </Select.Trigger>
-                <Select.Content>
-                  {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
-                    <Select.Item value={level}>Level {level}</Select.Item>
-                  {/each}
-                </Select.Content>
-              </Select.Root>
-              <button
-                type="button"
-                class="lu-btn lu-btn-primary lu-btn-sm"
-                disabled={isRatingAssessment || !hasApplicableAssessments}
-                onclick={rateAssessmentType}
-              >
-                {isRatingAssessment ? 'Rating…' : 'Rate'}
-              </button>
-            </div>
-            {#if !hasApplicableAssessments}
-              <span class="text-xs text-muted-foreground">
-                No applicable assessments to rate
-              </span>
-            {/if}
-          </div>
-        {/if}
+        <Dialog.Description class="mt-2 text-xs text-muted-foreground">
+          {#if data.role === 'Startup'}
+            Complete all assessments below to improve your readiness level
+          {:else}
+            View and rate the startup's assessment responses
+          {/if}
+        </Dialog.Description>
       </Dialog.Header>
 
+      <!-- Read the answers on the left, decide on the right. -->
+      <div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
       <div
         class="assessment-scroll min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5"
       >
@@ -666,6 +625,69 @@
             selectedLevel={Number(readinessLevel)}
           />
         {/if}
+      </div>
+
+      {#if canRateReadiness(data.role)}
+        {@const typeAssessments = selectedReadinessType
+          ? assessmentsByType()[selectedReadinessType] || []
+          : []}
+        {@const hasApplicableAssessments = typeAssessments.some(
+          (a: any) => a.isApplicable
+        )}
+        <!-- lu-root: the dialog portals outside the page's .lu-root, which
+             left .lu-btn unstyled and Rate reading as plain text. -->
+        <aside
+          class="lu-root order-first flex shrink-0 flex-col gap-3 rounded-2xl border border-[#1f2c47] !bg-[#0b1220] p-5 md:order-none md:w-72"
+          aria-label="Rate this dimension"
+        >
+          <span
+            id="rate-level-label"
+            class="text-[12.5px] font-medium text-[#94a3b8]"
+          >
+            Readiness level
+          </span>
+          <Select.Root type="single" bind:value={readinessLevel}>
+            <Select.Trigger
+              class="w-full"
+              aria-labelledby="rate-level-label"
+              disabled={!hasApplicableAssessments}
+            >
+              Level {readinessLevel}
+            </Select.Trigger>
+            <Select.Content>
+              {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
+                <Select.Item value={level}>Level {level}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+
+          {#if selectedRubric}
+            <!-- What the picked level claims, read before committing to it. -->
+            <div class="hidden min-h-0 flex-1 overflow-y-auto md:block">
+              <p class="text-[13.5px] font-semibold leading-snug text-white">
+                {selectedRubric.title}
+              </p>
+              <p class="mt-1.5 text-[13px] leading-relaxed text-[#94a3b8]">
+                {selectedRubric.content}
+              </p>
+            </div>
+          {/if}
+
+          <button
+            type="button"
+            class="lu-btn lu-btn-primary lu-btn-sm mt-auto w-full"
+            disabled={isRatingAssessment || !hasApplicableAssessments}
+            onclick={rateAssessmentType}
+          >
+            {isRatingAssessment ? 'Rating…' : `Rate level ${readinessLevel}`}
+          </button>
+          {#if !hasApplicableAssessments}
+            <span class="text-xs text-muted-foreground">
+              No applicable assessments to rate
+            </span>
+          {/if}
+        </aside>
+      {/if}
       </div>
     </Dialog.Content>
   </Dialog.Root>
