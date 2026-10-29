@@ -3,6 +3,7 @@
   import BrandMark from '$lib/components/shared/brand-mark.svelte';
   import { ArrowLeft, AlertTriangle } from 'lucide-svelte';
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import type { Snippet } from 'svelte';
   import { flash, reducedMotion } from '$lib/motion';
 
@@ -88,7 +89,7 @@
   <header
     class="sticky top-0 z-40 border-b border-[#17213a]/70 bg-[#07111f]/85 backdrop-blur-lg"
   >
-    <div class="mx-auto flex h-16 w-[min(62rem,90vw)] items-center">
+    <div class="mx-auto flex h-16 w-full max-w-[55rem] items-center px-5">
       <BrandMark />
       <a
         href="/"
@@ -103,16 +104,16 @@
 
   <main class="flex-1 px-5 py-12 sm:py-16">
     <div
-      class="mx-auto grid w-full max-w-[62rem] gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,36rem)_minmax(0,13rem)] lg:justify-center"
+      class="mx-auto grid w-full max-w-[52.5rem] gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,36rem)_minmax(0,13rem)] lg:justify-center"
     >
       <!-- Document -->
-      <div class="min-w-0">
+      <div class="min-w-0 max-w-[36rem]">
         <h1
           class="lu-d-xw text-[30px] leading-[1.15] text-white sm:text-[34px]"
         >
           {title}
         </h1>
-        <p class="mt-3 max-w-[36rem] text-[16px] leading-[1.65] text-[#94a3b8]">
+        <p class="mt-3 max-w-[36rem] text-[17px] leading-[1.65] text-[#94a3b8]">
           {summary}
         </p>
 
@@ -134,48 +135,34 @@
           </span>
         </p>
 
-        <!-- Below lg the rail has nowhere to sit, so it becomes a block here. -->
+        <!-- Below lg the rail has nowhere to sit, so it folds up here rather
+             than pushing the first section below the fold. -->
         {#if sections.length}
-          <nav
-            class="lu-toc mt-9 max-w-[36rem] rounded-[1rem] border border-[#1f2c47] bg-[#0b1220]/60 p-5 lg:hidden"
-            aria-label="On this page"
+          <details
+            class="lu-toc mt-7 max-w-[36rem] rounded-[1rem] border border-[#1f2c47] bg-[#0b1220]/60 lg:hidden"
           >
-            <p class="lu-d-md mb-3 text-[13.5px] text-white">On this page</p>
-            <ol>
-              <li
-                class="lu-toc__marker"
-                aria-hidden="true"
-                role="presentation"
-                use:follow={activeId}
-              ></li>
-              {#each sections as s, i (s.id)}
-                <li>
-                  <a
-                    href="#{s.id}"
-                    onclick={() => jump(s.id)}
-                    aria-current={activeId === s.id ? 'true' : undefined}
-                  >
-                    <span class="lu-num text-[#818cf8]">{i + 1}.</span>
-                    {s.text}
-                  </a>
-                </li>
-              {/each}
-            </ol>
-          </nav>
+            <summary
+              class="lu-d-md cursor-pointer px-5 py-3.5 text-[13.5px] text-white"
+            >
+              On this page
+            </summary>
+            <nav class="px-5 pb-4" aria-label="On this page">
+              <ol>
+                {#each sections as s, i (s.id)}
+                  <li>
+                    <a href="#{s.id}" onclick={() => jump(s.id)}>
+                      <span class="lu-num text-[#818cf8]">{i + 1}.</span>
+                      {s.text}
+                    </a>
+                  </li>
+                {/each}
+              </ol>
+            </nav>
+          </details>
         {/if}
 
         <div class="lu-prose mt-10" bind:this={proseEl}>
           {@render children()}
-        </div>
-
-        <div
-          class="mt-16 flex max-w-[36rem] flex-wrap gap-x-6 gap-y-2 border-t border-[#17213a] pt-6 text-[14.5px]"
-        >
-          <a href="/legal/terms" class="lu-link">Terms of Service</a>
-          <a href="/legal/privacy" class="lu-link">Privacy Policy</a>
-          <a href="/register" data-sveltekit-reload class="lu-link"
-            >Create an account</a
-          >
         </div>
       </div>
 
@@ -212,12 +199,31 @@
 
   <footer class="border-t border-[#17213a]/70">
     <div
-      class="mx-auto flex w-[min(62rem,90vw)] items-center justify-between gap-3 py-6"
+      class="mx-auto flex w-full max-w-[55rem] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-6"
     >
       <p class="lu-num text-[13px] text-[#94a3b8]">
         © {new Date().getFullYear()} LaunchUp
       </p>
-      <nav class="flex gap-5 text-[13px] text-[#94a3b8]" aria-label="Footer">
+      <nav
+        class="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-[#94a3b8]"
+        aria-label="Footer"
+      >
+        <a
+          href="/legal/terms"
+          aria-current={page.url.pathname === '/legal/terms'
+            ? 'page'
+            : undefined}
+          class="transition-colors hover:text-[#818cf8] aria-[current=page]:text-white"
+          >Terms of Service</a
+        >
+        <a
+          href="/legal/privacy"
+          aria-current={page.url.pathname === '/legal/privacy'
+            ? 'page'
+            : undefined}
+          class="transition-colors hover:text-[#818cf8] aria-[current=page]:text-white"
+          >Privacy Policy</a
+        >
         <a href="/#howitwork" class="transition-colors hover:text-[#818cf8]"
           >How it Works</a
         >
