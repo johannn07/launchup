@@ -296,7 +296,9 @@
             >Terms of Service</a
           >
           and
-          <a href="/legal/privacy" class="lu-link">Privacy Policy</a>.
+          <a href="/legal/privacy" class="lu-link whitespace-nowrap"
+            >Privacy Policy</a
+          >.
         </label>
       </div>
       {#if errorFor('terms')}
