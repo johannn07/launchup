@@ -37,8 +37,9 @@
 {#if $quota.isSuccess}
   <span
     class="text-[12.5px] text-[#94a3b8]"
-    title="Resets at {resets}. Shared by everyone using LaunchUp; one generation can use several requests."
+    title="Shared by everyone using LaunchUp; one generation can use several requests."
   >
-    {$quota.data.remaining}/{$quota.data.limit} AI requests left today
+    {$quota.data.remaining}/{$quota.data.limit} AI requests left today · Resets at
+    {resets}
   </span>
 {/if}
