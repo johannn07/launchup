@@ -16,6 +16,7 @@ import { GroundedPromptBuilderService } from './grounded-prompt-builder.service'
 import { OutputValidatorService } from './output-validator.service';
 import { RnaChatHistory } from 'src/entities/rna-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { withAiRetry } from '../ai/retry-transient';
 import { JSON_NO_CHANGE_RULE } from '../ai/refine-chat';
 import { RNA_MAX_LENGTH } from './rna.constants';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
@@ -230,7 +231,9 @@ export class RnaService {
       return { prompts: [prompt] };
     }
 
-    const generatedRNAs = await this.aiService.generateRNAsFromPrompt(ctx, prompt);
+    const generatedRNAs = await withAiRetry(() =>
+      this.aiService.generateRNAsFromPrompt(ctx, prompt),
+    );
     console.log('AI generatedRNAs:', JSON.stringify(generatedRNAs, null, 2));
 
     const createdRNAs: StartupRNA[] = [];

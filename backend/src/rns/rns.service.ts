@@ -20,6 +20,7 @@ import { RagQueryService } from '../rna/rag-query.service';
 import { GroundedPromptBuilderService } from '../rna/grounded-prompt-builder.service';
 import { OutputValidatorService } from '../rna/output-validator.service';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { withAiRetry } from '../ai/retry-transient';
 import { readinessLevelsByType } from '../common/readiness-levels.util';
 import { TEXT_NO_CHANGE_RULE } from '../ai/refine-chat';
 import { RNS_MAX_LENGTH } from './rns.constants';
@@ -364,7 +365,9 @@ Requirement note:
         continue;
       }
 
-      const aiTasks = await this.aiService.generateTasksFromPrompt(ctx, prompt);
+      const aiTasks = await withAiRetry(() =>
+        this.aiService.generateTasksFromPrompt(ctx, prompt),
+      );
 
       if (!aiTasks || !Array.isArray(aiTasks) || aiTasks.length === 0) {
         console.warn(`AI did not return any tasks for RNA ID: ${rna.id}`);

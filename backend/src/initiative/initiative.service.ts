@@ -17,6 +17,7 @@ import { AiService } from 'src/ai/ai.service';
 import { RnsStatus } from 'src/entities/enums/rns.enum';
 import { InitiativeChatHistory } from 'src/entities/initiative-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { withAiRetry } from '../ai/retry-transient';
 import { JSON_NO_CHANGE_RULE } from '../ai/refine-chat';
 
 @Injectable()
@@ -248,8 +249,9 @@ export class InitiativeService {
           continue;
         }
 
-        const resultText =
-          await this.aiService.generateInitiativesFromPrompt(ctx, prompt);
+        const resultText = await withAiRetry(() =>
+          this.aiService.generateInitiativesFromPrompt(ctx, prompt),
+        );
 
         for (const entry of resultText) {
           const initiative = new Initiative();
@@ -343,8 +345,9 @@ export class InitiativeService {
         return { prompts: [prompt] };
       }
 
-      const resultText =
-        await this.aiService.generateInitiativesFromPrompt(ctx, prompt);
+      const resultText = await withAiRetry(() =>
+        this.aiService.generateInitiativesFromPrompt(ctx, prompt),
+      );
 
       const initiatives: Initiative[] = [];
 

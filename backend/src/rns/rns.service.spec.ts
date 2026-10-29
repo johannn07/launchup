@@ -1,4 +1,5 @@
 import { RnsService } from './rns.service';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
@@ -822,5 +823,53 @@ describe('RnsService.generateTasks debug dry run', () => {
     expect(result.prompts[0]).toContain('Technology');
     expect(existingRns.priorityNumber).toBe(1);
     expect(persisted).toHaveLength(0);
+  });
+});
+
+// Testers saw "Internal server error": a Gemini 429/503 reached them as a bare 500.
+describe('RnsService.generateTasks when Gemini refuses', () => {
+  it('returns a readable 503 for a quota error', async () => {
+    const startup = { id: 1, name: 'AgroLink', user: { id: 7 }, capsuleProposal: { title: 't' } };
+    const rna = {
+      id: 10,
+      rna: 'Validate demand.',
+      readinessLevel: { readinessType: 'Technology', level: 3 },
+    };
+    const em = {
+      findOne: jest.fn((entity: any) =>
+        Promise.resolve(entity === Startup ? startup : null),
+      ),
+      find: jest.fn((entity: any) =>
+        Promise.resolve(entity === StartupRNA ? [rna] : []),
+      ),
+      persist: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+    const aiService = {
+      generateTasksFromPrompt: jest
+        .fn()
+        .mockRejectedValue(new Error('got status: 429 Too Many Requests. RESOURCE_EXHAUSTED')),
+    };
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({ model: 'm', temperature: 0, grounding: true, rag: true }),
+    } as any;
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      { queryVectorDatabase: jest.fn().mockResolvedValue({ lowConfidence: true }) } as any,
+      {} as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    const failure = service.generateTasks(
+      { startup_id: 1, rnaIds: [10], no_of_tasks_to_create: 1 } as any,
+      ctx,
+    );
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('daily quota');
   });
 });

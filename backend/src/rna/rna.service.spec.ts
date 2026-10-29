@@ -1,4 +1,5 @@
 import { RnaService } from './rna.service';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
@@ -757,5 +758,58 @@ describe('RnaService.generateRNA debug dry run', () => {
     expect(result.prompts).toHaveLength(1);
     expect(result.prompts[0]).toContain('Technology');
     expect(persisted).toHaveLength(0);
+  });
+});
+
+// Testers saw "Internal server error": a Gemini 429/503 reached them as a bare 500.
+describe('RnaService.generateRNA when Gemini refuses', () => {
+  it('returns a readable 503 for a quota error', async () => {
+    const startup = { id: 1, name: 'AgroLink', capsuleProposal: { title: 't' } };
+    const em = {
+      findOne: jest.fn((entity: any) =>
+        Promise.resolve(entity === Startup ? startup : null),
+      ),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupReadinessLevel)
+          return Promise.resolve([
+            { id: 200, readinessLevel: { id: 100, readinessType: 'Technology', level: 3 } },
+          ]);
+        return Promise.resolve([]);
+      }),
+      persist: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
+    };
+    const aiService = {
+      generateRNAsFromPrompt: jest
+        .fn()
+        .mockRejectedValue(new Error('got status: 429 Too Many Requests. RESOURCE_EXHAUSTED')),
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+    };
+    const ragQueryService = {
+      queryVectorDatabase: jest.fn().mockResolvedValue({
+        lowConfidence: true,
+        verifiedFrameworks: [],
+        businessModels: [],
+        similarProfiles: [],
+      }),
+    };
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({ model: 'm', temperature: 0, grounding: true, rag: true }),
+    } as any;
+    const service = new RnaService(
+      em as any,
+      aiService as any,
+      ragQueryService as any,
+      {} as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    const failure = service.generateRNA(1, ctx);
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('daily quota');
   });
 });

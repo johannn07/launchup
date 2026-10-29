@@ -11,6 +11,8 @@
  * a code path.
  */
 
+import { ServiceUnavailableException } from '@nestjs/common';
+
 /** The daily cap. Never retry this. */
 export function isQuotaError(e: unknown): boolean {
   const s = String((e as Error)?.message ?? e);
@@ -60,5 +62,26 @@ export async function withRetry<T>(
       onRetry?.(attempt, e);
       await sleep(delayMs * attempt);
     }
+  }
+}
+
+/**
+ * withRetry, then a Gemini refusal as a 503 the user can read; without it a
+ * 429 or a lasting 503 reaches them as a bare 500. Other errors pass through.
+ */
+export async function withAiRetry<T>(
+  fn: () => Promise<T>,
+  options: Parameters<typeof withRetry>[1] = {},
+): Promise<T> {
+  try {
+    return await withRetry(fn, options);
+  } catch (e) {
+    if (!isServiceFailure(e)) throw e;
+    throw new ServiceUnavailableException(
+      isQuotaError(e)
+        ? 'The AI service has reached its daily quota. Please try again after it resets.'
+        : 'The AI service is busy right now. Please try again in a moment.',
+      { cause: e },
+    );
   }
 }
