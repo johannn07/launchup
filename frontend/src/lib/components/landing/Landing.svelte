@@ -50,6 +50,16 @@
   ></div>
 
   <AboutUs />
+
+  <div
+    class="mx-auto h-px w-[min(72rem,88vw)] bg-gradient-to-r from-transparent via-[#6366f1]/60 to-transparent"
+  ></div>
+
   <CallToAction />
+
+  <div
+    class="mx-auto h-px w-[min(72rem,88vw)] bg-gradient-to-r from-transparent via-[#6366f1]/60 to-transparent"
+  ></div>
+
   <Footer />
 </div>
