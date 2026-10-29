@@ -10,7 +10,7 @@ Cross-session gotchas. These cost real time when rediscovered.
 
 - **Never run `pnpm build` while `pnpm dev` is watching.** Both write `dist/`; the race leaves the server unable to resolve its own modules. `pnpm test` is safe (ts-jest doesn't touch `dist/`).
 - **Green mocked tests have repeatedly coexisted with broken reality here.** The boot-time embedding backfill failed on every startup; deleting `TierConfig.weights` broke `seed-dummy.ts` so `pnpm dev` wouldn't compile — both with a green suite. Exercise the real path: `preview_start` + `preview_logs`, or `NestFactory.createApplicationContext`. Run SQL against Neon inside `begin`/`rollback`.
-- **Gemini free tier: 20 generation calls/day on `gemini-3.6-flash`, window resets 15:00 Philippine time** (midnight US Pacific). A run started before 15:00 draws on the *previous* window. One UI generation fans out into several calls — budget 3–5/day, not 20. 429s surface in the backend terminal, not the browser. Embedding has a separate 100/min quota.
+- **Gemini free tier: 20 generation calls/day on `gemini-3.6-flash`, window resets at midnight US Pacific — 15:00 PH during US daylight time, 16:00 from 2026-11-01 until 2027-03-14** — the app computes it (`ai/quota-window.ts`); never hard-code the hour. A run started before the reset draws on the *previous* window. One UI generation fans out into several calls — budget 3–5/day, not 20. 429s surface in the backend terminal, not the browser. Embedding has a separate 100/min quota.
 - **Never rewrite a `backend/measurement/*.js` file with LF endings.** The harness
   fingerprints code by hashing `Function.prototype.toString()`, which carries the
   file's *real* line endings; working copies are CRLF and git stores LF. An LF
@@ -585,11 +585,27 @@ waiting on John's decisions. Zero Gemini generation calls.
 - `POST /readiness/score` writes an evaluation on every dashboard view; AgroLink
   holds 187, all shipped with every `GET /startups/:id` (TODO §2).
 
+### Quota indicator (`feat/ai-quota-indicator`, `756dee2`, local)
+
+- Tokens were considered and rejected: the cap counts requests (the 429 names
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`), and our calls range
+  214–11,553 prompt tokens.
+- The counter wraps the SDK client's `generateContent` at boot, not AiService's
+  call sites: it catches the three capsule calls that bypass `generate()`, and the
+  summary-bias harness's dry-run stub replaces it, so dry runs are not counted.
+- The reset is midnight US Pacific, so it moves to 16:00 PH on 2026-11-01. The
+  notes had it fixed at 15:00 everywhere; corrected.
+- Verified on Neon at zero quota with the SDK stubbed beneath the real wrapper;
+  probe rows deleted. Not verified: a real generation moving the count, which
+  costs quota. 440/440 backend; `svelte-check` 110 errors, unchanged.
+- John's `pnpm dev` watched this working tree, so it ran the feature branch
+  after the switch. Docs were written in a separate worktree to avoid reloading it
+  onto `master`, which would let schema sync drop `ai_quota_usage`.
+
 ### Next step
 
-1. **John tests both branches locally**, then merges: a generation at quota must
-   toast the quota message; rating one dimension on Assessment must update the
-   card and the header tier without a reload.
-2. **Decide the quota indicator** (TODO §5) — then `feat/ai-quota-indicator`.
+1. **Both fixes merged and pushed** (`ab93619`); redeploy, backend first.
+2. **John tests `feat/ai-quota-indicator`:** the note on the four Generate pages;
+   after one generation the count drops by the requests it used.
 3. The production hygiene items (debug logging, boot seeder, demo passwords)
    before any real data lands.
