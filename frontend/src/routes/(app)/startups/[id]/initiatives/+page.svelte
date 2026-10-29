@@ -3,7 +3,8 @@
   import {
     KanbanBoardNew,
     MembersFilter,
-    ShowHideColumns
+    ShowHideColumns,
+    AiQuotaNote
   } from '$lib/components/shared';
   import {
     getData,
@@ -720,6 +721,7 @@
           <Plus class="h-4 w-4" />
           Add
         </button>
+        <AiQuotaNote busy={generatingInitiatives} />
         <div class="lu-split">
           <button
             type="button"

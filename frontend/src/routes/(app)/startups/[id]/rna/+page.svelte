@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { AiQuotaNote } from '$lib/components/shared';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
   import { getData } from '$lib/utils';
   import { useQueries } from '@sveltestack/svelte-query';
@@ -289,6 +290,7 @@
         <Plus class="h-4 w-4" />
         Add
       </button>
+      <AiQuotaNote busy={generatingRNA} />
       <div class="lu-split">
         <button
           type="button"

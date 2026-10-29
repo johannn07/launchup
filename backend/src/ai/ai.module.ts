@@ -8,6 +8,8 @@ import { AiRunService } from './ai-run.service';
 import { EmbeddingService } from './embedding.service';
 import { EmbeddingIndexService } from './embedding-index.service';
 import { RagCorpusSeederService } from './rag-corpus-seeder.service';
+import { AiQuotaService } from './ai-quota.service';
+import { AiQuotaController } from './ai-quota.controller';
 
 @Module({
   providers: [
@@ -19,8 +21,9 @@ import { RagCorpusSeederService } from './rag-corpus-seeder.service';
     EmbeddingService,
     EmbeddingIndexService,
     RagCorpusSeederService,
+    AiQuotaService,
   ],
-  controllers: [AiMetricsController],
+  controllers: [AiMetricsController, AiQuotaController],
   exports: [
     AiService,
     AiMetricsService,

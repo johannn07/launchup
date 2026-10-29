@@ -3,7 +3,8 @@
   import {
     KanbanBoardNew,
     MembersFilter,
-    ShowHideColumns
+    ShowHideColumns,
+    AiQuotaNote
   } from '$lib/components/shared';
   import { getData, getColumns, getReadiness } from '$lib/utils';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
@@ -565,6 +566,7 @@
           <Plus class="h-4 w-4" />
           Add
         </button>
+        <AiQuotaNote busy={generatingRNS} />
         <div class="lu-split">
           <button
             type="button"
