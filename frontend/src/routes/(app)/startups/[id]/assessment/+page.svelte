@@ -615,8 +615,10 @@
         {/if}
       </div>
 
+      <!-- lu-root: the dialog portals outside the page's .lu-root, which left
+           .lu-btn unstyled and Rate reading as plain text. -->
       <div
-        class="border-border/50 flex shrink-0 items-center justify-between gap-3 border-t pt-4"
+        class="lu-root border-border/50 flex shrink-0 items-center justify-between gap-3 border-t !bg-transparent pt-4"
       >
         {#if canRateReadiness(data.role)}
           {@const typeAssessments = selectedReadinessType
