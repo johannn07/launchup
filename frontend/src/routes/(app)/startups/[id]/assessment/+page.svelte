@@ -461,28 +461,81 @@
   <!-- Type Modal with Assessments -->
   <Dialog.Root open={showTypeModal} onOpenChange={closeTypeModal}>
     <Dialog.Content size="full" class="flex flex-col">
-      <Dialog.Header class="mb-1 shrink-0 text-left">
-        <div class="flex items-center gap-3">
-          <span
-            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.8rem] border border-[#2b3a5c] bg-[#111b2e]"
-            aria-hidden="true"
-          >
-            <ModalTypeIcon class="h-5 w-5 text-[#c7d2fe]" />
-          </span>
-          <div>
-            <Dialog.Title class="lu-d-md text-[20px] leading-tight text-white">
-              {selectedReadinessType}
-            </Dialog.Title>
-            <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">Assessment</p>
+      <!-- pr-10 keeps the rating controls clear of the corner close icon. -->
+      <Dialog.Header
+        class="mb-1 flex shrink-0 flex-row flex-wrap items-start justify-between gap-x-6 gap-y-4 space-y-0 pr-10 text-left"
+      >
+        <div class="min-w-0">
+          <div class="flex items-center gap-3">
+            <span
+              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[0.8rem] border border-[#2b3a5c] bg-[#111b2e]"
+              aria-hidden="true"
+            >
+              <ModalTypeIcon class="h-5 w-5 text-[#c7d2fe]" />
+            </span>
+            <div>
+              <Dialog.Title
+                class="lu-d-md text-[20px] leading-tight text-white"
+              >
+                {selectedReadinessType}
+              </Dialog.Title>
+              <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">
+                Assessment · {modalProgress()}% complete
+              </p>
+            </div>
           </div>
+          <Dialog.Description class="mt-2 text-xs text-muted-foreground">
+            {#if data.role === 'Startup'}
+              Complete all assessments below to improve your readiness level
+            {:else}
+              View and rate the startup's assessment responses
+            {/if}
+          </Dialog.Description>
         </div>
-        <Dialog.Description class="mt-2 text-xs text-muted-foreground">
-          {#if data.role === 'Startup'}
-            Complete all assessments below to improve your readiness level
-          {:else}
-            View and rate the startup's assessment responses
-          {/if}
-        </Dialog.Description>
+
+        {#if canRateReadiness(data.role)}
+          {@const typeAssessments = selectedReadinessType
+            ? assessmentsByType()[selectedReadinessType] || []
+            : []}
+          {@const hasApplicableAssessments = typeAssessments.some(
+            (a: any) => a.isApplicable
+          )}
+          <!-- lu-root: the dialog portals outside the page's .lu-root, which
+               left .lu-btn unstyled and Rate reading as plain text. -->
+          <div class="lu-root flex flex-col items-end gap-1.5 !bg-transparent">
+            <div class="flex items-center gap-2.5">
+              <span class="whitespace-nowrap text-[12.5px] text-[#94a3b8]"
+                >Readiness level</span
+              >
+              <Select.Root type="single" bind:value={readinessLevel}>
+                <Select.Trigger
+                  class="w-[110px]"
+                  disabled={!hasApplicableAssessments}
+                >
+                  Level {readinessLevel}
+                </Select.Trigger>
+                <Select.Content>
+                  {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
+                    <Select.Item value={level}>Level {level}</Select.Item>
+                  {/each}
+                </Select.Content>
+              </Select.Root>
+              <button
+                type="button"
+                class="lu-btn lu-btn-primary lu-btn-sm"
+                disabled={isRatingAssessment || !hasApplicableAssessments}
+                onclick={rateAssessmentType}
+              >
+                {isRatingAssessment ? 'Rating…' : 'Rate'}
+              </button>
+            </div>
+            {#if !hasApplicableAssessments}
+              <span class="text-xs text-muted-foreground">
+                No applicable assessments to rate
+              </span>
+            {/if}
+          </div>
+        {/if}
       </Dialog.Header>
 
       <div
@@ -613,64 +666,6 @@
             selectedLevel={Number(readinessLevel)}
           />
         {/if}
-      </div>
-
-      <!-- lu-root: the dialog portals outside the page's .lu-root, which left
-           .lu-btn unstyled and Rate reading as plain text. -->
-      <div
-        class="lu-root border-border/50 flex shrink-0 items-center justify-between gap-3 border-t !bg-transparent pt-4"
-      >
-        {#if canRateReadiness(data.role)}
-          {@const typeAssessments = selectedReadinessType
-            ? assessmentsByType()[selectedReadinessType] || []
-            : []}
-          {@const hasApplicableAssessments = typeAssessments.some(
-            (a: any) => a.isApplicable
-          )}
-          <div class="flex items-center gap-3">
-            <span class="text-sm font-medium">Rate Readiness Level:</span>
-            <Select.Root type="single" bind:value={readinessLevel}>
-              <Select.Trigger
-                class="w-[120px]"
-                disabled={!hasApplicableAssessments}
-              >
-                Level {readinessLevel}
-              </Select.Trigger>
-              <Select.Content>
-                {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
-                  <Select.Item value={level}>Level {level}</Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
-            <button
-              type="button"
-              class="lu-btn lu-btn-primary lu-btn-sm"
-              disabled={isRatingAssessment || !hasApplicableAssessments}
-              onclick={rateAssessmentType}
-            >
-              {isRatingAssessment ? 'Rating…' : 'Rate'}
-            </button>
-            {#if !hasApplicableAssessments}
-              <span class="text-xs text-muted-foreground">
-                No applicable assessments to rate
-              </span>
-            {/if}
-          </div>
-        {:else}
-          <div></div>
-        {/if}
-
-        <span class="hidden text-xs font-medium text-muted-foreground sm:block">
-          {modalProgress()}% complete
-        </span>
-
-        <button
-          type="button"
-          class="lu-btn lu-btn-secondary lu-btn-sm"
-          onclick={closeTypeModal}
-        >
-          Close
-        </button>
       </div>
     </Dialog.Content>
   </Dialog.Root>
