@@ -554,58 +554,53 @@ of writing. About two dozen Gemini calls, most returning 503 "high demand", then
 
 ## 2026-10-30 — tester reports during the user study
 
-Three reports from respondents. Two fixed on local branches off `master`, one
-waiting on John's decisions. Zero Gemini generation calls.
+Three reports from study respondents, all addressed; everything merged to
+`master` and pushed. No Gemini quota spent by Claude — John's own testing used
+the day's 20.
 
-| Branch | Report | Cause | Verified |
+| Work | Report | Cause / design | Verified |
 |---|---|---|---|
-| `fix/generation-ai-errors` (`9512c99`) | "Internal server error" during AI generation | Since 2026-10-02, 73 of 143 runs failed, all Gemini 429 (37) or 503 (35) bar one network drop. The four generators had no retry or mapping, so both became a bare 500 | Real DI graph on Neon, Gemini's client throwing the verbatim errors: 429 → 1 call, quota message; 503 → 3 calls, busy message; run row keeps the raw error. Probe rows deleted |
-| `fix/readiness-rating-refresh` (`e609f77`) | A rating needed a page refresh | Three causes: `tierOf` read an arbitrary evaluation (unordered collection), the stored tier only re-scored when the dashboard mounted, and the query cache holds data for an hour | Browser as mentor on AgroLink: label 359 ms after Rate, header Developing → Early in 1.8 s with no reload; AgroLink's levels restored |
+| `fix/generation-ai-errors` | "Internal server error" during AI generation | Since 2026-10-02, 73 of 143 runs failed, all Gemini 429 (37) or 503 (35) bar one network drop. RNA, RNS, Initiatives and Roadblocks had no retry or mapping. `withAiRetry` retries a 503 twice, never a 429, and returns a readable 503 | Real DI graph on Neon with Gemini's client throwing the verbatim errors. Then in John's own test: runs 259–261 recorded the readable quota message |
+| `fix/readiness-rating-refresh` | A rating needed a page refresh | Three causes: `tierOf` read an arbitrary evaluation (the collection is unordered), the stored tier only re-scored when the dashboard mounted, and the query cache holds data for an hour | Browser as mentor: label 359 ms after Rate, header tier in 1.8 s, no reload; AgroLink's levels restored |
+| `feat/ai-quota-indicator` + `fix/ai-quota-note-wording` | Testers asked to see whether AI quota remains | The cap counts requests, not tokens (the 429 names `GenerateRequestsPerDayPerProjectPerModel-FreeTier`; prompts run 214–11,553 tokens). `AiQuotaService` wraps the client's `generateContent` at boot and tallies per model and Pacific-day window in `ai_quota_usage`; a 429 marks the window exhausted. Shown as "N/20 AI requests left today · Resets at 3:00 PM" beside Generate on four pages | Neon at zero quota: 10 concurrent calls counted 10, a 429 flagged and rethrown. Live: run 261 counted and flagged, the note read 0/20 |
 
 ### Notes
 
-- `withAiRetry` wraps the service call sites, not `AiService`: the summary-bias
-  harness drives `AiService` directly. The refine chats and summary keep their own
-  mappings; three copies of the same two messages now exist.
-- The first diagnosis of the rating bug named only the refresh. The unordered
-  evaluations surfaced when the header read "Early" after a full reload while the
-  newest evaluation read "Developing".
-- The frontend has no test framework, so fix 2 was reproduced live before the
-  change and re-run after it, rather than test-first.
-- Quota indicator: the limit is 20 requests/day shared by everyone, not tokens,
-  and Gemini exposes no remaining count. Logged in TODO §5 with the two decisions.
-- Debug SQL logging and the boot seeder are both still on in `master`; the demo
-  accounts (`password123`, documented in a public repo) exist on production. John
-  chose to leave them while nothing important is in the database.
+- **The reset moves to 16:00 PH on 2026-11-01** (midnight US Pacific). The notes
+  had 15:00 fixed everywhere; corrected, and the app computes it.
+- `withAiRetry` and the quota counter sit outside `AiService`, because the
+  summary-bias harness drives it directly. The counter is installed on the client,
+  so the harness's dry-run stub replaces it and is not counted.
+- The refine chats, summary and generators each carry the same two error messages
+  — three copies.
+- The first rating diagnosis named only the refresh; the unordered evaluations
+  surfaced when a full reload still showed the wrong tier.
+- The frontend has no test framework: the rating fix was reproduced live first and
+  re-run after, rather than test-first.
+- **John's `pnpm dev` shares this working tree.** A branch switch recompiles his
+  running servers, and a backend boot without an entity lets schema sync drop its
+  table. Merges were done in a temporary worktree so his server never booted
+  without `ai_quota_usage`.
+- Gates on `master`: backend 440/440; `svelte-check` 110 errors, unchanged.
 
-### Found, not fixed
+### Still open
 
-- A failed generation still renumbers the board — the pages and
-  `generateInitiatives` shift numbers before the AI call (TODO §2).
+- **Production hygiene, deliberately left by John while the database holds
+  nothing important:** `debug: true` logs SQL with values to Render; the boot
+  seeder runs on every deploy; the demo accounts (`password123`, documented in a
+  public repo) exist on production, including a Manager.
+- A failed generation still renumbers the board (TODO §2) — now common, since
+  quota runs out daily.
 - `POST /readiness/score` writes an evaluation on every dashboard view; AgroLink
-  holds 187, all shipped with every `GET /startups/:id` (TODO §2).
-
-### Quota indicator (`feat/ai-quota-indicator`, `756dee2`, local)
-
-- Tokens were considered and rejected: the cap counts requests (the 429 names
-  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`), and our calls range
-  214–11,553 prompt tokens.
-- The counter wraps the SDK client's `generateContent` at boot, not AiService's
-  call sites: it catches the three capsule calls that bypass `generate()`, and the
-  summary-bias harness's dry-run stub replaces it, so dry runs are not counted.
-- The reset is midnight US Pacific, so it moves to 16:00 PH on 2026-11-01. The
-  notes had it fixed at 15:00 everywhere; corrected.
-- Verified on Neon at zero quota with the SDK stubbed beneath the real wrapper;
-  probe rows deleted. Not verified: a real generation moving the count, which
-  costs quota. 440/440 backend; `svelte-check` 110 errors, unchanged.
-- John's `pnpm dev` watched this working tree, so it ran the feature branch
-  after the switch. Docs were written in a separate worktree to avoid reloading it
-  onto `master`, which would let schema sync drop `ai_quota_usage`.
+  holds 187, all sent with every `GET /startups/:id` (TODO §2).
+- Not yet seen: a real generation lowering the quota count — today's runs predate
+  the counter, and the quota was spent by 03:14.
 
 ### Next step
 
-1. **Both fixes merged and pushed** (`ab93619`); redeploy, backend first.
-2. **John tests `feat/ai-quota-indicator`:** the note on the four Generate pages;
-   after one generation the count drops by the requests it used.
-3. The production hygiene items (debug logging, boot seeder, demo passwords)
-   before any real data lands.
+1. **Redeploy, backend first** — testers see none of today's work until then.
+2. **After 15:00 today, check the indicator:** 20/20, then one generation lowers it
+   by the requests it used.
+3. **Close the user study**, then the critical path: study analysis (TAM, SUS),
+   the SPMP and traceability matrix, and the 30–50 minute CER transcription for 3c.
+4. Before any real data: the production hygiene items above.
