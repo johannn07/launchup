@@ -47,6 +47,7 @@ import {
   type FieldConfidence,
 } from 'src/ocr/field-confidence';
 import {
+  aiUnavailableMessage,
   isQuotaError,
   isServiceFailure,
   withRetry,
@@ -333,7 +334,7 @@ export class StartupService {
         if (isServiceFailure(err)) {
           throw new ServiceUnavailableException(
             isQuotaError(err)
-              ? 'The AI service has reached its daily quota. Please try again after it resets.'
+              ? aiUnavailableMessage(err)
               : 'The AI service is busy right now. Please try uploading again in a moment.',
           );
         }
@@ -617,12 +618,9 @@ export class StartupService {
   /** A Gemini outage as a 503 the user can read; anything else unchanged. */
   private aiUnavailable(err: unknown): unknown {
     if (!isServiceFailure(err)) return err;
-    return new ServiceUnavailableException(
-      isQuotaError(err)
-        ? 'The AI service has reached its daily quota. Please try again after it resets.'
-        : 'The AI service is busy right now. Please try again in a moment.',
-      { cause: err },
-    );
+    return new ServiceUnavailableException(aiUnavailableMessage(err), {
+      cause: err,
+    });
   }
 
   /**
