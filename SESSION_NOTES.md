@@ -384,56 +384,16 @@ and the orphaned `/pending` route (§4).
 
 ---
 
-## 2026-09-18 — the eleven non-reactive variables, and what fixing them exposed
+## Compressed — 2026-09-18 (non-reactive state)
 
-Zero Gemini calls. `fix/non-reactive-state`, merged to local `master` (`2870e9e`).
-Eleven variables wrapped in `$state(...)` across five components (bias audits,
-tiers, OCR documents, elevate, the landing header). `svelte-check` warnings
-**22 → 11**, none of this class left; errors unchanged at 113.
-
-**The landing header is the one verified both ways.** The window never scrolls on
-`/` — the page scrolls inside a container — so the test drove a scroll event with
-`window.scrollY` stubbed: the fixed build toggles `border-b`/`backdrop-blur-lg`,
-the stashed original never does. ⚠️ **That also means the header's blur still
-cannot fire from real scrolling**, because the listener is on `window`. Own
-branch; TODO §2.
-
-### Fixing the state surfaced a second defect behind it
-
-John overrode bias audit #24 (three saves, in `activity_logs`) and the row
-rendered **"Startup #Unknown"**. `overrideBiasAudit` did `findOne` with no
-`populate`, so the startup serialized as a bare `1` and the page — which swaps
-that response into its list — read `startup.id` as `undefined`. Stored data was
-never wrong: Neon still had `startup_id = 1`. **The display bug had been
-unreachable precisely because the list never re-rendered**, so this branch would
-have shipped it as a visible regression; fixed here rather than deferred.
-Test-first (failed for the right reason, then passed), **380/380 backend**, and
-proven on the real ORM read-only: without `populate` the field serializes as `1`,
-with it as `{"id":1,"name":"AgroLink PH",…}`. Same class as the standing note —
-**a missing `populate` is invisible to every mocked test.**
-
-### The OCR preview cannot be reached at all
-
-John reported no preview button. Not this branch and not a regression: the button
-is gated on `o.sourcePath`, and **nothing ever writes `sourcePath`** (open since
-2026-09-06, §5). The `previewOpen`/`previewUrl` fix is correct and currently
-unreachable — it needs image storage first.
-
-### Verification limits
-
-Claude's pane was signed in as the Startup demo user throughout, so **Tiers,
-AI Bias and Elevate were not clicked through by Claude** — John tests those. The
-Manager screenshots that surfaced both findings came from John's own browser.
-
-### Next step
-
-1. **John tests on `master`:** Tiers "Add tier", an AI Bias override (the row must
-   still name its startup), Elevate's Next Level picker.
-2. **The landing header's scroll listener** watches `window` on a page that scrolls
-   in a container — own branch.
-3. `supportRatio` stays §2's open measurement problem, and the critical path is
-   unchanged: the SPMP and the traceability matrix, competing for the same weeks
-   as the 30-user study.
+Zero Gemini calls. `fix/non-reactive-state`, merged `2870e9e`: eleven plain-`let`
+variables wrapped in `$state(...)` (bias audits, tiers, OCR documents, elevate,
+landing header); `svelte-check` warnings 22 → 11. Re-rendering exposed a missing
+`populate` on `overrideBiasAudit` ("Startup #Unknown"), fixed test-first. **Still
+open:** the landing header's blur cannot fire from real scrolling (listener on
+`window`, page scrolls in a container; TODO §2); the OCR preview is unreachable
+because nothing writes `sourcePath` (§5); Tiers, AI Bias and Elevate were not
+clicked through by Claude.
 
 ---
 
@@ -590,3 +550,46 @@ of writing. About two dozen Gemini calls, most returning 503 "high demand", then
 4. The critical path is unchanged: the SPMP and the traceability matrix, competing
    for the same weeks as the 30-user study.
 
+---
+
+## 2026-10-30 — tester reports during the user study
+
+Three reports from respondents. Two fixed on local branches off `master`, one
+waiting on John's decisions. Zero Gemini generation calls.
+
+| Branch | Report | Cause | Verified |
+|---|---|---|---|
+| `fix/generation-ai-errors` (`9512c99`) | "Internal server error" during AI generation | Since 2026-10-02, 73 of 143 runs failed, all Gemini 429 (37) or 503 (35) bar one network drop. The four generators had no retry or mapping, so both became a bare 500 | Real DI graph on Neon, Gemini's client throwing the verbatim errors: 429 → 1 call, quota message; 503 → 3 calls, busy message; run row keeps the raw error. Probe rows deleted |
+| `fix/readiness-rating-refresh` (`e609f77`) | A rating needed a page refresh | Three causes: `tierOf` read an arbitrary evaluation (unordered collection), the stored tier only re-scored when the dashboard mounted, and the query cache holds data for an hour | Browser as mentor on AgroLink: label 359 ms after Rate, header Developing → Early in 1.8 s with no reload; AgroLink's levels restored |
+
+### Notes
+
+- `withAiRetry` wraps the service call sites, not `AiService`: the summary-bias
+  harness drives `AiService` directly. The refine chats and summary keep their own
+  mappings; three copies of the same two messages now exist.
+- The first diagnosis of the rating bug named only the refresh. The unordered
+  evaluations surfaced when the header read "Early" after a full reload while the
+  newest evaluation read "Developing".
+- The frontend has no test framework, so fix 2 was reproduced live before the
+  change and re-run after it, rather than test-first.
+- Quota indicator: the limit is 20 requests/day shared by everyone, not tokens,
+  and Gemini exposes no remaining count. Logged in TODO §5 with the two decisions.
+- Debug SQL logging and the boot seeder are both still on in `master`; the demo
+  accounts (`password123`, documented in a public repo) exist on production. John
+  chose to leave them while nothing important is in the database.
+
+### Found, not fixed
+
+- A failed generation still renumbers the board — the pages and
+  `generateInitiatives` shift numbers before the AI call (TODO §2).
+- `POST /readiness/score` writes an evaluation on every dashboard view; AgroLink
+  holds 187, all shipped with every `GET /startups/:id` (TODO §2).
+
+### Next step
+
+1. **John tests both branches locally**, then merges: a generation at quota must
+   toast the quota message; rating one dimension on Assessment must update the
+   card and the header tier without a reload.
+2. **Decide the quota indicator** (TODO §5) — then `feat/ai-quota-indicator`.
+3. The production hygiene items (debug logging, boot seeder, demo passwords)
+   before any real data lands.
