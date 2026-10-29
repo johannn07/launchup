@@ -26,6 +26,23 @@ export function isRetryableServerError(e: unknown): boolean {
   return s.includes('503') || s.includes('UNAVAILABLE');
 }
 
+/**
+ * The per-minute limit, which clears within a minute. Gemini names the limit
+ * in the 429 body; one without a name is treated as the daily cap, as before.
+ */
+export function isRateLimitError(e: unknown): boolean {
+  return isQuotaError(e) && String((e as Error)?.message ?? e).includes('PerMinute');
+}
+
+/** What to tell a user whose request Gemini refused. */
+export function aiUnavailableMessage(e: unknown): string {
+  if (isRateLimitError(e))
+    return 'The AI service is receiving too many requests. Please try again in a minute.';
+  if (isQuotaError(e))
+    return 'The AI service has reached its daily quota. Please try again after it resets.';
+  return 'The AI service is busy right now. Please try again in a moment.';
+}
+
 /** Either failure means the request cannot be served now, whatever the cause. */
 export function isServiceFailure(e: unknown): boolean {
   return isQuotaError(e) || isRetryableServerError(e);
@@ -77,11 +94,6 @@ export async function withAiRetry<T>(
     return await withRetry(fn, options);
   } catch (e) {
     if (!isServiceFailure(e)) throw e;
-    throw new ServiceUnavailableException(
-      isQuotaError(e)
-        ? 'The AI service has reached its daily quota. Please try again after it resets.'
-        : 'The AI service is busy right now. Please try again in a moment.',
-      { cause: e },
-    );
+    throw new ServiceUnavailableException(aiUnavailableMessage(e), { cause: e });
   }
 }

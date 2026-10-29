@@ -16,7 +16,7 @@ import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
 import { AiBiasAudit } from 'src/entities/ai-bias-audit.entity';
 import { RagContext } from 'src/entities/rag-context.entity';
 import { VectorEmbedding } from 'src/entities/vector-embeddings.entity';
-import { isQuotaError, isServiceFailure, withRetry } from './retry-transient';
+import { aiUnavailableMessage, isServiceFailure, withRetry } from './retry-transient';
 import { RNS_NO_CHANGE } from './refine-chat';
 import { AiRunContext } from './ai-run.service';
 import { AiConfigService } from './ai-config.service';
@@ -742,12 +742,7 @@ export class AiService {
       });
     } catch (e) {
       if (!isServiceFailure(e)) throw e;
-      throw new ServiceUnavailableException(
-        isQuotaError(e)
-          ? 'The AI service has reached its daily quota. Please try again after it resets.'
-          : 'The AI service is busy right now. Please try again in a moment.',
-        { cause: e },
-      );
+      throw new ServiceUnavailableException(aiUnavailableMessage(e), { cause: e });
     }
   }
 

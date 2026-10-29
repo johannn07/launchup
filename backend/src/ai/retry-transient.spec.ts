@@ -1,6 +1,8 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import {
+  aiUnavailableMessage,
   isQuotaError,
+  isRateLimitError,
   isRetryableServerError,
   withAiRetry,
   withRetry,
@@ -149,5 +151,39 @@ describe('the real error, verbatim', () => {
   it('classifies the 503 that broke the live upload as retryable, not quota', () => {
     expect(isRetryableServerError(observed)).toBe(true);
     expect(isQuotaError(observed)).toBe(false);
+  });
+});
+
+describe('telling the per-minute limit from the daily one', () => {
+  const RATE_LIMIT =
+    'got status: 429 Too Many Requests. {"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"violations":[{"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier"}]}]}}';
+  const DAILY =
+    'got status: 429 Too Many Requests. {"error":{"code":429,"status":"RESOURCE_EXHAUSTED","details":[{"violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}';
+
+  it('recognises the per-minute limit', () => {
+    expect(isRateLimitError(err(RATE_LIMIT))).toBe(true);
+    expect(isRateLimitError(err(DAILY))).toBe(false);
+    expect(isRateLimitError(err(SERVICE_BUSY))).toBe(false);
+  });
+
+  it('says to wait a minute for the per-minute limit', () => {
+    expect(aiUnavailableMessage(err(RATE_LIMIT))).toMatch(/minute/);
+    expect(aiUnavailableMessage(err(RATE_LIMIT))).not.toMatch(/daily/);
+  });
+
+  it('keeps the daily quota and busy messages', () => {
+    expect(aiUnavailableMessage(err(DAILY))).toMatch(/daily quota/);
+    // A quota refusal with no quotaId is treated as daily, as before.
+    expect(aiUnavailableMessage(err(QUOTA))).toMatch(/daily quota/);
+    expect(aiUnavailableMessage(err(SERVICE_BUSY))).toMatch(/busy/);
+  });
+
+  it('surfaces the per-minute message from withAiRetry, without retrying', async () => {
+    const fn = jest.fn().mockRejectedValue(err(RATE_LIMIT));
+
+    const failure = withAiRetry(fn, { sleep: jest.fn() });
+
+    await expect(failure).rejects.toThrow(/minute/);
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 });

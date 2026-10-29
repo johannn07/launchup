@@ -34,7 +34,21 @@ export class AiQuotaService implements OnModuleInit {
     countGenerateContent(models, {
       onCall: (model) => this.record(model, 'call'),
       onQuotaExhausted: (model) => this.record(model, 'exhausted'),
+      onAccepted: (model) => this.clearExhausted(model),
     });
+  }
+
+  // An update, not an upsert: a request is always counted before it is sent,
+  // so the row exists, and a window that was never exhausted needs no write.
+  private async clearExhausted(model: string) {
+    const { start } = quotaWindow(new Date());
+    await this.em
+      .fork()
+      .getConnection()
+      .execute(
+        'update ai_quota_usage set exhausted = false where model = ? and window_start = ? and exhausted',
+        [model, start],
+      );
   }
 
   private get limit() {

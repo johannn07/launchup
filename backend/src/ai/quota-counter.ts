@@ -1,10 +1,12 @@
-import { isQuotaError } from './retry-transient';
+import { isQuotaError, isRateLimitError } from './retry-transient';
 
 type GenerateContent = (req: any) => Promise<any>;
 
 export interface QuotaHooks {
   onCall(model: string): Promise<void>;
   onQuotaExhausted(model: string): Promise<void>;
+  /** Gemini has served requests hours before its stated reset. */
+  onAccepted(model: string): Promise<void>;
 }
 
 /**
@@ -23,16 +25,22 @@ export function countGenerateContent(
     await hooks.onCall(req?.model).catch((e) =>
       console.error('AI quota count failed', e),
     );
+    let res: any;
     try {
-      return await send(req);
+      res = await send(req);
     } catch (e) {
-      if (isQuotaError(e)) {
+      // The per-minute limit clears in a minute; only the daily cap empties the day.
+      if (isQuotaError(e) && !isRateLimitError(e)) {
         await hooks
           .onQuotaExhausted(req?.model)
           .catch((err) => console.error('AI quota flag failed', err));
       }
       throw e;
     }
+    await hooks
+      .onAccepted(req?.model)
+      .catch((err) => console.error('AI quota acceptance failed', err));
+    return res;
   };
 }
 
