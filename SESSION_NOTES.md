@@ -615,6 +615,8 @@ the day's 20.
 1. **Redeploy, backend first** — testers see none of today's work until then.
 2. **After 15:00 today, check the indicator:** 20/20, then one generation lowers it
    by the requests it used.
+   Also try the two rating follow-ups: the new rating panel, and the RNA picker
+   showing a new level without a refresh. Verified by Claude, not yet by John.
 3. **Close the user study**, then the critical path: study analysis (TAM, SUS),
    the SPMP and traceability matrix, and the 30–50 minute CER transcription for 3c.
 4. Before any real data: the production hygiene items above.
