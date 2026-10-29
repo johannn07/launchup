@@ -873,3 +873,87 @@ describe('RnsService.generateTasks when Gemini refuses', () => {
     await expect(failure).rejects.toThrow('daily quota');
   });
 });
+
+// A failed generation used to leave the board shifted with nothing inserted.
+describe('RnsService.generateTasks renumbering', () => {
+  function build(generate: jest.Mock, rnaIds: number[]) {
+    const startup = { id: 1, name: 'AgroLink', user: { id: 7 }, capsuleProposal: { title: 't' } };
+    const rnas = rnaIds.map((id) => ({
+      id,
+      rna: `RNA ${id}`,
+      readinessLevel: { readinessType: id === 10 ? 'Technology' : 'Market', level: 3 },
+    }));
+    const existing = [
+      { id: 501, priorityNumber: 1 },
+      { id: 502, priorityNumber: 2 },
+    ];
+    const em = {
+      findOne: jest.fn((entity: any) => {
+        if (entity === Startup) return Promise.resolve(startup);
+        if (entity === ReadinessLevel) return Promise.resolve({ id: 42, level: 4 });
+        return Promise.resolve(null);
+      }),
+      find: jest.fn((entity: any) => {
+        if (entity === StartupRNA) return Promise.resolve(rnas);
+        if (entity === Rns) return Promise.resolve(existing);
+        return Promise.resolve([]);
+      }),
+      create: jest.fn((_e, data) => data),
+      persist: jest.fn(),
+      flush: jest.fn().mockResolvedValue(undefined),
+      getReference: jest.fn((_e, id) => ({ id })),
+    };
+    const aiService = {
+      generateTasksFromPrompt: generate,
+      reviewBiasScore: jest
+        .fn()
+        .mockResolvedValue({ correctedScore: 4, biasFlagged: false, justification: '' }),
+      recordAiRecommendation: jest.fn().mockResolvedValue(undefined),
+      recordBiasAudit: jest.fn().mockResolvedValue(undefined),
+    };
+    const service = new RnsService(
+      em as any,
+      aiService as any,
+      { queryVectorDatabase: jest.fn().mockResolvedValue({ lowConfidence: true }) } as any,
+      {} as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+    const ctx = {
+      runId: 99,
+      run: {} as any,
+      config: Object.freeze({ model: 'm', temperature: 0, biasReview: true, scoreNormalization: true }),
+    } as any;
+    const run = () =>
+      service.generateTasks(
+        { startup_id: 1, rnaIds, no_of_tasks_to_create: 1, startPriorityNumber: 1 } as any,
+        ctx,
+      );
+    return { existing, run };
+  }
+
+  it('leaves existing numbers untouched when the AI call fails', async () => {
+    const { existing, run } = build(
+      jest.fn().mockRejectedValue(new Error('got status: 429 Too Many Requests')),
+      [10],
+    );
+
+    await expect(run()).rejects.toThrow();
+
+    expect(existing.map((r) => r.priorityNumber)).toEqual([1, 2]);
+  });
+
+  it('shifts existing items by the number created, not the number requested', async () => {
+    // Two next steps requested; the AI returns a task for only one of them.
+    const generate = jest
+      .fn()
+      .mockResolvedValueOnce([{ target_level: 4, description: 'Run pilots' }])
+      .mockResolvedValueOnce([]);
+    const { existing, run } = build(generate, [10, 11]);
+
+    const created = (await run()) as any[];
+
+    expect(created.map((r) => r.priorityNumber)).toEqual([1]);
+    expect(existing.map((r) => r.priorityNumber)).toEqual([2, 3]);
+  });
+});

@@ -128,32 +128,8 @@
 
     generatingRNS = true;
     try {
-      // First, get all current RNS items
-      const currentItems = await axiosInstance.get(
-        `/rns/?startupId=${data.startupId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${data.access}`
-          }
-        }
-      );
-
-      // Increment priority numbers of all existing items
-      const updatePromises = currentItems.data.map((item: any) =>
-        axiosInstance.patch(
-          `/rns/${item.id}/`,
-          { priorityNumber: (item.priorityNumber || 0) + selectedRNA.length },
-          {
-            headers: {
-              Authorization: `Bearer ${data.access}`
-            }
-          }
-        )
-      );
-
-      await Promise.all(updatePromises);
-
-      // Now generate new items with priority numbers starting from 1
+      // The server numbers new items from 1 and shifts existing ones by how
+      // many it created, after the AI succeeds.
       await axiosInstance.post(
         `/rns/generate-tasks/`, // Assuming this endpoint can handle rns_ids
         {

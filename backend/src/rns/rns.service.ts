@@ -253,15 +253,11 @@ async generateTasks(dto: GenerateTasksDto, ctx: AiRunContext) {
 
   const debugPrompts: string[] = [];
 
-  // Renumbering is a write, so a dry run must not reach it.
-  if (!dto.debug) {
-    const existingRns = await this.em.find(Rns, { startup: startup }, { orderBy: { priorityNumber: 'ASC' } });
-    for (const rns of existingRns) {
-      rns.priorityNumber += (dto.no_of_tasks_to_create || 1) * rnasToGenerateFrom.length;
-      this.em.persist(rns);
-    }
-    await this.em.flush();
-  }
+  // Read now, shifted after the loop by what was actually created: shifting
+  // first left gaps whenever the AI failed or returned nothing.
+  const existingRns = dto.debug
+    ? []
+    : await this.em.find(Rns, { startup: startup }, { orderBy: { priorityNumber: 'ASC' } });
 
   const targetReadinessLevel: Record<string, number> = {
     T: trl,
@@ -459,6 +455,10 @@ Requirement note:
           generationRun: ctx.run,
         });
       }
+    }
+    for (const rns of existingRns) {
+      rns.priorityNumber += createdRns.length;
+      this.em.persist(rns);
     }
     await this.em.flush(); // Flush all new RNS after the loop
 
