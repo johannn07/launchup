@@ -616,6 +616,12 @@ the day's 20.
   the per-minute limit says "try again in a minute" and leaves the quota note
   alone, and an accepted request clears the exhausted mark: Gemini served one at
   04:49 after saying to wait 11 hours.
+- **Duplicate score rows deleted** (John's call). A row identical to the one before
+  it for the same startup went: 309 evaluations and 1,854 gap rows across 14
+  startups (AgroLink 198 → 10, MediSync 50 → 4). Every real change and every
+  startup's latest values were kept. Backups of all rows are in
+  `db-backups/agrolink-evaluations-before-dedupe-1793310105905.json` and
+  `db-backups/all-evaluations-before-dedupe-1793310414397.json`.
 
 ### Still open
 
@@ -623,8 +629,6 @@ the day's 20.
   nothing important:** `debug: true` logs SQL with values to Render; the boot
   seeder runs on every deploy; the demo accounts (`password123`, documented in a
   public repo) exist on production, including a Manager.
-- **Old score rows:** AgroLink keeps 198 saved evaluations, all sent with every
-  `GET /startups/:id`. Deleting the duplicates is John's decision (TODO §2).
 - **Seen live but not by John:** the counter counted the 04:49 generation; the
   initiative per-step numbering and the Initiatives/Roadblocks renumbering have not
   run against a real generation.
