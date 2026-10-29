@@ -194,13 +194,35 @@ export class ReadinessService {
       weightRationale: this.getWeightRationale(weights),
     };
 
+    const isProvisional = dimensions.some((dimension) => dimension.score === 0);
+
     try {
+      // A new row only when something changed: every dashboard view used to
+      // add one, and the whole history ships with every startup response.
+      const latest = await this.em.findOne(
+        ReadinessEvaluation,
+        { startup: startupId },
+        { orderBy: { id: 'DESC' }, populate: ['gaps'] },
+      );
+      if (
+        latest &&
+        this.matchesEvaluation(latest, {
+          compositeScore,
+          tierLabel,
+          isProvisional,
+          tierThreshold,
+          dimensions,
+        })
+      ) {
+        return response;
+      }
+
       const evaluation = this.em.create(ReadinessEvaluation, {
         startup: startupId,
         compositeScore,
         tierLabel: tierLabel,
-        isProvisional: dimensions.some((dimension) => dimension.score === 0),
-        warning: dimensions.some((dimension) => dimension.score === 0)
+        isProvisional,
+        warning: isProvisional
           ? 'One or more readiness dimensions are missing, so the score should be treated as provisional.'
           : null,
         createdAt: new Date(),
@@ -232,5 +254,37 @@ export class ReadinessService {
     }
 
     return response;
+  }
+
+  /** Same score, tier, flag and per-dimension gap rows as the stored evaluation. */
+  private matchesEvaluation(
+    latest: ReadinessEvaluation,
+    next: {
+      compositeScore: number;
+      tierLabel: string;
+      isProvisional: boolean;
+      tierThreshold: number;
+      dimensions: { key: string; percent: number }[];
+    },
+  ) {
+    if (
+      latest.compositeScore !== next.compositeScore ||
+      latest.tierLabel !== next.tierLabel ||
+      latest.isProvisional !== next.isProvisional
+    ) {
+      return false;
+    }
+    const gaps = latest.gaps.getItems();
+    return (
+      gaps.length === next.dimensions.length &&
+      next.dimensions.every((dimension) =>
+        gaps.some(
+          (gap) =>
+            gap.dimensionKey === dimension.key &&
+            gap.score === dimension.percent &&
+            gap.tierThreshold === next.tierThreshold,
+        ),
+      )
+    );
   }
 }

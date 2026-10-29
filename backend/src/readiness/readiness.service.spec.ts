@@ -47,7 +47,8 @@ describe('ReadinessService', () => {
 
     // Two find() calls: readiness levels, then tier configs.
     expect(em.find).toHaveBeenCalledTimes(2);
-    expect(em.findOne).toHaveBeenCalledTimes(1);
+    // The startup, then the latest evaluation to compare against.
+    expect(em.findOne).toHaveBeenCalledTimes(2);
     expect(result.compositeScore).toBeGreaterThan(0);
     expect(result.tierLabel).toBeDefined();
     expect(result.dimensions).toHaveLength(6);
@@ -137,5 +138,89 @@ describe('ReadinessService', () => {
     await new ReadinessService(em, profiles).getReadinessForStartup(1);
 
     expect(profiles.resolve).toHaveBeenCalledWith(null, null);
+  });
+});
+
+// Every dashboard view saved a new evaluation even when nothing changed;
+// AgroLink held 187, all shipped with every GET /startups/:id.
+describe('ReadinessService evaluation history', () => {
+  // Records what getReadinessForStartup writes, and answers findOne for the
+  // latest evaluation with whatever the test supplies.
+  function recordingEm(levels: Array<[ReadinessType, number]>, latest: any = null) {
+    const created: Array<{ entity: string; data: any }> = [];
+    const em = {
+      find: jest.fn(async (entity: any) => {
+        if (entity?.name === 'TierConfig') return [];
+        return levels.map(([readinessType, level]) => ({ readinessLevel: { level, readinessType } }));
+      }),
+      findOne: jest.fn(async (entity: any) =>
+        entity?.name === 'ReadinessEvaluation'
+          ? latest
+          : { id: 1, sector: null, businessModel: null },
+      ),
+      create: jest.fn((entity: any, data: any) => {
+        created.push({ entity: entity.name, data });
+        return { ...data };
+      }),
+      persist: jest.fn(),
+      flush: jest.fn(async () => undefined),
+    } as unknown as EntityManager;
+    const evaluations = () => created.filter((c) => c.entity === 'ReadinessEvaluation');
+    const gaps = () => created.filter((c) => c.entity === 'ReadinessGap').map((c) => c.data);
+    return { em, evaluations, gaps };
+  }
+
+  // The evaluation a previous identical call stored, shaped as findOne returns it.
+  async function storedAfterScoring(levels: Array<[ReadinessType, number]>) {
+    const first = recordingEm(levels);
+    await serviceWith(first.em).getReadinessForStartup(1);
+    const [evaluation] = first.evaluations();
+    const gaps = first.gaps();
+    return { ...evaluation.data, gaps: { getItems: () => gaps } };
+  }
+
+  it('saves the first evaluation', async () => {
+    const { em, evaluations, gaps } = recordingEm(AGROLINK);
+
+    await serviceWith(em).getReadinessForStartup(1);
+
+    expect(evaluations()).toHaveLength(1);
+    expect(gaps()).toHaveLength(6);
+  });
+
+  it('saves nothing when the result matches the latest evaluation', async () => {
+    const latest = await storedAfterScoring(AGROLINK);
+    const { em, evaluations, gaps } = recordingEm(AGROLINK, latest);
+
+    const result = await serviceWith(em).getReadinessForStartup(1);
+
+    expect(evaluations()).toHaveLength(0);
+    expect(gaps()).toHaveLength(0);
+    expect(result.compositeScore).toBe(latest.compositeScore);
+  });
+
+  it('saves when the score changes', async () => {
+    const latest = await storedAfterScoring(AGROLINK);
+    const { em, evaluations } = recordingEm(MEDISYNC, latest);
+
+    await serviceWith(em).getReadinessForStartup(1);
+
+    expect(evaluations()).toHaveLength(1);
+  });
+
+  // Two levels can trade places and leave the composite unchanged.
+  it('saves when one dimension changes even if the score and tier do not', async () => {
+    const latest = await storedAfterScoring(AGROLINK);
+    const shifted = latest.gaps.getItems().map((gap: any, i: number) =>
+      i === 0 ? { ...gap, score: gap.score + 11 } : gap,
+    );
+    const { em, evaluations } = recordingEm(AGROLINK, {
+      ...latest,
+      gaps: { getItems: () => shifted },
+    });
+
+    await serviceWith(em).getReadinessForStartup(1);
+
+    expect(evaluations()).toHaveLength(1);
   });
 });
