@@ -578,10 +578,23 @@
         }
       );
 
-      await Promise.all([
+      const [, refreshed] = await Promise.all([
         $initiativesQueries[1].refetch(),
         $initiativesQueries[2].refetch()
       ]);
+
+      // Number per step now, as a moved or edited card does: the server numbers
+      // new initiatives by position in the selection, not within their step.
+      columns.forEach((column) => {
+        column.items = refreshed.data
+          .filter(
+            (item: any) =>
+              item.isAiGenerated === false &&
+              item.requestedStatus === column.value
+          )
+          .sort((a: any, b: any) => a.initiativeNumber - b.initiativeNumber);
+      });
+      await updateInitiativeNumber();
 
       // // Mark all new initiatives
       // const newInitiatives = columns[0].items.filter(item => !item.isNew);
