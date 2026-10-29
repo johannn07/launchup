@@ -597,26 +597,45 @@ the day's 20.
   put the controls in the header; John rejected it as awkward. The taste skill was
   loaded for the redesign, applied only where it fits, since it excludes product UI.
 
+### Four more fixes (merged and pushed)
+
+- **Renumbering after generation** (`fix/renumber-after-generation`). Next steps
+  were shifted twice before the AI call (page and server), so even a success left
+  a gap; Initiatives shifted every startup's rows. Now the server shifts after the
+  AI call by what it created; Roadblocks' page does the same. Live: AgroLink's next
+  steps went 1,3,2,4,5,6 → 2,4,3,5,6,7 + new 1. Initiatives and Roadblocks are
+  unit-tested only.
+- **Initiative numbers per step** (`fix/initiative-numbers-after-generation`). The
+  page now runs its per-step renumbering right after a generation. Not run live:
+  it costs a real request.
+- **Score history** (`fix/score-history-on-change`). A score is saved only when it
+  differs from the latest (total, tier, flag, each dimension). Live on Neon: three
+  unchanged views added nothing; a change added one. AgroLink's 198 old rows stay.
+- **Per-minute vs daily quota** (`fix/quota-daily-limit`). Of 47 refusals in 30
+  days, 38 were the daily cap and 9 the per-minute limit, all treated as daily. Now
+  the per-minute limit says "try again in a minute" and leaves the quota note
+  alone, and an accepted request clears the exhausted mark: Gemini served one at
+  04:49 after saying to wait 11 hours.
+
 ### Still open
 
 - **Production hygiene, deliberately left by John while the database holds
   nothing important:** `debug: true` logs SQL with values to Render; the boot
   seeder runs on every deploy; the demo accounts (`password123`, documented in a
   public repo) exist on production, including a Manager.
-- A failed generation still renumbers the board (TODO §2) — now common, since
-  quota runs out daily.
-- `POST /readiness/score` writes an evaluation on every dashboard view; AgroLink
-  holds 187, all sent with every `GET /startups/:id` (TODO §2).
-- Not yet seen: a real generation lowering the quota count — today's runs predate
-  the counter, and the quota was spent by 03:14.
+- **Old score rows:** AgroLink keeps 198 saved evaluations, all sent with every
+  `GET /startups/:id`. Deleting the duplicates is John's decision (TODO §2).
+- **Seen live but not by John:** the counter counted the 04:49 generation; the
+  initiative per-step numbering and the Initiatives/Roadblocks renumbering have not
+  run against a real generation.
 
 ### Next step
 
 1. **Redeploy, backend first** — testers see none of today's work until then.
 2. **After 15:00 today, check the indicator:** 20/20, then one generation lowers it
    by the requests it used.
-   Also try the two rating follow-ups: the new rating panel, and the RNA picker
-   showing a new level without a refresh. Verified by Claude, not yet by John.
+   Also try the rating panel, the RNA picker after a rating, and generating on
+   all three boards: no gaps, and new initiatives numbered from #1 in their step.
 3. **Close the user study**, then the critical path: study analysis (TAM, SUS),
    the SPMP and traceability matrix, and the 30–50 minute CER transcription for 3c.
 4. Before any real data: the production hygiene items above.
