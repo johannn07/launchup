@@ -583,6 +583,20 @@ the day's 20.
   without `ai_quota_usage`.
 - Gates on `master`: backend 440/440; `svelte-check` 110 errors, unchanged.
 
+### Two follow-ups from John's testing (merged and pushed)
+
+- **The RNA page still needed a refresh after a rating** (`fix/rating-refresh-all-views`).
+  The morning's fix invalidated a named list of queries and missed `readinessData`,
+  which the RNA, RNS and Elevate pages read, so the Generate picker kept old levels
+  for up to an hour. A rating now invalidates every query. Reproduced live before
+  the change (picker read Level 4 after rating 5) and fixed after.
+- **The rating dialog's Rate button read as plain text** (`fix/assessment-rate-button`).
+  Cause: `.lu-btn` styles are scoped under `.lu-root`, and dialogs portal outside
+  it. The dialog now has no footer: answers on the left, a rating panel on the right
+  with the picker, what the picked level means, and "Rate level N". A first attempt
+  put the controls in the header; John rejected it as awkward. The taste skill was
+  loaded for the redesign, applied only where it fits, since it excludes product UI.
+
 ### Still open
 
 - **Production hygiene, deliberately left by John while the database holds
