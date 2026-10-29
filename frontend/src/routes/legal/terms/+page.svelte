@@ -81,8 +81,8 @@
     You are responsible for the accuracy of your account details, for keeping
     your credentials secure, and for everything done through your account. Tell
     us promptly at
-    <a href="mailto:security@launchup.example">security@launchup.example</a> if you
-    believe your account has been accessed without your authorisation.
+    <a href="mailto:launchup.enhanced@gmail.com">launchup.enhanced@gmail.com</a>
+    if you believe your account has been accessed without your authorisation.
   </p>
   <p>
     Accounts belong to a named individual and must not be shared. Mentors,
@@ -161,21 +161,19 @@
   </p>
   <p>
     Before starting proceedings, both sides agree to try to settle the dispute
-    informally by writing to the address below and allowing 30 days for a reply.
-    If any provision of these terms is found unenforceable, the rest continues
-    to apply.
+    informally by writing to the email address below and allowing 30 days for a
+    reply. If any provision of these terms is found unenforceable, the rest
+    continues to apply.
   </p>
 
   <h2 id="contact">Contact</h2>
   <p>
     Questions about these terms go to
-    <a href="mailto:legal@launchup.example">legal@launchup.example</a>. We aim
-    to reply within five working days.
+    <a href="mailto:launchup.enhanced@gmail.com">launchup.enhanced@gmail.com</a
+    >. We aim to reply within five working days.
   </p>
   <p>
-    LaunchUp Technologies Inc.<br />
-    4F Innovation Center, Ayala Avenue<br />
-    Makati City 1226, Philippines<br />
-    SEC registration no. CS202400000
+    LaunchUp is a capstone project by BSIT students of Cebu Institute of
+    Technology - University.
   </p>
 </LegalShell>

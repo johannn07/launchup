@@ -134,9 +134,9 @@
   <p>
     You can update your name and email in your account settings and close your
     account at any time. For anything else, write to
-    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>. We
-    respond within 30 days, and will tell you if a request is complex enough to
-    need a single further extension of 30 days.
+    <a href="mailto:launchup.enhanced@gmail.com">launchup.enhanced@gmail.com</a
+    >. We respond within 30 days, and will tell you if a request is complex
+    enough to need a single further extension of 30 days.
   </p>
   <p>
     Because assessments are produced with automated processing, you may ask for
@@ -171,11 +171,11 @@
   <h2 id="contact">Contact</h2>
   <p>
     Privacy questions and rights requests go to
-    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>,
-    which reaches our Data Protection Officer.
+    <a href="mailto:launchup.enhanced@gmail.com">launchup.enhanced@gmail.com</a
+    >.
   </p>
   <p>
-    The data controller is LaunchUp Technologies Inc., 4F Innovation Center,
-    Ayala Avenue, Makati City 1226, Philippines.
+    LaunchUp is a capstone project by BSIT students of Cebu Institute of
+    Technology - University.
   </p>
 </LegalShell>

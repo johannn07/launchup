@@ -128,10 +128,9 @@
         <p class="lu-notice mt-7">
           <AlertTriangle class="mt-0.5 h-4 w-4 flex-none" />
           <span>
-            <strong class="font-semibold">Placeholder draft.</strong> Complete first-draft
-            wording, written to be reacted to rather than relied on. It has not been
-            reviewed by a lawyer, it is not legal advice, and it is not enforceable
-            as written. Have counsel review and replace it before LaunchUp goes live.
+            <strong class="font-semibold">Placeholder draft.</strong> It has not
+            been reviewed by a lawyer, it is not legal advice, and it is not enforceable
+            as written.
           </span>
         </p>
 
