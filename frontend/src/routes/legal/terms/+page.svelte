@@ -148,16 +148,16 @@
   <p>
     On closure you lose access to the platform and to the assessments held in
     it, so export anything you need beforehand. Sections that by their nature
-    should survive — intellectual property, limitation of liability, and
-    governing law — continue to apply.
+    should survive (intellectual property, limitation of liability, and
+    governing law) continue to apply.
   </p>
 
   <h2 id="governing-law">Governing law</h2>
   <p>
     These terms are governed by the laws of the Republic of the Philippines,
-    without regard to its conflict of laws rules, and the courts of Makati City
-    have exclusive jurisdiction over any dispute. Either party may still seek
-    injunctive relief wherever appropriate.
+    without regard to its conflict of laws rules, and the courts of the
+    Philippines have exclusive jurisdiction over any dispute. Either party may
+    still seek injunctive relief wherever appropriate.
   </p>
   <p>
     Before starting proceedings, both sides agree to try to settle the dispute
