@@ -89,7 +89,7 @@
   <header
     class="sticky top-0 z-40 border-b border-[#17213a]/70 bg-[#07111f]/85 backdrop-blur-lg"
   >
-    <div class="mx-auto flex h-16 w-full max-w-[55rem] items-center px-5">
+    <div class="mx-auto flex h-16 w-[min(72rem,88vw)] items-center">
       <BrandMark />
       <a
         href="/"
@@ -102,9 +102,9 @@
     </div>
   </header>
 
-  <main class="flex-1 px-5 py-12 sm:py-16">
+  <main class="flex-1 py-12 sm:py-16">
     <div
-      class="mx-auto grid w-full max-w-[52.5rem] gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,36rem)_minmax(0,13rem)] lg:justify-center"
+      class="mx-auto grid w-[min(72rem,88vw)] gap-x-14 gap-y-10 lg:grid-cols-[minmax(0,36rem)_13rem] lg:justify-between"
     >
       <!-- Document -->
       <div class="min-w-0 max-w-[36rem]">
@@ -113,7 +113,7 @@
         >
           {title}
         </h1>
-        <p class="mt-3 max-w-[36rem] text-[17px] leading-[1.65] text-[#94a3b8]">
+        <p class="mt-3 text-[17px] leading-[1.65] text-[#94a3b8]">
           {summary}
         </p>
 
@@ -125,7 +125,7 @@
           >
         </p>
 
-        <p class="lu-notice mt-7 max-w-[36rem]">
+        <p class="lu-notice mt-7">
           <AlertTriangle class="mt-0.5 h-4 w-4 flex-none" />
           <span>
             <strong class="font-semibold">Placeholder draft.</strong> Complete first-draft
@@ -139,7 +139,7 @@
              than pushing the first section below the fold. -->
         {#if sections.length}
           <details
-            class="lu-toc mt-7 max-w-[36rem] rounded-[1rem] border border-[#1f2c47] bg-[#0b1220]/60 lg:hidden"
+            class="lu-toc mt-7 rounded-[1rem] border border-[#1f2c47] bg-[#0b1220]/60 lg:hidden"
           >
             <summary
               class="lu-d-md cursor-pointer px-5 py-3.5 text-[13.5px] text-white"
@@ -199,7 +199,7 @@
 
   <footer class="border-t border-[#17213a]/70">
     <div
-      class="mx-auto flex w-full max-w-[55rem] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-5 py-6"
+      class="mx-auto flex w-[min(72rem,88vw)] flex-wrap items-center justify-between gap-x-6 gap-y-3 py-6"
     >
       <p class="lu-num text-[13px] text-[#94a3b8]">
         © {new Date().getFullYear()} LaunchUp
