@@ -1,4 +1,5 @@
 import { InitiativeService } from './initiative.service';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { AiRunService } from 'src/ai/ai-run.service';
 import { Initiative } from 'src/entities/initiative.entity';
 import { Rns } from 'src/entities/rns.entity';
@@ -383,5 +384,68 @@ describe('InitiativeService.generateInitiatives debug dry run', () => {
     expect(result.prompts[0]).toContain('Technology');
     expect(existingInitiative.initiativeNumber).toBe(1);
     expect(created).toHaveLength(0);
+  });
+});
+
+// Testers saw "Internal server error": a Gemini 429/503 reached them as a bare 500.
+describe('InitiativeService.generateInitiatives when Gemini refuses', () => {
+  const rns = {
+    id: 10,
+    priorityNumber: 1,
+    readinessType: 'Technology',
+    status: 1,
+    targetLevel: { level: 3 },
+    description: 'Existing RNS description',
+    startup: { id: 1, name: 'AgroLink', user: { id: 5 }, capsuleProposal: { title: 't' } },
+  } as any;
+
+  function build() {
+    const em = {
+      find: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
+      findOneOrFail: jest.fn().mockResolvedValue(rns),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+    };
+    const aiService = {
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+      generateInitiativesFromPrompt: jest
+        .fn()
+        .mockRejectedValue(new Error('got status: 429 Too Many Requests. RESOURCE_EXHAUSTED')),
+    };
+    const ctx = {
+      runId: 77,
+      run: {} as any,
+      config: Object.freeze({ model: 'm', temperature: 0 }),
+    } as any;
+    const service = new InitiativeService(
+      em as any,
+      aiService as any,
+      buildAiRunService().aiRunService,
+    );
+    return { service, ctx };
+  }
+
+  it('returns a readable 503 for a quota error on the rnsIds branch', async () => {
+    const { service, ctx } = build();
+
+    const failure = service.generateInitiatives(
+      { rnsIds: [10], no_of_initiatives_to_create: 1 } as any,
+      ctx,
+    );
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('daily quota');
+  });
+
+  it('returns a readable 503 for a quota error on the rnsId branch', async () => {
+    const { service, ctx } = build();
+
+    const failure = service.generateInitiatives(
+      { rnsId: 10, no_of_initiatives_to_create: 1 } as any,
+      ctx,
+    );
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('daily quota');
   });
 });

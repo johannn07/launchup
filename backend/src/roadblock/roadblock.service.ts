@@ -18,6 +18,7 @@ import { Rns } from 'src/entities/rns.entity';
 import { Initiative } from 'src/entities/initiative.entity';
 import { RoadblockChatHistory } from 'src/entities/roadblock-chat-history.entity';
 import { AiRunContext, AiRunService } from '../ai/ai-run.service';
+import { withAiRetry } from '../ai/retry-transient';
 import { JSON_NO_CHANGE_RULE } from '../ai/refine-chat';
 import { OutputValidatorService } from '../rna/output-validator.service';
 import { ROADBLOCK_MAX_LENGTH } from './roadblock.constants';
@@ -213,8 +214,9 @@ export class RoadblockService {
       return prompt;
     }
 
-    const resultData =
-      await this.aiService.generateRoadblocksFromPrompt(ctx, prompt); // your JSON parser helper
+    const resultData = await withAiRetry(() =>
+      this.aiService.generateRoadblocksFromPrompt(ctx, prompt),
+    );
 
     // if(dto.debug){
     //     return resultData;

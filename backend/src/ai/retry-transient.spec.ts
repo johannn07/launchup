@@ -1,4 +1,10 @@
-import { isQuotaError, isRetryableServerError, withRetry } from './retry-transient';
+import { ServiceUnavailableException } from '@nestjs/common';
+import {
+  isQuotaError,
+  isRetryableServerError,
+  withAiRetry,
+  withRetry,
+} from './retry-transient';
 
 const err = (message: string) => new Error(message);
 
@@ -77,6 +83,59 @@ describe('withRetry', () => {
     await withRetry(fn, { attempts: 3, delayMs: 2000, sleep: noSleep }).catch(() => {});
 
     expect(noSleep.mock.calls.map((c) => c[0])).toEqual([2000, 4000]);
+  });
+});
+
+describe('withAiRetry', () => {
+  const noSleep = jest.fn().mockResolvedValue(undefined);
+
+  it('recovers a call that 503s once', async () => {
+    const fn = jest
+      .fn()
+      .mockRejectedValueOnce(err(SERVICE_BUSY))
+      .mockResolvedValue('recovered');
+
+    await expect(withAiRetry(fn, { sleep: noSleep })).resolves.toBe('recovered');
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('turns a quota error into a readable 503 without a second call', async () => {
+    const fn = jest.fn().mockRejectedValue(err(QUOTA));
+
+    const failure = withAiRetry(fn, { sleep: noSleep });
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('daily quota');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns a 503 that outlasts the retries into a readable 503', async () => {
+    const fn = jest.fn().mockRejectedValue(err(SERVICE_BUSY));
+
+    const failure = withAiRetry(fn, { sleep: noSleep });
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('busy');
+    expect(fn).toHaveBeenCalledTimes(3);
+  });
+
+  // AiRunService.track records the cause; without it the run log loses the raw Gemini error.
+  it('keeps the upstream error as the cause', async () => {
+    const upstream = err(QUOTA);
+
+    const failure = await withAiRetry(() => Promise.reject(upstream), {
+      sleep: noSleep,
+    }).catch((e) => e);
+
+    expect(failure.cause).toBe(upstream);
+  });
+
+  it('rethrows any other error unchanged', async () => {
+    const other = new Error('Startup with ID 9 not found');
+
+    await expect(
+      withAiRetry(() => Promise.reject(other), { sleep: noSleep }),
+    ).rejects.toBe(other);
   });
 });
 

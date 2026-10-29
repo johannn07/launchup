@@ -1,4 +1,5 @@
 import { RoadblockService } from './roadblock.service';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { AiRunService } from 'src/ai/ai-run.service';
 import { Startup } from 'src/entities/startup.entity';
 import { Rns } from 'src/entities/rns.entity';
@@ -423,5 +424,37 @@ describe('RoadblockService.statusChange', () => {
       requestedStatus: 3,
       approvalStatus: 'Unchanged',
     });
+  });
+});
+
+// Testers saw "Internal server error": a Gemini 429/503 reached them as a bare 500.
+describe('RoadblockService.generateRoadblocks when Gemini refuses', () => {
+  it('returns a readable 503 for a quota error', async () => {
+    const startup = { id: 1, name: 'AgroLink', capsuleProposal: { title: 't' }, user: { id: 5 } };
+    const em = {
+      findOneOrFail: jest.fn().mockResolvedValue(startup),
+      find: jest.fn().mockResolvedValue([]),
+      persistAndFlush: jest.fn().mockResolvedValue(undefined),
+    };
+    const aiService = {
+      createBasePrompt: jest.fn().mockResolvedValue('base prompt'),
+      generateRoadblocksFromPrompt: jest
+        .fn()
+        .mockRejectedValue(new Error('got status: 429 Too Many Requests. RESOURCE_EXHAUSTED')),
+    };
+    const service = new RoadblockService(
+      em as any,
+      aiService as any,
+      new OutputValidatorService(),
+      buildAiRunService().aiRunService,
+    );
+
+    const failure = service.generateRoadblocks(
+      { startupId: 1, no_of_roadblocks_to_create: 1, debug: false } as any,
+      buildCtx(),
+    );
+
+    await expect(failure).rejects.toBeInstanceOf(ServiceUnavailableException);
+    await expect(failure).rejects.toThrow('daily quota');
   });
 });
