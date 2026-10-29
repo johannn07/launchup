@@ -7,7 +7,8 @@
   import * as Select from '$lib/components/ui/select';
   import { Segmented, SubmitButton } from '$lib/motion';
   import { StatePanel } from '$lib/components/workspace';
-  import { useQueries } from '@sveltestack/svelte-query';
+  import { useQueries, useQueryClient } from '@sveltestack/svelte-query';
+  import { refreshAfterRating } from '$lib/readiness-refresh';
   import { getData, canRateReadiness } from '$lib/utils';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
   import Rubric from '$lib/components/startups/readiness/rubric.svelte';
@@ -23,6 +24,7 @@
 
   const { data } = $props();
   const { access, startupId, role } = data;
+  const queryClient = useQueryClient();
 
   const readinessLevelQueries = useQueries([
     {
@@ -204,11 +206,7 @@
 
       toast.success('Baseline scores saved');
       revising = false;
-      await Promise.all([
-        $readinessLevelQueries[2].refetch(),
-        $readinessLevelQueries[3].refetch(),
-        $readinessLevelQueries[0].refetch()
-      ]);
+      await refreshAfterRating(queryClient, startupId);
     } catch (error: any) {
       console.error(error);
       const message =
