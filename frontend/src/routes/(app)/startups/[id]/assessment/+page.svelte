@@ -75,6 +75,14 @@
     return levels;
   });
 
+  const selectedRubric = $derived(
+    ($rubricsQuery.data ?? []).find(
+      (r: any) =>
+        r.readinessType === selectedReadinessType &&
+        r.level === Number(readinessLevel)
+    )
+  );
+
   function toggleAssessmentForm(): void {
     showAssessmentForm = !showAssessmentForm;
   }
@@ -473,7 +481,9 @@
             <Dialog.Title class="lu-d-md text-[20px] leading-tight text-white">
               {selectedReadinessType}
             </Dialog.Title>
-            <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">Assessment</p>
+            <p class="mt-0.5 text-[12.5px] text-[#94a3b8]">
+              Assessment · {modalProgress()}% complete
+            </p>
           </div>
         </div>
         <Dialog.Description class="mt-2 text-xs text-muted-foreground">
@@ -485,6 +495,8 @@
         </Dialog.Description>
       </Dialog.Header>
 
+      <!-- Read the answers on the left, decide on the right. -->
+      <div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
       <div
         class="assessment-scroll min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5"
       >
@@ -615,60 +627,67 @@
         {/if}
       </div>
 
-      <div
-        class="border-border/50 flex shrink-0 items-center justify-between gap-3 border-t pt-4"
-      >
-        {#if canRateReadiness(data.role)}
-          {@const typeAssessments = selectedReadinessType
-            ? assessmentsByType()[selectedReadinessType] || []
-            : []}
-          {@const hasApplicableAssessments = typeAssessments.some(
-            (a: any) => a.isApplicable
-          )}
-          <div class="flex items-center gap-3">
-            <span class="text-sm font-medium">Rate Readiness Level:</span>
-            <Select.Root type="single" bind:value={readinessLevel}>
-              <Select.Trigger
-                class="w-[120px]"
-                disabled={!hasApplicableAssessments}
-              >
-                Level {readinessLevel}
-              </Select.Trigger>
-              <Select.Content>
-                {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
-                  <Select.Item value={level}>Level {level}</Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
-            <button
-              type="button"
-              class="lu-btn lu-btn-primary lu-btn-sm"
-              disabled={isRatingAssessment || !hasApplicableAssessments}
-              onclick={rateAssessmentType}
-            >
-              {isRatingAssessment ? 'Rating…' : 'Rate'}
-            </button>
-            {#if !hasApplicableAssessments}
-              <span class="text-xs text-muted-foreground">
-                No applicable assessments to rate
-              </span>
-            {/if}
-          </div>
-        {:else}
-          <div></div>
-        {/if}
-
-        <span class="hidden text-xs font-medium text-muted-foreground sm:block">
-          {modalProgress()}% complete
-        </span>
-
-        <button
-          type="button"
-          class="lu-btn lu-btn-secondary lu-btn-sm"
-          onclick={closeTypeModal}
+      {#if canRateReadiness(data.role)}
+        {@const typeAssessments = selectedReadinessType
+          ? assessmentsByType()[selectedReadinessType] || []
+          : []}
+        {@const hasApplicableAssessments = typeAssessments.some(
+          (a: any) => a.isApplicable
+        )}
+        <!-- lu-root: the dialog portals outside the page's .lu-root, which
+             left .lu-btn unstyled and Rate reading as plain text. -->
+        <aside
+          class="lu-root order-first flex shrink-0 flex-col gap-3 rounded-2xl border border-[#1f2c47] !bg-[#0b1220] p-5 md:order-none md:w-72"
+          aria-label="Rate this dimension"
         >
-          Close
-        </button>
+          <span
+            id="rate-level-label"
+            class="text-[12.5px] font-medium text-[#94a3b8]"
+          >
+            Readiness level
+          </span>
+          <Select.Root type="single" bind:value={readinessLevel}>
+            <Select.Trigger
+              class="w-full"
+              aria-labelledby="rate-level-label"
+              disabled={!hasApplicableAssessments}
+            >
+              Level {readinessLevel}
+            </Select.Trigger>
+            <Select.Content>
+              {#each Array.from( { length: 9 }, (_, i) => (i + 1).toString() ) as level}
+                <Select.Item value={level}>Level {level}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+
+          {#if selectedRubric}
+            <!-- What the picked level claims, read before committing to it. -->
+            <div class="hidden min-h-0 flex-1 overflow-y-auto md:block">
+              <p class="text-[13.5px] font-semibold leading-snug text-white">
+                {selectedRubric.title}
+              </p>
+              <p class="mt-1.5 text-[13px] leading-relaxed text-[#94a3b8]">
+                {selectedRubric.content}
+              </p>
+            </div>
+          {/if}
+
+          <button
+            type="button"
+            class="lu-btn lu-btn-primary lu-btn-sm mt-auto w-full"
+            disabled={isRatingAssessment || !hasApplicableAssessments}
+            onclick={rateAssessmentType}
+          >
+            {isRatingAssessment ? 'Rating…' : `Rate level ${readinessLevel}`}
+          </button>
+          {#if !hasApplicableAssessments}
+            <span class="text-xs text-muted-foreground">
+              No applicable assessments to rate
+            </span>
+          {/if}
+        </aside>
+      {/if}
       </div>
     </Dialog.Content>
   </Dialog.Root>
