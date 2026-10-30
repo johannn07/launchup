@@ -397,63 +397,15 @@ clicked through by Claude.
 
 ---
 
-## 2026-09-26 — Kanban drops, and two refine-chat defects
+## Compressed — 2026-09-26 (Kanban drops, refine chats)
 
-Three branches off `master`, merged to local `master` (`d08863d`) for John to test
-and push. About 10 Gemini calls, most of them 503s.
-
-| Branch | Defect | Cause | Verified |
-|---|---|---|---|
-| `fix/kanban-drop-target` | Cards only dropped on part of a column; a card could not return to the column it left | The dnd zone was only as tall as its cards (`min-h` 6.5rem) while the visible column stretched to the row; the library accepts a drop only inside the zone's box | Live on MediSync, RNS and Roadblocks round trips dropped low in short columns; John confirmed |
-| `fix/refine-chat-ai-busy` | Mentor chat showed "API Error: 500" | Gemini **503 "high demand"** — every failed refine run in `ai_generation_runs` was this; the chats never retried and passed it on as a 500 | Live, against a real 503: 3 attempts (~10s), readable 503, run log keeps both messages |
-| `fix/refine-chat-non-instructions` | "bro" / "secret" rewrote the RNS/RNA | All four refine prompts said "if the user names no field, refine everything" | Live: "bro" got a plain reply, no rewrite, no prefix |
-
-### Kanban
-
-- Also fixed: after a drop, renumbering and the refetch ran concurrently, so the
-  board could re-sort on half-written numbers. Renumber is now awaited first;
-  Roadblocks and Initiatives renumbered twice per drop (the source zone's finalize
-  fires too) and now renumber once.
-- ❓ **On hold — John's decision:** the `#N` label *is* `priorityNumber`, renumbered
-  across the whole board on every drop, so moving a card changes its number and the
-  "Step #N" initiatives show. Proposed: a separate stable `rnsNumber` label,
-  `priorityNumber` kept for ordering. Tracked in `TODO_CHECKLIST.md` §3.
-
-### Refine chats
-
-- `generateForChat` wraps the four refine calls in the existing `withRetry` (2s, 4s;
-  429 never retried) and maps a service failure to `ServiceUnavailableException`.
-  Deliberately **not** applied to `generate()`, which every generation path shares.
-- The upstream error rides as `cause`; `AiRunService.track` records
-  `message (cause: …)`. Without that, the readable message erased the raw Gemini
-  error — the very record that diagnosed this bug.
-- Non-requests: one shared rule in `ai/refine-chat.ts`. JSON prompts answer `{}`,
-  the plain-text RNS prompt answers a `NO_CHANGE` sentinel (tolerated inside `<p>`).
-  "Here's my suggestion…" now renders only when something was refined.
-- **The "mentor" framing was wrong.** Nothing is role-specific; the 500 was Gemini
-  load, and John's first mentor retest happened to succeed.
-
-### Verification limits
-
-- **Not verified live: a real request still producing a rewrite after the prompt
-  change.** Gemini returned 503 on all three attempts (runs 61–63). Unit tests
-  cover the parser; the model's reading of the new instruction is untested.
-- Kanban drags were driven with stepped synthetic mouse events — the pane's
-  `left_click_drag` sends no intermediate moves. John's real-mouse test is the
-  proof. Initiatives had no items on MediSync, so its identical change was not
-  dragged.
-- Gates on merged `master`: backend **400/400** (40 suites); `svelte-check`
-  **110 errors / 9 warnings**, unchanged by this work.
-
-### Next step
-
-1. **John tests on local `master`, then pushes:** a real refine request as mentor
-   ("Make it shorter") must rewrite; "bro" must not; Kanban drags on all three boards.
-2. **Decide the stable-number change** (§3). If yes, it is `feat/stable-item-numbers`,
-   covering `rnsNumber` and roadblocks' `riskNumber`; initiatives number per RNS and
-   need their own look.
-3. The critical path is unchanged: the SPMP and the traceability matrix, competing
-   for the same weeks as the 30-user study.
+About 10 Gemini calls, mostly 503s. Three branches merged (`d08863d`): Kanban
+columns accept drops over their full height and renumber once per drop, awaited
+before the refetch; the four refine chats retry a Gemini 503 twice and return a
+readable 503 instead of a 500; a message naming no field ("bro") no longer
+rewrites the item. **Still open:** a live check that a real request ("Make it
+shorter") still rewrites (three attempts hit 503s), and John's decision on stable
+item numbers (`#N` is `priorityNumber`, renumbered on every drop; TODO §3).
 
 ---
 
@@ -643,3 +595,59 @@ the day's 20.
 3. **Close the user study**, then the critical path: study analysis (TAM, SUS),
    the SPMP and traceability matrix, and the 30–50 minute CER transcription for 3c.
 4. Before any real data: the production hygiene items above.
+
+---
+
+## 2026-10-30 (later) — design pass: landing, legal, auth
+
+Frontend only, zero Gemini calls. The taste skill applied page by page, keeping the
+brand ("keep the look": layout, font sizes, redundant displays, broken UI only).
+Merged to `master` and pushed.
+
+| Branch | Pages | What changed |
+|---|---|---|
+| `design/landing-taste-pass` | `/` | Hero no longer blinks out on hydration (scroll reveal removed above the fold); headline 3 lines at desktop, 4 on mobile (was 4/5; mobile hero 1,703 → 1,311px). Removed both stat-tile rows, a duplicate Get Started, two redundant eyebrows, nav Home. One divider style; lead text 17px. Footer links Terms/Privacy. Header tracks the active section with IntersectionObserver. New How-it-works heading |
+| same | `/legal/terms`, `/legal/privacy` | Landing's 72rem frame; mobile contents folded (first section 902 → 556px); link rows merged into the footer. Content (John's wording): shorter disclaimer, `launchup.enhanced@gmail.com` everywhere, fictional company/address/SEC number replaced by a CIT-U capstone note, Makati jurisdiction → "courts of the Philippines", body em-dashes removed |
+| `design/auth-taste-pass` (stacked on the above) | `/login`, `/register`, `/manager-login` | Header/footer on the 72rem frame; form + scales column kept as one centred 48rem group; Terms/Privacy in the footer; "Privacy Policy" no longer splits in the consent label |
+
+### Mistakes John caught
+
+- **Width rule:** the legal pages first got their own 55rem frame; the logo jumped
+  ~180px between pages. Every page now shares `w-[min(72rem,88vw)]` for header and
+  footer. Narrow content sits inside it, never in its own frame.
+- **Branch switch hid the work:** the auth branch was first cut from `master`, so
+  John's dev server stopped showing the landing/legal fixes and they read as
+  undone. Rebased onto the landing branch. Stack follow-on branches on unmerged work.
+- **A feature link removed unasked:** "Forgot password?" was deleted because
+  `/forgot-password` 404s. Restored. A link to an unbuilt feature is intent; flag it.
+- **Stretching the auth columns to the frame edges** left a large empty gap.
+  Reverted to one centred group.
+
+### Verification
+
+- Live in the dev server: built-in pane for `/` and legal (signed in as John's
+  mentor, so `/login` redirects); Playwright, with no session, for the three auth
+  pages. Frames measured at 1440px (136–1288px) and 375px; no horizontal overflow.
+- The pane intermittently stopped painting (window behind others), so several
+  checks are DOM measurements rather than screenshots.
+- `svelte-check` 110 errors, unchanged. ESLint fails to parse the `as` casts in
+  `AboutUs`/`ReadinessPanel` and Prettier flags every landing file for line
+  endings; both predate this work (TODO §4).
+
+### Still open
+
+- `/forgot-password` has no page (TODO §3). Tab titles still use "Page — LaunchUp"
+  site-wide; John has not decided whether to change it.
+- `/objectives` and `/dashboard` were mislisted as public; they are Manager-only and
+  dev-preview, and belong to the app group.
+
+### Next step
+
+1. **John reviews `/`, the legal pages and the auth pages** on the deployed site
+   after the next frontend deploy.
+2. **App pages, general group**, on a new branch off `master`: shared app header
+   and navigation first (its frame differs from the landing's), then `/startups`,
+   `/apply`, `/applications`, `/cohorts`, `/analytics`, `/account/*`. The taste
+   skill excludes product UI, so only its token-level rules apply there.
+3. The capstone critical path is unchanged: study analysis (TAM, SUS), SPMP,
+   traceability matrix, CER transcription for 3c.
