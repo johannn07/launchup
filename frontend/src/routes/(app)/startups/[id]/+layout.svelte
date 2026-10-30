@@ -4,6 +4,7 @@
   import { useQuery } from '@sveltestack/svelte-query';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
   import { statusOf, tierOf, tierLine } from '$lib/startup-status';
+  import MentorName from '$lib/components/startups/MentorName.svelte';
 
   const { children, data } = $props();
   const { access, startupId } = data;
@@ -127,6 +128,19 @@
           <span class="lu-status" data-status={status.key}>{statusLabel}</span>
           {#if tierKnown}
             <span class="text-[13px] text-[#94a3b8]">{tierLine(tier)}</span>
+          {/if}
+          <!-- Shared by every workspace page, so founders see their mentor on each. -->
+          {#if data.role === 'Startup' && $startupQuery.isSuccess}
+            <span class="h-3.5 w-px bg-[#2b3a5c]" aria-hidden="true"></span>
+            <span
+              class="flex min-w-0 items-center gap-1.5 text-[13px] text-[#94a3b8]"
+            >
+              Mentor
+              <MentorName
+                mentors={info.mentors}
+                qualificationStatus={info.qualificationStatus}
+              />
+            </span>
           {/if}
         </div>
       </div>

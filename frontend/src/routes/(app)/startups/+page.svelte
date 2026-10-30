@@ -453,10 +453,16 @@
   >
     <!-- Column labels, aligned to the row grid in startup-card.svelte -->
     <div
-      class="hidden gap-x-5 border-b border-[#17213a] px-5 py-3 text-[12.5px] font-medium text-[#94a3b8] sm:grid sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]"
+      class="hidden gap-x-5 border-b border-[#17213a] px-5 py-3 text-[12.5px] font-medium text-[#94a3b8] sm:grid {role ===
+      'Startup'
+        ? 'sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.5fr)_8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1.25rem]'
+        : 'sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]'}"
     >
       <span>Startup</span>
       <span>Status</span>
+      {#if role === 'Startup'}
+        <span>Mentor</span>
+      {/if}
       <span>Progress</span>
       <span class="hidden lg:block">Next step</span>
       <span></span>

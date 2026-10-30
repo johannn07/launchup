@@ -3,6 +3,7 @@
   import { ChevronRight } from 'lucide-svelte';
   import { arrive } from '$lib/motion';
   import { statusOf, tierOf, tierLine } from '$lib/startup-status';
+  import MentorName from './MentorName.svelte';
 
   let {
     startup,
@@ -16,6 +17,8 @@
     status.key === 'qualified' && role === 'Mentor' ? 'Active' : status.label
   );
   const tier = $derived(tierOf(startup));
+  // Founders otherwise never learn who mentors them; staff already know.
+  const showMentor = $derived(role === 'Startup');
 
   const initials = $derived(
     (startup?.name ?? '?')
@@ -64,7 +67,9 @@
 <a
   {href}
   onclick={onClick}
-  class="lu-row group grid items-center gap-x-5 gap-y-3 px-5 py-4 transition-colors hover:bg-[#0f1a2c] focus-visible:bg-[#0f1a2c] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#818cf8] sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]"
+  class="lu-row group grid items-center gap-x-5 gap-y-3 px-5 py-4 transition-colors hover:bg-[#0f1a2c] focus-visible:bg-[#0f1a2c] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#818cf8] {showMentor
+    ? 'sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.5fr)_8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_1.25rem]'
+    : 'sm:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_1.25rem] lg:grid-cols-[minmax(0,1.6fr)_8.5rem_minmax(0,1fr)_minmax(0,1.1fr)_1.25rem]'}"
 >
   <!-- Identity -->
   <div class="flex min-w-0 items-center gap-3.5">
@@ -91,6 +96,15 @@
   <div>
     <span class="lu-status" data-status={status.key}>{statusLabel}</span>
   </div>
+
+  {#if showMentor}
+    <div class="min-w-0 text-[13px]">
+      <MentorName
+        mentors={startup.mentors}
+        qualificationStatus={startup.qualificationStatus}
+      />
+    </div>
+  {/if}
 
   <!-- Progress -->
   <div class="min-w-0">
