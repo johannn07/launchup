@@ -39,8 +39,9 @@
 </script>
 
 <!--
-  Composition, not decoration. The landing page's 72rem frame governs the
-  header, the content and the footer, so edges stay put between pages. Content is
+  Composition, not decoration. Header and footer use the landing page's 72rem
+  frame so they stay put between pages; the form and its context column stay
+  together as one centred 48rem group. Content is
   anchored to a fixed top offset rather than vertically centred, so the heading
   lands in the same place on login and register instead of jumping between them.
   The right column is quiet type on the page ground — no card, no fill, no icons.
@@ -64,7 +65,7 @@
 
   <main class="flex-1 pb-16 pt-12 sm:pt-16">
     <div
-      class="mx-auto grid w-[min(72rem,88vw)] gap-x-12 lg:grid-cols-[minmax(0,25rem)_minmax(0,18rem)] lg:justify-between"
+      class="mx-auto grid w-[min(48rem,88vw)] gap-x-12 lg:grid-cols-[minmax(0,25rem)_minmax(0,15rem)]"
     >
       <!-- Form column -->
       <div class="min-w-0">

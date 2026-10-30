@@ -72,7 +72,12 @@
     </div>
 
     <div>
-      <label class="lu-field" for="password">Password</label>
+      <div class="flex items-baseline justify-between gap-3">
+        <label class="lu-field" for="password">Password</label>
+        <a href="/forgot-password" class="lu-link mb-[7px] text-[13px]"
+          >Forgot password?</a
+        >
+      </div>
       <div class="relative">
         <input
           class="lu-input lu-input-pw"
