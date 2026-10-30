@@ -2,23 +2,25 @@
   import { onMount } from 'svelte';
   import { Rocket } from 'lucide-svelte';
 
-  let activeSection = $state('hero');
+  const sections = ['howitwork', 'aboutus'];
+  let activeSection = $state('');
 
-  function handleScroll() {
-    for (const id of ['hero', 'howitwork', 'aboutus']) {
-      const el = document.getElementById(id);
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      if (rect.top <= 80 && rect.bottom >= 80) {
-        activeSection = id;
-        break;
-      }
-    }
-  }
-
+  // A band just under the sticky header; whichever section crosses it is active.
   onMount(() => {
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) activeSection = e.target.id;
+          else if (activeSection === e.target.id) activeSection = '';
+        }
+      },
+      { rootMargin: '-80px 0px -85% 0px' }
+    );
+    for (const id of sections) {
+      const el = document.getElementById(id);
+      if (el) obs.observe(el);
+    }
+    return () => obs.disconnect();
   });
 </script>
 
@@ -34,15 +36,6 @@
     <ul
       class="ml-auto hidden items-center gap-7 text-[15px] font-medium md:flex"
     >
-      <li>
-        <a
-          href="#hero"
-          class="transition-colors hover:text-[#818cf8] {activeSection ===
-          'hero'
-            ? 'text-[#f1f5f9]'
-            : 'text-[#94a3b8]'}">Home</a
-        >
-      </li>
       <li>
         <a
           href="#howitwork"

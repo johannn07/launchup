@@ -1,11 +1,5 @@
 <script lang="ts">
-  import {
-    ArrowRight,
-    Sparkles,
-    FileText,
-    Rocket,
-    TrendingUp
-  } from 'lucide-svelte';
+  import { FileText, Rocket, TrendingUp } from 'lucide-svelte';
   import { reveal } from './reveal';
 
   const steps = [
@@ -32,33 +26,14 @@
 
 <section id="howitwork" class="scroll-mt-16">
   <div class="mx-auto w-[min(72rem,88vw)] py-24">
-    <div class="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
-      <div class="max-w-xl" use:reveal>
-        <p class="lu-chip">
-          <Sparkles class="h-4 w-4 text-[#6366f1]" />
-          Designed to reduce friction
-        </p>
-        <h2
-          class="lu-d-xw mt-6 text-[32px] leading-[1.08] text-white sm:text-[42px]"
-        >
-          How it works should feel obvious, not administrative.
-        </h2>
-        <p class="mt-5 max-w-[56ch] text-[17px] leading-[1.7] text-[#94a3b8]">
-          LaunchUp turns the startup review journey into a clear sequence with
-          enough structure to trust and enough warmth to feel human.
-        </p>
-      </div>
-
-      <div class="flex lg:justify-end" use:reveal>
-        <a
-          data-sveltekit-reload
-          href="/register"
-          class="lu-btn lu-btn-secondary"
-        >
-          Get started
-          <ArrowRight class="lu-arw h-4 w-4" />
-        </a>
-      </div>
+    <div class="max-w-3xl" use:reveal>
+      <h2 class="lu-d-xw text-[32px] leading-[1.08] text-white sm:text-[42px]">
+        From application to investment-ready in three steps.
+      </h2>
+      <p class="mt-5 max-w-[56ch] text-[17px] leading-[1.7] text-[#94a3b8]">
+        LaunchUp turns the startup review journey into a clear sequence with
+        enough structure to trust and enough warmth to feel human.
+      </p>
     </div>
 
     <ol class="mt-12 grid gap-5 lg:grid-cols-3">

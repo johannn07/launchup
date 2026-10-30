@@ -34,37 +34,15 @@
     class="mx-auto grid w-[min(72rem,88vw)] items-center gap-12 py-24 lg:grid-cols-[1fr_0.92fr] lg:gap-16"
   >
     <div use:reveal>
-      <p class="lu-chip">About the platform</p>
-      <h2
-        class="lu-d-xw mt-6 text-[32px] leading-[1.08] text-white sm:text-[42px]"
-      >
+      <h2 class="lu-d-xw text-[32px] leading-[1.08] text-white sm:text-[42px]">
         About LaunchUp
       </h2>
-      <p class="mt-5 max-w-[56ch] text-[17.5px] leading-[1.75] text-[#94a3b8]">
+      <p class="mt-5 max-w-[56ch] text-[17px] leading-[1.7] text-[#94a3b8]">
         LaunchUp is a dedicated program designed to support startups on their
         path to success. It provides essential resources and guidance to
         innovative entrepreneurs, with a specific focus on incubation and
         acceleration.
       </p>
-
-      <dl class="mt-8 grid gap-3 sm:grid-cols-3">
-        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
-          <dt class="text-[13px] text-[#94a3b8]">Focus</dt>
-          <dd class="lu-d-md mt-1.5 text-[15px] text-white">Founders first</dd>
-        </div>
-        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
-          <dt class="text-[13px] text-[#94a3b8]">Method</dt>
-          <dd class="lu-d-md mt-1.5 text-[15px] text-white">
-            Grounded scoring
-          </dd>
-        </div>
-        <div class="rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-4">
-          <dt class="text-[13px] text-[#94a3b8]">Outcome</dt>
-          <dd class="lu-d-md mt-1.5 text-[15px] text-white">
-            Clear next steps
-          </dd>
-        </div>
-      </dl>
     </div>
 
     <!-- Answers the question the hero raises: where does a level come from? -->

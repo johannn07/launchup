@@ -4,7 +4,7 @@
 </script>
 
 <!-- Sits where the About section used to leave a ~42rem gap above the footer. -->
-<section class="border-y border-[#17213a]">
+<section>
   <div
     class="mx-auto flex w-[min(72rem,88vw)] flex-wrap items-center justify-between gap-6 py-14"
   >

@@ -21,7 +21,7 @@
   <h3>Account information</h3>
   <p>
     Your first and last name, email address, and role on the platform. Passwords
-    are stored only as a salted hash — we never hold the password itself and
+    are stored only as a salted hash. We never hold the password itself and
     cannot recover it for you.
   </p>
 
@@ -38,9 +38,9 @@
   <p>
     Server logs recording requests to the platform, including IP address,
     browser user agent, and timestamps, together with records of each assessment
-    run — which configuration produced a given score, when, and how long it
-    took. We use these for security, debugging, and measuring the quality of our
-    own scoring.
+    run: which configuration produced a given score, when, and how long it took.
+    We use these for security, debugging, and measuring the quality of our own
+    scoring.
   </p>
 
   <h2 id="how-we-use-it">How we use it</h2>
@@ -134,9 +134,9 @@
   <p>
     You can update your name and email in your account settings and close your
     account at any time. For anything else, write to
-    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>. We
-    respond within 30 days, and will tell you if a request is complex enough to
-    need a single further extension of 30 days.
+    <a href="mailto:launchup.enhanced@gmail.com">launchup.enhanced@gmail.com</a
+    >. We respond within 30 days, and will tell you if a request is complex
+    enough to need a single further extension of 30 days.
   </p>
   <p>
     Because assessments are produced with automated processing, you may ask for
@@ -171,11 +171,11 @@
   <h2 id="contact">Contact</h2>
   <p>
     Privacy questions and rights requests go to
-    <a href="mailto:privacy@launchup.example">privacy@launchup.example</a>,
-    which reaches our Data Protection Officer.
+    <a href="mailto:launchup.enhanced@gmail.com">launchup.enhanced@gmail.com</a
+    >.
   </p>
   <p>
-    The data controller is LaunchUp Technologies Inc., 4F Innovation Center,
-    Ayala Avenue, Makati City 1226, Philippines.
+    LaunchUp is a capstone project by BSIT students of Cebu Institute of
+    Technology - University.
   </p>
 </LegalShell>

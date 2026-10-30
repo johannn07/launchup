@@ -63,7 +63,7 @@
       </p>
     </div>
     <p
-      class="inline-flex items-center gap-1.5 rounded-full border border-[#fbbf24]/30 bg-[#fbbf24]/10 px-3 py-1.5 text-[12.5px] font-semibold text-[#fbbf24]"
+      class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#fbbf24]/30 bg-[#fbbf24]/10 px-3 py-1.5 text-[12.5px] font-semibold text-[#fbbf24]"
     >
       <svg
         class="h-3.5 w-3.5"
