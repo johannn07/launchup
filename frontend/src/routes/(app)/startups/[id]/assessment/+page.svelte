@@ -498,7 +498,7 @@
       <!-- Read the answers on the left, decide on the right. -->
       <div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
       <div
-        class="assessment-scroll min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5"
+        class="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-[#1f2c47] bg-[#0b1220] p-5"
       >
         {#if selectedReadinessType && assessmentsByType()[selectedReadinessType]?.length > 0}
           <div class="flex flex-col gap-5">
@@ -750,27 +750,3 @@
     {/snippet}
   </StatePanel>
 {/snippet}
-
-<style>
-  .assessment-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
-  }
-
-  .assessment-scroll::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .assessment-scroll::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .assessment-scroll::-webkit-scrollbar-thumb {
-    background-color: var(--border);
-    border-radius: 9999px;
-  }
-
-  .assessment-scroll::-webkit-scrollbar-thumb:hover {
-    background-color: var(--muted-foreground);
-  }
-</style>

@@ -14,6 +14,20 @@ html:has(.lu-root) {
   scroll-behavior: smooth;
 }
 
+/* One scrollbar in every browser. Without this, Chrome on Windows draws a
+   classic bar with arrows and Firefox-based browsers an overlay one. Chrome
+   121+ and Firefox both read these standard properties. The thumb is
+   --lu-step (3.25:1 on navy); hex because .lu-root tokens don't reach html.
+   scrollbar-color inherits, scrollbar-width doesn't, hence the `*`. */
+html:has(.lu-root) {
+  scrollbar-color: #54648a transparent;
+}
+
+html:has(.lu-root),
+html:has(.lu-root) * {
+  scrollbar-width: thin;
+}
+
 /* ================= Motion system =================
    Three durations and two curves. Every transition on a branded page uses one
    of these, so hover, state changes and arriving data read as one system
