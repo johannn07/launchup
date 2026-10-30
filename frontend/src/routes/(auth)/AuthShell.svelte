@@ -39,8 +39,9 @@
 </script>
 
 <!--
-  Composition, not decoration. One shell width governs the header, the content
-  and the footer, so the page stops having two competing measures. Content is
+  Composition, not decoration. Header and footer use the landing page's 72rem
+  frame so they stay put between pages; the form and its context column stay
+  together as one centred 48rem group. Content is
   anchored to a fixed top offset rather than vertically centred, so the heading
   lands in the same place on login and register instead of jumping between them.
   The right column is quiet type on the page ground — no card, no fill, no icons.
@@ -54,7 +55,7 @@
   ></div>
 
   <header class="border-b border-[#17213a]/70">
-    <div class="mx-auto flex h-16 w-[min(48rem,90vw)] items-center">
+    <div class="mx-auto flex h-16 w-[min(72rem,88vw)] items-center">
       <BrandMark />
       <a href="/" class="lu-btn lu-btn-secondary lu-btn-sm ml-auto"
         >Back to site</a
@@ -62,9 +63,9 @@
     </div>
   </header>
 
-  <main class="flex-1 px-5 pb-16 pt-12 sm:pt-16">
+  <main class="flex-1 pb-16 pt-12 sm:pt-16">
     <div
-      class="mx-auto grid w-[min(48rem,90vw)] gap-x-12 lg:grid-cols-[minmax(0,25rem)_minmax(0,15rem)]"
+      class="mx-auto grid w-[min(48rem,88vw)] gap-x-12 lg:grid-cols-[minmax(0,25rem)_minmax(0,15rem)]"
     >
       <!-- Form column -->
       <div class="min-w-0">
@@ -120,12 +121,21 @@
 
   <footer class="border-t border-[#17213a]/70">
     <div
-      class="mx-auto flex w-[min(48rem,90vw)] flex-wrap items-center justify-between gap-3 py-6"
+      class="mx-auto flex w-[min(72rem,88vw)] flex-wrap items-center justify-between gap-x-6 gap-y-3 py-6"
     >
       <p class="lu-num text-[13px] text-[#94a3b8]">
         © {new Date().getFullYear()} LaunchUp
       </p>
-      <nav class="flex gap-5 text-[13px] text-[#94a3b8]" aria-label="Footer">
+      <nav
+        class="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-[#94a3b8]"
+        aria-label="Footer"
+      >
+        <a href="/legal/terms" class="transition-colors hover:text-[#818cf8]"
+          >Terms of Service</a
+        >
+        <a href="/legal/privacy" class="transition-colors hover:text-[#818cf8]"
+          >Privacy Policy</a
+        >
         <a href="/#howitwork" class="transition-colors hover:text-[#818cf8]"
           >How it Works</a
         >
