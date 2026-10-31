@@ -577,14 +577,14 @@ Merged to `master` and pushed.
 
 ## 2026-10-31 → 11-01 — app shell, `/startups`, unused pages
 
-Frontend only, zero Gemini calls. Everything merged to local `master`, **not pushed**.
+Frontend only, zero Gemini calls. Everything merged to `master` and pushed (`bb009bd`).
 
 | Branch | Change | Verified |
 |---|---|---|
 | `docs/taste-skill-rule` | CLAUDE.md: load the taste skill for every UI change | — |
 | `design/app-general-taste-pass` | App header and content on the landing's 72rem frame. The app scrolls the document: brand.css reserves the document gutter, so the old inner scroller drew a second bar and moved the logo 5px between short and long pages. Header sticky, mobile menu overlays, header border darkens on scroll (IntersectionObserver; the old listener watched a container that never scrolled). `/startups`: search icon sat on the text (brand padding beat `pl-10`), legend counts removed (the tabs show them), "0 / 2" spacing | Playwright as the seeded founder, 1440 and 375: frame 139–1291 on `/`, `/startups`, `/apply`; one scroller; border toggles |
 | `chore/remove-orphan-routes` | Deleted `/startups/[id]/pending` (no link since 2026-09-17) and `/dashboard` (dev-only preview) | `svelte-check` 110, unchanged |
-| `feat/progress-report-nav` | Progress back in the startup nav | Live on MediSync: tab active, seven sections render |
+| `feat/progress-report-nav`, then `feat/progress-in-overview` | Progress re-enabled, then moved to the fifth Overview tab (`/startups/[id]/overview/progress-report`) at John's request | Live on MediSync: Overview active, Progress tab active, seven sections render |
 
 ### `/apply`
 
@@ -614,8 +614,7 @@ build status, works). Deleted: `/pending`, `/dashboard`. Re-enabled: Progress.
 
 ### Next step
 
-1. **John reviews local `master`** (list in the session reply), then pushes and
-   redeploys the frontend.
+1. **Redeploy the frontend**; `master` is pushed.
 2. **The pop-up edit work** (TODO §3), on its own branch, using startup 65; delete
    it afterwards.
 3. Continue the app design pass: `/applications`, `/account/*`, then the per-startup
