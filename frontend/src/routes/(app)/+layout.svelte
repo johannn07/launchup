@@ -3,7 +3,8 @@
   import { Header } from '$lib/components/shared';
 
   let { children, data } = $props();
-  let scrollContainer = $state<HTMLDivElement | null>(null);
+  // Scrolled past this, the header's rule darkens.
+  let topSentinel = $state<HTMLDivElement | null>(null);
 
   // The authenticated app is dark-only, like every other branded page. `dark`
   // on the wrapper below covers everything rendered inside it; this covers what
@@ -24,17 +25,19 @@
   });
 </script>
 
-<div class="dark lu-ws flex h-full flex-col overflow-x-hidden bg-[#07111f]">
+<div class="lu-ws dark flex h-full flex-col overflow-x-hidden bg-[#07111f]">
   <div
     aria-hidden="true"
     class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,#07111f_0%,#0b1220_45%,#050816_100%)]"
   ></div>
-  <Header user={data.user} startup={data.startup} {scrollContainer} />
-  <div
-    class="mx-auto my-6 flex h-full w-full max-w-7xl flex-col px-4 sm:px-6 lg:px-8"
-  >
-    <div class="min-h-16"></div>
-    <div bind:this={scrollContainer} class="flex-1">
+  <Header user={data.user} startup={data.startup} {topSentinel} />
+  <div class="relative mx-auto my-6 flex h-full w-[min(72rem,88vw)] flex-col">
+    <div
+      bind:this={topSentinel}
+      class="pointer-events-none absolute inset-x-0 top-0 h-[100px]"
+      aria-hidden="true"
+    ></div>
+    <div class="flex-1">
       {@render children()}
     </div>
   </div>

@@ -4,14 +4,12 @@
   import { page } from '$app/state';
   import { crossfade } from 'svelte/transition';
   import { cubicInOut } from 'svelte/easing';
-  import { onMount, onDestroy } from 'svelte';
-  import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
   import { Rocket, Menu, X } from 'lucide-svelte';
   import { MOVE } from '$lib/motion';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
 
-  const { user, startup, scrollContainer } = $props();
+  const { user, startup, topSentinel } = $props();
 
   // One flag per menu: a shared flag opens both, and the hidden one keeps the
   // page locked (upstream 59a5781).
@@ -57,32 +55,15 @@
 
   let isBlurred = $state(false);
 
-  function handleScroll(e?: Event) {
-    let scrollY = 0;
-    if (scrollContainer) {
-      scrollY = scrollContainer.scrollTop;
-    } else {
-      scrollY = window.scrollY;
-    }
-    isBlurred = scrollY > 100;
-  }
-
-  onMount(() => {
-    if (!browser) return;
-    if (scrollContainer) {
-      scrollContainer.addEventListener('scroll', handleScroll);
-    } else {
-      window.addEventListener('scroll', handleScroll);
-    }
-  });
-
-  onDestroy(() => {
-    if (!browser) return;
-    if (scrollContainer) {
-      scrollContainer.removeEventListener('scroll', handleScroll);
-    } else {
-      window.removeEventListener('scroll', handleScroll);
-    }
+  // The sentinel covers the first 100px of the page; once it leaves the
+  // viewport the page has scrolled, whichever element is doing the scrolling.
+  $effect(() => {
+    if (!topSentinel) return;
+    const obs = new IntersectionObserver(([e]) => {
+      isBlurred = !e.isIntersecting;
+    });
+    obs.observe(topSentinel);
+    return () => obs.disconnect();
   });
 
   // Pending and waitlisted startups have nothing to assess yet, only their
@@ -102,10 +83,10 @@
             !isUnqualifiedStartup || item.link === 'overview'
         )
         .map((item) => ({
-        name: item.name,
-        href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
-        isActive: currentModule === item.link || currentModulev2 === item.link
-      }));
+          name: item.name,
+          href: `/${module}/${startup}/${item.link}${item.name === 'Overview' ? `/${item?.subModule[0].link}` : ''}`,
+          isActive: currentModule === item.link || currentModulev2 === item.link
+        }));
     }
     return modules.map((item) => ({
       name: item.name,
@@ -117,17 +98,16 @@
   const navLinks = $derived(getNavLinks());
 </script>
 
-<!-- Matches the landing header: navy at 85% with blur, hairline rule. The
-     blur is functional here, since page content scrolls beneath it. -->
+<!-- Matches the landing header: navy at 85% with blur, hairline rule. Sticky
+     inside the layout's scroller, so it shares the content's width when a
+     scrollbar is showing; fixed, it spanned the scrollbar and sat off-frame. -->
 <header
-  class="lu-root fixed left-0 right-0 top-0 z-40 border-b backdrop-blur-lg transition-colors duration-move {isBlurred
+  class="lu-root sticky top-0 z-40 shrink-0 border-b backdrop-blur-lg transition-colors duration-move {isBlurred
     ? 'border-[#1f2c47]'
     : 'border-[#17213a]/70'}"
   style="background: rgba(7, 17, 31, 0.85)"
 >
-  <nav
-    class="mx-auto flex h-16 w-full max-w-7xl items-center px-4 sm:px-6 lg:px-8"
-  >
+  <nav class="mx-auto flex h-16 w-[min(72rem,88vw)] items-center">
     <div class="flex flex-1 items-center">
       <a
         data-sveltekit-preload-data="tap"
@@ -194,23 +174,28 @@
   </nav>
 
   {#if mobileMenuOpen}
-    <div class="border-t border-[#17213a] px-4 py-3 md:hidden">
-      <ul class="flex flex-col gap-1">
-        {#each navLinks as link}
-          <li>
-            <a
-              data-sveltekit-preload-data="tap"
-              href={link.href}
-              class="flex items-center rounded-[10px] px-3 py-2.5 text-[14px] font-medium transition-colors {link.isActive
-                ? 'bg-[#4f46e5]/15 text-white'
-                : 'text-[#94a3b8] hover:bg-[#0b1220] hover:text-white'}"
-              onclick={() => (mobileMenuOpen = false)}
-            >
-              {link.name}
-            </a>
-          </li>
-        {/each}
-      </ul>
+    <!-- Drops over the page rather than pushing it down. -->
+    <div
+      class="absolute inset-x-0 top-full border-y border-[#17213a] bg-[#07111f] py-3 md:hidden"
+    >
+      <div class="mx-auto w-[min(72rem,88vw)]">
+        <ul class="flex flex-col gap-1">
+          {#each navLinks as link}
+            <li>
+              <a
+                data-sveltekit-preload-data="tap"
+                href={link.href}
+                class="flex items-center rounded-[10px] px-3 py-2.5 text-[14px] font-medium transition-colors {link.isActive
+                  ? 'bg-[#4f46e5]/15 text-white'
+                  : 'text-[#94a3b8] hover:bg-[#0b1220] hover:text-white'}"
+                onclick={() => (mobileMenuOpen = false)}
+              >
+                {link.name}
+              </a>
+            </li>
+          {/each}
+        </ul>
+      </div>
     </div>
   {/if}
 </header>
