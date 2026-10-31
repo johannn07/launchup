@@ -409,98 +409,19 @@ item numbers (`#N` is `priorityNumber`, renumbered on every drop; TODO §3).
 
 ---
 
-## 2026-09-30 → 10-01 — application submissions that never saved, and empty proposals
+## Compressed — 2026-09-30 → 10-01 (applications that never saved, empty proposals)
 
-Reported: applying as `chanlance.school@gmail.com` "does not register". Four
-branches, all merged to `master` and pushed. The first two were deployed and
-**tested by John on the deployed server**; the last two were not yet at the time
-of writing. About two dozen Gemini calls, most returning 503 "high demand", then
-429 once `gemini-3.6-flash` hit its daily quota.
-
-| Branch | Defect | Cause | Verified |
-|---|---|---|---|
-| `fix/apply-submit-url` (`f7eb460`) | `/apply` form: submit did nothing, no message | The server action posted through `$lib/axios`, whose `baseURL` became the relative `/api` in `5a453d2`; Node cannot resolve it ("Invalid URL"). The failure was returned outside superforms' `message`, so the page dropped it | Live: submit lands on `/startups`; with the API stopped, the error toast shows |
-| `fix/startup-wizard-submit` (`ba770ab`) | Wizard: reload to `/startups`, nothing saved, locally and deployed | (1) The SO 4.2 summary ran **inside** the create transaction, so any Gemini 503/429 rolled back the application; the page's error toast was commented out. (2) `/startups/apply` returned no `id`, so all 18 URAT and 7 calculator answers were posted with `startupId: undefined` — the local Neon branch held **zero** of either, for any startup | Live on Neon at 429: startup, 18 + 7 answers and a failed run linked to it all saved; Manager dialog showed the pending state, returned the quota message as a 503, then generated the summary and badge |
-| `fix/empty-capsule-proposal` (`ed33526`) | A failed upload let the founder submit anyway; every proposal field became "Pending AI Generation", which the Manager reviewed, the summary described and RAG indexed | The upload was marked required but nothing enforced it, and the action substituted placeholders | Live: Next gated until name + 5 fields; typed application saved real text + 18/7 answers; an edit cleared a stand-in summary and rewrote the same RAG row; a proposal-less post refused |
-| `feat/capsule-proposal-reupload` (`0e560ca`) | No way to upload the proposal after applying | The attach-a-file endpoint for an existing startup is commented out | Live: at 429 the upload showed the quota message and changed nothing; with quota it filled all 8 fields, saved nothing until Save, then saved, cleared the summary and refreshed RAG |
-
-### Design of the wizard fix
-
-- `create()` makes no AI call. The summary runs after commit in its own
-  `analysis_summary` run, opened with the startup id — which also ends the FK error
-  from attributing a run to an uncommitted startup.
-- On failure `aiAnalysisSummary` stays null (column now nullable) and `/apply`
-  returns `{ id, summaryPending: true }`. Chosen by John over "fail with a clear
-  message": the summary is the Manager's SO 4.2/4.4 aid, not the founder's.
-- Managers fill a pending summary from any of the four Applications dialogs via
-  `POST /startups/:id/analysis-summary` (`AdminGuard`). It refuses to replace an
-  existing summary, since the SO 4.4 approval gate may already be acknowledged
-  against it. Input is built from the saved proposal, so submit and regenerate give
-  the model the same text.
-- Also: the PDF upload retries a busy model and returns a readable 503 instead of
-  a 500 with Gemini's raw body; the URAT answer DTO gained `@ValidateNested`, and
-  its `response` went from `@IsNumber` to `@IsString` — otherwise nested validation
-  would have rejected every text answer.
-
-### Design of the empty-proposal fix and re-upload
-
-- The wizard's Details step offers "Type the proposal in instead", with or without
-  a failed upload; Next stays disabled until the startup name, title, description,
-  problem, market and solution are filled. The action rejects a submission
-  missing any of them rather than substituting placeholders.
-- Editing a saved proposal (Overview → Capsule Proposal, or a waitlisted reapply)
-  clears the summary while Pending or Waitlisted, and refreshes the proposal's RAG
-  row in place (`AiService.refreshRagContext`), dropping the old vector first so a
-  failed embed leaves a row for the boot backfill, not a vector of the old text.
-  After approval the summary is kept. A no-op save does neither. Saving never
-  regenerates the summary: repeated saves would each spend a call of the 20/day.
-- Re-upload is frontend-only: "Upload new version" runs the existing parse
-  endpoint, fills the fields unsaved with an "AI-filled, check it" notice, and
-  Save goes through the same PATCH as a typed edit.
-- Applications already saved with placeholders can now be repaired: the founder
-  uploads or types, then a Manager generates the summary.
-
-### Verification limits
-
-- **The summary's success path used `gemini-3.5-flash-lite`**, not the production
-  model — `3.6-flash` was at quota. So did the re-upload's success path.
-  `backend/.env` was switched for each test and restored byte-for-byte (same
-  checksum).
-- Playwright mouse clicks on the Applications cards did not open the dialog;
-  `element.click()` did, on this branch and with master's dialogs stashed. Treated
-  as a test-driver artifact, not investigated further.
-- Deployed passwords were typed by John, not Claude; the deployed wizard was filled
-  by Claude in the Browser pane.
-- Gates: backend **416/416** (40 suites); `svelte-check` **110 errors**, unchanged.
-- All test startups (27, 33, 35) and their answers, runs, RAG rows and the
-  re-upload's OCR row were deleted from Neon.
-
-### Found, not fixed
-
-- **The apply page's `load` also returns the `Access` token as `data.access`** —
-  the same leak as §1's P1 "stop shipping the raw JWT", one more call site.
-- **SO 4.4 flagged a critical summary as "Predominantly positive"** — run 100, lite
-  model, text opening "The proposal fails to provide actionable information…". The
-  next generation read Balanced. n = 1, unconfirmed; TODO §2.
-- `StartupService` still injects `AiRunService` and no longer uses it. TODO §4.
-- The Render backend took **53 s** to answer after idling (free-tier spin-down).
-- **The wizard's "Startup name" field is ignored** — `create()` names the startup
-  after the proposal title. Pre-existing. TODO §2.
-
-### Next step
-
-1. **John tests the last two branches on the deployed server:** type a proposal in
-   the wizard (Next must stay disabled until it is complete), then "Upload new
-   version" on Capsule Proposal once Gemini has quota, save, and check the
-   Manager sees "Generate summary". Remove the untracked
-   `sample-application/` (test PDF and answers) and `.playwright-mcp/` (test
-   screenshots and logs) when done with them.
-2. **Check the SO 4.4 misread** against the production model before it reaches a
-   demo — it is the badge a Manager acts on.
-3. Carried from 2026-09-26: the live refine-chat check, and the stable item-number
-   decision (§3).
-4. The critical path is unchanged: the SPMP and the traceability matrix, competing
-   for the same weeks as the 30-user study.
+Four branches merged and pushed: `/apply` posted through a relative axios base Node
+could not resolve; the wizard ran the SO 4.2 summary inside the create transaction
+(a Gemini 503/429 rolled the application back) and posted URAT/calculator answers
+with no startup id; a failed upload saved "Pending AI Generation" in every proposal
+field; proposals can now be typed and re-uploaded. The summary now runs after commit
+and a Manager can generate a pending one. John tested the first two on the deployed
+server. Summary and re-upload success paths ran on `gemini-3.5-flash-lite` (3.6 was at
+quota). **Still open:** John's deployed test of the last two; SO 4.4 read a critical
+summary as "Predominantly positive" (n = 1, TODO §2); the wizard's "Startup name" is
+ignored (TODO §2); `data.access` leak on the apply load (§1 P1); unused `AiRunService`
+(§4); Render free tier took 53 s to wake.
 
 ---
 
@@ -651,3 +572,51 @@ Merged to `master` and pushed.
    skill excludes product UI, so only its token-level rules apply there.
 3. The capstone critical path is unchanged: study analysis (TAM, SUS), SPMP,
    traceability matrix, CER transcription for 3c.
+
+---
+
+## 2026-10-31 → 11-01 — app shell, `/startups`, unused pages
+
+Frontend only, zero Gemini calls. Everything merged to local `master`, **not pushed**.
+
+| Branch | Change | Verified |
+|---|---|---|
+| `docs/taste-skill-rule` | CLAUDE.md: load the taste skill for every UI change | — |
+| `design/app-general-taste-pass` | App header and content on the landing's 72rem frame. The app scrolls the document: brand.css reserves the document gutter, so the old inner scroller drew a second bar and moved the logo 5px between short and long pages. Header sticky, mobile menu overlays, header border darkens on scroll (IntersectionObserver; the old listener watched a container that never scrolled). `/startups`: search icon sat on the text (brand padding beat `pl-10`), legend counts removed (the tabs show them), "0 / 2" spacing | Playwright as the seeded founder, 1440 and 375: frame 139–1291 on `/`, `/startups`, `/apply`; one scroller; border toggles |
+| `chore/remove-orphan-routes` | Deleted `/startups/[id]/pending` (no link since 2026-09-17) and `/dashboard` (dev-only preview) | `svelte-check` 110, unchanged |
+| `feat/progress-report-nav` | Progress back in the startup nav | Live on MediSync: tab active, seven sections render |
+
+### `/apply`
+
+A redesign was built, shown, then discarded: `/apply` is the old full-page form. Its
+only link is the pop-up's "Edit application" for waitlisted startups; without an id it
+is reachable by URL only. John's call: edit inside the pop-up instead (TODO §3, with his
+field decisions). Dummy startup 65 (waitlisted, owned by `founder.medisync`, on the
+shared Neon DB, which also holds 19 non-demo accounts) was created to view the edit
+mode and is kept for that work.
+
+### Unused-page audit (John decides each)
+
+Unlinked: `/analytics`, `/cohorts` (no backend; TODO §3), `/objectives` (Manager-only
+build status, works). Deleted: `/pending`, `/dashboard`. Re-enabled: Progress.
+`/manager-login` has no visible link; reached by redirect from `/admin`.
+
+### Still open
+
+- The Progress report needs a design pass (radar shape, two "III" sections, truncated
+  descriptions, numeric statuses).
+- After the founder's session expired, signing in went to `/startups` instead of the
+  `redirectTo` page. Seen once, not investigated.
+- `backup/pre-split-2026-09-04` is unmerged on purpose: its work reached `master` as
+  PRs #47–#50 with rewritten commits.
+- The app stops preview servers when a turn ends; the dev servers were restarted
+  several times from `.claude/launch.json`.
+
+### Next step
+
+1. **John reviews local `master`** (list in the session reply), then pushes and
+   redeploys the frontend.
+2. **The pop-up edit work** (TODO §3), on its own branch, using startup 65; delete
+   it afterwards.
+3. Continue the app design pass: `/applications`, `/account/*`, then the per-startup
+   pages, including the Progress report.
