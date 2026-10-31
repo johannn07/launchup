@@ -111,8 +111,8 @@
     <div class="flex items-baseline justify-between gap-3 text-[12.5px]">
       <span class="text-[#94a3b8]">Initiatives</span>
       <span class="lu-num font-semibold text-[#f1f5f9]">
-        {done}<span class="font-normal text-[#94a3b8]">
-          / {initiatives.length}</span
+        {done}<span class="font-normal text-[#94a3b8]"
+          >{' / '}{initiatives.length}</span
         >
       </span>
     </div>

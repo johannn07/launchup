@@ -360,20 +360,13 @@
           class="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[12.5px] text-[#94a3b8]"
         >
           {#if role === 'Startup'}
-            <li class="lu-legend" data-status="pending">
-              Pending <b>{pendingStartups.length}</b>
-            </li>
-            <li class="lu-legend" data-status="waitlisted">
-              Waitlisted <b>{waitlistedStartups.length}</b>
-            </li>
+            <li class="lu-legend" data-status="pending">Pending</li>
+            <li class="lu-legend" data-status="waitlisted">Waitlisted</li>
           {/if}
           <li class="lu-legend" data-status="qualified">
             {role === 'Mentor' ? 'Active' : 'Qualified'}
-            <b>{qualifiedStartups.length}</b>
           </li>
-          <li class="lu-legend" data-status="completed">
-            Completed <b>{completedStartups.length}</b>
-          </li>
+          <li class="lu-legend" data-status="completed">Completed</li>
         </ul>
       {/if}
     </div>
@@ -384,8 +377,8 @@
         <span class="lu-skel mt-1.5 h-[34px] w-16" aria-hidden="true"></span>
       {:else}
         <p class="lu-d-xw lu-num mt-1.5 text-[34px] leading-none text-white">
-          {doneInitiatives}<span class="text-[18px] text-[#94a3b8]">
-            / {allInitiatives?.length ?? 0}</span
+          {doneInitiatives}<span class="text-[18px] text-[#94a3b8]"
+            >{' / '}{allInitiatives?.length ?? 0}</span
           >
         </p>
       {/if}
@@ -436,7 +429,7 @@
         class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#54648a]"
       />
       <input
-        class="lu-input pl-10"
+        class="lu-input !pl-10"
         type="search"
         placeholder="Search by name"
         aria-label="Search startups by name"
@@ -560,27 +553,32 @@
           <p class="lu-num text-[13px] text-[#94a3b8]">
             Showing <span class="text-[#f1f5f9]"
               >{(currentPage - 1) * perPage + 1}</span
-            >–<span class="text-[#f1f5f9]"
-              >{Math.min(currentPage * perPage, filteredStartups().length)}</span
+            >-<span class="text-[#f1f5f9]"
+              >{Math.min(
+                currentPage * perPage,
+                filteredStartups().length
+              )}</span
             >
             of <span class="text-[#f1f5f9]">{filteredStartups().length}</span>
           </p>
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="lu-btn lu-btn-secondary lu-btn-sm !px-0 w-[38px]"
+              class="lu-btn lu-btn-secondary lu-btn-sm w-[38px] !px-0"
               aria-label="Previous page"
               disabled={currentPage <= 1}
               onclick={() => currentPage--}
             >
               <ArrowLeft class="h-4 w-4" />
             </button>
-            <span class="lu-num min-w-[6.5rem] text-center text-[13px] text-[#94a3b8]">
+            <span
+              class="lu-num min-w-[6.5rem] text-center text-[13px] text-[#94a3b8]"
+            >
               Page <span class="text-white">{currentPage}</span> of {totalPages}
             </span>
             <button
               type="button"
-              class="lu-btn lu-btn-secondary lu-btn-sm !px-0 w-[38px]"
+              class="lu-btn lu-btn-secondary lu-btn-sm w-[38px] !px-0"
               aria-label="Next page"
               disabled={currentPage >= totalPages}
               onclick={() => currentPage++}
