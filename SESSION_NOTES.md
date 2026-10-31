@@ -601,7 +601,7 @@ Unlinked: `/analytics`, `/cohorts` (no backend; TODO §3), `/objectives` (Manage
 build status, works). Deleted: `/pending`, `/dashboard`. Re-enabled: Progress.
 `/manager-login` has no visible link; reached by redirect from `/admin`.
 
-### Progress report pass (`design/progress-report`, `b46f5db`, not yet merged)
+### Progress report pass (`design/progress-report`, merged and pushed `b280328`)
 
 Data fixes as well as layout: the radar paired levels with a hardcoded label list by
 index (now matched by type, canonical order, scale from 0); short-term next steps
