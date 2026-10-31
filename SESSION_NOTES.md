@@ -613,6 +613,12 @@ has an explicit mobile column, so its tables scroll inside their box on every ta
 Verified at 1440 and 375 on MediSync; `svelte-check` 110 → 108. **Not tested:** the
 PDF download (it saves a file).
 
+Then, at John's request: sections reordered (chart, RNA, RNS short, RNS long,
+initiatives, risks) and made collapsible with item counts and Expand/Collapse all;
+the PDF export opens every section for the capture (`c5e2318`). Overview tabs
+reordered General, Capsule Proposal, Progress, Members, Elevate
+(`feat/overview-tab-order`, `c6ccfa7`, stacked on the report branch).
+
 ### Still open
 - After the founder's session expired, signing in went to `/startups` instead of the
   `redirectTo` page. Seen once, not investigated.

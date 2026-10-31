@@ -42,20 +42,20 @@ const startupModule = {
           link: 'general'
         },
         {
-          name: 'Members',
-          link: 'members'
-        },
-        {
           name: 'Capsule Proposal',
           link: 'capsule_proposal'
         },
         {
-          name: 'Elevate',
-          link: 'elevate'
-        },
-        {
           name: 'Progress',
           link: 'progress-report'
+        },
+        {
+          name: 'Members',
+          link: 'members'
+        },
+        {
+          name: 'Elevate',
+          link: 'elevate'
         }
       ]
     }
