@@ -65,6 +65,13 @@ branch. If it does not, create the branch first. When the current branch's
 stated purpose is complete, say so and stop, rather than proposing what else
 could be done while you are here.
 
+## UI changes
+- Load the taste skill (`taste-skill:taste-skill`) every time a UI change is
+  asked for, before reading or editing the UI. Not once per session.
+- It targets landing pages. On product UI (app shell, tables, forms, dialogs)
+  apply only the rules that carry over: one frame width, one accent, one radius
+  scale, contrast, loading/empty/error states, no em-dashes in visible text.
+
 ## Comment & documentation style
 - Keep all code comments short and to the point — one line where possible.
 - Explain *why*, not *what* — don't describe what the code obviously already shows.
