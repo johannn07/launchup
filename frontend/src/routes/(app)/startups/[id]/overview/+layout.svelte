@@ -19,26 +19,30 @@
     ]
   );
 
-  const modules = $derived((() => {
-    const userRole = data.user?.role as 'Startup' | 'Mentor' | 'Manager';
-    const roleModules = access.roles[userRole]?.modules ?? [];
-    
-    // Looked up by name because the module list is role-dependent.
-    const startupsModule = roleModules.find(m => m.link === 'startups');
-    if (!startupsModule) return [];
-    
-    // Find the overview submodule
-    const overviewModule = startupsModule.subModule.find(s => s.link === 'overview');
-    if (!overviewModule) return [];
-    
-    return overviewModule.subModule ?? [];
-  })());
+  const modules = $derived(
+    (() => {
+      const userRole = data.user?.role as 'Startup' | 'Mentor' | 'Manager';
+      const roleModules = access.roles[userRole]?.modules ?? [];
+
+      // Looked up by name because the module list is role-dependent.
+      const startupsModule = roleModules.find((m) => m.link === 'startups');
+      if (!startupsModule) return [];
+
+      // Find the overview submodule
+      const overviewModule = startupsModule.subModule.find(
+        (s) => s.link === 'overview'
+      );
+      if (!overviewModule) return [];
+
+      return overviewModule.subModule ?? [];
+    })()
+  );
 </script>
 
-<div
-  class="rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] p-5 sm:p-6"
->
-  <div class="grid gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10">
+<div class="rounded-[1.25rem] border border-[#1f2c47] bg-[#0b1220] p-5 sm:p-6">
+  <div
+    class="grid grid-cols-1 gap-8 lg:grid-cols-[13rem_minmax(0,1fr)] lg:gap-10"
+  >
     <nav aria-label="Overview">
       <ul class="flex gap-1 overflow-x-auto lg:flex-col">
         {#each modules as item (item.link)}
