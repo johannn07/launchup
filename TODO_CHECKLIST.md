@@ -987,7 +987,7 @@ Each verified by reading **both** sides of the call.
   **Decision:** *Cut* (recommended), or *Fix* (needs the dynamic assessment-type work from §2 first). *Decide together with the "create assessment type" bug.*
 
 - [x] ✅ **SCOPE · S · Three finished features are hidden from navigation** — *Progress report re-enabled 2026-11-01 (`feat/progress-report-nav`)*
-  Progress is now the fifth Overview tab (`overview/progress-report`) and renders all seven sections on MediSync. Analytics and Cohorts stay commented out; they belong to the first item above. The report needs a design pass: the radar draws an odd shape with faint labels, two sections are both numbered "III", initiative descriptions are cut mid-word, and next-step status shows raw numbers.
+  Progress is now the fifth Overview tab (`overview/progress-report`) and renders all seven sections on MediSync. Analytics and Cohorts stay commented out; they belong to the first item above. Its design and data pass is on `design/progress-report` (`b46f5db`): radar matched to dimensions by type, long-term steps no longer listed as short-term, statuses named, nothing truncated, null assignees handled, query keyed by startup. PDF download not re-tested.
   Commented out in `access.ts`: Progress Report (`:36-40`), Analytics (`:104-108`), Cohorts (`:109-113`).
   **Confirmed 2026-07-26:** Progress Report is fully working (UI + `GET /progress/:startupId/progress-report`) and the re-enable really is a five-line uncomment — temporarily uncommenting rendered it completely and correctly against live data. Analytics/Cohorts fold into the first item above.
 
