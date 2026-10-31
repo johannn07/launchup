@@ -72,6 +72,8 @@
             }
           }
         },
+        // Drawn complete at once: the PDF export captures it right after it opens.
+        animation: false,
         responsive: true,
         maintainAspectRatio: false,
         plugins: {

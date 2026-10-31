@@ -1,6 +1,9 @@
 <script lang="ts">
   import * as Card from '$lib/components/ui/card';
-  import { Download } from 'lucide-svelte';
+  import { ChevronDown, Download } from 'lucide-svelte';
+  import { tick } from 'svelte';
+  import { slide } from 'svelte/transition';
+  import { dur, MOVE } from '$lib/motion';
   import { RadarChartV2 } from '$lib/components/shared';
   import { useQuery } from '@sveltestack/svelte-query';
   import { getData, getStatusName } from '$lib/utils.js';
@@ -19,6 +22,10 @@
   );
 
   const downloadMultiPagePDF = async () => {
+    // Every section goes into the PDF, collapsed or not.
+    exporting = true;
+    await tick();
+    await new Promise((r) => setTimeout(r, dur(MOVE) + 150));
     try {
       const pages = document.querySelectorAll('.pdf-page');
       const tables = document.querySelectorAll('.pdf-table');
@@ -78,6 +85,8 @@
       // });
     } catch (error) {
       console.error('Error generating multi-page PDF:', error);
+    } finally {
+      exporting = false;
     }
   };
 
@@ -119,7 +128,40 @@
     )
   );
 
-  const section = 'lu-d-md text-[16px] text-white';
+  const initiativeCount = $derived(
+    priorities.reduce((n: number, s: any) => n + s.initiatives.length, 0)
+  );
+
+  type SectionKey =
+    | 'chart'
+    | 'rna'
+    | 'short'
+    | 'long'
+    | 'initiatives'
+    | 'risks';
+  const KEYS: SectionKey[] = [
+    'chart',
+    'rna',
+    'short',
+    'long',
+    'initiatives',
+    'risks'
+  ];
+  let open = $state<Record<SectionKey, boolean>>({
+    chart: true,
+    rna: false,
+    short: false,
+    long: false,
+    initiatives: false,
+    risks: false
+  });
+  let exporting = $state(false);
+  const isOpen = (k: SectionKey) => exporting || open[k];
+  const allOpen = $derived(KEYS.every((k) => open[k]));
+  function toggleAll() {
+    const next = !allOpen;
+    for (const k of KEYS) open[k] = next;
+  }
   const head =
     'h-11 text-left text-[12.5px] font-semibold text-[#94a3b8] first:pl-5 last:pr-5';
   const cell =
@@ -139,14 +181,25 @@
 
 <div class="flex items-center justify-between gap-4">
   <h1 class="lu-h2">Progress</h1>
-  <button
-    type="button"
-    class="lu-btn lu-btn-secondary lu-btn-sm"
-    onclick={downloadMultiPagePDF}
-    disabled={!report}
-  >
-    <Download class="h-4 w-4" /> Download PDF
-  </button>
+  <div class="flex items-center gap-2">
+    <button
+      type="button"
+      class="lu-btn lu-btn-secondary lu-btn-sm"
+      onclick={toggleAll}
+      disabled={!report}
+    >
+      {allOpen ? 'Collapse all' : 'Expand all'}
+    </button>
+    <button
+      type="button"
+      class="lu-btn lu-btn-secondary lu-btn-sm"
+      onclick={downloadMultiPagePDF}
+      disabled={!report || exporting}
+    >
+      <Download class="h-4 w-4" />
+      {exporting ? 'Preparing' : 'Download PDF'}
+    </button>
+  </div>
 </div>
 
 {#if $queryResult.isLoading}
@@ -160,234 +213,410 @@
     The progress report could not be loaded. Reload the page to try again.
   </p>
 {:else}
-  <div class="mt-5 grid min-w-0 gap-4">
-    <Card.Root class="pdf-page min-w-0">
-      <Card.Content class="grid min-w-0 gap-5 p-4 sm:p-6">
-        <p class="lu-d-xw text-[22px] leading-tight text-white">
+  <div class="mt-5 grid min-w-0 gap-3">
+    <Card.Root class="pdf-page min-w-0 overflow-hidden">
+      {#if exporting}
+        <p
+          class="lu-d-xw px-4 pt-5 text-[22px] leading-tight text-white sm:px-6"
+        >
           {report.startup.name} progress report
         </p>
-        <h3 class={section}>I. Readiness levels</h3>
-        {#if levels.length}
-          <div
-            class="relative mx-auto h-[280px] w-full min-w-0 max-w-[460px] sm:h-[380px]"
+      {/if}
+      <h3>
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors duration-quick hover:bg-[#0f1a2c] sm:px-6"
+          aria-expanded={isOpen('chart')}
+          aria-controls="progress-chart"
+          onclick={() => (open.chart = !open.chart)}
+        >
+          <span class="lu-d-md flex-1 text-[16px] text-white"
+            >I. Readiness chart</span
           >
-            <RadarChartV2
-              id={Number(data.startupId)}
-              min={0}
-              max={9}
-              data={levels.map((l: any) => l.level)}
-              labels={levels.map((l: any) => l.readinessType)}
-            />
-          </div>
-        {:else}
-          <p class="text-[14px] text-[#94a3b8]">
-            No readiness levels rated yet.
-          </p>
-        {/if}
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root class="pdf-page min-w-0">
-      <Card.Content class="grid min-w-0 gap-4 p-4 sm:p-6">
-        <h3 class={section}>II. Readiness and needs assessment</h3>
+          <ChevronDown
+            class="h-4 w-4 shrink-0 text-[#94a3b8] transition-transform duration-move {isOpen(
+              'chart'
+            )
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+      </h3>
+      {#if isOpen('chart')}
         <div
-          class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+          id="progress-chart"
+          transition:slide={{ duration: dur(MOVE) }}
+          class="grid min-w-0 gap-4 border-t border-[#17213a] p-4 sm:p-6"
         >
-          <Table.Root class="pdf-table">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head class={head}>Dimension</Table.Head>
-                <Table.Head class={head}>Level</Table.Head>
-                <Table.Head class={head}>Assessment</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {#each rnaRows as rna (rna.id)}
-                <Table.Row>
-                  <Table.Cell class="{cell} w-40"
-                    >{rna.readinessType}</Table.Cell
-                  >
-                  <Table.Cell class="{cell} {num} w-20"
-                    >{rna.readinessLevel.level}</Table.Cell
-                  >
-                  <Table.Cell class={cell}>{rna.rna}</Table.Cell>
-                </Table.Row>
-              {:else}
-                {@render empty(3, 'No assessments yet.')}
-              {/each}
-            </Table.Body>
-          </Table.Root>
-        </div>
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root class="pdf-page min-w-0">
-      <Card.Content class="grid min-w-0 gap-4 p-4 sm:p-6">
-        <h3 class={section}>III. Next steps: short term</h3>
-        <div
-          class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
-        >
-          <Table.Root class="pdf-table">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head class={head}>#</Table.Head>
-                <Table.Head class={head}>Dimension</Table.Head>
-                <Table.Head class={head}>Target</Table.Head>
-                <Table.Head class={head}>Description</Table.Head>
-                <Table.Head class={head}>Status</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {#each shortTerm as step (step.id)}
-                <Table.Row>
-                  <Table.Cell class="{cell} {num} w-12"
-                    >{step.priorityNumber}</Table.Cell
-                  >
-                  <Table.Cell class="{cell} w-36"
-                    >{step.readinessType}</Table.Cell
-                  >
-                  <Table.Cell class="{cell} {num} w-20"
-                    >Level {step.targetLevelScore}</Table.Cell
-                  >
-                  <Table.Cell class={cell}>{step.description}</Table.Cell>
-                  <Table.Cell class="{cell} w-28 whitespace-nowrap"
-                    >{getStatusName(step.status)}</Table.Cell
-                  >
-                </Table.Row>
-              {:else}
-                {@render empty(5, 'No short-term next steps yet.')}
-              {/each}
-            </Table.Body>
-          </Table.Root>
-        </div>
-      </Card.Content>
-    </Card.Root>
-
-    <Card.Root class="pdf-page min-w-0">
-      <Card.Content class="grid min-w-0 gap-4 p-4 sm:p-6">
-        <h3 class={section}>IV. Initiatives</h3>
-        {#each priorities as step (step.id)}
-          <div class="grid min-w-0 gap-2">
-            <p class="text-[13.5px] font-semibold text-[#c3ced9]">
-              Next step #{step.priorityNumber}
-              <span class="font-normal text-[#94a3b8]"
-                >{step.readinessType}</span
-              >
-            </p>
+          {#if levels.length}
             <div
-              class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+              class="relative mx-auto h-[280px] w-full min-w-0 max-w-[460px] sm:h-[380px]"
             >
-              <Table.Root class="pdf-table">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.Head class={head}>#</Table.Head>
-                    <Table.Head class={head}>Description</Table.Head>
-                    <Table.Head class={head}>Measures</Table.Head>
-                    <Table.Head class={head}>Targets</Table.Head>
-                    <Table.Head class={head}>Status</Table.Head>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {#each step.initiatives as initiative (initiative.id)}
-                    <Table.Row>
-                      <Table.Cell class="{cell} {num} w-12"
-                        >{initiative.initiativeNumber}</Table.Cell
-                      >
-                      <Table.Cell class={cell}
-                        >{initiative.description}</Table.Cell
-                      >
-                      <Table.Cell class={cell}>{initiative.measures}</Table.Cell
-                      >
-                      <Table.Cell class={cell}>{initiative.targets}</Table.Cell>
-                      <Table.Cell class="{cell} w-28 whitespace-nowrap"
-                        >{getStatusName(initiative.status)}</Table.Cell
-                      >
-                    </Table.Row>
-                  {/each}
-                </Table.Body>
-              </Table.Root>
+              <RadarChartV2
+                id={Number(data.startupId)}
+                min={0}
+                max={9}
+                data={levels.map((l: any) => l.level)}
+                labels={levels.map((l: any) => l.readinessType)}
+              />
             </div>
+          {:else}
+            <p class="text-[14px] text-[#94a3b8]">
+              No readiness levels rated yet.
+            </p>
+          {/if}
+        </div>
+      {/if}
+    </Card.Root>
+
+    <Card.Root class="pdf-page min-w-0 overflow-hidden">
+      <h3>
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors duration-quick hover:bg-[#0f1a2c] sm:px-6"
+          aria-expanded={isOpen('rna')}
+          aria-controls="progress-rna"
+          onclick={() => (open.rna = !open.rna)}
+        >
+          <span class="lu-d-md flex-1 text-[16px] text-white">II. RNA</span>
+          <span
+            class="lu-num rounded-full border border-[#1f2c47] px-2 py-0.5 text-[12px] text-[#94a3b8]"
+            >{rnaRows.length}</span
+          >
+          <ChevronDown
+            class="h-4 w-4 shrink-0 text-[#94a3b8] transition-transform duration-move {isOpen(
+              'rna'
+            )
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+      </h3>
+      {#if isOpen('rna')}
+        <div
+          id="progress-rna"
+          transition:slide={{ duration: dur(MOVE) }}
+          class="grid min-w-0 gap-4 border-t border-[#17213a] p-4 sm:p-6"
+        >
+          <div
+            class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+          >
+            <Table.Root class="pdf-table">
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head class={head}>Dimension</Table.Head>
+                  <Table.Head class={head}>Level</Table.Head>
+                  <Table.Head class={head}>Assessment</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {#each rnaRows as rna (rna.id)}
+                  <Table.Row>
+                    <Table.Cell class="{cell} w-40"
+                      >{rna.readinessType}</Table.Cell
+                    >
+                    <Table.Cell class="{cell} {num} w-20"
+                      >{rna.readinessLevel.level}</Table.Cell
+                    >
+                    <Table.Cell class={cell}>{rna.rna}</Table.Cell>
+                  </Table.Row>
+                {:else}
+                  {@render empty(3, 'No assessments yet.')}
+                {/each}
+              </Table.Body>
+            </Table.Root>
           </div>
-        {:else}
-          <p class="text-[14px] text-[#94a3b8]">No initiatives yet.</p>
-        {/each}
-      </Card.Content>
+        </div>
+      {/if}
     </Card.Root>
 
-    <Card.Root class="pdf-page min-w-0">
-      <Card.Content class="grid min-w-0 gap-4 p-4 sm:p-6">
-        <h3 class={section}>V. Next steps: long term</h3>
-        <div
-          class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+    <Card.Root class="pdf-page min-w-0 overflow-hidden">
+      <h3>
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors duration-quick hover:bg-[#0f1a2c] sm:px-6"
+          aria-expanded={isOpen('short')}
+          aria-controls="progress-short"
+          onclick={() => (open.short = !open.short)}
         >
-          <Table.Root class="pdf-table">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head class={head}>#</Table.Head>
-                <Table.Head class={head}>Dimension</Table.Head>
-                <Table.Head class={head}>Target</Table.Head>
-                <Table.Head class={head}>Description</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {#each longTerm as step (step.id)}
+          <span class="lu-d-md flex-1 text-[16px] text-white"
+            >III. RNS: Short Term</span
+          >
+          <span
+            class="lu-num rounded-full border border-[#1f2c47] px-2 py-0.5 text-[12px] text-[#94a3b8]"
+            >{shortTerm.length}</span
+          >
+          <ChevronDown
+            class="h-4 w-4 shrink-0 text-[#94a3b8] transition-transform duration-move {isOpen(
+              'short'
+            )
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+      </h3>
+      {#if isOpen('short')}
+        <div
+          id="progress-short"
+          transition:slide={{ duration: dur(MOVE) }}
+          class="grid min-w-0 gap-4 border-t border-[#17213a] p-4 sm:p-6"
+        >
+          <div
+            class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+          >
+            <Table.Root class="pdf-table">
+              <Table.Header>
                 <Table.Row>
-                  <Table.Cell class="{cell} {num} w-12"
-                    >{step.priorityNumber}</Table.Cell
-                  >
-                  <Table.Cell class="{cell} w-36"
-                    >{step.readinessType}</Table.Cell
-                  >
-                  <Table.Cell class="{cell} {num} w-20"
-                    >Level {step.targetLevelScore}</Table.Cell
-                  >
-                  <Table.Cell class={cell}>{step.description}</Table.Cell>
+                  <Table.Head class={head}>#</Table.Head>
+                  <Table.Head class={head}>Dimension</Table.Head>
+                  <Table.Head class={head}>Target</Table.Head>
+                  <Table.Head class={head}>Description</Table.Head>
+                  <Table.Head class={head}>Status</Table.Head>
                 </Table.Row>
-              {:else}
-                {@render empty(4, 'No long-term next steps yet.')}
-              {/each}
-            </Table.Body>
-          </Table.Root>
+              </Table.Header>
+              <Table.Body>
+                {#each shortTerm as step (step.id)}
+                  <Table.Row>
+                    <Table.Cell class="{cell} {num} w-12"
+                      >{step.priorityNumber}</Table.Cell
+                    >
+                    <Table.Cell class="{cell} w-36"
+                      >{step.readinessType}</Table.Cell
+                    >
+                    <Table.Cell class="{cell} {num} w-20"
+                      >Level {step.targetLevelScore}</Table.Cell
+                    >
+                    <Table.Cell class={cell}>{step.description}</Table.Cell>
+                    <Table.Cell class="{cell} w-28 whitespace-nowrap"
+                      >{getStatusName(step.status)}</Table.Cell
+                    >
+                  </Table.Row>
+                {:else}
+                  {@render empty(5, 'No short-term next steps yet.')}
+                {/each}
+              </Table.Body>
+            </Table.Root>
+          </div>
         </div>
-      </Card.Content>
+      {/if}
     </Card.Root>
 
-    <Card.Root class="pdf-page min-w-0">
-      <Card.Content class="grid min-w-0 gap-4 p-4 sm:p-6">
-        <h3 class={section}>VI. Risks and roadblocks</h3>
-        <div
-          class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+    <Card.Root class="pdf-page min-w-0 overflow-hidden">
+      <h3>
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors duration-quick hover:bg-[#0f1a2c] sm:px-6"
+          aria-expanded={isOpen('long')}
+          aria-controls="progress-long"
+          onclick={() => (open.long = !open.long)}
         >
-          <Table.Root class="pdf-table">
-            <Table.Header>
-              <Table.Row>
-                <Table.Head class={head}>#</Table.Head>
-                <Table.Head class={head}>Risk</Table.Head>
-                <Table.Head class={head}>Fix or mitigation</Table.Head>
-                <Table.Head class={head}>Assignee</Table.Head>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {#each roadblocks as roadblock (roadblock.id)}
+          <span class="lu-d-md flex-1 text-[16px] text-white"
+            >IV. RNS: Long Term</span
+          >
+          <span
+            class="lu-num rounded-full border border-[#1f2c47] px-2 py-0.5 text-[12px] text-[#94a3b8]"
+            >{longTerm.length}</span
+          >
+          <ChevronDown
+            class="h-4 w-4 shrink-0 text-[#94a3b8] transition-transform duration-move {isOpen(
+              'long'
+            )
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+      </h3>
+      {#if isOpen('long')}
+        <div
+          id="progress-long"
+          transition:slide={{ duration: dur(MOVE) }}
+          class="grid min-w-0 gap-4 border-t border-[#17213a] p-4 sm:p-6"
+        >
+          <div
+            class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+          >
+            <Table.Root class="pdf-table">
+              <Table.Header>
                 <Table.Row>
-                  <Table.Cell class="{cell} {num} w-12"
-                    >{roadblock.riskNumber}</Table.Cell
-                  >
-                  <Table.Cell class={cell}>{roadblock.description}</Table.Cell>
-                  <Table.Cell class={cell}>{roadblock.fix}</Table.Cell>
-                  <Table.Cell class="{cell} w-36"
-                    >{roadblock.assignee
-                      ? `${roadblock.assignee.firstName} ${roadblock.assignee.lastName}`
-                      : 'Unassigned'}</Table.Cell
-                  >
+                  <Table.Head class={head}>#</Table.Head>
+                  <Table.Head class={head}>Dimension</Table.Head>
+                  <Table.Head class={head}>Target</Table.Head>
+                  <Table.Head class={head}>Description</Table.Head>
                 </Table.Row>
-              {:else}
-                {@render empty(4, 'No roadblocks recorded.')}
-              {/each}
-            </Table.Body>
-          </Table.Root>
+              </Table.Header>
+              <Table.Body>
+                {#each longTerm as step (step.id)}
+                  <Table.Row>
+                    <Table.Cell class="{cell} {num} w-12"
+                      >{step.priorityNumber}</Table.Cell
+                    >
+                    <Table.Cell class="{cell} w-36"
+                      >{step.readinessType}</Table.Cell
+                    >
+                    <Table.Cell class="{cell} {num} w-20"
+                      >Level {step.targetLevelScore}</Table.Cell
+                    >
+                    <Table.Cell class={cell}>{step.description}</Table.Cell>
+                  </Table.Row>
+                {:else}
+                  {@render empty(4, 'No long-term next steps yet.')}
+                {/each}
+              </Table.Body>
+            </Table.Root>
+          </div>
         </div>
-      </Card.Content>
+      {/if}
+    </Card.Root>
+
+    <Card.Root class="pdf-page min-w-0 overflow-hidden">
+      <h3>
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors duration-quick hover:bg-[#0f1a2c] sm:px-6"
+          aria-expanded={isOpen('initiatives')}
+          aria-controls="progress-initiatives"
+          onclick={() => (open.initiatives = !open.initiatives)}
+        >
+          <span class="lu-d-md flex-1 text-[16px] text-white"
+            >V. Initiatives</span
+          >
+          <span
+            class="lu-num rounded-full border border-[#1f2c47] px-2 py-0.5 text-[12px] text-[#94a3b8]"
+            >{initiativeCount}</span
+          >
+          <ChevronDown
+            class="h-4 w-4 shrink-0 text-[#94a3b8] transition-transform duration-move {isOpen(
+              'initiatives'
+            )
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+      </h3>
+      {#if isOpen('initiatives')}
+        <div
+          id="progress-initiatives"
+          transition:slide={{ duration: dur(MOVE) }}
+          class="grid min-w-0 gap-4 border-t border-[#17213a] p-4 sm:p-6"
+        >
+          {#each priorities as step (step.id)}
+            <div class="grid min-w-0 gap-2">
+              <p class="text-[13.5px] font-semibold text-[#c3ced9]">
+                Next step #{step.priorityNumber}
+                <span class="font-normal text-[#94a3b8]"
+                  >{step.readinessType}</span
+                >
+              </p>
+              <div
+                class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+              >
+                <Table.Root class="pdf-table">
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.Head class={head}>#</Table.Head>
+                      <Table.Head class={head}>Description</Table.Head>
+                      <Table.Head class={head}>Measures</Table.Head>
+                      <Table.Head class={head}>Targets</Table.Head>
+                      <Table.Head class={head}>Status</Table.Head>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {#each step.initiatives as initiative (initiative.id)}
+                      <Table.Row>
+                        <Table.Cell class="{cell} {num} w-12"
+                          >{initiative.initiativeNumber}</Table.Cell
+                        >
+                        <Table.Cell class={cell}
+                          >{initiative.description}</Table.Cell
+                        >
+                        <Table.Cell class={cell}
+                          >{initiative.measures}</Table.Cell
+                        >
+                        <Table.Cell class={cell}
+                          >{initiative.targets}</Table.Cell
+                        >
+                        <Table.Cell class="{cell} w-28 whitespace-nowrap"
+                          >{getStatusName(initiative.status)}</Table.Cell
+                        >
+                      </Table.Row>
+                    {/each}
+                  </Table.Body>
+                </Table.Root>
+              </div>
+            </div>
+          {:else}
+            <p class="text-[14px] text-[#94a3b8]">No initiatives yet.</p>
+          {/each}
+        </div>
+      {/if}
+    </Card.Root>
+
+    <Card.Root class="pdf-page min-w-0 overflow-hidden">
+      <h3>
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-4 text-left transition-colors duration-quick hover:bg-[#0f1a2c] sm:px-6"
+          aria-expanded={isOpen('risks')}
+          aria-controls="progress-risks"
+          onclick={() => (open.risks = !open.risks)}
+        >
+          <span class="lu-d-md flex-1 text-[16px] text-white"
+            >VI. Risks and Roadblocks</span
+          >
+          <span
+            class="lu-num rounded-full border border-[#1f2c47] px-2 py-0.5 text-[12px] text-[#94a3b8]"
+            >{roadblocks.length}</span
+          >
+          <ChevronDown
+            class="h-4 w-4 shrink-0 text-[#94a3b8] transition-transform duration-move {isOpen(
+              'risks'
+            )
+              ? 'rotate-180'
+              : ''}"
+          />
+        </button>
+      </h3>
+      {#if isOpen('risks')}
+        <div
+          id="progress-risks"
+          transition:slide={{ duration: dur(MOVE) }}
+          class="grid min-w-0 gap-4 border-t border-[#17213a] p-4 sm:p-6"
+        >
+          <div
+            class="min-w-0 overflow-x-auto rounded-[12px] border border-[#1f2c47]"
+          >
+            <Table.Root class="pdf-table">
+              <Table.Header>
+                <Table.Row>
+                  <Table.Head class={head}>#</Table.Head>
+                  <Table.Head class={head}>Risk</Table.Head>
+                  <Table.Head class={head}>Fix or mitigation</Table.Head>
+                  <Table.Head class={head}>Assignee</Table.Head>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {#each roadblocks as roadblock (roadblock.id)}
+                  <Table.Row>
+                    <Table.Cell class="{cell} {num} w-12"
+                      >{roadblock.riskNumber}</Table.Cell
+                    >
+                    <Table.Cell class={cell}>{roadblock.description}</Table.Cell
+                    >
+                    <Table.Cell class={cell}>{roadblock.fix}</Table.Cell>
+                    <Table.Cell class="{cell} w-36"
+                      >{roadblock.assignee
+                        ? `${roadblock.assignee.firstName} ${roadblock.assignee.lastName}`
+                        : 'Unassigned'}</Table.Cell
+                    >
+                  </Table.Row>
+                {:else}
+                  {@render empty(4, 'No roadblocks recorded.')}
+                {/each}
+              </Table.Body>
+            </Table.Root>
+          </div>
+        </div>
+      {/if}
     </Card.Root>
   </div>
 {/if}
