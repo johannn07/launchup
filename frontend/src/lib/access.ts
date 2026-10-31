@@ -34,11 +34,6 @@ const startupModule = {
       subModule: []
     },
     {
-      name: 'Progress',
-      link: 'progress-report',
-      subModule: []
-    },
-    {
       name: 'Overview',
       link: 'overview',
       subModule: [
@@ -57,6 +52,10 @@ const startupModule = {
         {
           name: 'Elevate',
           link: 'elevate'
+        },
+        {
+          name: 'Progress',
+          link: 'progress-report'
         }
       ]
     }
