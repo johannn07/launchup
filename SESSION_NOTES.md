@@ -601,10 +601,19 @@ Unlinked: `/analytics`, `/cohorts` (no backend; TODO §3), `/objectives` (Manage
 build status, works). Deleted: `/pending`, `/dashboard`. Re-enabled: Progress.
 `/manager-login` has no visible link; reached by redirect from `/admin`.
 
-### Still open
+### Progress report pass (`design/progress-report`, `b46f5db`, not yet merged)
 
-- The Progress report needs a design pass (radar shape, two "III" sections, truncated
-  descriptions, numeric statuses).
+Data fixes as well as layout: the radar paired levels with a hardcoded label list by
+index (now matched by type, canonical order, scale from 0); short-term next steps
+included the long-term ones; statuses were numbers; descriptions were cut at 100
+characters and only three roadblocks showed; an unassigned roadblock would crash the
+page (`assignee: null`); the query key ignored the startup id, so another startup's
+cached report could show for an hour. Sections renumbered I-VI. The Overview grid now
+has an explicit mobile column, so its tables scroll inside their box on every tab.
+Verified at 1440 and 375 on MediSync; `svelte-check` 110 → 108. **Not tested:** the
+PDF download (it saves a file).
+
+### Still open
 - After the founder's session expired, signing in went to `/startups` instead of the
   `redirectTo` page. Seen once, not investigated.
 - `backup/pre-split-2026-09-04` is unmerged on purpose: its work reached `master` as
@@ -617,5 +626,6 @@ build status, works). Deleted: `/pending`, `/dashboard`. Re-enabled: Progress.
 1. **Redeploy the frontend**; `master` is pushed.
 2. **The pop-up edit work** (TODO §3), on its own branch, using startup 65; delete
    it afterwards.
-3. Continue the app design pass: `/applications`, `/account/*`, then the per-startup
-   pages, including the Progress report.
+3. Continue the app design pass: `/applications`, `/account/*`, then the remaining
+   per-startup pages. Two MediSync initiatives under different steps both show #53;
+   per-step numbering looks stale for that data.
