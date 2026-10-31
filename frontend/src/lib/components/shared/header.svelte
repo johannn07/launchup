@@ -98,9 +98,8 @@
   const navLinks = $derived(getNavLinks());
 </script>
 
-<!-- Matches the landing header: navy at 85% with blur, hairline rule. Sticky
-     inside the layout's scroller, so it shares the content's width when a
-     scrollbar is showing; fixed, it spanned the scrollbar and sat off-frame. -->
+<!-- Matches the landing header: navy at 85% with blur, hairline rule. Sticky,
+     so it sits in the same box as the content beneath it. -->
 <header
   class="lu-root sticky top-0 z-40 shrink-0 border-b backdrop-blur-lg transition-colors duration-move {isBlurred
     ? 'border-[#1f2c47]'

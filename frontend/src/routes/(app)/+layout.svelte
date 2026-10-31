@@ -25,13 +25,16 @@
   });
 </script>
 
-<div class="lu-ws dark flex h-full flex-col overflow-x-hidden bg-[#07111f]">
+<!-- The document scrolls, as on the landing page: brand.css reserves its
+     scrollbar gutter, so an inner scroller drew a second bar beside an empty
+     one and moved the frame 5px between short and long pages. -->
+<div class="lu-ws dark flex min-h-full flex-col overflow-x-clip bg-[#07111f]">
   <div
     aria-hidden="true"
     class="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,#07111f_0%,#0b1220_45%,#050816_100%)]"
   ></div>
   <Header user={data.user} startup={data.startup} {topSentinel} />
-  <div class="relative mx-auto my-6 flex h-full w-[min(72rem,88vw)] flex-col">
+  <div class="relative mx-auto my-6 flex w-[min(72rem,88vw)] flex-1 flex-col">
     <div
       bind:this={topSentinel}
       class="pointer-events-none absolute inset-x-0 top-0 h-[100px]"
