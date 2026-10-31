@@ -22,8 +22,8 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 
 | Work | Where |
 |---|---|
-| **Design pass: app shell and `/startups`** — app on the landing's 72rem frame; the document scrolls (no second scrollbar, no 5px logo shift between pages); startups search icon no longer covers its text; legend counts the tabs already show removed | `design/app-general-taste-pass` — merged to local `master` 2026-11-01, live-verified — see `SESSION_NOTES.md` |
-| **Orphaned `/pending` and `/dashboard` deleted; Progress report back in the nav** | `chore/remove-orphan-routes` + `feat/progress-report-nav` — merged to local `master` 2026-11-01; the report verified live on MediSync |
+| **Design pass: app shell and `/startups`** — app on the landing's 72rem frame; the document scrolls (no second scrollbar, no 5px logo shift between pages); startups search icon no longer covers its text; legend counts the tabs already show removed | `design/app-general-taste-pass` — merged and pushed 2026-11-01, live-verified — see `SESSION_NOTES.md` |
+| **Orphaned `/pending` and `/dashboard` deleted; Progress report re-enabled as an Overview tab** | `chore/remove-orphan-routes`, `feat/progress-report-nav`, `feat/progress-in-overview` — merged and pushed 2026-11-01; the report verified live on MediSync |
 | **Design pass: landing, legal and auth pages** — one 72rem frame across them, redundant blocks removed, hero no longer blinks on load, legal contact details made real (capstone email and note, no address or Makati) | `design/landing-taste-pass` + `design/auth-taste-pass` — merged and pushed 2026-10-30, live-verified in the dev server — see `SESSION_NOTES.md` |
 | AI pipeline config flags + per-run provenance (`ai_generation_runs`) | PR #7 |
 | RNS/RNA generation bug fixes | PR #8 |
@@ -987,7 +987,7 @@ Each verified by reading **both** sides of the call.
   **Decision:** *Cut* (recommended), or *Fix* (needs the dynamic assessment-type work from §2 first). *Decide together with the "create assessment type" bug.*
 
 - [x] ✅ **SCOPE · S · Three finished features are hidden from navigation** — *Progress report re-enabled 2026-11-01 (`feat/progress-report-nav`)*
-  Progress is back in the startup nav and renders all seven sections on MediSync. Analytics and Cohorts stay commented out; they belong to the first item above. The report needs a design pass: the radar draws an odd shape with faint labels, two sections are both numbered "III", initiative descriptions are cut mid-word, and next-step status shows raw numbers.
+  Progress is now the fifth Overview tab (`overview/progress-report`) and renders all seven sections on MediSync. Analytics and Cohorts stay commented out; they belong to the first item above. The report needs a design pass: the radar draws an odd shape with faint labels, two sections are both numbered "III", initiative descriptions are cut mid-word, and next-step status shows raw numbers.
   Commented out in `access.ts`: Progress Report (`:36-40`), Analytics (`:104-108`), Cohorts (`:109-113`).
   **Confirmed 2026-07-26:** Progress Report is fully working (UI + `GET /progress/:startupId/progress-report`) and the re-enable really is a five-line uncomment — temporarily uncommenting rendered it completely and correctly against live data. Analytics/Cohorts fold into the first item above.
 
