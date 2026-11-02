@@ -72,6 +72,14 @@ could be done while you are here.
   apply only the rules that carry over: one frame width, one accent, one radius
   scale, contrast, loading/empty/error states, no em-dashes in visible text.
 
+## Capstone documents (SRS, SDD)
+- Templates are in `Downloads\capstone\5 Course templates and guides\`. Match the
+  template exactly: fonts, sizes, colors, heading bands, section numbering (its
+  skipped 2.3 and 3.3 included). Don't restyle or renumber anything.
+- Content must match the current implementation on `master`. Don't make anything up:
+  if a section needs facts the code, the docs or the user haven't given, ask first.
+- Blue italic text in a template is guidance. Replace it with content, never copy it.
+
 ## Comment & documentation style
 - Keep all code comments short and to the point — one line where possible.
 - Explain *why*, not *what* — don't describe what the code obviously already shows.
