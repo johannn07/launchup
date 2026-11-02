@@ -570,12 +570,11 @@ reordered General, Capsule Proposal, Progress, Members, Elevate
 Gates: backend 486/486; `svelte-check` 108 errors, none in changed files.
 
 ### Found
-- **The running backend never finds `data/ai-baseline.json`** (`dist/data/` is never populated), so every normalization used the mean 0 / std 1 fallback and pushed scores to 8 or 9. Visible in `ai_bias_audits` as 4→9 and 5→9. This branch stops the inflation; the path fix needs its own branch.
+- **The running backend never finds `data/ai-baseline.json`** (`dist/data/` is never populated), so every normalization used the mean 0 / std 1 fallback and pushed scores to 8 or 9. Visible in `ai_bias_audits` as 4→9 and 5→9. This branch stops the inflation; `fix/baseline-path` (stacked on it) fixes the path. Live on the built backend: 5, 9, 2 normalize to 5, 8, 3. `ai-metrics.json` has the same path bug, open.
 - **`/ranking-by-rubrics` is dead** (its method body is commented out), so "exclude provisional startups from rankings" has nothing to act on.
 - **Possible defect:** the Assessment page's dimension cards did not open the rating modal for a Mentor under Playwright. Not reproduced by hand.
 - **Legacy "Pending" tier labels** still sit on evaluations saved before `e1b963c`; the tier filter lists them. Saving `/admin/tiers` relabels every stored evaluation. Left alone: it writes to the shared database.
 - Vite's first server render took 2.5 to 10 minutes at a full core.
 
 ### Next step
-1. John tests `feat/srs-small-requirements`, then merge.
-2. Baseline path fix, on its own branch.
+1. John tests `feat/srs-small-requirements`, then `fix/baseline-path` on top of it; merge in that order.
