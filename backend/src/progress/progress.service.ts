@@ -1,21 +1,28 @@
 import { EntityManager } from '@mikro-orm/core';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Initiative } from 'src/entities/initiative.entity';
 import { Rns } from 'src/entities/rns.entity';
 import { Roadblock } from 'src/entities/roadblock.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 import { StartupRNA } from 'src/entities/rna.entity';
 import { Startup } from 'src/entities/startup.entity';
+import { Role } from 'src/entities/enums/role.enum';
+import { canAccessStartup } from 'src/startup/startup-access';
 
 @Injectable()
 export class ProgressService {
   constructor(private em: EntityManager) {}
 
-  async getProgressReport(startupId: number) {
-    const startup = await this.em.findOne(Startup, { id: startupId });
+  async getProgressReport(startupId: number, user: { id?: number; role?: Role | string } | undefined) {
+    const startup = await this.em.findOne(Startup, { id: startupId }, { populate: ['members', 'mentors'] });
 
     if (!startup) {
-      throw new NotFoundException(`Startup with ID ${startup} does not exist!`);
+      throw new NotFoundException(`Startup with ID ${startupId} does not exist!`);
+    }
+
+    // Same rule as the startup detail routes (SRS 3.3).
+    if (!canAccessStartup(startup, user)) {
+      throw new ForbiddenException('You do not have access to this startup');
     }
 
     const readinessLevels = await this.em.find(
