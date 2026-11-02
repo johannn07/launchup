@@ -34,5 +34,26 @@ export function tierOf(
   return evals.reduce((a, b) => (b.id > a.id ? b : a)).tierLabel;
 }
 
+/**
+ * Tier labels present in a list, best first. Tiers are Manager-configurable, so
+ * the order comes from the scores rather than a fixed ladder.
+ */
+export function tiersBestFirst(
+  startups: {
+    qualificationStatus?: number | null;
+    readinessEvaluations?: { id: number; tierLabel: string; compositeScore?: number }[];
+  }[]
+): string[] {
+  const best = new Map<string, number>();
+  for (const s of startups) {
+    const tier = tierOf(s);
+    if (!tier) continue;
+    const latest = s.readinessEvaluations!.reduce((a, b) => (b.id > a.id ? b : a));
+    const score = Number(latest.compositeScore ?? 0);
+    best.set(tier, Math.max(best.get(tier) ?? -Infinity, score));
+  }
+  return [...best.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+}
+
 export const tierLine = (tier: string | null) =>
   tier ? `Readiness: ${tier}` : 'Readiness not scored';

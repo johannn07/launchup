@@ -10,6 +10,7 @@
   import { StartupCard } from '$lib/components/startups';
   import StartupStatusCard from '$lib/components/startups/base/StartupStatusCard.svelte';
   import StartupFilterButton from '$lib/components/startups/base/StartupFilterButton.svelte';
+  import { tierOf, tiersBestFirst } from '$lib/startup-status';
   import { QualificationStatus } from '$lib/enums/qualification-status.enum';
   import { Can } from '$lib/components/shared';
   import { useQuery } from '@sveltestack/svelte-query';
@@ -59,6 +60,13 @@
   });
 
   let search = $state('');
+  // SRS 2.3: Managers and Mentors narrow the list by readiness tier.
+  let tierFilter = $state('all');
+  const NOT_SCORED = 'not-scored';
+  const tierOptions = $derived(tiersBestFirst(listOfStartups()));
+  const inTier = (startup: any) =>
+    tierFilter === 'all' ||
+    (tierFilter === NOT_SCORED ? tierOf(startup) === null : tierOf(startup) === tierFilter);
   let filter = $state('All Startups');
   let allInitiatives: any[] = $state([]);
   let completedInitiativesPercentage = $state(0);
@@ -112,6 +120,7 @@
       );
     }
 
+    base = base.filter(inTier);
     if (!search) return base;
     return base.filter((startup: any) =>
       startup.name.toLowerCase().includes(search.toLowerCase())
@@ -222,11 +231,11 @@
   // Tab counts follow the search box, so each tab says how many results it
   // would show for what you've typed; they tick as you type.
   const matching = (list: any[]) =>
-    search
-      ? list.filter((s: any) =>
-          s.name.toLowerCase().includes(search.toLowerCase())
-        ).length
-      : list.length;
+    list
+      .filter(inTier)
+      .filter(
+        (s: any) => !search || s.name.toLowerCase().includes(search.toLowerCase())
+      ).length;
   const filterOptions = $derived([
     { value: 'All Startups', label: 'All', count: matching(listOfStartups()) },
     ...(role === 'Startup'
@@ -275,6 +284,7 @@
   $effect(() => {
     filter;
     search;
+    tierFilter;
     currentPage = 1;
   });
 
@@ -424,7 +434,24 @@
       label="Filter by status"
     />
 
-    <div class="relative w-full sm:w-[20rem]">
+    <div class="flex w-full flex-wrap gap-3 sm:w-auto sm:flex-nowrap">
+      {#if role !== 'Startup'}
+        <!-- Width on a wrapper: .lu-root .lu-input pins width to 100%. -->
+        <div class="w-full sm:w-[11rem] sm:shrink-0">
+        <select
+          class="lu-input"
+          aria-label="Filter startups by readiness tier"
+          bind:value={tierFilter}
+        >
+          <option value="all">All tiers</option>
+          {#each tierOptions as tier (tier)}
+            <option value={tier}>{tier}</option>
+          {/each}
+          <option value={NOT_SCORED}>Not scored</option>
+        </select>
+        </div>
+      {/if}
+    <div class="relative w-full sm:w-[20rem] sm:shrink-0">
       <SearchIcon
         class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#54648a]"
       />
@@ -435,6 +462,7 @@
         aria-label="Search startups by name"
         bind:value={search}
       />
+    </div>
     </div>
   </div>
 
@@ -515,13 +543,16 @@
         <p class="mt-1.5 max-w-[40ch] text-[14px] leading-[1.6] text-[#94a3b8]">
           {search
             ? `Nothing matches "${search}" in this view.`
-            : 'No startups have this status yet.'}
+            : tierFilter !== 'all'
+              ? 'No startups in this tier for this view.'
+              : 'No startups have this status yet.'}
         </p>
         <button
           type="button"
           class="lu-btn lu-btn-secondary lu-btn-sm mt-6"
           onclick={() => {
             search = '';
+            tierFilter = 'all';
             filter = 'All Startups';
           }}
         >
