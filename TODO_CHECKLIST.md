@@ -70,7 +70,44 @@ Prioritized backlog from a full read of the codebase (see [docs/ARCHITECTURE.md]
 | **Broken functionality (§2)** | In progress — **28 of 35 fixed**. 2026-10-30 (design pass): the landing header's scroll-listener item closed (IntersectionObserver). 2026-10-30 (later): renumbering after generation and saved-score growth fixed. 2026-10-30: two tester-reported defects fixed, merged and pushed — AI generation showed a 500 on Gemini 429/503, and a rating needed a reload (the header tier was also reading an arbitrary evaluation); a failed generation renumbering the board added as open. 2026-10-01: empty proposals blocked, typed/re-uploaded proposals supported, John's deployed test owed; the ignored "Startup name" field added as open. 2026-09-30: the application wizard and the `/apply` form both saved nothing — fixed, deployed, tested by John; an SO 4.4 misread (n = 1) added as open. 2026-09-26: Kanban drop zone and the two refine-chat defects (Gemini 503 surfaced as 500; non-requests rewrote the item) fixed on local `master` `d08863d`, one live check owed. 2026-09-18: the eleven non-reactive state variables fixed, plus the missing `populate` they exposed on the bias-audit override (`2870e9e`); the landing header's scroll listener added as a new open item. 2026-09-17: three UI defects fixed and deployed (avatar-menu lock, applications dialog state, no overview for unqualified startups); **the same non-reactive-state defect found in eleven more variables — open, possibly visible on admin pages**. Earlier: 15 of 21 fixed — 14 merged to `master` 2026-09-07 (`level_criteria`, `readiness_levels.name`, remove-member, the unguarded controller), all four tested by John first, three of them carrying a wrong diagnosis — impact, scope and risk; see `SESSION_NOTES.md` 2026-09-07. The dimension-order defect added and fixed 2026-09-07 on `fix/readiness-dimension-order`, unblocked by reading the SDD. **7 open.** The `supportRatio` defect stays open as a measurement problem, its false "Verified" badge removed without touching the threshold |
 | **Incomplete features (§3)** | Decided 2026-08-07 — cut, don't defer; 10 items still open, the deletions not yet executed. 2026-11-01: Progress report re-enabled; editing a waitlisted application inside the pop-up added (replaces `/apply`). Added 2026-10-30: `/forgot-password` has no page; the login link stays by John's decision. Added 2026-09-26: stable item numbers on the Kanban boards, on hold for John's decision |
 | **Cleanup / tech debt (§4)** | In progress — 8 of 32 done, 24 open (the orphaned `/pending` route deleted 2026-11-01; two added 2026-10-30: ESLint cannot parse two landing components, Prettier flags line endings; one added 2026-09-30: an unused `AiRunService` dependency; two added 2026-09-06: an unreachable modal, a false storage claim in `CLAUDE.md`; two added 2026-09-17: per-startup initiatives fetch, orphaned `/pending` route) |
+| **Priority: SRS v2.0 unbuilt requirements** | Open, 18 code items plus 2 measurements. Added 2026-11-03 from the requirements SRS v2.0 marks "Not yet implemented"; ordered easiest first, see the section below |
 | **Infrastructure decisions (§5)** | Mostly settled — hosting, storage, model and key done; 7 open — 3 production-hygiene/quota (a quota indicator requested by testers was built and pushed 2026-10-30), 4 deferred design calls (OCR extraction cache + image storage added 2026-09-06). **Quota is now costed** (2026-09-07): 2 calls per startup intake, ~23 per 6-dimension workflow, against a hard 20/day — see §5 |
+
+---
+
+## Priority: SRS v2.0 unbuilt requirements — added 2026-11-03
+
+Every requirement `Team_07_LaunchUpEnhanced_SRS_v2.0` keeps but marks "Not yet implemented" or "Not yet measured". Ordered by how much existing code each one changes, least first. Effort estimates come from reading the code, not from building anything. Each item goes on its own branch.
+
+**Small — reuses what exists**
+- [ ] **S · Log failed sign-ins** (SRS 1.1). `AuthService.signin` already throws on a bad email or password; write an `activity_logs` row there.
+- [ ] **S · Warn when the normalization baseline is missing** (SRS 2.1). `BaselineService.loadBaseline()` falls back to mean 0 / std 1 without a word; log a low-confidence warning.
+- [ ] **S · Mark failed bias reviews "bias-unverified"** (SRS 2.1). The fallback branch in `reviewBiasScore` exists; `recordBiasAudit` writes `normalized` / `flagged` instead.
+- [ ] **S · Leave provisional startups out of rankings** (SRS 2.3). `isProvisional` is stored on `readiness_evaluations`; `/startups/ranking-by-rubrics` doesn't read it.
+- [ ] **S · Filter the startups list by tier** (SRS 2.3). Frontend only: `tierOf()` already gives each card its tier; add it beside the status filters.
+- [ ] **S · Progress report checks access to that startup** (SRS 3.3). `progress.controller.ts` is `JwtGuard`-only; call `assertCanAccessStartup` as the startup routes do. Same fix as the IDOR item in §1.
+- [ ] **S · Manager-only admissions and other state-changing routes** (SRS 3.4 Security). Already tracked as §1 P1 "Restrict the admissions endpoints to Manager" (`RolesGuard`); this raises its priority.
+
+**Medium — new plumbing on existing data**
+- [ ] **M · Show the gap shortfall per dimension** (SRS 2.3). `readiness_gaps` is written on every evaluation; `GET /readiness/:id` doesn't return it and the dashboard has no place for it.
+- [ ] **M · Alert a Manager on invalid weight or tier configuration** (SRS 2.3). `WeightProfileService` skips bad profiles with a console warning only; write an `activity_logs` row the Admin dashboard already shows.
+- [ ] **M · Show validation results to Mentors** (SRS 2.2). Stored in `ai_recommendations` and linked to the RNA through `generationRun`; nothing on the RNA page reads them.
+- [ ] **M · Let a Manager request a bias re-evaluation** (SRS 2.1). Needs a route and a button on `/admin/ai/bias-audits`; the rerun reuses `reviewBiasScore`.
+- [ ] **M · Check recommendations against scores and profile fields; mark unverifiable ones** (SRS 2.2). `OutputValidatorService` checks text, length and retrieval confidence only; groundedness was excluded on saturation grounds (§0, 1c), which the fabrication probe partly refuted.
+
+**Small code, blocked outside the code**
+- [ ] **S · Confirmation email on registration** (SRS 1.1). Blocked on a mail provider account and credentials; no mail library is in the repo.
+- [ ] **S · Expert-rating normalization baseline** (SRS 2.1, 2.5). `POST /ai/baseline/update` exists; blocked on the expert ratings themselves (§0, 4a). Current baseline is a placeholder (mean 5, std 2).
+
+**Large — new subsystems or a design change**
+- [ ] **L · Retry queue for failed AI generation** (SRS 2.2). Nothing queues today; Gemini 429/503 returns a readable 503.
+- [ ] **L · Queue OCR uploads when the service is down** (SRS 2.4). Same missing piece as above; uploads fail with "AI busy, try again".
+- [ ] **L · Adversarial re-scoring of the six readiness dimensions** (SRS 2.1). Levels are rated by people, so there is no AI readiness score to re-prompt; this changes how scoring works.
+- [ ] **L · Canvas-region sketch recognition** (SRS 2.4). §0, 3b: no code maps canvas regions to fields, and the inherited sketch heuristic flags every real upload.
+
+**Measurements, not code**
+- [ ] **Concurrent-evaluation performance** (SRS 3.4). Never measured.
+- [ ] **99.9% uptime during incubation periods** (SRS 3.4). A hosting target; never measured.
 
 ---
 
