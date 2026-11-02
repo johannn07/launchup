@@ -1,13 +1,16 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { AuthDto, AuthSignInDto } from './dto';
 import * as argon from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { EntityManager } from '@mikro-orm/core';
 import { User } from 'src/entities/user.entity';
+import { ActivityLog } from 'src/entities/activity-log.entity';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private em: EntityManager,
     private jwtService: JwtService,
@@ -35,10 +38,16 @@ export class AuthService {
 
   async signin(dto: AuthSignInDto) {
     const user = await this.em.findOne(User, { email: dto.email });
-    if (!user) throw new ForbiddenException('User not found.');
+    if (!user) {
+      await this.logFailedSignin(dto.email, 'unknown email');
+      throw new ForbiddenException('User not found.');
+    }
 
     const passwordMatches = await argon.verify(user.hash, dto.password);
-    if (!passwordMatches) throw new ForbiddenException('Wrong Password');
+    if (!passwordMatches) {
+      await this.logFailedSignin(dto.email, 'wrong password');
+      throw new ForbiddenException('Wrong Password');
+    }
 
     return this.signToken(
       user.id,
@@ -47,6 +56,18 @@ export class AuthService {
       user.firstName,
       user.lastName,
     );
+  }
+
+  // SRS 1.1. Shown in the Manager's activity feed; a failed write must not
+  // change the sign-in outcome.
+  private async logFailedSignin(email: string, reason: string) {
+    try {
+      await this.em.persistAndFlush(
+        this.em.create(ActivityLog, { action: 'Auth', details: `Failed sign-in (${reason})`, actor: email, createdAt: new Date() }),
+      );
+    } catch (err) {
+      this.logger.warn(`Could not log failed sign-in: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   async signToken(
