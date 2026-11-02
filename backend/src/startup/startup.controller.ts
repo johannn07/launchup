@@ -212,6 +212,7 @@ export class StartupController {
     return await this.startupService.getCalculatorFinalScores(startupId);
   }
 
+  @UseGuards(AdminGuard)
   @Post(':startupId/approve-applicant')
   async approveApplicant(
     @Param('startupId') startupId: number,
@@ -227,6 +228,7 @@ export class StartupController {
     });
   }
 
+  @UseGuards(AdminGuard)
   @Patch(':startupId/waitlist-applicant')
   async waitlistApplicant(
     @Param('startupId', ParseIntPipe) startupId: number,
@@ -235,6 +237,7 @@ export class StartupController {
     return await this.startupService.waitlistApplicant(startupId, dto);
   }
 
+  @UseGuards(AdminGuard)
   @Post(':startupId/appoint-mentors')
   async appointMentors(
     @Param('startupId') startupId: number,
@@ -243,6 +246,7 @@ export class StartupController {
     return await this.startupService.appointMentors(startupId, dto);
   }
 
+  @UseGuards(AdminGuard)
   @Patch(':startupId/mark-complete')
   async markStartupComplete(
     @Param('startupId', ParseIntPipe) startupId: number,
@@ -250,6 +254,7 @@ export class StartupController {
     return await this.startupService.markComplete(startupId);
   }
 
+  @UseGuards(AdminGuard)
   @Patch(':startupId/change-mentor')
   async changeMentor(
     @Param('startupId', ParseIntPipe) startupId: number,
