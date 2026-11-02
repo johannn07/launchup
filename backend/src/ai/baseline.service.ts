@@ -1,8 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { promises as fs } from 'fs';
+import { existsSync, promises as fs } from 'fs';
 import * as path from 'path';
 
-const BASELINE_FILE = path.resolve(__dirname, '..', '..', 'data', 'ai-baseline.json');
+// Two levels up from src/ai, three from dist/src/ai after a build. Checks the
+// file, not the folder: a stray dist/data would otherwise win.
+export function resolveBaselineFile(dir: string): string {
+  const candidates = [
+    path.resolve(dir, '..', '..', 'data', 'ai-baseline.json'),
+    path.resolve(dir, '..', '..', '..', 'data', 'ai-baseline.json'),
+  ];
+  return candidates.find((file) => existsSync(file)) ?? candidates[candidates.length - 1];
+}
+
+const BASELINE_FILE = resolveBaselineFile(__dirname);
 
 @Injectable()
 export class BaselineService {

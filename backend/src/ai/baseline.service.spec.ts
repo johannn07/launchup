@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
-import { BaselineService } from './baseline.service';
+import * as path from 'path';
+import { BaselineService, resolveBaselineFile } from './baseline.service';
 
 describe('BaselineService.normalizeScore', () => {
   afterEach(() => jest.restoreAllMocks());
@@ -31,5 +32,20 @@ describe('BaselineService.normalizeScore', () => {
   it('clamps an uncorrected score to the 1 to 9 scale', async () => {
     jest.spyOn(fs, 'readFile').mockRejectedValue(new Error('ENOENT'));
     expect((await new BaselineService().normalizeScore(12)).scaled).toBe(9);
+  });
+});
+
+// The built server runs from dist/src/ai, where two levels up is dist/, which
+// the build never fills. Every normalization used the fallback until 2026-11-03.
+describe('resolveBaselineFile', () => {
+  const backendRoot = path.resolve(__dirname, '..', '..');
+  const repoFile = path.join(backendRoot, 'data', 'ai-baseline.json');
+
+  it('finds the repo file when running from src', () => {
+    expect(resolveBaselineFile(path.join(backendRoot, 'src', 'ai'))).toBe(repoFile);
+  });
+
+  it('finds the repo file when running from the build output', () => {
+    expect(resolveBaselineFile(path.join(backendRoot, 'dist', 'src', 'ai'))).toBe(repoFile);
   });
 });
