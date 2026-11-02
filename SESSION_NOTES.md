@@ -425,97 +425,11 @@ ignored (TODO §2); `data.access` leak on the apply load (§1 P1); unused `AiRun
 
 ---
 
-## 2026-10-30 — tester reports during the user study
+## Compressed — 2026-10-30 (tester reports during the user study)
 
-Three reports from study respondents, all addressed; everything merged to
-`master` and pushed. No Gemini quota spent by Claude — John's own testing used
-the day's 20.
+Three study reports fixed, merged and pushed: AI generation 500s now return a readable 503 on Gemini 429/503 (`withAiRetry`), a rating refreshes every view and the header tier reads the newest evaluation, and an AI quota indicator ("N/20 AI requests left today") sits beside every Generate button. Follow-ups the same day: renumbering only after a successful generation, per-step initiative numbers, scores saved only when changed, per-minute vs daily quota told apart, and 309 duplicate evaluations plus 1,854 gap rows deleted at John's call (backups in `db-backups/`). The reset moved to 16:00 PH on 2026-11-01.
 
-| Work | Report | Cause / design | Verified |
-|---|---|---|---|
-| `fix/generation-ai-errors` | "Internal server error" during AI generation | Since 2026-10-02, 73 of 143 runs failed, all Gemini 429 (37) or 503 (35) bar one network drop. RNA, RNS, Initiatives and Roadblocks had no retry or mapping. `withAiRetry` retries a 503 twice, never a 429, and returns a readable 503 | Real DI graph on Neon with Gemini's client throwing the verbatim errors. Then in John's own test: runs 259–261 recorded the readable quota message |
-| `fix/readiness-rating-refresh` | A rating needed a page refresh | Three causes: `tierOf` read an arbitrary evaluation (the collection is unordered), the stored tier only re-scored when the dashboard mounted, and the query cache holds data for an hour | Browser as mentor: label 359 ms after Rate, header tier in 1.8 s, no reload; AgroLink's levels restored |
-| `feat/ai-quota-indicator` + `fix/ai-quota-note-wording` | Testers asked to see whether AI quota remains | The cap counts requests, not tokens (the 429 names `GenerateRequestsPerDayPerProjectPerModel-FreeTier`; prompts run 214–11,553 tokens). `AiQuotaService` wraps the client's `generateContent` at boot and tallies per model and Pacific-day window in `ai_quota_usage`; a 429 marks the window exhausted. Shown as "N/20 AI requests left today · Resets at 3:00 PM" beside Generate on four pages | Neon at zero quota: 10 concurrent calls counted 10, a 429 flagged and rethrown. Live: run 261 counted and flagged, the note read 0/20 |
-
-### Notes
-
-- **The reset moves to 16:00 PH on 2026-11-01** (midnight US Pacific). The notes
-  had 15:00 fixed everywhere; corrected, and the app computes it.
-- `withAiRetry` and the quota counter sit outside `AiService`, because the
-  summary-bias harness drives it directly. The counter is installed on the client,
-  so the harness's dry-run stub replaces it and is not counted.
-- The refine chats, summary and generators each carry the same two error messages
-  — three copies.
-- The first rating diagnosis named only the refresh; the unordered evaluations
-  surfaced when a full reload still showed the wrong tier.
-- The frontend has no test framework: the rating fix was reproduced live first and
-  re-run after, rather than test-first.
-- **John's `pnpm dev` shares this working tree.** A branch switch recompiles his
-  running servers, and a backend boot without an entity lets schema sync drop its
-  table. Merges were done in a temporary worktree so his server never booted
-  without `ai_quota_usage`.
-- Gates on `master`: backend 440/440; `svelte-check` 110 errors, unchanged.
-
-### Two follow-ups from John's testing (merged and pushed)
-
-- **The RNA page still needed a refresh after a rating** (`fix/rating-refresh-all-views`).
-  The morning's fix invalidated a named list of queries and missed `readinessData`,
-  which the RNA, RNS and Elevate pages read, so the Generate picker kept old levels
-  for up to an hour. A rating now invalidates every query. Reproduced live before
-  the change (picker read Level 4 after rating 5) and fixed after.
-- **The rating dialog's Rate button read as plain text** (`fix/assessment-rate-button`).
-  Cause: `.lu-btn` styles are scoped under `.lu-root`, and dialogs portal outside
-  it. The dialog now has no footer: answers on the left, a rating panel on the right
-  with the picker, what the picked level means, and "Rate level N". A first attempt
-  put the controls in the header; John rejected it as awkward. The taste skill was
-  loaded for the redesign, applied only where it fits, since it excludes product UI.
-
-### Four more fixes (merged and pushed)
-
-- **Renumbering after generation** (`fix/renumber-after-generation`). Next steps
-  were shifted twice before the AI call (page and server), so even a success left
-  a gap; Initiatives shifted every startup's rows. Now the server shifts after the
-  AI call by what it created; Roadblocks' page does the same. Live: AgroLink's next
-  steps went 1,3,2,4,5,6 → 2,4,3,5,6,7 + new 1. Initiatives and Roadblocks are
-  unit-tested only.
-- **Initiative numbers per step** (`fix/initiative-numbers-after-generation`). The
-  page now runs its per-step renumbering right after a generation. Not run live:
-  it costs a real request.
-- **Score history** (`fix/score-history-on-change`). A score is saved only when it
-  differs from the latest (total, tier, flag, each dimension). Live on Neon: three
-  unchanged views added nothing; a change added one. AgroLink's 198 old rows stay.
-- **Per-minute vs daily quota** (`fix/quota-daily-limit`). Of 47 refusals in 30
-  days, 38 were the daily cap and 9 the per-minute limit, all treated as daily. Now
-  the per-minute limit says "try again in a minute" and leaves the quota note
-  alone, and an accepted request clears the exhausted mark: Gemini served one at
-  04:49 after saying to wait 11 hours.
-- **Duplicate score rows deleted** (John's call). A row identical to the one before
-  it for the same startup went: 309 evaluations and 1,854 gap rows across 14
-  startups (AgroLink 198 → 10, MediSync 50 → 4). Every real change and every
-  startup's latest values were kept. Backups of all rows are in
-  `db-backups/agrolink-evaluations-before-dedupe-1793310105905.json` and
-  `db-backups/all-evaluations-before-dedupe-1793310414397.json`.
-
-### Still open
-
-- **Production hygiene, deliberately left by John while the database holds
-  nothing important:** `debug: true` logs SQL with values to Render; the boot
-  seeder runs on every deploy; the demo accounts (`password123`, documented in a
-  public repo) exist on production, including a Manager.
-- **Seen live but not by John:** the counter counted the 04:49 generation; the
-  initiative per-step numbering and the Initiatives/Roadblocks renumbering have not
-  run against a real generation.
-
-### Next step
-
-1. **Redeploy, backend first** — testers see none of today's work until then.
-2. **After 15:00 today, check the indicator:** 20/20, then one generation lowers it
-   by the requests it used.
-   Also try the rating panel, the RNA picker after a rating, and generating on
-   all three boards: no gaps, and new initiatives numbered from #1 in their step.
-3. **Close the user study**, then the critical path: study analysis (TAM, SUS),
-   the SPMP and traceability matrix, and the 30–50 minute CER transcription for 3c.
-4. Before any real data: the production hygiene items above.
+**Still open from it:** production hygiene left by John on purpose (`debug: true` SQL logging on Render, the boot seeder on every deploy, demo accounts with `password123` on production including a Manager); the per-step initiative numbering and the Initiatives/Roadblocks renumbering have not run against a real generation.
 
 ---
 
@@ -635,3 +549,33 @@ reordered General, Capsule Proposal, Progress, Members, Elevate
 3. Continue the app design pass: `/applications`, `/account/*`, then the remaining
    per-startup pages. Two MediSync initiatives under different steps both show #53;
    per-step numbering looks stale for that data.
+
+---
+
+## 2026-11-03 — SRS v2.0, then its small unbuilt requirements
+
+**SRS v2.0** (`Downloads\capstone\1 Team 07 deliverables\Team_07_LaunchUpEnhanced_SRS_v2.0.docx/.pdf`, 48 pages) rebuilt against the course template and checked line by line against it; content audited against `master`, unbuilt requirements kept and marked. `SRS_v2.0_changes.md` beside it lists every change. CLAUDE.md gained the capstone-document rules; `TODO_CHECKLIST.md` gained the SRS priority section. Both merged to local `master`.
+
+**`feat/srs-small-requirements`** (local, unmerged): six of the seven small items.
+
+| Item | Change | Verified |
+|---|---|---|
+| Failed sign-ins logged | `Auth` row in `activity_logs` | Live: shown in `/admin/recent-activity` |
+| Insufficient baseline | Score left uncorrected, justification says so | Unit + live |
+| Bias review never ran | `bias-unverified` status and an "Unverified" badge | Unit only (needs a failing Gemini call) |
+| Tier filter | Select beside search on `/startups`, Mentor and Manager | Live as Manager at 1280 and 375: Developing showed only MediSync, Not scored 28 of 44, Clear filters resets it |
+| Progress report access | `canAccessStartup` in `ProgressService` | Live: 403 / 200 / 200 |
+| Admissions routes | `AdminGuard` on five routes | Live: founder and mentor 403 |
+
+Gates: backend 486/486; `svelte-check` 108 errors, none in changed files.
+
+### Found
+- **The running backend never finds `data/ai-baseline.json`** (`dist/data/` is never populated), so every normalization used the mean 0 / std 1 fallback and pushed scores to 8 or 9. Visible in `ai_bias_audits` as 4→9 and 5→9. This branch stops the inflation; the path fix needs its own branch.
+- **`/ranking-by-rubrics` is dead** (its method body is commented out), so "exclude provisional startups from rankings" has nothing to act on.
+- **Possible defect:** the Assessment page's dimension cards did not open the rating modal for a Mentor under Playwright. Not reproduced by hand.
+- **Legacy "Pending" tier labels** still sit on evaluations saved before `e1b963c`; the tier filter lists them. Saving `/admin/tiers` relabels every stored evaluation. Left alone: it writes to the shared database.
+- Vite's first server render took 2.5 to 10 minutes at a full core.
+
+### Next step
+1. John tests `feat/srs-small-requirements`, then merge.
+2. Baseline path fix, on its own branch.
