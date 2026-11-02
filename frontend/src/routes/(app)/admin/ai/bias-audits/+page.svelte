@@ -2,7 +2,7 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
-  import { ShieldAlert, ShieldCheck, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX } from 'lucide-svelte';
+  import { ShieldAlert, ShieldCheck, ShieldQuestion, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX } from 'lucide-svelte';
 
   let { data }: { data: { audits: any[]; access: string } } = $props();
   let audits = $state(data.audits ?? []);
@@ -98,7 +98,12 @@
                   </div>
                 </td>
                 <td class="px-6 py-5">
-                  {#if a.biasFlagged}
+                  <!-- SRS 2.1: the model review never ran, so this score needs a person. -->
+                  {#if a.biasStatus === 'bias-unverified'}
+                    <Badge variant="outline" class="flex w-fit items-center gap-1.5 text-foreground border-border bg-muted/40" title="The model review did not complete. Check this score manually.">
+                      <ShieldQuestion class="h-3 w-3" /> Unverified
+                    </Badge>
+                  {:else if a.biasFlagged}
                     <Badge variant="destructive" class="flex w-fit items-center gap-1.5 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20 shadow-none">
                       <ShieldAlert class="h-3 w-3" /> Flagged
                     </Badge>

@@ -507,6 +507,46 @@ describe('AiService', () => {
     });
   });
 
+  // SRS 2.1: a review that never ran must not read as one that passed.
+  describe('reviewBiasScore failure and baseline reporting', () => {
+    const input = { dimensionKey: 'market', rawScore: 8, maxScore: 9, context: 'ctx' };
+
+    it('reports a completed review as verified', async () => {
+      generateContent.mockResolvedValue({
+        text: '{"corrected_score":6,"bias_flagged":true,"justification":"inflated"}',
+      });
+      const result = await service.reviewBiasScore(ctxWith({ biasReview: true, scoreNormalization: false }), input);
+      expect(result.reviewFailed).toBe(false);
+      expect(result.correctedScore).toBe(6);
+    });
+
+    it('reports a review whose call throws as failed', async () => {
+      generateContent.mockRejectedValue(new Error('timeout'));
+      const result = await service.reviewBiasScore(ctxWith({ biasReview: true, scoreNormalization: false }), input);
+      expect(result.reviewFailed).toBe(true);
+      expect(result.correctedScore).toBe(8);
+    });
+
+    it('reports a review that never parses as failed', async () => {
+      generateContent.mockResolvedValue({ text: 'not json at all' });
+      const result = await service.reviewBiasScore(ctxWith({ biasReview: true, scoreNormalization: false }), input);
+      expect(result.reviewFailed).toBe(true);
+    });
+
+    it('does not count a disabled review as failed', async () => {
+      const result = await service.reviewBiasScore(ctxWith({ biasReview: false, scoreNormalization: false }), input);
+      expect(result.reviewFailed).toBe(false);
+    });
+
+    it('says so when the baseline is unavailable and keeps the raw score', async () => {
+      jest.spyOn(service as any, 'normalizeAiScore').mockResolvedValue({ z: 0, scaled: 8, baselineAvailable: false });
+      const result = await service.reviewBiasScore(ctxWith({ biasReview: false, scoreNormalization: true }), input);
+      expect(result.correctedScore).toBe(8);
+      expect(result.biasFlagged).toBe(false);
+      expect(result.justification).toMatch(/baseline unavailable/i);
+    });
+  });
+
   // These three used to read AiConfigService.defaults and open no run row, so
   // the capsule-parsing path was invisible to the provenance table and ignored
   // any X-Ai-Pipeline-Config override.

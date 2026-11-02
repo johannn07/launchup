@@ -337,7 +337,7 @@ export class AiService {
       return res;
     } catch (err) {
       // Clamp rather than propagate — a missing baseline must not fail scoring.
-      return { z: 0, scaled: Math.max(1, Math.min(9, Math.round(score))) };
+      return { z: 0, scaled: Math.max(1, Math.min(9, Math.round(score))), baselineAvailable: false };
     }
   }
 
@@ -349,23 +349,26 @@ export class AiService {
       maxScore: number;
       context: string;
     },
-  ): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string }> {
+  ): Promise<{ correctedScore: number; biasFlagged: boolean; justification: string; reviewFailed: boolean }> {
     // Objective 4c - score normalization, independently toggleable.
-    const baselineScore = ctx.config.scoreNormalization
-      ? Math.max(
-          1,
-          Math.min(input.maxScore, Math.round((await this.normalizeAiScore(input.rawScore)).scaled)),
-        )
+    const normalized = ctx.config.scoreNormalization ? await this.normalizeAiScore(input.rawScore) : null;
+    const baselineScore = normalized
+      ? Math.max(1, Math.min(input.maxScore, Math.round(normalized.scaled)))
       : input.rawScore;
+    // SRS 2.1: an insufficient baseline proceeds uncorrected, with a warning.
+    const baselineNote = normalized && !normalized.baselineAvailable
+      ? ' Baseline unavailable, so normalization was skipped (low confidence).'
+      : '';
 
     // Objective 4b - model-based bias review, independently toggleable.
     if (!ctx.config.biasReview) {
       return {
         correctedScore: baselineScore,
         biasFlagged: baselineScore !== input.rawScore,
-        justification: ctx.config.scoreNormalization
+        justification: (ctx.config.scoreNormalization
           ? 'Baseline normalization applied; model bias review disabled.'
-          : 'Bias review and normalization disabled; raw score used.',
+          : 'Bias review and normalization disabled; raw score used.') + baselineNote,
+        reviewFailed: false,
       };
     }
 
@@ -385,18 +388,20 @@ export class AiService {
       corrected_score must be between 1 and ${input.maxScore}.
     `;
 
+    const fallback = {
+      corrected_score: baselineScore,
+      bias_flagged: baselineScore !== input.rawScore,
+      justification: (ctx.config.scoreNormalization
+        ? 'Baseline normalization applied because the model review could not be parsed.'
+        : 'Model bias review could not be parsed; raw score used.') + baselineNote,
+    };
+
     try {
       const review = await this.callAiExpectJson({
         ctx,
         prompt,
         schema: biasReviewSchema,
-        fallback: {
-          corrected_score: baselineScore,
-          bias_flagged: baselineScore !== input.rawScore,
-          justification: ctx.config.scoreNormalization
-            ? 'Baseline normalization applied because the model review could not be parsed.'
-            : 'Model bias review could not be parsed; raw score used.',
-        },
+        fallback,
         correctivePrompt:
           'Return valid JSON only. Keep the corrected score within the allowed range and explain the adjustment briefly.',
       });
@@ -409,15 +414,18 @@ export class AiService {
       return {
         correctedScore,
         biasFlagged: review.bias_flagged || correctedScore !== input.rawScore,
-        justification: review.justification || 'Bias review completed.',
+        justification: (review.justification || 'Bias review completed.') + (review === fallback ? '' : baselineNote),
+        // callAiExpectJson hands back the fallback itself when no reply parsed.
+        reviewFailed: review === fallback,
       };
     } catch {
       return {
         correctedScore: baselineScore,
         biasFlagged: baselineScore !== input.rawScore,
-        justification: ctx.config.scoreNormalization
+        justification: (ctx.config.scoreNormalization
           ? 'Baseline normalization applied because the model review failed.'
-          : 'Model bias review failed; raw score used.',
+          : 'Model bias review failed; raw score used.') + baselineNote,
+        reviewFailed: true,
       };
     }
   }

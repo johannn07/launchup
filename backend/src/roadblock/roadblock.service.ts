@@ -1,4 +1,5 @@
 import { EntityManager } from '@mikro-orm/core';
+import { biasStatusOf } from 'src/ai/bias-status';
 import {
   BadRequestException,
   Injectable,
@@ -279,7 +280,7 @@ export class RoadblockService {
         deviation: Math.abs(reviewedRisk.correctedScore - Number(data.riskNumber)),
         threshold: 1,
         biasFlagged: reviewedRisk.biasFlagged,
-        biasStatus: reviewedRisk.biasFlagged ? 'flagged' : 'normalized',
+        biasStatus: biasStatusOf(reviewedRisk),
         justification: reviewedRisk.justification,
         generationRun: ctx.run,
       });

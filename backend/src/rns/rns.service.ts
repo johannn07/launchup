@@ -1,4 +1,5 @@
 import { EntityManager } from '@mikro-orm/core';
+import { biasStatusOf } from 'src/ai/bias-status';
 import {
   Injectable,
   NotFoundException,
@@ -450,7 +451,7 @@ Requirement note:
           deviation: Math.abs(reviewedTarget.correctedScore - (Number(task.target_level) || targetReadinessLevel[readinessType] + 1)),
           threshold: 2,
           biasFlagged: reviewedTarget.biasFlagged,
-          biasStatus: reviewedTarget.biasFlagged ? 'flagged' : 'normalized',
+          biasStatus: biasStatusOf(reviewedTarget),
           justification: reviewedTarget.justification,
           generationRun: ctx.run,
         });
