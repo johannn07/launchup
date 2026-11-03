@@ -576,5 +576,24 @@ Gates: backend 486/486; `svelte-check` 108 errors, none in changed files.
 - **Legacy "Pending" tier labels** still sit on evaluations saved before `e1b963c`; the tier filter lists them. Saving `/admin/tiers` relabels every stored evaluation. Left alone: it writes to the shared database.
 - Vite's first server render took 2.5 to 10 minutes at a full core.
 
+Small items and the baseline fix are merged to local `master`.
+
+### Registration email and medium items
+- **Registration email** (merged): `MailService` over SMTP, sent from `POST /auth/signup` only. Off until `SMTP_*` is set in `backend/.env`. Live send verified through Ethereal; never sent to a real inbox.
+- **`feat/srs-medium-requirements`** (local, unmerged), 4 of 5:
+
+| Item | Verified |
+|---|---|
+| Config alert on invalid weights or tiers | Unit only (needs a bad DB row) |
+| Gap shortfall per dimension | Live on MediSync, API and page |
+| Validation results on RNA cards | Live "Passed checks" on AgroLink; flagged state unseen |
+| Manager bias re-evaluation | Live: #84 re-evaluated #83 (one Gemini call) |
+
+Gates: backend 506/506; `svelte-check` 108 errors, none in changed files.
+
+- **Re-evaluating an old audit is weak evidence.** Audits before this branch stored no review context, so #84 saw only "MediSync, Technology" and kept the raw 8.
+- A `git stash` / `stash pop` compare step applied John's old `fix/ocr-document-dedupe` stash by mistake (the tree was clean). Reset with `git reset --merge`; both stashes are still listed.
+
 ### Next step
-1. John tests `feat/srs-small-requirements`, then `fix/baseline-path` on top of it; merge in that order.
+1. John tests `feat/srs-medium-requirements`.
+2. Item 5 (check recommendations against scores and profile fields) needs a method decision first.
