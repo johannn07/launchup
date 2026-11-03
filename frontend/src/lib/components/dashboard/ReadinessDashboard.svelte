@@ -29,6 +29,8 @@
     weight: number;
     weightedScore: number;
     rationale: string;
+    /** Points below the current tier's threshold (SRS 2.3). */
+    shortfall?: number;
   };
 
   type Recommendation = {
@@ -49,6 +51,7 @@
   type ReadinessResponse = {
     compositeScore: number;
     tierLabel: string;
+    tierThreshold?: number;
     dimensions: Dimension[];
     recommendations: Recommendation[];
     weightRationale: WeightRationale[];
@@ -134,13 +137,28 @@
   });
 </script>
 
-{#snippet meter(percent: number, colour: string, delay: number)}
-  <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]">
-    <div
-      class="lu-fill h-full rounded-full"
-      style="width:{percent}%; background:{colour}; transition-delay:{delay}ms"
-      use:arrive
-    ></div>
+{#snippet meter(
+  percent: number,
+  colour: string,
+  delay: number,
+  mark: number | null = null
+)}
+  <div class="relative">
+    <div class="h-1.5 w-full overflow-hidden rounded-full bg-[#17213a]">
+      <div
+        class="lu-fill h-full rounded-full"
+        style="width:{percent}%; background:{colour}; transition-delay:{delay}ms"
+        use:arrive
+      ></div>
+    </div>
+    {#if mark !== null}
+      <!-- The tier threshold, so the shortfall reads as distance to a line. -->
+      <div
+        class="pointer-events-none absolute -top-1 h-3.5 w-0.5 -translate-x-1/2 rounded-full bg-[#c3ced9]"
+        style="left:{mark}%"
+        aria-hidden="true"
+      ></div>
+    {/if}
   </div>
 {/snippet}
 
@@ -255,6 +273,9 @@
                 <p class="text-[13.5px] text-[#94a3b8]">
                   Each bar is the dimension score. The weighted contribution to
                   the composite is on the right.
+                  {#if data.tierThreshold != null}
+                    The mark is the {tier} threshold of {data.tierThreshold}.
+                  {/if}
                 </p>
                 <div
                   class="mt-4 divide-y divide-[#17213a] border-t border-[#17213a]"
@@ -284,9 +305,20 @@
                         {@render meter(
                           d.percent,
                           b.colour,
-                          (fillRank[d.key] ?? 0) * 60
+                          (fillRank[d.key] ?? 0) * 60,
+                          data.tierThreshold ?? null
                         )}
                       </div>
+                      {#if d.shortfall != null && data.tierThreshold != null}
+                        <p
+                          class="lu-num mt-2 text-[13px] font-semibold"
+                          style="color:{d.shortfall > 0 ? WARN : '#94a3b8'}"
+                        >
+                          {d.shortfall > 0
+                            ? `${d.shortfall} pts below the ${tier} threshold`
+                            : `Meets the ${tier} threshold`}
+                        </p>
+                      {/if}
                       <p class="mt-2 text-[13px] leading-[1.6] text-[#94a3b8]">
                         {d.rationale}
                       </p>

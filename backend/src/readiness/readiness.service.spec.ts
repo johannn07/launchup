@@ -89,6 +89,19 @@ describe('ReadinessService', () => {
     expect(product9?.percent).toBe(100);
   });
 
+  // SRS 2.3: shortfall is the current tier's threshold minus the dimension score.
+  it('returns the shortfall per dimension against the tier threshold', async () => {
+    const result = await serviceWith(emWith(MEDISYNC)).getReadinessForStartup(2);
+
+    expect(result.tierThreshold).toBe(40);
+    const byKey = Object.fromEntries(result.dimensions.map((d) => [d.key, d]));
+    expect(byKey.regulatory.shortfall).toBe(7); // 33%
+    expect(byKey.product.shortfall).toBe(0); // 56%
+    for (const d of result.dimensions) {
+      expect(d.shortfall).toBe(Math.max(0, 40 - d.percent));
+    }
+  });
+
   it('scores the Regulatory dimension', async () => {
     const result = await serviceWith(emWith(MEDISYNC)).getReadinessForStartup(2);
     const regulatory = result.dimensions.find((d) => d.key === 'regulatory');

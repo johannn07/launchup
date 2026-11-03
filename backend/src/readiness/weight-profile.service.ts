@@ -1,5 +1,5 @@
 import { EntityManager } from '@mikro-orm/core';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Sector } from 'src/entities/enums/sector.enum';
 import { BusinessModel } from 'src/entities/enums/business-model.enum';
 import { WeightProfile } from 'src/entities/weight-profile.entity';
@@ -9,12 +9,14 @@ import {
   DimensionKey,
   WEIGHT_SUM_TOLERANCE,
 } from './readiness.weights';
+import { ConfigAlertService } from './config-alert.service';
 
 @Injectable()
 export class WeightProfileService {
-  private readonly logger = new Logger(WeightProfileService.name);
-
-  constructor(private readonly em: EntityManager) {}
+  constructor(
+    private readonly em: EntityManager,
+    @Optional() private readonly alerts?: ConfigAlertService,
+  ) {}
 
   async resolve(
     sector?: Sector | null,
@@ -33,7 +35,7 @@ export class WeightProfileService {
       const profile = await this.em.findOne(WeightProfile, where);
       if (!profile) continue;
 
-      const weights = this.validate(profile);
+      const weights = await this.validate(profile);
       if (weights) return weights;
     }
 
@@ -42,21 +44,23 @@ export class WeightProfileService {
     return DEFAULT_WEIGHTS;
   }
 
-  private validate(profile: WeightProfile): Record<DimensionKey, number> | null {
+  private async validate(
+    profile: WeightProfile,
+  ): Promise<Record<DimensionKey, number> | null> {
     const stored = profile.weights ?? {};
 
     const missing = DIMENSION_KEYS.filter((key) => typeof stored[key] !== 'number');
     if (missing.length > 0) {
-      this.logger.warn(
-        `Weight profile ${profile.id} is missing ${missing.join(', ')}; falling through.`,
+      await this.alerts?.raise(
+        `Weight profile ${profile.id} is missing ${missing.join(', ')}; using the next profile in the cascade.`,
       );
       return null;
     }
 
     const sum = DIMENSION_KEYS.reduce((total, key) => total + stored[key], 0);
     if (Math.abs(sum - 1) > WEIGHT_SUM_TOLERANCE) {
-      this.logger.warn(
-        `Weight profile ${profile.id} sums to ${sum.toFixed(3)}, not 1.0; falling through.`,
+      await this.alerts?.raise(
+        `Weight profile ${profile.id} sums to ${sum.toFixed(3)}, not 1.0; using the next profile in the cascade.`,
       );
       return null;
     }

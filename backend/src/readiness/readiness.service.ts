@@ -1,5 +1,5 @@
 import { EntityManager } from '@mikro-orm/core';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ReadinessType } from 'src/entities/enums/readiness-type.enum';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
 import { ReadinessEvaluation } from 'src/entities/readiness-evaluation.entity';
@@ -9,6 +9,7 @@ import { SEED_TIER_CONFIGS } from './readiness.tiers';
 import { Startup } from 'src/entities/startup.entity';
 import { DEFAULT_WEIGHTS, DimensionKey } from './readiness.weights';
 import { WeightProfileService } from './weight-profile.service';
+import { ConfigAlertService } from './config-alert.service';
 
 // The rubric runs 1-9 for every dimension; scores are a fraction of 9.
 const MAX_LEVEL = 9;
@@ -62,6 +63,7 @@ const READINESS_DIMENSIONS: ReadinessDimension[] = [
 export type ReadinessScoreResponse = {
   compositeScore: number;
   tierLabel: string;
+  tierThreshold: number;
   dimensions: Array<{
     key: DimensionKey;
     label: string;
@@ -71,6 +73,8 @@ export type ReadinessScoreResponse = {
     weight: number;
     weightedScore: number;
     rationale: string;
+    /** Points below the current tier's threshold, at least 0 (SRS 2.3). */
+    shortfall: number;
   }>;
   recommendations: Array<{
     priority: number;
@@ -94,6 +98,7 @@ export class ReadinessService {
   constructor(
     private readonly em: EntityManager,
     private readonly weightProfiles: WeightProfileService,
+    @Optional() private readonly alerts?: ConfigAlertService,
   ) {}
 
   getWeightRationale(weights: Record<DimensionKey, number> = DEFAULT_WEIGHTS) {
@@ -149,8 +154,7 @@ export class ReadinessService {
 
     // Manager-configured thresholds, falling back to the same defaults the
     // seeder writes — so an unseeded database classifies identically.
-    const persisted = await this.em.find(TierConfig, {});
-    const sortedTiers = (persisted.length > 0 ? persisted : SEED_TIER_CONFIGS)
+    const sortedTiers = (await this.loadTiers())
       .slice()
       .sort((a, b) => b.threshold - a.threshold);
 
@@ -165,6 +169,11 @@ export class ReadinessService {
         break;
       }
     }
+
+    const scored = dimensions.map((dimension) => ({
+      ...dimension,
+      shortfall: Math.max(0, tierThreshold - dimension.percent),
+    }));
 
     const recommendations = [...dimensions]
       .sort((left, right) => left.weightedScore - right.weightedScore)
@@ -189,7 +198,8 @@ export class ReadinessService {
     const response: ReadinessScoreResponse = {
       compositeScore,
       tierLabel,
-      dimensions,
+      tierThreshold,
+      dimensions: scored,
       recommendations,
       weightRationale: this.getWeightRationale(weights),
     };
@@ -232,15 +242,14 @@ export class ReadinessService {
       this.em.persist(evaluation);
       await this.em.flush();
 
-      for (const dimension of dimensions) {
-        const gap = Math.max(0, tierThreshold - dimension.percent);
+      for (const dimension of scored) {
         this.em.persist(
           this.em.create(ReadinessGap, {
             evaluation,
             dimensionKey: dimension.key,
             score: dimension.percent,
             tierThreshold,
-            shortfall: gap,
+            shortfall: dimension.shortfall,
             createdAt: new Date(),
           }),
         );
@@ -254,6 +263,32 @@ export class ReadinessService {
     }
 
     return response;
+  }
+
+  /** Usable tier rows; unusable ones are skipped and alerted, as weight profiles are. */
+  private async loadTiers(): Promise<Array<{ tierLabel: string; threshold: number }>> {
+    const persisted = await this.em.find(TierConfig, {});
+    if (persisted.length === 0) return SEED_TIER_CONFIGS;
+
+    const valid = persisted.filter(
+      (t) =>
+        t.tierLabel?.trim() &&
+        Number.isFinite(t.threshold) &&
+        t.threshold >= 0 &&
+        t.threshold <= 100,
+    );
+    const invalid = persisted.filter((t) => !valid.includes(t));
+    if (invalid.length > 0) {
+      const rows = invalid
+        .map((t) => `"${t.tierLabel ?? ''}" at ${t.threshold}`)
+        .join(', ');
+      await this.alerts?.raise(
+        valid.length > 0
+          ? `Tier configuration has unusable rows (${rows}); they are skipped.`
+          : `Tier configuration has no usable rows (${rows}); the default tiers are used.`,
+      );
+    }
+    return valid.length > 0 ? valid : SEED_TIER_CONFIGS;
   }
 
   /** Same score, tier, flag and per-dimension gap rows as the stored evaluation. */
