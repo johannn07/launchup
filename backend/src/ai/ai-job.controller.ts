@@ -7,6 +7,7 @@ import {
   NotFoundException,
   Param,
   ParseIntPipe,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { JwtGuard } from 'src/auth/guard';
 import { Startup } from 'src/entities/startup.entity';
 import { canAccessStartup } from 'src/startup/startup-access';
 import { AiJobQueueService } from './ai-job-queue.service';
+import { AiJobOperation } from 'src/entities/ai-generation-job.entity';
 
 type Requester = { id?: number; role?: string };
 
@@ -46,6 +48,27 @@ export class AiJobController {
     return this.jobs.listForStartup(startupId);
   }
 
+  // Before a startup exists only the requester can see their job (SRS 2.4).
+  @Get('mine')
+  async mine(
+    @Query('operation') operation: AiJobOperation,
+    @GetUser() user: Requester,
+  ) {
+    if (!user?.id) throw new ForbiddenException();
+    return this.jobs.listMine(user.id, operation);
+  }
+
+  @Post(':id/collect')
+  async collect(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: Requester,
+  ) {
+    const job = await this.jobs.findOne(id);
+    if (!job) throw new NotFoundException('Job not found');
+    if (job.requestedById !== user?.id) throw new ForbiddenException();
+    return this.jobs.collect(id);
+  }
+
   @Delete(':id')
   async cancel(
     @Param('id', ParseIntPipe) id: number,
@@ -54,7 +77,8 @@ export class AiJobController {
     const job = await this.jobs.findOne(id);
     if (!job) throw new NotFoundException('Job not found');
     if (job.startup) await this.assertAccess(job.startup.id, user);
-    else if (user?.role !== 'Manager') throw new ForbiddenException();
+    else if (user?.role !== 'Manager' && job.requestedById !== user?.id)
+      throw new ForbiddenException();
     return this.jobs.cancel(id);
   }
 }

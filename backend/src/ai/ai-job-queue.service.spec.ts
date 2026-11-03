@@ -158,7 +158,7 @@ describe('AiJobQueueService', () => {
 
     await service.tick(NOW);
 
-    expect(handler).toHaveBeenCalledWith({ startupId: 2 }, {});
+    expect(handler).toHaveBeenCalledWith({ startupId: 2 }, {}, null);
     expect(job).toMatchObject({ status: 'completed', attempts: 1 });
   });
 
@@ -181,6 +181,60 @@ describe('AiJobQueueService', () => {
     expect(broken).toMatchObject({
       status: 'failed',
       lastError: 'No capsule proposal',
+    });
+  });
+
+  // SRS 2.4: a proposal upload is replayed from the job row.
+  it('queues an upload with its bytes, once per file', async () => {
+    const { service, rows } = build();
+    const upload = {
+      operation: 'capsule_extract' as const,
+      payload: {},
+      user: { id: 9 },
+      file: {
+        buffer: Buffer.from('page'),
+        originalname: 'p.png',
+        mimetype: 'image/png',
+      },
+    };
+    const fail = () => Promise.reject(wrapped(BUSY));
+    await expect(service.runOrQueue(upload, fail)).rejects.toBeTruthy();
+    await expect(service.runOrQueue(upload, fail)).rejects.toBeTruthy();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      fileName: 'p.png',
+      mimeType: 'image/png',
+      requestedById: 9,
+      payload: { sha256: expect.stringMatching(/^[0-9a-f]{64}$/) },
+    });
+    expect(Buffer.from(rows[0].file).toString()).toBe('page');
+  });
+
+  it('hands the file to the handler, keeps the result, drops the bytes', async () => {
+    const job: any = {
+      ...due(),
+      operation: 'capsule_extract',
+      startup: null,
+      file: Buffer.from('page'),
+      fileName: 'p.png',
+      mimeType: 'image/png',
+    };
+    const { service } = build([job]);
+    const handler = jest.fn(() => Promise.resolve({ title: 'Parsed' }));
+    service.register('capsule_extract', handler, { keepResult: true });
+
+    await service.tick(NOW);
+
+    expect(handler).toHaveBeenCalledWith(
+      job.payload,
+      {},
+      expect.objectContaining({ originalname: 'p.png', mimetype: 'image/png' }),
+    );
+    expect(job).toMatchObject({
+      status: 'completed',
+      result: { title: 'Parsed' },
+      file: null,
     });
   });
 

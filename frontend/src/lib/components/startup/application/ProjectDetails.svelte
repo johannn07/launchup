@@ -4,6 +4,7 @@
   import { Input } from '$lib/components/ui/input/index.js';
   import { Label } from '$lib/components/ui/label/index.js';
   import { Upload, FileText, Loader } from 'lucide-svelte';
+  import { onDestroy, onMount } from 'svelte';
 
   let files: any;
   export let access: string;
@@ -61,6 +62,98 @@
 
   import { toast } from 'svelte-sonner';
 
+  // SRS 2.4: when Gemini refuses an upload, the server queues it and this form
+  // fills itself once the parse finishes, now or on a later visit.
+  type ParseJob = {
+    id: number;
+    status: 'queued' | 'running' | 'failed' | 'completed';
+    fileName: string | null;
+    nextAttemptAt: string;
+    lastError: string | null;
+    result?: any;
+  };
+  let parseJob: ParseJob | null = null;
+  // Finished after the founder started typing: offered, never overwritten.
+  let readyJob: ParseJob | null = null;
+  let poll: ReturnType<typeof setInterval> | undefined;
+
+  const fromParse = (data: any) => ({
+    title: data.title || '',
+    startup_description: data.startup_description || '',
+    problem_statement: data.problem_statement || '',
+    target_market: data.target_market || '',
+    solution_description: data.solution_description || '',
+    objectives: data.objectives || '',
+    scope: data.scope || '',
+    methodology: data.methodology || '',
+    fieldConfidence: data.fieldConfidence || {},
+    legibilityStatus: data.legibilityStatus || 'verified',
+    legibilityReason: data.legibilityReason || null,
+    sketchDetected: data.sketchDetected || false,
+    sketchConfidence: data.sketchConfidence || 0
+  });
+
+  async function checkParseJobs() {
+    try {
+      const res = await fetch('/api/ai/jobs/mine?operation=capsule_extract');
+      if (!res.ok) return;
+      const [latest]: ParseJob[] = await res.json();
+      if (latest?.status === 'completed') {
+        parseJob = null;
+        if (information) readyJob = latest;
+        else await useParsed(latest);
+      } else {
+        parseJob = latest ?? null;
+      }
+    } catch {
+      // The next poll tries again.
+    }
+  }
+
+  async function useParsed(job: ParseJob) {
+    const res = await fetch(`/api/ai/jobs/${job.id}/collect`, { method: 'POST' });
+    if (!res.ok) return;
+    const collected = await res.json();
+    information = fromParse(collected.result ?? {});
+    readyJob = null;
+    toast.success(`${job.fileName ?? 'Your proposal'} was processed. Review the fields below.`);
+  }
+
+  async function dropJob(job: ParseJob) {
+    await fetch(`/api/ai/jobs/${job.id}`, { method: 'DELETE' });
+    if (parseJob?.id === job.id) parseJob = null;
+    if (readyJob?.id === job.id) {
+      // A finished job cannot be cancelled; collecting it retires it.
+      await fetch(`/api/ai/jobs/${job.id}/collect`, { method: 'POST' });
+      readyJob = null;
+    }
+  }
+
+  const retryAt = (iso: string) => {
+    const d = new Date(iso);
+    const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    return d.toDateString() === new Date().toDateString()
+      ? time
+      : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+  };
+
+  const queuedText = (job: ParseJob) =>
+    `${job.fileName ?? 'Your proposal'} is queued because the AI service is unavailable. ` +
+    `It will be processed automatically ${job.status === 'queued' ? `around ${retryAt(job.nextAttemptAt)}` : 'now'}, ` +
+    'and this form fills in when it is done. You can leave this page; the result waits here.';
+
+  const failedText = (job: ParseJob) =>
+    `${job.fileName ?? 'Your proposal'} could not be processed: ` +
+    `${job.lastError ?? 'the AI service stayed unavailable.'} Upload it again or type it in.`;
+
+  onMount(() => {
+    checkParseJobs();
+    poll = setInterval(() => {
+      if (parseJob && parseJob.status !== 'failed') checkParseJobs();
+    }, 30_000);
+  });
+  onDestroy(() => clearInterval(poll));
+
   async function getInformation() {
     processing = true;
     if (!files || !files[0]) {
@@ -74,7 +167,7 @@
 
     try {
       const response = await fetch(
-        `/api/startups/parse-capsule-proposal`,
+        `/api/startups/parse-capsule-proposal?queue=true`,
         {
           method: 'POST',
           headers: {
@@ -87,21 +180,17 @@
       const data = await response.json();
 
       if (response.ok) {
-        information = {
-          title: data.title || '',
-          startup_description: data.startup_description || '',
-          problem_statement: data.problem_statement || '',
-          target_market: data.target_market || '',
-          solution_description: data.solution_description || '',
-          objectives: data.objectives || '',
-          scope: data.scope || '',
-          methodology: data.methodology || '',
-          fieldConfidence: data.fieldConfidence || {},
-          legibilityStatus: data.legibilityStatus || 'verified',
-          legibilityReason: data.legibilityReason || null,
-          sketchDetected: data.sketchDetected || false,
-          sketchConfidence: data.sketchConfidence || 0,
+        information = fromParse(data);
+      } else if (data.queued) {
+        parseJob = {
+          id: data.jobId,
+          status: 'queued',
+          fileName: files[0].name,
+          nextAttemptAt: data.nextAttemptAt,
+          lastError: null
         };
+        toast.info(data.message);
+        resetUpload();
       } else {
         toast.error(
           `${data.message || 'Failed to process document.'} You can type the proposal in instead.`
@@ -258,6 +347,49 @@
         accept=".pdf,.jpg,.jpeg,.png"
         bind:files
       />
+      {#if parseJob && !information}
+        <div
+          class="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-sm leading-6 text-amber-800 dark:border-amber-400/20 dark:bg-amber-400/5 dark:text-amber-200"
+          aria-live="polite"
+        >
+          {#if parseJob.status === 'failed'}
+            <p>{failedText(parseJob)}</p>
+          {:else}
+            <p>{queuedText(parseJob)}</p>
+          {/if}
+          <button
+            type="button"
+            class="mt-2 text-sm font-semibold underline-offset-2 hover:underline"
+            onclick={() => parseJob && dropJob(parseJob)}
+          >
+            {parseJob.status === 'failed' ? 'Dismiss' : 'Cancel the queued upload'}
+          </button>
+        </div>
+      {/if}
+      {#if readyJob}
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#6366f1]/30 bg-[#6366f1]/5 p-4 text-sm text-slate-700 dark:text-white/80"
+          aria-live="polite"
+        >
+          <p>{readyJob.fileName ?? 'Your queued proposal'} has been processed.</p>
+          <div class="flex gap-2">
+            <button
+              type="button"
+              class="rounded-full bg-[#4f46e5] px-4 py-2 text-sm font-semibold text-white"
+              onclick={() => readyJob && useParsed(readyJob)}
+            >
+              Replace the fields with it
+            </button>
+            <button
+              type="button"
+              class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold dark:border-white/10"
+              onclick={() => readyJob && dropJob(readyJob)}
+            >
+              Discard
+            </button>
+          </div>
+        </div>
+      {/if}
       {#if !information && !processing}
         <button
           type="button"

@@ -8,13 +8,20 @@ import {
 } from '@mikro-orm/core';
 import { Startup } from './startup.entity';
 
-export type AiJobOperation = 'rna' | 'rns' | 'initiatives' | 'roadblocks';
+export type AiJobOperation =
+  | 'rna'
+  | 'rns'
+  | 'initiatives'
+  | 'roadblocks'
+  | 'capsule_extract';
 export type AiJobStatus =
   | 'queued'
   | 'running'
   | 'completed'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  // A finished parse whose result the applicant has applied to their form.
+  | 'collected';
 
 /**
  * A generation request Gemini refused, kept for a later retry (SRS 2.2).
@@ -59,4 +66,18 @@ export class AiGenerationJob {
 
   @Property({ type: DateTimeType, nullable: true })
   completedAt?: Date | null;
+
+  /** The uploaded proposal (SRS 2.4); cleared once the job ends. */
+  @Property({ type: 'blob', nullable: true, lazy: true })
+  file?: Buffer | null;
+
+  @Property({ nullable: true })
+  fileName?: string | null;
+
+  @Property({ length: 100, nullable: true })
+  mimeType?: string | null;
+
+  /** Kept for operations whose result has no other home, i.e. parses. */
+  @Property({ type: 'json', nullable: true })
+  result?: unknown;
 }

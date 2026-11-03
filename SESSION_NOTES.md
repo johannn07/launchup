@@ -598,3 +598,10 @@ Gates: backend 522/522; `svelte-check` 108 errors, none in changed files.
 
 ### Next step
 1. John tests `feat/srs-medium-requirements`.
+
+### Large items (same day)
+- **`feat/ai-retry-queue`** (local): refused RNA, next-step, initiative and roadblock generation is queued and retried. Live: a real refusal queued and cancelled; the server's worker completed a no-cost job; panel and Cancel work. A refusal-then-success retry on generation was not run (it would regenerate demo data).
+- **`feat/ocr-upload-queue`** (local, stacked on the above): refused proposal parses are queued with the file. Live end to end on `PondSense-capsule-proposal.pdf`, about 2 Gemini calls.
+- **`fix/bias-audit-reevaluation-type`** (local, off master): `reevaluationOf` was created as varchar, because `number | null` reflects as Object. The queue's `requestedById` had the same defect, fixed on its branch. Columns typed `number | null` need an explicit `type`.
+- Adversarial re-scoring and canvas recognition: skipped by John; record both as SRS deviations.
+- Temp `.ts` files in `backend/` (not only `src/`) restart the dev server; keep scripts in the scratchpad.

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { EntityManager, RequestContext } from '@mikro-orm/core';
 import {
   Injectable,
@@ -16,10 +17,23 @@ import { AiQuotaService } from './ai-quota.service';
 import { AiRunContext, AiRunService } from './ai-run.service';
 import { nextAttemptAt, queuedMessage, refusalOf } from './job-retry-schedule';
 
+export interface QueuedFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+}
+
 type Handler = (
   payload: Record<string, unknown>,
   ctx: AiRunContext,
+  file: QueuedFile | null,
 ) => Promise<unknown>;
+
+interface Registration {
+  handler: Handler;
+  /** Store the return value on the job: a parse has nowhere else to go. */
+  keepResult: boolean;
+}
 
 export interface QueueRequest {
   operation: AiJobOperation;
@@ -28,6 +42,8 @@ export interface QueueRequest {
   resolveStartupId?: () => Promise<number | null>;
   payload: Record<string, unknown>;
   user?: { id?: number; email?: string } | null;
+  /** An upload to replay (SRS 2.4); kept in the job row until it ends. */
+  file?: QueuedFile;
 }
 
 const TICK_MS = 60_000;
@@ -39,7 +55,7 @@ const TICK_MS = 60_000;
 @Injectable()
 export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AiJobQueueService.name);
-  private readonly handlers = new Map<AiJobOperation, Handler>();
+  private readonly handlers = new Map<AiJobOperation, Registration>();
   private timer?: NodeJS.Timeout;
   private busy = false;
 
@@ -72,8 +88,12 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Called by each generating controller for its own operation. */
-  register(operation: AiJobOperation, handler: Handler) {
-    this.handlers.set(operation, handler);
+  register(
+    operation: AiJobOperation,
+    handler: Handler,
+    { keepResult = false }: { keepResult?: boolean } = {},
+  ) {
+    this.handlers.set(operation, { handler, keepResult });
   }
 
   /** Runs now; on a Gemini refusal, queues the request and says so. */
@@ -108,20 +128,34 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
     const { resetAt } = await this.quota.status();
     const when = nextAttemptAt(refusal, 1, new Date(), resetAt)!;
 
+    // The same upload twice is one job; its hash stands in for the bytes.
+    const payload = request.file
+      ? {
+          ...request.payload,
+          sha256: createHash('sha256')
+            .update(request.file.buffer)
+            .digest('hex'),
+        }
+      : request.payload;
+
     // Pressing Generate twice while Gemini is down queues it once.
     const same = await em.find(AiGenerationJob, {
       operation: request.operation,
       startup: startupId,
+      requestedById: request.user?.id ?? null,
       status: 'queued',
     });
-    const payloadKey = JSON.stringify(request.payload);
+    const payloadKey = JSON.stringify(payload);
     const existing = same.find((j) => JSON.stringify(j.payload) === payloadKey);
     if (existing) return existing;
 
     const job = em.create(AiGenerationJob, {
       operation: request.operation,
       startup: startupId ? em.getReference(Startup, startupId) : null,
-      payload: request.payload,
+      payload,
+      file: request.file?.buffer ?? null,
+      fileName: request.file?.originalname ?? null,
+      mimeType: request.file?.mimetype ?? null,
       requestedById: request.user?.id ?? null,
       requestedByEmail: request.user?.email ?? null,
       status: 'queued',
@@ -143,7 +177,7 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
       const job = await em.findOne(
         AiGenerationJob,
         { status: 'queued', nextAttemptAt: { $lte: now } },
-        { orderBy: { nextAttemptAt: 'ASC' } },
+        { orderBy: { nextAttemptAt: 'ASC' }, populate: ['file'] },
       );
       if (!job) return;
 
@@ -154,8 +188,8 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const handler = this.handlers.get(job.operation);
-      if (!handler) {
+      const registration = this.handlers.get(job.operation);
+      if (!registration) {
         job.status = 'failed';
         job.lastError = `No handler registered for ${job.operation}.`;
         await em.flush();
@@ -166,19 +200,29 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
       job.attempts += 1;
       await em.flush();
 
+      const file: QueuedFile | null = job.file
+        ? {
+            buffer: Buffer.from(job.file),
+            originalname: job.fileName ?? 'upload',
+            mimetype: job.mimeType ?? 'application/octet-stream',
+          }
+        : null;
+
       try {
-        await RequestContext.create(this.em, () =>
+        const result = await RequestContext.create(this.em, () =>
           this.runs.track(
             job.startup?.id ?? null,
             job.operation,
             undefined,
             false,
-            (ctx) => handler(job.payload, ctx),
+            (ctx) => registration.handler(job.payload, ctx, file),
           ),
         );
         job.status = 'completed';
         job.completedAt = new Date();
         job.lastError = null;
+        job.file = null;
+        if (registration.keepResult) job.result = result;
       } catch (e) {
         const refusal = refusalOf(e);
         const next = refusal
@@ -186,6 +230,7 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
           : null;
         job.status = next ? 'queued' : 'failed';
         if (next) job.nextAttemptAt = next;
+        else job.file = null;
         job.lastError = refusal
           ? queuedMessage(refusal)
           : e instanceof Error
@@ -216,6 +261,30 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** A user's own startup-less jobs, e.g. proposal parses before a startup exists. */
+  async listMine(userId: number, operation: AiJobOperation) {
+    return this.em.fork().find(
+      AiGenerationJob,
+      {
+        requestedById: userId,
+        operation,
+        status: { $in: ['queued', 'running', 'failed', 'completed'] },
+      },
+      { orderBy: { createdAt: 'DESC' }, limit: 5 },
+    );
+  }
+
+  /** Hands a finished result to its requester once. */
+  async collect(id: number) {
+    const em = this.em.fork();
+    const job = await em.findOneOrFail(AiGenerationJob, { id });
+    if (job.status === 'completed') {
+      job.status = 'collected';
+      await em.flush();
+    }
+    return job;
+  }
+
   async findOne(id: number) {
     return this.em.fork().findOne(AiGenerationJob, { id });
   }
@@ -227,6 +296,8 @@ export class AiJobQueueService implements OnModuleInit, OnModuleDestroy {
     if (job.status === 'queued' || job.status === 'failed') {
       job.status = 'cancelled';
       await em.flush();
+      // `file` is lazy and unloaded here, so assigning null would not be flushed.
+      await em.nativeUpdate(AiGenerationJob, { id }, { file: null });
     }
     return job;
   }

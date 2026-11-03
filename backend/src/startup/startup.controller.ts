@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -17,6 +18,7 @@ import {
 
 import { AiService } from 'src/ai/ai.service';
 import { AiRunService } from 'src/ai/ai-run.service';
+import { AiJobQueueService } from 'src/ai/ai-job-queue.service';
 import { StartupService } from './startup.service';
 import { AdminGuard, JwtGuard } from 'src/auth/guard';
 import { GetUser } from 'src/auth/decorator';
@@ -41,7 +43,20 @@ export class StartupController {
     private startupService: StartupService,
     private aiService: AiService,
     private readonly aiRunService: AiRunService,
-  ) {}
+    private readonly jobs: AiJobQueueService,
+  ) {
+    jobs.register(
+      'capsule_extract',
+      (_p, ctx, file) => {
+        if (!file) throw new BadRequestException('The queued upload has no file.');
+        return this.startupService.parseCapsuleProposal(
+          { ...file, size: file.buffer.length } as Express.Multer.File,
+          ctx,
+        );
+      },
+      { keepResult: true },
+    );
+  }
 
   @Get('/startups')
   getStartups(@Req() req: any) {
@@ -163,17 +178,26 @@ export class StartupController {
     @UploadedFile() file: Express.Multer.File,
     @Req() req: any,
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
+    // /apply opts in: its form can fill itself later. Other callers keep the 503.
+    @Query('queue') queue?: string,
   ) {
     // Null startupId: parsing happens during application fill-in, before a
     // startup exists to attribute the run to.
     const isPrivileged = req.user?.role === Role.Manager;
+    const run = () =>
+      this.aiRunService.track(null, 'capsule_extract', pipelineConfig, isPrivileged, (ctx) =>
+        this.startupService.parseCapsuleProposal(file, ctx),
+      );
     try {
-      return await this.aiRunService.track(
-        null,
-        'capsule_extract',
-        pipelineConfig,
-        isPrivileged,
-        (ctx) => this.startupService.parseCapsuleProposal(file, ctx),
+      if (queue !== 'true' || !file) return await run();
+      return await this.jobs.runOrQueue(
+        {
+          operation: 'capsule_extract',
+          payload: {},
+          file: { buffer: file.buffer, originalname: file.originalname, mimetype: file.mimetype },
+          user: req.user,
+        },
+        run,
       );
     } catch (error) {
       const { Logger } = require('@nestjs/common');

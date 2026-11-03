@@ -336,6 +336,7 @@ export class StartupService {
             isQuotaError(err)
               ? aiUnavailableMessage(err)
               : 'The AI service is busy right now. Please try uploading again in a moment.',
+            { cause: err },
           );
         }
         console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
