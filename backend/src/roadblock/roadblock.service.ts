@@ -225,17 +225,18 @@ export class RoadblockService {
 
     const roadblocks: Roadblock[] = [];
     for (const data of resultData) {
+      const reviewContext = [
+        `Startup: ${startup.name}`,
+        `Task count: ${tasks.length}`,
+        `Initiative count: ${initiatives.length}`,
+        `Description: ${data.description}`,
+        `Fix: ${data.fix}`,
+      ].join('\n');
       const reviewedRisk = await this.aiService.reviewBiasScore(ctx, {
         dimensionKey: 'roadblock',
         rawScore: Number(data.riskNumber),
         maxScore: 5,
-        context: [
-          `Startup: ${startup.name}`,
-          `Task count: ${tasks.length}`,
-          `Initiative count: ${initiatives.length}`,
-          `Description: ${data.description}`,
-          `Fix: ${data.fix}`,
-        ].join('\n'),
+        context: reviewContext,
       });
 
       const roadblock = new Roadblock();
@@ -282,6 +283,7 @@ export class RoadblockService {
         biasFlagged: reviewedRisk.biasFlagged,
         biasStatus: biasStatusOf(reviewedRisk),
         justification: reviewedRisk.justification,
+        reviewContext,
         generationRun: ctx.run,
       });
     }

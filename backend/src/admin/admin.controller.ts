@@ -12,6 +12,8 @@ import {
   Req,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { BiasReevaluationService } from './bias-reevaluation.service';
+import { GetUser } from '../auth/decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateStartupDto } from './dto/create-startup.dto';
@@ -44,6 +46,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly em: EntityManager,
+    private readonly biasReevaluation: BiasReevaluationService,
   ) {}
 
   // JSON endpoint for recent activity
@@ -158,6 +161,15 @@ export class AdminController {
       justification: body.justification,
     };
     return this.adminService.overrideBiasAudit(id, payload);
+  }
+
+  // Costs one or two Gemini calls against the daily quota.
+  @Post('ai/bias-audits/:id/reevaluate')
+  async reevaluateBiasAudit(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser() user: { email?: string },
+  ) {
+    return this.biasReevaluation.reevaluate(id, user?.email ?? 'admin');
   }
 
   // OCR documents

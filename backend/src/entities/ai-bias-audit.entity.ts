@@ -40,6 +40,14 @@ export class AiBiasAudit {
   @Property({ type: 'text', nullable: true })
   justification?: string | null;
 
+  /** What the review saw, so a Manager can request a re-evaluation (SRS 2.1). */
+  @Property({ type: 'text', nullable: true })
+  reviewContext?: string | null;
+
+  /** The audit this row re-evaluates. */
+  @Property({ nullable: true })
+  reevaluationOf?: number | null;
+
   @Property({ type: DateTimeType })
   createdAt: Date = new Date();
 

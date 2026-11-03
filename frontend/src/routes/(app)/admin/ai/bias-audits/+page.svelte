@@ -2,13 +2,34 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
-  import { ShieldAlert, ShieldCheck, ShieldQuestion, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX } from 'lucide-svelte';
+  import { ShieldAlert, ShieldCheck, ShieldQuestion, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX, RefreshCw } from 'lucide-svelte';
+  import { toast } from 'svelte-sonner';
 
   let { data }: { data: { audits: any[]; access: string } } = $props();
   let audits = $state(data.audits ?? []);
   let overridingId: number | null = $state(null);
   let overrideValue: number | null = $state(null);
   let overriding = $state(false);
+  let reevaluatingId: number | null = $state(null);
+
+  // SRS 2.1. Adds a new audit row; the original stays as the record of what ran.
+  async function reevaluate(id: number) {
+    reevaluatingId = id;
+    try {
+      const res = await fetch(`/api/admin/ai/bias-audits/${id}/reevaluate`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${data.access}` }
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const created = await res.json();
+      audits = [created, ...audits];
+      toast.success(`Re-evaluated as audit #${created.id}: ${created.rawScore} to ${created.correctedScore}`);
+    } catch {
+      toast.error('Re-evaluation failed. Try again later; it uses the daily AI quota.');
+    } finally {
+      reevaluatingId = null;
+    }
+  }
 
   async function overrideAudit(id: number) {
     if (overrideValue === null) return;
@@ -82,6 +103,9 @@
                     <span class="text-xs text-muted-foreground flex items-center gap-1.5 opacity-80">
                       <Database class="h-3 w-3" /> Startup #{a.startup?.id ?? 'Unknown'}
                     </span>
+                    {#if a.reevaluationOf}
+                      <span class="text-xs text-muted-foreground opacity-80">Re-evaluation of #{a.reevaluationOf}</span>
+                    {/if}
                   </div>
                 </td>
                 <td class="px-6 py-5 text-muted-foreground font-medium">{a.rawScore}</td>
@@ -129,9 +153,15 @@
                       </Button>
                     </div>
                   {:else}
-                    <Button variant="outline" size="sm" onclick={() => { overridingId = a.id; overrideValue = a.correctedScore ?? a.rawScore; }} class="transition-all hover:bg-muted/80">
-                      <Edit2 class="h-3.5 w-3.5 mr-1.5" /> Override
-                    </Button>
+                    <div class="flex items-center justify-end gap-2">
+                      <Button variant="outline" size="sm" onclick={() => reevaluate(a.id)} disabled={reevaluatingId !== null} title="Run the bias review again. Uses the daily AI quota." class="transition-all hover:bg-muted/80">
+                        <RefreshCw class="h-3.5 w-3.5 mr-1.5 {reevaluatingId === a.id ? 'animate-spin' : ''}" />
+                        {reevaluatingId === a.id ? 'Re-evaluating' : 'Re-evaluate'}
+                      </Button>
+                      <Button variant="outline" size="sm" onclick={() => { overridingId = a.id; overrideValue = a.correctedScore ?? a.rawScore; }} class="transition-all hover:bg-muted/80">
+                        <Edit2 class="h-3.5 w-3.5 mr-1.5" /> Override
+                      </Button>
+                    </div>
                   {/if}
                 </td>
               </tr>

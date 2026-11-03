@@ -7,6 +7,8 @@ import { StartupModule } from '../startup/startup.module'; // Import StartupModu
 import { MikroOrmModule } from '@mikro-orm/nestjs';
 import { ActivityLog } from '../entities/activity-log.entity';
 import { AdminGuard } from '../auth/guard';
+import { AiModule } from '../ai/ai.module';
+import { BiasReevaluationService } from './bias-reevaluation.service';
 
 @Module({
   imports: [
@@ -14,8 +16,9 @@ import { AdminGuard } from '../auth/guard';
     AuthModule, // Add AuthModule to imports
     StartupModule, // Add StartupModule to imports
     MikroOrmModule.forFeature([ActivityLog]),
+    AiModule,
   ],
   controllers: [AdminController],
-  providers: [AdminService, AdminGuard],
+  providers: [AdminService, AdminGuard, BiasReevaluationService],
 })
 export class AdminModule {}

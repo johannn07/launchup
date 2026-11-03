@@ -24,7 +24,8 @@ export type AiRunOperation =
   | 'roadblocks'
   | 'roadblocks_refine'
   | 'capsule_extract'
-  | 'analysis_summary';
+  | 'analysis_summary'
+  | 'bias_reevaluation';
 export type AiRunStatus = 'running' | 'completed' | 'failed';
 
 /**

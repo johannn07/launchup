@@ -467,6 +467,8 @@ export class AiService {
     biasFlagged?: boolean;
     biasStatus?: string;
     justification?: string | null;
+    reviewContext?: string | null;
+    reevaluationOf?: number | null;
     generationRun?: AiGenerationRun;
   }) {
     const audit = this.em.create(AiBiasAudit, {
@@ -479,6 +481,8 @@ export class AiService {
       biasFlagged: input.biasFlagged ?? false,
       biasStatus: input.biasStatus ?? 'normalized',
       justification: input.justification ?? null,
+      reviewContext: input.reviewContext ?? null,
+      reevaluationOf: input.reevaluationOf ?? null,
       generationRun: input.generationRun,
       createdAt: new Date(),
     });

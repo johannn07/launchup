@@ -381,16 +381,17 @@ Requirement note:
 
       for (let i = 0; i < aiTasks.length; i++) {
         const task = aiTasks[i];
+        const reviewContext = [
+          `Startup: ${startup.name}`,
+          `Readiness type: ${readinessType}`,
+          `RNA: ${rna.rna ?? ''}`,
+          `Task description: ${task.description}`,
+        ].join('\n');
         const reviewedTarget = await this.aiService.reviewBiasScore(ctx, {
           dimensionKey: readinessType,
           rawScore: Number(task.target_level) || targetReadinessLevel[readinessType] + 1,
           maxScore: 9,
-          context: [
-            `Startup: ${startup.name}`,
-            `Readiness type: ${readinessType}`,
-            `RNA: ${rna.rna ?? ''}`,
-            `Task description: ${task.description}`,
-          ].join('\n'),
+          context: reviewContext,
         });
 
         const targetLevel = await this.em.findOne(ReadinessLevel, {
@@ -453,6 +454,7 @@ Requirement note:
           biasFlagged: reviewedTarget.biasFlagged,
           biasStatus: biasStatusOf(reviewedTarget),
           justification: reviewedTarget.justification,
+          reviewContext,
           generationRun: ctx.run,
         });
       }
