@@ -410,7 +410,9 @@ async function bootstrap() {
 
   const orm = app.get(MikroORM);
   await retireAdminRole(orm);
-  await orm.getSchemaGenerator().updateSchema();
+  // safe: add what is missing, never drop. A server on older code sharing
+  // this database dropped newer tables and columns on boot (2026-11-03).
+  await orm.getSchemaGenerator().updateSchema({ safe: true });
   await seedWeightProfiles(orm);
   await seedTierConfigs(orm);
   await seedLocalDemoData(orm);
