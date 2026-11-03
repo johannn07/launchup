@@ -45,7 +45,8 @@ export class AiBiasAudit {
   reviewContext?: string | null;
 
   /** The audit this row re-evaluates. */
-  @Property({ nullable: true })
+  // Typed explicitly: `number | null` reflects as Object, which became varchar.
+  @Property({ type: 'integer', nullable: true })
   reevaluationOf?: number | null;
 
   @Property({ type: DateTimeType })
