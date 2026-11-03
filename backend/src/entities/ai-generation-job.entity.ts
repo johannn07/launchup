@@ -35,7 +35,8 @@ export class AiGenerationJob {
   @Property({ type: 'json' })
   payload!: Record<string, unknown>;
 
-  @Property({ nullable: true })
+  // Typed explicitly: `number | null` reflects as Object, which became varchar.
+  @Property({ type: 'integer', nullable: true })
   requestedById?: number | null;
 
   @Property({ nullable: true })
