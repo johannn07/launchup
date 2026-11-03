@@ -7,6 +7,7 @@ import {
 import { StartupRNA } from 'src/entities/rna.entity';
 import { Startup } from 'src/entities/startup.entity';
 import { AiRecommendation } from 'src/entities/ai-recommendation.entity';
+import { sourceTextOf } from './recommendation-facts';
 import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { ReadinessLevel } from 'src/entities/readiness-level.entity';
 import { StartupReadinessLevel } from 'src/entities/startup-readiness-level.entity';
@@ -236,6 +237,34 @@ export class RnaService {
     );
     console.log('AI generatedRNAs:', JSON.stringify(generatedRNAs, null, 2));
 
+    // What the prompt knew about the startup. aiAnalysisSummary is model
+    // output, so it is not a source.
+    const c = capsuleProposalInfo;
+    const capsuleFacts = [
+      c.title,
+      c.description,
+      c.problemStatement,
+      c.targetMarket,
+      c.solutionDescription,
+      c.objectives,
+      c.historicalTimeline,
+      c.competitiveAdvantageAnalysis,
+      c.members,
+      c.intellectualPropertyStatus,
+      c.curriculumVitae,
+      c.scope,
+      c.methodology,
+    ];
+    const facts = {
+      ratedLevels: Object.fromEntries(
+        startupReadinessLevels.map((srl) => [
+          srl.readinessLevel.readinessType,
+          srl.readinessLevel.level,
+        ]),
+      ),
+      sourceText: sourceTextOf(startup.name, capsuleFacts),
+    };
+
     const createdRNAs: StartupRNA[] = [];
     for (const generatedRNA of generatedRNAs) {
       const matchingReadinessLevel = targetReadinessLevels.find(
@@ -263,6 +292,7 @@ export class RnaService {
           content: newRNA.rna,
           retrievalLowConfidence: ragContext.lowConfidence,
           maxLength: RNA_MAX_LENGTH,
+          facts,
         });
 
         await this.aiService.recordAiRecommendation({

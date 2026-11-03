@@ -40,7 +40,13 @@
   const showChecks = $derived(
     role !== 'Startup' && rna.isAiGenerated && !!rna.validationStatus
   );
-  const flagged = $derived(rna.validationStatus === 'flagged');
+  // Unverifiable: contradicts a rated level or cites a figure the profile lacks.
+  const CHECK_LABEL: Record<string, string> = {
+    validated: 'Passed checks',
+    flagged: 'Flagged by checks',
+    unverifiable: 'Unverifiable'
+  };
+  const passed = $derived(rna.validationStatus === 'validated');
 </script>
 
 <div
@@ -83,9 +89,9 @@
       <div class="flex flex-wrap items-center gap-2">
         <span
           class="lu-status"
-          style="--st: var({flagged ? '--lu-flag' : '--lu-ok'})"
+          style="--st: var({passed ? '--lu-ok' : '--lu-flag'})"
         >
-          {flagged ? 'Flagged by checks' : 'Passed checks'}
+          {CHECK_LABEL[rna.validationStatus] ?? rna.validationStatus}
         </span>
         {#if rna.confidenceStatus === 'low-confidence'}
           <span class="lu-status" style="--st: var(--lu-mute)">
@@ -93,7 +99,7 @@
           </span>
         {/if}
       </div>
-      {#if flagged && rna.validationNotes}
+      {#if !passed && rna.validationNotes}
         <p class="text-[12.5px] leading-relaxed text-[#94a3b8]">
           {rna.validationNotes}
         </p>
