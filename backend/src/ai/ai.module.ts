@@ -10,6 +10,8 @@ import { EmbeddingIndexService } from './embedding-index.service';
 import { RagCorpusSeederService } from './rag-corpus-seeder.service';
 import { AiQuotaService } from './ai-quota.service';
 import { AiQuotaController } from './ai-quota.controller';
+import { AiJobQueueService } from './ai-job-queue.service';
+import { AiJobController } from './ai-job.controller';
 
 @Module({
   providers: [
@@ -22,8 +24,9 @@ import { AiQuotaController } from './ai-quota.controller';
     EmbeddingIndexService,
     RagCorpusSeederService,
     AiQuotaService,
+    AiJobQueueService,
   ],
-  controllers: [AiMetricsController, AiQuotaController],
+  controllers: [AiMetricsController, AiQuotaController, AiJobController],
   exports: [
     AiService,
     AiMetricsService,
@@ -33,6 +36,7 @@ import { AiQuotaController } from './ai-quota.controller';
     EmbeddingService,
     EmbeddingIndexService,
     RagCorpusSeederService,
+    AiJobQueueService,
   ],
 })
 export class AiModule {}

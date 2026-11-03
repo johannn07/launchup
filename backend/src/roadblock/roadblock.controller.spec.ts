@@ -9,6 +9,7 @@ function buildController() {
   const controller = new RoadblockController(
     roadblockService as any,
     {} as any,
+    { register: jest.fn(), runOrQueue: (_r: unknown, run: () => unknown) => run() } as any,
   );
   return { controller, roadblockService };
 }

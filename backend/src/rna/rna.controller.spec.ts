@@ -10,7 +10,11 @@ function buildController() {
       fn({ run: {}, config: {} }),
     ),
   };
-  const controller = new RnaController(rnaService as any, aiRunService as any);
+  const controller = new RnaController(
+    rnaService as any,
+    aiRunService as any,
+    { register: jest.fn(), runOrQueue: (_r: unknown, run: () => unknown) => run() } as any,
+  );
   return { controller, rnaService };
 }
 

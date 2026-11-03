@@ -4,7 +4,8 @@
     KanbanBoardNew,
     MembersFilter,
     ShowHideColumns,
-    AiQuotaNote
+    AiQuotaNote,
+    AiQueuedJobs
   } from '$lib/components/shared';
   import {
     getData,
@@ -17,6 +18,7 @@
   import axiosInstance from '$lib/axios.js';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import { toast } from 'svelte-sonner';
+  import { toastAiError } from '$lib/ai-errors';
   import { RoadblocksCard } from '$lib/components/startups/roadblocks';
   import { RoadblocksCreateDialog } from '$lib/components/startups/roadblocks';
   import { Loader, Sparkles, ChevronDown, Plus } from 'lucide-svelte';
@@ -420,9 +422,7 @@
 
       toast.success(`Successfully generated ${count} Roadblocks`);
     } catch (error: any) {
-      toast.error(
-        error.response?.data?.message || 'Failed to generate roadblocks'
-      );
+      toastAiError(error, 'Failed to generate roadblocks');
     } finally {
       generatingRoadblocks = false;
     }
@@ -618,6 +618,15 @@
       Generates the chosen number of roadblocks. Drafts are editable, and you
       can delete them.
     </p>
+  {/if}
+
+  {#if canEdit}
+    <AiQueuedJobs
+      startupId={Number(startupId)}
+      operation="roadblocks"
+      busy={generatingRoadblocks}
+      onDone={() => $roadblocksQueries.forEach((q) => q.refetch())}
+    />
   {/if}
 
   <div class="block w-full">

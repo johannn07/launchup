@@ -20,6 +20,7 @@ import {
   UpdateRoadblockDto,
 } from './dto/roadblock.dto';
 import { AiRunService } from '../ai/ai-run.service';
+import { AiJobQueueService } from '../ai/ai-job-queue.service';
 import { Role } from '../entities/enums/role.enum';
 
 @UseGuards(JwtGuard)
@@ -28,7 +29,15 @@ export class RoadblockController {
   constructor(
     private roadblockService: RoadblockService,
     private readonly aiRunService: AiRunService,
-  ) {}
+    private readonly jobs: AiJobQueueService,
+  ) {
+    jobs.register('roadblocks', (p, ctx) =>
+      this.roadblockService.generateRoadblocks(
+        { ...p, debug: false } as GenerateRoadblocksDto,
+        ctx,
+      ),
+    );
+  }
 
   @Get()
   async getByStartupId(@Query('startupId', ParseIntPipe) startupId: number) {
@@ -76,12 +85,14 @@ export class RoadblockController {
     // GenerateRoadblocksDto carries a real startupId, so the run can be
     // attributed at open time — unlike the *_refine route below, no
     // service-side backfill is needed.
-    return this.aiRunService.track(
-      dto.startupId,
-      'roadblocks',
-      pipelineConfig,
-      isPrivileged,
-      (ctx) => this.roadblockService.generateRoadblocks(dto, ctx),
+    const run = () =>
+      this.aiRunService.track(dto.startupId, 'roadblocks', pipelineConfig, isPrivileged, (ctx) =>
+        this.roadblockService.generateRoadblocks(dto, ctx),
+      );
+    if (dto.debug) return run();
+    return this.jobs.runOrQueue(
+      { operation: 'roadblocks', startupId: dto.startupId, payload: { ...dto }, user: req.user },
+      run,
     );
   }
 

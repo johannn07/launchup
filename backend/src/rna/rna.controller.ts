@@ -18,6 +18,7 @@ import { JwtGuard } from 'src/auth/guard';
 import { RnaService } from './rna.service';
 import { CreateStartupRnaDto, UpdateStartupRnaDto } from './dto/rna.dto';
 import { AiRunService } from '../ai/ai-run.service';
+import { AiJobQueueService } from '../ai/ai-job-queue.service';
 import { Role } from '../entities/enums/role.enum';
 import { ReadinessType } from '../entities/enums/readiness-type.enum';
 
@@ -27,7 +28,16 @@ export class RnaController {
   constructor(
     private readonly rnaService: RnaService,
     private readonly aiRunService: AiRunService,
-  ) {}
+    private readonly jobs: AiJobQueueService,
+  ) {
+    jobs.register('rna', (p, ctx) =>
+      this.rnaService.generateRNA(
+        p.startupId as number,
+        ctx,
+        p.readinessTypes as ReadinessType[] | undefined,
+      ),
+    );
+  }
 
   @Post()
   async create(@Body() dto: CreateStartupRnaDto) {
@@ -72,18 +82,24 @@ export class RnaController {
       );
 
     const isPrivileged = req.user?.role === Role.Manager;
-    return this.aiRunService.track(
-      id,
-      'rna',
-      pipelineConfig,
-      isPrivileged,
-      (ctx) =>
+    const run = () =>
+      this.aiRunService.track(id, 'rna', pipelineConfig, isPrivileged, (ctx) =>
         this.rnaService.generateRNA(
           id,
           ctx,
           selected as ReadinessType[],
           debug === 'true',
         ),
+      );
+    if (debug === 'true') return run();
+    return this.jobs.runOrQueue(
+      {
+        operation: 'rna',
+        startupId: id,
+        payload: { startupId: id, readinessTypes: selected },
+        user: req.user,
+      },
+      run,
     );
   }
 

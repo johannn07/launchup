@@ -16,6 +16,7 @@ import { JwtGuard } from 'src/auth/guard';
 import { RnsService } from './rns.service';
 import { CreateRnsDto, UpdateRnsDto, GenerateTasksDto } from './dto';
 import { AiRunService } from '../ai/ai-run.service';
+import { AiJobQueueService } from '../ai/ai-job-queue.service';
 import { Role } from '../entities/enums/role.enum';
 
 @UseGuards(JwtGuard)
@@ -24,7 +25,12 @@ export class RnsController {
   constructor(
     private rnsService: RnsService,
     private readonly aiRunService: AiRunService,
-  ) {}
+    private readonly jobs: AiJobQueueService,
+  ) {
+    jobs.register('rns', (p, ctx) =>
+      this.rnsService.generateTasks({ ...p, debug: false } as GenerateTasksDto, ctx),
+    );
+  }
 
   @Get()
   async getStartupRns(@Query('startupId', ParseIntPipe) startupId: number) {
@@ -43,12 +49,14 @@ export class RnsController {
     @Headers('x-ai-pipeline-config') pipelineConfig?: string,
   ) {
     const isPrivileged = req.user?.role === Role.Manager;
-    return this.aiRunService.track(
-      dto.startup_id,
-      'rns',
-      pipelineConfig,
-      isPrivileged,
-      (ctx) => this.rnsService.generateTasks(dto, ctx),
+    const run = () =>
+      this.aiRunService.track(dto.startup_id, 'rns', pipelineConfig, isPrivileged, (ctx) =>
+        this.rnsService.generateTasks(dto, ctx),
+      );
+    if (dto.debug) return run();
+    return this.jobs.runOrQueue(
+      { operation: 'rns', startupId: dto.startup_id, payload: { ...dto }, user: req.user },
+      run,
     );
   }
 

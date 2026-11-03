@@ -4,12 +4,14 @@
     KanbanBoardNew,
     MembersFilter,
     ShowHideColumns,
-    AiQuotaNote
+    AiQuotaNote,
+    AiQueuedJobs
   } from '$lib/components/shared';
   import { getData, getColumns, getReadiness } from '$lib/utils';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
   import { useQueries } from '@sveltestack/svelte-query';
   import { toast } from 'svelte-sonner';
+  import { toastAiError } from '$lib/ai-errors';
   import axiosInstance from '$lib/axios.js';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import {
@@ -151,7 +153,7 @@
       generatingRNS = false;
       toast.success(`Successfully generated RNS`);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to generate RNS');
+      toastAiError(error, 'Failed to generate RNS');
       generatingRNS = false;
     }
   };
@@ -614,6 +616,15 @@
       Generates next steps from the selected assessments. Drafts are editable,
       and you can delete them.
     </p>
+  {/if}
+
+  {#if canEdit}
+    <AiQueuedJobs
+      startupId={Number(startupId)}
+      operation="rns"
+      busy={generatingRNS}
+      onDone={() => $rnsQueries[1].refetch()}
+    />
   {/if}
 
   <div class="block w-full">

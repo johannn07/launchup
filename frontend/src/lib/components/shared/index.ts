@@ -17,3 +17,4 @@ export { default as EmptyState } from './empty-state.svelte';
 export { default as ErrorState } from './error-state.svelte';
 export { default as PageHeader } from './page-header.svelte';
 export { default as AiQuotaNote } from './ai-quota-note.svelte';
+export { default as AiQueuedJobs } from './ai-queued-jobs.svelte';

@@ -20,6 +20,9 @@ import {
   UpdateInitiativeDto,
 } from './dto/initiative.dto';
 import { AiRunService } from '../ai/ai-run.service';
+import { AiJobQueueService } from '../ai/ai-job-queue.service';
+import { EntityManager } from '@mikro-orm/core';
+import { Rns } from '../entities/rns.entity';
 import { Role } from '../entities/enums/role.enum';
 
 @UseGuards(JwtGuard)
@@ -28,7 +31,16 @@ export class InitiativeController {
   constructor(
     private initiativeService: InitiativeService,
     private readonly aiRunService: AiRunService,
-  ) {}
+    private readonly jobs: AiJobQueueService,
+    private readonly em: EntityManager,
+  ) {
+    jobs.register('initiatives', (p, ctx) =>
+      this.initiativeService.generateInitiatives(
+        { ...p, debug: false } as GenerateInitiativeDto,
+        ctx,
+      ),
+    );
+  }
 
   @Get()
   async getStartupInitiative(
@@ -66,12 +78,25 @@ export class InitiativeController {
     // startup is only known once InitiativeService loads the referenced Rns,
     // so the run is opened startup-less and InitiativeService.generateInitiatives
     // attributes it itself, same as the *_refine routes below.
-    return this.aiRunService.track(
-      null,
-      'initiatives',
-      pipelineConfig,
-      isPrivileged,
-      (ctx) => this.initiativeService.generateInitiatives(dto, ctx),
+    const run = () =>
+      this.aiRunService.track(null, 'initiatives', pipelineConfig, isPrivileged, (ctx) =>
+        this.initiativeService.generateInitiatives(dto, ctx),
+      );
+    if (dto.debug) return run();
+    return this.jobs.runOrQueue(
+      {
+        operation: 'initiatives',
+        // Only needed to list the job on the startup's page.
+        resolveStartupId: async () => {
+          const rnsId = dto.rnsId ?? dto.rnsIds?.[0];
+          if (!rnsId) return null;
+          const rns = await this.em.fork().findOne(Rns, { id: rnsId });
+          return rns?.startup?.id ?? null;
+        },
+        payload: { ...dto },
+        user: req.user,
+      },
+      run,
     );
   }
 

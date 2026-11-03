@@ -4,7 +4,8 @@
     KanbanBoardNew,
     MembersFilter,
     ShowHideColumns,
-    AiQuotaNote
+    AiQuotaNote,
+    AiQueuedJobs
   } from '$lib/components/shared';
   import {
     getData,
@@ -20,6 +21,7 @@
   import axiosInstance from '$lib/axios';
   import axios from 'axios';
   import { toast } from 'svelte-sonner';
+  import { toastAiError } from '$lib/ai-errors';
   import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
   import {
     InitiativeCard,
@@ -613,9 +615,7 @@
       // selectedRNS = [];
       toast.success('Generated initiatives for the selected next steps');
     } catch (error: any) {
-      toast.error(
-        error.response?.data?.message || 'Failed to generate initiatives'
-      );
+      toastAiError(error, 'Failed to generate initiatives');
     } finally {
       generatingInitiatives = false;
     }
@@ -784,6 +784,15 @@
       Generates one initiative per selected next step. Drafts are editable, and
       you can delete them.
     </p>
+  {/if}
+
+  {#if canEdit}
+    <AiQueuedJobs
+      startupId={Number(startupId)}
+      operation="initiatives"
+      busy={generatingInitiatives}
+      onDone={() => $initiativesQueries.forEach((q) => q.refetch())}
+    />
   {/if}
 
   <div class="block w-full">

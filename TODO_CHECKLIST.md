@@ -103,10 +103,10 @@ Every requirement `Team_07_LaunchUpEnhanced_SRS_v2.0` keeps but marks "Not yet i
 - [ ] **S · Expert-rating normalization baseline** (SRS 2.1, 2.5). `POST /ai/baseline/update` exists; blocked on the expert ratings themselves (§0, 4a). Current baseline is a placeholder (mean 5, std 2).
 
 **Large — new subsystems or a design change**
-- [ ] **L · Retry queue for failed AI generation** (SRS 2.2). Nothing queues today; Gemini 429/503 returns a readable 503.
+- [x] ✅ **L · Retry queue for failed AI generation** (SRS 2.2). *2026-11-03, `feat/ai-retry-queue`.* RNA, next-step, initiative and roadblock generation refused by Gemini is saved in `ai_generation_jobs`; the 503 says it is queued. `AiJobQueueService` runs one due job a minute, skips while the daily quota is exhausted, backs off 2-60 min on a busy model, waits for the reset on the daily cap, and gives up after 6 tries. Each page lists its queued jobs with Cancel. Live: a real refusal (`gemini-3.1-pro-preview`) was queued and cancelled before it ran; the running server's worker completed a no-cost job; the panel and Cancel work. A full refusal-then-success retry was not run live (it would regenerate demo data); unit-tested.
 - [ ] **L · Queue OCR uploads when the service is down** (SRS 2.4). Same missing piece as above; uploads fail with "AI busy, try again".
-- [ ] **L · Adversarial re-scoring of the six readiness dimensions** (SRS 2.1). Levels are rated by people, so there is no AI readiness score to re-prompt; this changes how scoring works.
-- [ ] **L · Canvas-region sketch recognition** (SRS 2.4). §0, 3b: no code maps canvas regions to fields, and the inherited sketch heuristic flags every real upload.
+- [x] ⏭️ **L · Adversarial re-scoring of the six readiness dimensions** (SRS 2.1). **Skipped by John, 2026-11-03.** Levels are rated by people, so bias correction applies to AI-proposed target levels and risk numbers only. Record as a design deviation in the SRS.
+- [x] ⏭️ **L · Canvas-region sketch recognition** (SRS 2.4). **Skipped by John, 2026-11-03**; stays descoped per §0, 3b (no code maps canvas regions to fields, and the inherited sketch heuristic flags every real upload).
 
 **Measurements, not code**
 - [ ] **Concurrent-evaluation performance** (SRS 3.4). Never measured.

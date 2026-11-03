@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { AiQuotaNote } from '$lib/components/shared';
+  import { AiQuotaNote, AiQueuedJobs } from '$lib/components/shared';
+  import { toastAiError } from '$lib/ai-errors';
   import { useQueriesState } from '$lib/stores/useQueriesState.svelte.js';
   import { getData } from '$lib/utils';
   import { useQueries } from '@sveltestack/svelte-query';
@@ -76,8 +77,7 @@
       $rnaQueries[1].refetch();
     } catch (error: any) {
       console.error(error);
-      const msg = error.response?.data?.message || 'Failed to generate RNA';
-      toast.error(msg);
+      toastAiError(error, 'Failed to generate RNA');
     } finally {
       generatingRNA = false;
     }
@@ -343,6 +343,12 @@
         </DropdownMenu.Root>
       </div>
     </div>
+    <AiQueuedJobs
+      startupId={Number(startupId)}
+      operation="rna"
+      busy={generatingRNA}
+      onDone={() => $rnaQueries[1].refetch()}
+    />
   {/if}
 
   {#if $rnaQueries[1].data.length === 0}
