@@ -34,6 +34,13 @@
     Investment: Wallet
   };
   const Icon = $derived(dimensionIcon[rna.readinessLevel.readinessType] ?? Cpu);
+
+  // SRS 2.2. The checks ran on the AI draft, so they stop applying once a
+  // Mentor approves or edits it; founders never see them.
+  const showChecks = $derived(
+    role !== 'Startup' && rna.isAiGenerated && !!rna.validationStatus
+  );
+  const flagged = $derived(rna.validationStatus === 'flagged');
 </script>
 
 <div
@@ -70,6 +77,29 @@
   <p class="flex-1 break-words text-[13.5px] leading-relaxed text-[#94a3b8]">
     {previewText(rna.rna)}
   </p>
+
+  {#if showChecks}
+    <div class="space-y-1.5">
+      <div class="flex flex-wrap items-center gap-2">
+        <span
+          class="lu-status"
+          style="--st: var({flagged ? '--lu-flag' : '--lu-ok'})"
+        >
+          {flagged ? 'Flagged by checks' : 'Passed checks'}
+        </span>
+        {#if rna.confidenceStatus === 'low-confidence'}
+          <span class="lu-status" style="--st: var(--lu-mute)">
+            Low retrieval confidence
+          </span>
+        {/if}
+      </div>
+      {#if flagged && rna.validationNotes}
+        <p class="text-[12.5px] leading-relaxed text-[#94a3b8]">
+          {rna.validationNotes}
+        </p>
+      {/if}
+    </div>
+  {/if}
 
   <div
     class="flex items-center justify-between border-t border-[#17213a] pt-3 text-[12.5px] text-[#94a3b8]"
