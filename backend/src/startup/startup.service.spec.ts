@@ -164,15 +164,36 @@ describe('StartupService.approveApplicant — SO 4.4 acknowledgement gate', () =
     expect(logs[0].details).toContain('42');
   });
 
-  it('approves a balanced summary with no acknowledgement and logs nothing', async () => {
-    const { service, startup, logs } = buildForApproval(BALANCED);
+  it('approves a balanced summary with no acknowledgement', async () => {
+    const { service, startup } = buildForApproval(BALANCED);
 
     await service.approveApplicant(42);
 
     expect(startup.qualificationStatus).toBe(QualificationStatus.QUALIFIED);
-    // The log means "approved against a warning". Logging every approval would
-    // dilute it into an access log.
-    expect(logs).toHaveLength(0);
+  });
+
+  // SRS 2.0, 1.3: every approval is logged with the Manager and the verdict.
+  it('logs a balanced approval with who approved it and the verdict', async () => {
+    const { service, logs } = buildForApproval(BALANCED);
+
+    await service.approveApplicant(42, { actor: 'manager@launchup.local' });
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0].actor).toBe('manager@launchup.local');
+    expect(logs[0].details).toContain('42');
+    expect(logs[0].details).toContain('balanced');
+  });
+
+  // The override must stay findable among routine approvals in the feed.
+  it('words a flagged override differently from a routine approval', async () => {
+    const flagged = buildForApproval(LENIENT);
+    const routine = buildForApproval(BALANCED);
+
+    await flagged.service.approveApplicant(42, { acknowledged: true });
+    await routine.service.approveApplicant(42);
+
+    expect(flagged.logs[0].details).toContain('despite');
+    expect(routine.logs[0].details).not.toContain('despite');
   });
 
   // The one defect in this feature that no mock could catch, pinned at the only
