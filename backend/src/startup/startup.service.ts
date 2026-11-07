@@ -1117,18 +1117,18 @@ export class StartupService {
 
     startup.qualificationStatus = QualificationStatus.QUALIFIED;
 
-    // Only flagged approvals are logged. Logging every approval would turn the
-    // record of "approved against a warning" into an access log.
-    if (flagged) {
-      this.em.create(ActivityLog, {
-        action: 'Manager',
-        actor: opts.actor,
-        details:
-          `Approved startup ${startupId} despite a predominantly-positive analysis summary ` +
-          `(verdict ${verdict?.source}${verdict?.runId ? `, run ${verdict.runId}` : ''}).`,
-        createdAt: new Date(),
-      });
-    }
+    // SRS 2.0, 1.3: every approval is logged with the Manager and the verdict.
+    // An override keeps its own wording so it stays findable in the feed.
+    const run = verdict?.runId ? `, run ${verdict.runId}` : '';
+    this.em.create(ActivityLog, {
+      action: 'Manager',
+      actor: opts.actor,
+      details: flagged
+        ? `Approved startup ${startupId} despite a predominantly-positive analysis summary ` +
+          `(verdict ${verdict?.source}${run}).`
+        : `Approved startup ${startupId} (summary verdict ${verdict?.status ?? 'none'}${run}).`,
+      createdAt: new Date(),
+    });
 
     await this.em.flush();
     return { message: `Startup with ID ${startupId} has been approved.` };
