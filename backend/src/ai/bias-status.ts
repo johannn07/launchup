@@ -4,3 +4,6 @@ export const biasStatusOf = (r: {
   reviewFailed: boolean;
 }) =>
   r.reviewFailed ? 'bias-unverified' : r.biasFlagged ? 'flagged' : 'normalized';
+
+// A Manager replaced the corrected score; the reason is in overrideJustification.
+export const BIAS_STATUS_OVERRIDDEN = 'overridden';

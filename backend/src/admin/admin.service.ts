@@ -17,6 +17,7 @@ import { UpdateStartupDto } from './dto/update-startup.dto'; // Import UpdateSta
 import { EntityManager } from '@mikro-orm/core';
 import { ActivityLog } from '../entities/activity-log.entity';
 import { AiBiasAudit } from '../entities/ai-bias-audit.entity';
+import { BIAS_STATUS_OVERRIDDEN } from '../ai/bias-status';
 import { OcrDocument } from '../entities/ocr-document.entity';
 import { TierConfig } from '../entities/tier-config.entity';
 import { Role } from '../entities/enums/role.enum';
@@ -264,16 +265,28 @@ export class AdminService {
     return this.em.find(AiBiasAudit, {}, { orderBy: { createdAt: 'DESC' }, populate: ['startup'] });
   }
 
-  async overrideBiasAudit(id: number, payload: { correctedScore?: number; biasFlagged?: boolean; biasStatus?: string; justification?: string }) {
+  async overrideBiasAudit(
+    id: number,
+    payload: { correctedScore?: number; biasFlagged?: boolean; biasStatus?: string; justification?: string },
+    actor = 'admin',
+  ) {
+    // SRS 2.1: an override without a reason leaves no audit trail.
+    const reason = typeof payload.justification === 'string' ? payload.justification.trim() : '';
+    if (!reason) throw new BadRequestException('A justification is required to override a score');
     // The admin page swaps this response into its list, which reads startup.id.
     const audit = await this.em.findOne(AiBiasAudit, { id }, { populate: ['startup'] });
     if (!audit) throw new NotFoundException(`Audit with ID ${id} not found`);
+    const previous = audit.correctedScore;
     if (payload.correctedScore !== undefined) audit.correctedScore = payload.correctedScore;
-    if (payload.biasFlagged !== undefined) audit.biasFlagged = payload.biasFlagged;
-    if (payload.biasStatus !== undefined) audit.biasStatus = payload.biasStatus;
-    if (payload.justification !== undefined) audit.justification = payload.justification;
+    audit.biasFlagged = payload.biasFlagged ?? false;
+    audit.biasStatus = payload.biasStatus ?? BIAS_STATUS_OVERRIDDEN;
+    audit.overrideJustification = reason;
     await this.em.flush();
-    await this.log('Admin', `Overrode bias audit ${id}`, 'admin');
+    await this.log(
+      'Admin',
+      `Overrode bias audit ${id} (${audit.dimensionKey}): ${previous} to ${audit.correctedScore}. Reason: ${reason}`,
+      actor,
+    );
     return audit;
   }
 

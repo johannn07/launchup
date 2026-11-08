@@ -40,6 +40,10 @@ export class AiBiasAudit {
   @Property({ type: 'text', nullable: true })
   justification?: string | null;
 
+  /** The Manager's reason for overriding; `justification` keeps the reviewer's own. */
+  @Property({ type: 'text', nullable: true })
+  overrideJustification?: string | null;
+
   /** What the review saw, so a Manager can request a re-evaluation (SRS 2.1). */
   @Property({ type: 'text', nullable: true })
   reviewContext?: string | null;

@@ -2,14 +2,21 @@
   import { Button } from '$lib/components/ui/button';
   import { Badge } from '$lib/components/ui/badge';
   import { Input } from '$lib/components/ui/input';
-  import { ShieldAlert, ShieldCheck, ShieldQuestion, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX, RefreshCw } from 'lucide-svelte';
+  import { ShieldAlert, ShieldCheck, ShieldQuestion, ArrowDownRight, ArrowUpRight, Database, Edit2, Check, X, SearchX, RefreshCw, UserCheck } from 'lucide-svelte';
   import { toast } from 'svelte-sonner';
 
   let { data }: { data: { audits: any[]; access: string } } = $props();
   let audits = $state(data.audits ?? []);
   let overridingId: number | null = $state(null);
   let overrideValue: number | null = $state(null);
+  let overrideReason = $state('');
   let overriding = $state(false);
+
+  function closeOverride() {
+    overridingId = null;
+    overrideValue = null;
+    overrideReason = '';
+  }
   let reevaluatingId: number | null = $state(null);
 
   // SRS 2.1. Adds a new audit row; the original stays as the record of what ran.
@@ -31,23 +38,24 @@
     }
   }
 
+  // SRS 2.1: the Manager overrides a corrected score and enters a justification.
   async function overrideAudit(id: number) {
-    if (overrideValue === null) return;
+    const justification = overrideReason.trim();
+    if (overrideValue === null || !justification) return;
     overriding = true;
     try {
       const res = await fetch(`/api/admin/ai/bias-audits/override/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.access}` },
-        body: JSON.stringify({ correctedScore: overrideValue })
+        body: JSON.stringify({ correctedScore: overrideValue, justification })
       });
-      if (res.ok) {
-        const updated = await res.json();
-        audits = audits.map(a => (a.id === id ? updated : a));
-        overridingId = null;
-        overrideValue = null;
-      }
-    } catch (e) {
-      // ignore
+      if (!res.ok) throw new Error(String(res.status));
+      const updated = await res.json();
+      audits = audits.map(a => (a.id === id ? updated : a));
+      closeOverride();
+      toast.success(`Audit #${id} overridden`);
+    } catch {
+      toast.error('Override was not saved. Try again.');
     } finally {
       overriding = false;
     }
@@ -120,12 +128,21 @@
                       <ArrowUpRight class="h-4 w-4 text-green-500" />
                     {/if}
                   </div>
+                  {#if a.overrideJustification}
+                    <p class="mt-1 max-w-[28ch] text-xs font-normal text-muted-foreground">
+                      Override reason: {a.overrideJustification}
+                    </p>
+                  {/if}
                 </td>
                 <td class="px-6 py-5">
                   <!-- SRS 2.1: the model review never ran, so this score needs a person. -->
                   {#if a.biasStatus === 'bias-unverified'}
                     <Badge variant="outline" class="flex w-fit items-center gap-1.5 text-foreground border-border bg-muted/40" title="The model review did not complete. Check this score manually.">
                       <ShieldQuestion class="h-3 w-3" /> Unverified
+                    </Badge>
+                  {:else if a.biasStatus === 'overridden'}
+                    <Badge variant="outline" class="flex w-fit items-center gap-1.5 text-foreground border-border bg-muted/40" title="A Manager replaced the corrected score.">
+                      <UserCheck class="h-3 w-3" /> Overridden
                     </Badge>
                   {:else if a.biasFlagged}
                     <Badge variant="destructive" class="flex w-fit items-center gap-1.5 bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20 shadow-none">
@@ -139,16 +156,23 @@
                 </td>
                 <td class="px-6 py-5 text-right">
                   {#if overridingId === a.id}
-                    <div class="flex items-center justify-end gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
-                      <Input type="number" bind:value={overrideValue} class="w-20 h-9 text-center bg-background/50" />
-                      <Button size="sm" onclick={() => overrideAudit(a.id)} disabled={overriding} class="h-9 w-20 shadow-sm transition-all">
+                    <div class="flex items-end justify-end gap-2 animate-in fade-in slide-in-from-right-2 duration-200">
+                      <div class="flex flex-col gap-1 text-left">
+                        <label for="override-score-{a.id}" class="text-xs font-medium text-muted-foreground">Score</label>
+                        <Input id="override-score-{a.id}" type="number" bind:value={overrideValue} class="w-20 h-9 text-center bg-background/50" />
+                      </div>
+                      <div class="flex flex-col gap-1 text-left">
+                        <label for="override-reason-{a.id}" class="text-xs font-medium text-muted-foreground">Justification (required)</label>
+                        <Input id="override-reason-{a.id}" type="text" bind:value={overrideReason} maxlength={500} class="w-64 h-9 bg-background/50" />
+                      </div>
+                      <Button size="sm" onclick={() => overrideAudit(a.id)} disabled={overriding || overrideValue === null || !overrideReason.trim()} class="h-9 w-20 shadow-sm transition-all">
                         {#if overriding}
                           <span class="animate-pulse">...</span>
                         {:else}
                           <Check class="h-4 w-4 mr-1.5" /> Save
                         {/if}
                       </Button>
-                      <Button size="icon" variant="ghost" class="h-9 w-9 text-muted-foreground hover:text-destructive" onclick={() => { overridingId = null; overrideValue = null; }} disabled={overriding}>
+                      <Button size="icon" variant="ghost" class="h-9 w-9 text-muted-foreground hover:text-destructive" onclick={closeOverride} disabled={overriding} aria-label="Cancel override">
                         <X class="h-4 w-4" />
                       </Button>
                     </div>
@@ -158,7 +182,7 @@
                         <RefreshCw class="h-3.5 w-3.5 mr-1.5 {reevaluatingId === a.id ? 'animate-spin' : ''}" />
                         {reevaluatingId === a.id ? 'Re-evaluating' : 'Re-evaluate'}
                       </Button>
-                      <Button variant="outline" size="sm" onclick={() => { overridingId = a.id; overrideValue = a.correctedScore ?? a.rawScore; }} class="transition-all hover:bg-muted/80">
+                      <Button variant="outline" size="sm" onclick={() => { overridingId = a.id; overrideValue = a.correctedScore ?? a.rawScore; overrideReason = ''; }} class="transition-all hover:bg-muted/80">
                         <Edit2 class="h-3.5 w-3.5 mr-1.5" /> Override
                       </Button>
                     </div>
