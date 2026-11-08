@@ -10,6 +10,10 @@
     startup?.uratQuestionAnswers
       ?.filter((answer: any) => answer.uratQuestion.readinessType === 'Organizational')
       ?.sort((a: any, b: any) => a.uratQuestion.id - b.uratQuestion.id) ?? [];
+
+  // Seeded from saved answers; bound to the textarea so the counter tracks typing.
+  let responses: string[] = [];
+  $: responses = (question ?? []).map((_: any, i: number) => organizationalAnswers[i]?.response ?? '');
 </script>
 
 <div class="flex-1 overflow-auto px-1" class:hidden={currentStep !== stepName}>
@@ -31,12 +35,12 @@
             placeholder="Provide a detailed answer here..."
             id="org_{i}"
             name="organizational{i}"
-            value={organizationalAnswers[i]?.response ?? ''}
+            bind:value={responses[i]}
             class="min-h-[100px] rounded-xl border-slate-200/70 bg-white/80 resize-none p-4 text-sm shadow-inner focus-visible:ring-2 focus-visible:ring-[#6366f1] focus-visible:border-transparent dark:border-white/10 dark:bg-black/20 dark:focus-visible:bg-black/40 transition-colors"
           />
           <div class="mt-2 flex items-center justify-end">
             <span class="text-[11px] font-medium text-slate-400 dark:text-white/40 bg-slate-100 dark:bg-white/5 px-2 py-0.5 rounded-md">
-              {(organizationalAnswers[i]?.response ?? '').length} chars
+              {(responses[i] ?? '').length} chars
             </span>
           </div>
           <input type="hidden" name="organizational{i}id" value={`${q.id}`} />
