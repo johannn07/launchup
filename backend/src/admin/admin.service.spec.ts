@@ -71,18 +71,36 @@ describe('AdminService.deleteUser', () => {
 // The page swaps the response into its list, so an unpopulated startup would
 // serialize as a bare id and render as "Startup #Unknown".
 describe('AdminService.overrideBiasAudit', () => {
-  it('returns the audit with its startup populated', async () => {
-    const audit = { id: 24, correctedScore: 5, startup: { id: 1 } };
+  function overrideService() {
+    const audit: any = {
+      id: 24,
+      dimensionKey: 'Market',
+      correctedScore: 5,
+      biasFlagged: true,
+      biasStatus: 'flagged',
+      justification: 'Reviewer: claims lack evidence.',
+      startup: { id: 1 },
+    };
     const findOne = jest.fn(async () => audit);
+    const flush = jest.fn(async () => undefined);
+    const create = jest.fn((_entity: unknown, data: any) => data);
     const em = {
       findOne,
-      flush: jest.fn(async () => undefined),
-      create: jest.fn((_entity: unknown, data: any) => data),
+      flush,
+      create,
       persistAndFlush: jest.fn(async () => undefined),
     } as unknown as EntityManager;
     const service = new AdminService({} as any, {} as any, {} as any, em);
+    return { service, audit, findOne, flush, create };
+  }
 
-    const result = await service.overrideBiasAudit(24, { correctedScore: 3 });
+  it('returns the audit with its startup populated', async () => {
+    const { service, findOne } = overrideService();
+
+    const result = await service.overrideBiasAudit(24, {
+      correctedScore: 3,
+      justification: 'Pilot contract verified by phone.',
+    });
 
     expect(findOne).toHaveBeenCalledWith(
       expect.anything(),
@@ -90,6 +108,54 @@ describe('AdminService.overrideBiasAudit', () => {
       expect.objectContaining({ populate: ['startup'] }),
     );
     expect(result.correctedScore).toBe(3);
+  });
+
+  // SRS 2.1: the Manager overrides a score and enters a justification.
+  it.each([undefined, '', '   '])(
+    'rejects an override with justification %p',
+    async (justification) => {
+      const { service, audit, flush } = overrideService();
+
+      await expect(
+        service.overrideBiasAudit(24, { correctedScore: 3, justification }),
+      ).rejects.toThrow(BadRequestException);
+      expect(flush).not.toHaveBeenCalled();
+      expect(audit.correctedScore).toBe(5);
+    },
+  );
+
+  // Otherwise the audit still reads Flagged after a person has resolved it.
+  it('marks the audit overridden and keeps the reviewer justification', async () => {
+    const { service, audit } = overrideService();
+
+    await service.overrideBiasAudit(24, {
+      correctedScore: 3,
+      justification: '  Pilot contract verified by phone.  ',
+    });
+
+    expect(audit.biasStatus).toBe('overridden');
+    expect(audit.biasFlagged).toBe(false);
+    expect(audit.overrideJustification).toBe('Pilot contract verified by phone.');
+    expect(audit.justification).toBe('Reviewer: claims lack evidence.');
+  });
+
+  it('logs the score change, the reason and who made it', async () => {
+    const { service, create } = overrideService();
+
+    await service.overrideBiasAudit(
+      24,
+      { correctedScore: 3, justification: 'Pilot contract verified by phone.' },
+      'manager@launchup.local',
+    );
+
+    expect(create).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        details:
+          'Overrode bias audit 24 (Market): 5 to 3. Reason: Pilot contract verified by phone.',
+        actor: 'manager@launchup.local',
+      }),
+    );
   });
 });
 

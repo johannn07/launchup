@@ -153,14 +153,18 @@ export class AdminController {
   }
 
   @Post('ai/bias-audits/override/:id')
-  async overrideBiasAudit(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+  async overrideBiasAudit(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+    @GetUser() user: { email?: string },
+  ) {
     const payload = {
       correctedScore: body.correctedScore !== undefined ? Number(body.correctedScore) : undefined,
       biasFlagged: typeof body.biasFlagged === 'boolean' ? body.biasFlagged : undefined,
       biasStatus: body.biasStatus,
       justification: body.justification,
     };
-    return this.adminService.overrideBiasAudit(id, payload);
+    return this.adminService.overrideBiasAudit(id, payload, user?.email ?? 'admin');
   }
 
   // Costs one or two Gemini calls against the daily quota.
