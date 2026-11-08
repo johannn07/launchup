@@ -1,6 +1,9 @@
 import { Sector } from 'src/entities/enums/sector.enum';
 import { BusinessModel } from 'src/entities/enums/business-model.enum';
 
+// Stored keys that predate the canonical names: team = Acceptance,
+// product = Technology, traction = Organizational, funding = Investment.
+// Labels and order live in readiness.service.ts.
 export type DimensionKey =
   | 'team'
   | 'market'

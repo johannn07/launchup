@@ -21,44 +21,39 @@ type ReadinessDimension = {
   rationale: string;
 };
 
-const READINESS_DIMENSIONS: ReadinessDimension[] = [
-  {
-    key: 'team',
-    label: 'Team',
-    readinessType: ReadinessType.A,
-    rationale: 'Team readiness is weighted highest because execution quality is the main multiplier for the rest of the startup.',
-  },
-  {
-    key: 'market',
-    label: 'Market',
-    readinessType: ReadinessType.M,
-    rationale: 'Market readiness is critical because clear demand is the strongest proof that the opportunity is worth pursuing.',
-  },
-  {
+// Keys predate the canonical names and are stored in weight_profiles.weights
+// and readiness_gaps.dimension_key, so they stay; the label is the dimension.
+const DIMENSION_BY_TYPE: Record<ReadinessType, Pick<ReadinessDimension, 'key' | 'rationale'>> = {
+  [ReadinessType.T]: {
     key: 'product',
-    label: 'Product',
-    readinessType: ReadinessType.T,
-    rationale: 'Product readiness is important, but it can move quickly once the team and market are clear.',
+    rationale: 'Technology readiness tracks how far the core technology has moved from concept to a proven, working system. A working product is necessary, but it does not show that anyone will buy or use it.',
   },
-  {
-    key: 'traction',
-    label: 'Traction',
-    readinessType: ReadinessType.O,
-    rationale: 'Traction differentiates the startup stage and validates momentum, but it should not overshadow fit signals.',
+  [ReadinessType.M]: {
+    key: 'market',
+    rationale: 'Market readiness tracks evidence of demand: a defined customer, a sized opportunity and validated willingness to pay. Clear demand is the strongest proof that the opportunity is worth pursuing.',
   },
-  {
+  [ReadinessType.R]: {
     key: 'regulatory',
-    label: 'Regulatory',
-    readinessType: ReadinessType.R,
     rationale: 'Regulatory readiness gates market entry in licensed sectors, so it carries more weight for health and finance startups than elsewhere.',
   },
-  {
-    key: 'funding',
-    label: 'Funding',
-    readinessType: ReadinessType.I,
-    rationale: 'Funding supports execution capacity, but it is treated as a supporting signal rather than the core score.',
+  [ReadinessType.A]: {
+    key: 'team',
+    rationale: 'Acceptance readiness tracks whether target users and stakeholders take up the solution, through pilots, repeat use and endorsements. A product nobody adopts cannot progress on the other dimensions.',
   },
-];
+  [ReadinessType.O]: {
+    key: 'traction',
+    rationale: 'Organizational readiness tracks whether the team, processes and partnerships can deliver and scale the solution. It decides whether progress on the other dimensions can be sustained.',
+  },
+  [ReadinessType.I]: {
+    key: 'funding',
+    rationale: 'Investment readiness tracks financial position and preparedness to raise capital. It is treated as a supporting signal, because funding tends to follow progress on the other dimensions.',
+  },
+};
+
+// Canonical order and names come from ReadinessType, not a restated list.
+const READINESS_DIMENSIONS: ReadinessDimension[] = Object.values(ReadinessType).map(
+  (readinessType) => ({ readinessType, label: readinessType, ...DIMENSION_BY_TYPE[readinessType] }),
+);
 
 export type ReadinessScoreResponse = {
   compositeScore: number;
