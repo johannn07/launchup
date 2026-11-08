@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 
@@ -168,6 +169,11 @@ export class StartupApplicationDto {
   @IsString()
   @IsOptional()
   universityName?: string;
+
+  // sha256 from /parse-capsule-proposal; links that upload to the startup.
+  @Matches(/^[0-9a-f]{64}$/)
+  @IsOptional()
+  ocrDocumentHash?: string;
 }
 
 export class WaitlistStartupDto {

@@ -113,6 +113,8 @@ export const actions: Actions = {
         links: formData.get('links') || '',
         groupName: formData.get('group_name') || '',
         universityName: formData.get('university_name') || '',
+        // Absent when the proposal was typed in; undefined drops out of the JSON.
+        ocrDocumentHash: text('ocrDocumentHash') || undefined
       };
 
       response = await fetch(`${PUBLIC_API_URL}/startups/apply`, {

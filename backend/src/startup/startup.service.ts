@@ -222,6 +222,7 @@ export class StartupService {
       await this.em.flush();
 
       await this.createStartupProposal(startup, dto);
+      await this.linkOcrDocument(startup, dto.ocrDocumentHash);
 
       if (startup.capsuleProposal) {
         await this.aiService.recordRagContext(
@@ -235,8 +236,8 @@ export class StartupService {
 
   /**
    * One row per distinct upload. Re-parsing the same bytes refreshes that row
-   * instead of leaving another orphan behind — nothing links these to a startup
-   * at parse time, since parsing happens before the startup exists.
+   * instead of leaving another orphan behind. Parsing happens before the
+   * startup exists, so the link is made on submit by linkOcrDocument.
    */
   private async upsertOcrDocument(
     contentHash: string,
@@ -255,6 +256,19 @@ export class StartupService {
     const created = this.em.create(OcrDocument, { ...data, contentHash });
     await this.em.persistAndFlush(created);
     return created;
+  }
+
+  /**
+   * Attaches the parsed upload to the startup it was submitted with, so
+   * retention pruning keeps it. A row already linked elsewhere stays put:
+   * the hash proves someone had the bytes, not that they own the record.
+   */
+  private async linkOcrDocument(startup: Startup, contentHash?: string) {
+    if (!contentHash) return;
+    const doc = await this.em.findOne(OcrDocument, { contentHash });
+    if (!doc || doc.startup) return;
+    doc.startup = startup;
+    await this.em.flush();
   }
 
   async parseCapsuleProposal(file: Express.Multer.File, ctx: AiRunContext) {
@@ -308,6 +322,8 @@ export class StartupService {
         legibilityReason: legibility.reason,
         imageWidth: legibility.width,
         imageHeight: legibility.height,
+        // Sent back on submit so the upload can be linked to the startup.
+        documentHash: contentHash,
       };
     }
 
@@ -409,6 +425,8 @@ export class StartupService {
           legibilityReason: err instanceof Error ? err.message : String(err),
           imageWidth: null,
           imageHeight: null,
+          // Sent back on submit so the upload can be linked to the startup.
+          documentHash: contentHash,
         };
       }
 
@@ -502,6 +520,8 @@ export class StartupService {
       legibilityReason: legibility.reason,
       imageWidth: legibility.width,
       imageHeight: legibility.height,
+      // Sent back on submit so the upload can be linked to the startup.
+      documentHash: contentHash,
     };
   }
   private async createStartupProposal(
@@ -1572,6 +1592,7 @@ export class StartupService {
     // Editing the proposal is a reapplication, so it re-enters review.
     startup.qualificationStatus = QualificationStatus.PENDING;
 
+    await this.linkOcrDocument(startup, dto.ocrDocumentHash);
     await this.afterProposalEdit(startup, proposal);
 
     return startup;
@@ -1624,6 +1645,9 @@ export class StartupService {
 
     const proposal = startup.capsuleProposal;
     const before = this.proposalText(proposal);
+
+    // Before the no-change check: an upload can match the saved text exactly.
+    await this.linkOcrDocument(startup, dto.ocrDocumentHash);
 
     if (dto.title !== undefined) proposal.title = dto.title;
     if (dto.description !== undefined) proposal.description = dto.description;
