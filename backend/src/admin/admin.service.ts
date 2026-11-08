@@ -14,7 +14,7 @@ import { StartupService } from '../startup/startup.service'; // Import StartupSe
 import { Startup } from '../entities/startup.entity'; // Import Startup entity
 import { CreateStartupDto } from './dto/create-startup.dto'; // Import CreateStartupDto
 import { UpdateStartupDto } from './dto/update-startup.dto'; // Import UpdateStartupDto
-import { EntityManager } from '@mikro-orm/core';
+import { EntityManager, wrap } from '@mikro-orm/core';
 import { ActivityLog } from '../entities/activity-log.entity';
 import { AiBiasAudit } from '../entities/ai-bias-audit.entity';
 import { BIAS_STATUS_OVERRIDDEN } from '../ai/bias-status';
@@ -290,8 +290,20 @@ export class AdminService {
     return audit;
   }
 
-  async getOcrDocuments(): Promise<OcrDocument[]> {
-    return this.em.find(OcrDocument, {}, { orderBy: { createdAt: 'DESC' } });
+  async getOcrDocuments() {
+    const docs = await this.em.find(
+      OcrDocument,
+      {},
+      { orderBy: { createdAt: 'DESC' }, populate: ['startup'] },
+    );
+    // Name only: the page needs to say whose document it is, not the whole startup.
+    return docs.map((doc) => {
+      const { startup: _startup, ...rest } = wrap(doc).toObject();
+      return {
+        ...rest,
+        startup: doc.startup ? { id: doc.startup.id, name: doc.startup.name } : null,
+      };
+    });
   }
 
   async flagOcrDocument(id: number, payload: { sketchDetected?: boolean; sketchConfidence?: number; legibilityStatus?: string; note?: string }) {

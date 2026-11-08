@@ -54,3 +54,46 @@ describe('OcrRetentionService.prune', () => {
     expect(em.nativeDelete).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Applies the where clause to rows instead of recording it, so the tests below
+ * show which documents survive rather than which filter was passed.
+ */
+function buildWithRows(rows: Array<{ id: number; startup: unknown; createdAt: Date }>) {
+  const table = [...rows];
+  const em = {
+    nativeDelete: jest.fn(async (_entity: unknown, where: any) => {
+      const doomed = table.filter(
+        (row) =>
+          (where.startup === null ? row.startup == null : true) &&
+          row.createdAt < where.createdAt.$lt,
+      );
+      doomed.forEach((row) => table.splice(table.indexOf(row), 1));
+      return doomed.length;
+    }),
+  };
+  const config = { get: jest.fn(() => '30') };
+  return { service: new OcrRetentionService(em as never, config as never), table };
+}
+
+describe('OcrRetentionService.prune — linked documents (KD-17)', () => {
+  const now = new Date('2026-09-06T00:00:00.000Z');
+  const old = new Date('2026-01-01T00:00:00.000Z');
+
+  it('keeps an old document linked to a startup', async () => {
+    const { service, table } = buildWithRows([{ id: 1, startup: { id: 42 }, createdAt: old }]);
+
+    await expect(service.prune(now)).resolves.toBe(0);
+    expect(table.map((row) => row.id)).toEqual([1]);
+  });
+
+  it('deletes an old document never linked to an application', async () => {
+    const { service, table } = buildWithRows([
+      { id: 1, startup: { id: 42 }, createdAt: old },
+      { id: 2, startup: null, createdAt: old },
+    ]);
+
+    await expect(service.prune(now)).resolves.toBe(1);
+    expect(table.map((row) => row.id)).toEqual([1]);
+  });
+});

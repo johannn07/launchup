@@ -827,3 +827,78 @@ describe('StartupService.parseCapsuleProposal — duplicate uploads', () => {
     );
   });
 });
+
+/**
+ * Parsing runs before the startup exists, so nothing linked an upload to its
+ * application and retention pruned every one of them (KD-17).
+ */
+describe('StartupService — linking the uploaded document on submit', () => {
+  const HASH = 'a'.repeat(64);
+  const summary: StartupAnalysisSummary = {
+    summary: 'S.',
+    unmetCriteria: [],
+    criticalRisks: [],
+    source: 'schema',
+  };
+
+  function buildWithDoc(doc: any) {
+    const built = build(summary);
+    built.em.findOne.mockImplementation(async (entity: unknown, where: any) => {
+      if (entity === OcrDocument) return where?.contentHash === doc?.contentHash ? doc : null;
+      return entity === Startup ? built.startup : { id: 7 };
+    });
+    return built;
+  }
+
+  it('returns the content hash from the parse so the form can send it back', async () => {
+    const { service } = buildOcr({ tesseractText: 'noise', visionJson: VISION_JSON });
+
+    const parsed = await service.parseCapsuleProposal(imageFile, ctx);
+
+    expect(parsed.documentHash).toBe(
+      createHash('sha256').update(imageFile.buffer).digest('hex'),
+    );
+  });
+
+  it('links the uploaded document to the new startup', async () => {
+    const doc: any = { id: 3, contentHash: HASH, startup: undefined };
+    const { service, startup } = buildWithDoc(doc);
+
+    await service.create({ ...dto, ocrDocumentHash: HASH }, 7);
+
+    expect(doc.startup).toBe(startup);
+  });
+
+  it('leaves a typed-in application without a document', async () => {
+    const doc: any = { id: 3, contentHash: HASH, startup: undefined };
+    const { service, em } = buildWithDoc(doc);
+
+    await service.create(dto, 7);
+
+    expect(doc.startup).toBeUndefined();
+    expect(em.findOne).not.toHaveBeenCalledWith(OcrDocument, expect.anything());
+  });
+
+  // The same bytes uploaded by a second founder must not move the first's record.
+  it('does not take a document already linked to another startup', async () => {
+    const other = { id: 99 };
+    const doc: any = { id: 3, contentHash: HASH, startup: other };
+    const { service } = buildWithDoc(doc);
+
+    await service.create({ ...dto, ocrDocumentHash: HASH }, 7);
+
+    expect(doc.startup).toBe(other);
+  });
+
+  it('links a new version uploaded to an existing startup, even when its text is unchanged', async () => {
+    const { service, startup, em } = buildForEdit(QualificationStatus.QUALIFIED);
+    const doc: any = { id: 4, contentHash: HASH, startup: undefined };
+    em.findOne.mockImplementation(async (entity: unknown) =>
+      entity === OcrDocument ? doc : startup,
+    );
+
+    await service.updateCapsuleProposalFields(42, { title: 'PondSense', ocrDocumentHash: HASH });
+
+    expect(doc.startup).toBe(startup);
+  });
+});

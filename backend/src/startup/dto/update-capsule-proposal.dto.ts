@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, Matches } from 'class-validator';
 
 export class UpdateCapsuleProposalDto {
   @IsString()
@@ -32,4 +32,9 @@ export class UpdateCapsuleProposalDto {
   @IsString()
   @IsOptional()
   methodology?: string;
+
+  // sha256 from /parse-capsule-proposal; links that upload to the startup.
+  @Matches(/^[0-9a-f]{64}$/)
+  @IsOptional()
+  ocrDocumentHash?: string;
 }

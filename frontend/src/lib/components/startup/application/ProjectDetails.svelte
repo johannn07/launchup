@@ -29,6 +29,8 @@
     sketchConfidence?: number;
     // Typed by the founder rather than extracted, so no confidence badges.
     manual?: boolean;
+    // Sent on submit so the backend links the upload to the new startup.
+    documentHash?: string;
   };
 
   const reviewFields = [
@@ -90,7 +92,8 @@
     legibilityStatus: data.legibilityStatus || 'verified',
     legibilityReason: data.legibilityReason || null,
     sketchDetected: data.sketchDetected || false,
-    sketchConfidence: data.sketchConfidence || 0
+    sketchConfidence: data.sketchConfidence || 0,
+    documentHash: data.documentHash || undefined
   });
 
   async function checkParseJobs() {
@@ -479,6 +482,9 @@
       <input type="hidden" name="objectives" value={information.objectives} />
       <input type="hidden" name="scope" value={information.scope} />
       <input type="hidden" name="methodology" value={information.methodology} />
+      {#if information.documentHash}
+        <input type="hidden" name="ocrDocumentHash" value={information.documentHash} />
+      {/if}
     {/if}
   </div>
 </div>

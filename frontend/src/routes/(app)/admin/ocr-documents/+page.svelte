@@ -17,7 +17,7 @@
   let filtered = $derived(ocrs.filter(o => {
     if (!filter) return true;
     const f = filter.toLowerCase();
-    return (String(o.originalFilename || '').toLowerCase().includes(f) || String(o.extractedText || '').toLowerCase().includes(f));
+    return (String(o.originalFilename || '').toLowerCase().includes(f) || String(o.extractedText || '').toLowerCase().includes(f) || String(o.startup?.name || '').toLowerCase().includes(f));
   }));
 
   let totalPages = $derived(Math.max(1, Math.ceil(filtered.length / perPage)));
@@ -42,7 +42,8 @@
       });
       if (res.ok) {
         const updated = await res.json();
-        ocrs = ocrs.map(o => (o.id === updated.id ? updated : o));
+        // The flag response carries startup as a bare id; keep the row's name.
+        ocrs = ocrs.map(o => (o.id === updated.id ? { ...updated, startup: o.startup } : o));
       }
     } catch (e) {
     } finally {
@@ -65,7 +66,7 @@
     </div>
     <div class="relative w-full md:w-72">
       <Search class="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/50" />
-      <Input placeholder="Filter filename or text..." bind:value={filter} class="pl-9 bg-card/50 backdrop-blur-sm border-border/50" />
+      <Input placeholder="Filter filename, startup or text..." bind:value={filter} class="pl-9 bg-card/50 backdrop-blur-sm border-border/50" />
     </div>
   </div>
 
@@ -85,6 +86,7 @@
           <tr class="bg-muted/40 border-b border-border/50">
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground">ID</th>
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Filename</th>
+            <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Startup</th>
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Sketch Analysis</th>
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Legibility</th>
             <th class="px-6 py-4 text-left font-semibold text-muted-foreground">Dimensions</th>
@@ -95,7 +97,7 @@
         <tbody>
           {#if pageItems.length === 0}
             <tr>
-              <td colspan="7" class="px-6 py-16 text-center text-muted-foreground">
+              <td colspan="8" class="px-6 py-16 text-center text-muted-foreground">
                 <div class="flex flex-col items-center justify-center space-y-4">
                   <div class="h-16 w-16 rounded-full bg-muted/50 flex items-center justify-center border border-border/50">
                     <Scan class="h-8 w-8 text-muted-foreground/40" />
@@ -114,6 +116,14 @@
                     <ImageIcon class="h-4 w-4 text-muted-foreground shrink-0" />
                     <span class="font-medium text-foreground truncate" title={o.originalFilename}>{o.originalFilename || 'Unknown'}</span>
                   </div>
+                </td>
+                <td class="px-6 py-5">
+                  {#if o.startup}
+                    <span class="block max-w-[12rem] truncate font-medium text-foreground" title={o.startup.name}>{o.startup.name}</span>
+                  {:else}
+                    <!-- Unlinked rows are removed after OCR_RETENTION_DAYS. -->
+                    <span class="text-xs text-muted-foreground" title="Not attached to an application; removed after the retention period">Not linked</span>
+                  {/if}
                 </td>
                 <td class="px-6 py-5">
                   <div class="flex flex-col gap-1">

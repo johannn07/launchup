@@ -47,6 +47,8 @@
   let extracting = $state(false);
   // Name of the file the unsaved fields came from; cleared on save.
   let extractedFrom = $state('');
+  // Hash of that file, sent on save so the backend links the upload here.
+  let extractedHash = $state('');
   let fileInput: HTMLInputElement | undefined = $state();
 
   // Fills the form from a new file without saving, so the founder reviews the
@@ -92,6 +94,7 @@
       scope = extracted.scope || '';
       methodology = extracted.methodology || '';
       extractedFrom = file.name;
+      extractedHash = extracted.documentHash || '';
     } catch {
       toast.error(
         'Network error while reading the file. You can still edit the fields directly.'
@@ -144,7 +147,8 @@
           solution,
           objectives,
           scope,
-          methodology
+          methodology,
+          ocrDocumentHash: extractedHash || undefined
         },
         {
           headers: {
@@ -156,6 +160,7 @@
       console.log('Capsule proposal saved successfully:', response.data);
       toast.success('Capsule proposal saved successfully');
       extractedFrom = '';
+      extractedHash = '';
       $queryResult.refetch();
     } catch (error: any) {
       console.error('Error saving capsule proposal:', error);
