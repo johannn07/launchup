@@ -61,8 +61,30 @@ describe('ReadinessService', () => {
     const rationale = serviceWith(emWith([])).getWeightRationale();
 
     expect(rationale.map((item) => item.key)).toEqual([
-      'team', 'market', 'product', 'traction', 'regulatory', 'funding',
+      'product', 'market', 'regulatory', 'team', 'traction', 'funding',
     ]);
+  });
+
+  // KD-12: the dashboard showed Team, Product, Traction and Funding for A, T, O and I.
+  it('labels dimensions with the canonical names, in ReadinessType order', async () => {
+    const canonical = Object.values(ReadinessType);
+    const result = await serviceWith(emWith(MEDISYNC)).getReadinessForStartup(2);
+
+    expect(canonical).toEqual([
+      'Technology', 'Market', 'Regulatory', 'Acceptance', 'Organizational', 'Investment',
+    ]);
+    expect(result.dimensions.map((d) => d.label)).toEqual(canonical);
+    expect(result.dimensions.map((d) => d.readinessType)).toEqual(canonical);
+    expect(result.weightRationale.map((w) => w.label)).toEqual(canonical);
+  });
+
+  it('writes each rationale about its own dimension', () => {
+    const rationale = serviceWith(emWith([])).getWeightRationale();
+
+    for (const item of rationale) {
+      expect(item.rationale.startsWith(`${item.label} readiness`)).toBe(true);
+      expect(item.rationale).not.toMatch(/\b(team|product|traction|funding) readiness\b|execution quality|[—–]/i);
+    }
   });
 
   it('scores the seeded early-stage startup at 17', async () => {
