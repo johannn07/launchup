@@ -566,7 +566,8 @@ Gates: backend 522/522; `svelte-check` 108 errors, none in changed files.
 
 Report: pitchdemo could not scan JPGs or PDFs. Backend, `/api` proxy, auth and Gemini all worked. The uploads hit two limits:
 
-- **Scanned PDFs had no OCR.** The PDF path only ran `pdf-parse`; `Sample Proposal.pdf` is one 1080×1723 image, so it extracted two newlines and every field came back empty (the 11-14 CamScanner PDF too). Fixed on `fix/scanned-pdf-ocr` (local, not merged): under 100 non-space characters the PDF goes to Gemini Vision as `application/pdf`. Live: 1,610-character transcription, fields filled; PondSense (text layer) unchanged. Same call count: the Vision call replaces the text extraction call.
-- **Images under 1200×900 are refused before any AI call** (`ocr.service.ts` `checkLegibility`). A portrait 1080-wide image fails on width. Not changed; John's call whether to make it orientation-agnostic. The two refused files were not on disk to measure.
+- **Scanned PDFs had no OCR.** The PDF path only ran `pdf-parse`; `Sample Proposal.pdf` is one 1080×1723 image, so it extracted two newlines and every field came back empty (the 11-14 CamScanner PDF too). Fixed on `fix/scanned-pdf-ocr`: under 100 non-space characters the PDF goes to Gemini Vision as `application/pdf`. Live: 1,610-character transcription, fields filled; PondSense (text layer) unchanged. Same call count: the Vision call replaces the text extraction call.
+- **The image size rule read axes, not sides** (`checkLegibility` required width ≥ 1200 and height ≥ 900), so a page photographed upright failed. Fixed on `fix/orientation-agnostic-size`: long side ≥ 1200, short side ≥ 900. Live: the 1080×1723 page from `Sample Proposal.pdf`, uploaded as a JPG, passes with every field extracted. The two refused files were not on disk, so which check refused them is unconfirmed.
+- **Still open:** WebP is always refused (no dimension reader for it), and the contrast check measures byte entropy of the file's last 4 KB, which clean PNGs can fail.
 
-Gates: backend 552/552, `tsc` clean.
+Both merged to `master` and pushed 2026-11-16. Gates: backend 558/558, `tsc` clean.
