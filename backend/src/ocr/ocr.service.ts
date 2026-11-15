@@ -33,7 +33,8 @@ export class OcrService {
     }
 
     const { width, height } = dimensions;
-    if (width < 1200 || height < 900) {
+    // Sides, not axes: a page photographed upright is as legible as one held sideways.
+    if (Math.max(width, height) < 1200 || Math.min(width, height) < 900) {
       return {
         isLegible: false,
         reason: 'Image resolution is too low for reliable OCR',
