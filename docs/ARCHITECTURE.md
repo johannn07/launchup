@@ -161,6 +161,7 @@ Those gates now name `Manager` directly (`utils.ts`'s `canRateReadiness`, the `<
       POST /readinesslevel/calculator-question-answers/create→ 7 CalculatorQuestionAnswer rows
       [optional] POST /startups/parse-capsule-proposal
                    → pdf-parse → Gemini → CapsuleProposal
+                     (no text layer, or an image → Gemini Vision)
       (frontend/src/routes/(app)/startups/+page.server.ts)
 
 5.  → /startups/[id]/pending  (waiting room)

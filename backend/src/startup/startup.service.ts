@@ -57,6 +57,10 @@ import {
 // It is truthy, so it wins any `||` fallback unless matched explicitly.
 const OCR_PLACEHOLDER_PREFIX = /^OCR_PLACEHOLDER:/;
 
+// Below this many non-space characters a PDF's text layer is a scanner
+// watermark ("CamScanner") or nothing, so its pages are read as images.
+const MIN_PDF_TEXT_CHARS = 100;
+
 @Injectable()
 export class StartupService {
   constructor(
@@ -335,28 +339,8 @@ export class StartupService {
 
     if (file.mimetype.startsWith('image/')) {
       // Primary path: Gemini Vision beats Tesseract by a wide margin on handwriting.
-      try {
-        aiPayload = await this.aiService.getCapsuleProposalInfoFromImage(
-          ctx,
-          file.buffer,
-          file.mimetype,
-        );
-        visionSucceeded = true;
-      } catch (err) {
-        // Degrading to Tesseract when the service is simply unreachable produced
-        // verified-looking garbage on 2026-08-22: Tesseract mangles handwriting,
-        // a second call extracts fields from the mangling, and those fields then
-        // match it perfectly. Better to say so and let the user retry.
-        if (isServiceFailure(err)) {
-          throw new ServiceUnavailableException(
-            isQuotaError(err)
-              ? aiUnavailableMessage(err)
-              : 'The AI service is busy right now. Please try uploading again in a moment.',
-            { cause: err },
-          );
-        }
-        console.error('[OCR] Gemini Vision extraction failed, falling back to Tesseract:', err);
-      }
+      aiPayload = await this.extractWithVision(ctx, file);
+      visionSucceeded = aiPayload !== null;
 
       // Tesseract still needed for raw text and sketch detection.
       try {
@@ -430,7 +414,12 @@ export class StartupService {
         };
       }
 
-      aiPayload = await this.extractFieldsFromText(ctx, parsedText);
+      // A scanned PDF is page images with no text layer; Gemini reads those pages directly.
+      if (parsedText.replace(/\s/g, '').length < MIN_PDF_TEXT_CHARS) {
+        aiPayload = await this.extractWithVision(ctx, file);
+        visionSucceeded = aiPayload !== null;
+      }
+      if (!aiPayload) aiPayload = await this.extractFieldsFromText(ctx, parsedText);
     }
 
     const cleanPayload = aiPayload
@@ -471,7 +460,7 @@ export class StartupService {
     // Gemini reads handwriting far better than Tesseract, so its transcription
     // wins whenever there is one. `parsedText` deliberately stays Tesseract's:
     // detectSketch already scored it above and its weights are tuned to that
-    // output, not to clean prose. PDFs have no raw_transcription and fall back.
+    // output, not to clean prose. Text-layer PDFs have no raw_transcription and fall back.
     const transcription: string =
       parsedPayload.raw_transcription ||
       (OCR_PLACEHOLDER_PREFIX.test(parsedText) ? '' : parsedText);
@@ -524,6 +513,35 @@ export class StartupService {
       documentHash: contentHash,
     };
   }
+
+  /** Gemini Vision extraction; null on a model error worth falling back from. */
+  private async extractWithVision(
+    ctx: AiRunContext,
+    file: Express.Multer.File,
+  ): Promise<string | null> {
+    try {
+      return (
+        (await this.aiService.getCapsuleProposalInfoFromImage(ctx, file.buffer, file.mimetype)) ??
+        null
+      );
+    } catch (err) {
+      // Degrading to Tesseract when the service is simply unreachable produced
+      // verified-looking garbage on 2026-08-22: Tesseract mangles handwriting,
+      // a second call extracts fields from the mangling, and those fields then
+      // match it perfectly. Better to say so and let the user retry.
+      if (isServiceFailure(err)) {
+        throw new ServiceUnavailableException(
+          isQuotaError(err)
+            ? aiUnavailableMessage(err)
+            : 'The AI service is busy right now. Please try uploading again in a moment.',
+          { cause: err },
+        );
+      }
+      console.error('[OCR] Gemini Vision extraction failed, falling back to text extraction:', err);
+      return null;
+    }
+  }
+
   private async createStartupProposal(
     startup: Startup,
     dto: StartupApplicationDto,
