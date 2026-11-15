@@ -13,6 +13,10 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'crypto';
 
+// The text layer pdf-parse finds; a scanned PDF has none.
+let mockPdfText = '';
+jest.mock('pdf-parse', () => jest.fn(async () => ({ text: mockPdfText })));
+
 /**
  * First spec for src/startup/. Scoped to the summary path only — the service is
  * ~1400 lines and broad coverage is a different task. This path had none, which
@@ -825,6 +829,60 @@ describe('StartupService.parseCapsuleProposal — duplicate uploads', () => {
     expect(ocrDocs[0].extractedText).toBe(
       'AgriTrace: An IoT-Enabled Cold Chain Monitoring System',
     );
+  });
+});
+
+/**
+ * A scanned PDF (a phone scan, CamScanner) is page images with no text layer.
+ * pdf-parse returned "\n\n" for one on 2026-11-15, and every field came back empty.
+ */
+describe('StartupService.parseCapsuleProposal — scanned PDFs', () => {
+  const pdfFile = {
+    mimetype: 'application/pdf',
+    originalname: 'Sample Proposal.pdf',
+    buffer: Buffer.from('%PDF-1.7 scanned'),
+  } as any;
+
+  it('reads a PDF with no text layer through Gemini Vision', async () => {
+    mockPdfText = '\n\nCamScanner';
+    const { service, ocrDocs, aiService } = buildOcr({ tesseractText: '', visionJson: VISION_JSON });
+
+    const result: any = await service.parseCapsuleProposal(pdfFile, ctx);
+
+    expect(aiService.getCapsuleProposalInfoFromImage).toHaveBeenCalledWith(
+      ctx,
+      pdfFile.buffer,
+      'application/pdf',
+    );
+    expect(result.title).toBe('AgriTrace');
+    expect(ocrDocs[0].extractedText).toBe(
+      'AgriTrace: An IoT-Enabled Cold Chain Monitoring System',
+    );
+  });
+
+  it('keeps text extraction for a PDF that has a text layer', async () => {
+    mockPdfText = 'AgriTrace: An IoT-Enabled Cold Chain Monitoring System. '.repeat(5);
+    const { service, aiService } = buildOcr({ tesseractText: '', visionJson: VISION_JSON });
+
+    await service.parseCapsuleProposal(pdfFile, ctx);
+
+    expect(aiService.getCapsuleProposalInfoFromImage).not.toHaveBeenCalled();
+    expect(aiService.getCapsuleProposalInfo).toHaveBeenCalled();
+  });
+
+  // The upload queue only catches a 503; anything else would lose the file.
+  it('raises a busy model on a scanned PDF as a 503', async () => {
+    mockPdfText = '\n\n';
+    const { service, ocrDocs } = buildOcr({
+      tesseractText: '',
+      visionJson: VISION_JSON,
+      visionError: 'got status: 503 Service Unavailable. {"error":{"code":503}}',
+    });
+
+    await expect(service.parseCapsuleProposal(pdfFile, ctx)).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+    expect(ocrDocs).toHaveLength(0);
   });
 });
 

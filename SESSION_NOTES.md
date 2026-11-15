@@ -433,59 +433,11 @@ Three study reports fixed, merged and pushed: AI generation 500s now return a re
 
 ---
 
-## 2026-10-30 (later) — design pass: landing, legal, auth
+## Compressed — 2026-10-30 (later) (design pass: landing, legal, auth)
 
-Frontend only, zero Gemini calls. The taste skill applied page by page, keeping the
-brand ("keep the look": layout, font sizes, redundant displays, broken UI only).
-Merged to `master` and pushed.
+Frontend only, merged and pushed: `design/landing-taste-pass` (`/`, `/legal/*`) and `design/auth-taste-pass` (`/login`, `/register`, `/manager-login`). One 72rem frame across them, hero no longer blinks on load, redundant blocks removed, legal contact details made real. Lessons kept in memory: one frame width for every page, stack follow-on branches on unmerged work, never delete a link to an unbuilt feature.
 
-| Branch | Pages | What changed |
-|---|---|---|
-| `design/landing-taste-pass` | `/` | Hero no longer blinks out on hydration (scroll reveal removed above the fold); headline 3 lines at desktop, 4 on mobile (was 4/5; mobile hero 1,703 → 1,311px). Removed both stat-tile rows, a duplicate Get Started, two redundant eyebrows, nav Home. One divider style; lead text 17px. Footer links Terms/Privacy. Header tracks the active section with IntersectionObserver. New How-it-works heading |
-| same | `/legal/terms`, `/legal/privacy` | Landing's 72rem frame; mobile contents folded (first section 902 → 556px); link rows merged into the footer. Content (John's wording): shorter disclaimer, `launchup.enhanced@gmail.com` everywhere, fictional company/address/SEC number replaced by a CIT-U capstone note, Makati jurisdiction → "courts of the Philippines", body em-dashes removed |
-| `design/auth-taste-pass` (stacked on the above) | `/login`, `/register`, `/manager-login` | Header/footer on the 72rem frame; form + scales column kept as one centred 48rem group; Terms/Privacy in the footer; "Privacy Policy" no longer splits in the consent label |
-
-### Mistakes John caught
-
-- **Width rule:** the legal pages first got their own 55rem frame; the logo jumped
-  ~180px between pages. Every page now shares `w-[min(72rem,88vw)]` for header and
-  footer. Narrow content sits inside it, never in its own frame.
-- **Branch switch hid the work:** the auth branch was first cut from `master`, so
-  John's dev server stopped showing the landing/legal fixes and they read as
-  undone. Rebased onto the landing branch. Stack follow-on branches on unmerged work.
-- **A feature link removed unasked:** "Forgot password?" was deleted because
-  `/forgot-password` 404s. Restored. A link to an unbuilt feature is intent; flag it.
-- **Stretching the auth columns to the frame edges** left a large empty gap.
-  Reverted to one centred group.
-
-### Verification
-
-- Live in the dev server: built-in pane for `/` and legal (signed in as John's
-  mentor, so `/login` redirects); Playwright, with no session, for the three auth
-  pages. Frames measured at 1440px (136–1288px) and 375px; no horizontal overflow.
-- The pane intermittently stopped painting (window behind others), so several
-  checks are DOM measurements rather than screenshots.
-- `svelte-check` 110 errors, unchanged. ESLint fails to parse the `as` casts in
-  `AboutUs`/`ReadinessPanel` and Prettier flags every landing file for line
-  endings; both predate this work (TODO §4).
-
-### Still open
-
-- `/forgot-password` has no page (TODO §3). Tab titles still use "Page — LaunchUp"
-  site-wide; John has not decided whether to change it.
-- `/objectives` and `/dashboard` were mislisted as public; they are Manager-only and
-  dev-preview, and belong to the app group.
-
-### Next step
-
-1. **John reviews `/`, the legal pages and the auth pages** on the deployed site
-   after the next frontend deploy.
-2. **App pages, general group**, on a new branch off `master`: shared app header
-   and navigation first (its frame differs from the landing's), then `/startups`,
-   `/apply`, `/applications`, `/cohorts`, `/analytics`, `/account/*`. The taste
-   skill excludes product UI, so only its token-level rules apply there.
-3. The capstone critical path is unchanged: study analysis (TAM, SUS), SPMP,
-   traceability matrix, CER transcription for 3c.
+**Still open from it:** `/forgot-password` has no page (TODO §3); tab-title format undecided.
 
 ---
 
@@ -607,3 +559,14 @@ Gates: backend 522/522; `svelte-check` 108 errors, none in changed files.
 - **Cause found:** `updateSchema()` drops unknown tables and columns by default, so a server on older code sharing this Neon database dropped the queue table and the new bias-audit columns on boot (between 12:10 and 12:31). Boots now use `{ safe: true }` (`fix/safe-schema-boot`), shown by a dry run to plan no drops. It protects only servers that run it; the other server must be redeployed from master. #84's link restored again.
 - Adversarial re-scoring and canvas recognition: skipped by John; record both as SRS deviations.
 - Temp `.ts` files in `backend/` (not only `src/`) restart the dev server; keep scripts in the scratchpad.
+
+---
+
+## 2026-11-16 — scanned PDFs read nothing
+
+Report: pitchdemo could not scan JPGs or PDFs. Backend, `/api` proxy, auth and Gemini all worked. The uploads hit two limits:
+
+- **Scanned PDFs had no OCR.** The PDF path only ran `pdf-parse`; `Sample Proposal.pdf` is one 1080×1723 image, so it extracted two newlines and every field came back empty (the 11-14 CamScanner PDF too). Fixed on `fix/scanned-pdf-ocr` (local, not merged): under 100 non-space characters the PDF goes to Gemini Vision as `application/pdf`. Live: 1,610-character transcription, fields filled; PondSense (text layer) unchanged. Same call count: the Vision call replaces the text extraction call.
+- **Images under 1200×900 are refused before any AI call** (`ocr.service.ts` `checkLegibility`). A portrait 1080-wide image fails on width. Not changed; John's call whether to make it orientation-agnostic. The two refused files were not on disk to measure.
+
+Gates: backend 552/552, `tsc` clean.
