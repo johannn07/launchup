@@ -167,8 +167,8 @@ representation.
 - Mentor assignment with per-mentor load indicators
 - Roadblocks and initiatives tracked per startup
 - Cohorts and analytics dashboards
-- Admin console — user management, startup editing, assessment configuration, activity
-  log
+- Manager console — user management, startup editing, assessment and tier
+  configuration, bias audits, OCR document review
 
 ---
 
@@ -231,6 +231,11 @@ own lockfile and is installed and run separately.
 
 **Full reference** — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) covers the domain model, authorization, end-to-end flows, the frontend/backend contract, and the complete database schema.
 
+**Review documents**
+
+- [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) — features, status, known limitations, adviser revisions
+- [docs/REFACTORING_EVIDENCE.md](docs/REFACTORING_EVIDENCE.md) — significant refactors with commit and PR links
+
 ## Prerequisites
 
 | Requirement | Version |
@@ -247,7 +252,7 @@ own lockfile and is installed and run separately.
 ### 1. Clone and create a database
 
 ```bash
-git clone https://github.com/johannn07/launchup.git
+git clone https://github.com/l9rins/launchup.git
 ```
 
 Create a Postgres database and note its host, port, name, user and password. Each
@@ -310,14 +315,19 @@ generation. It is idempotent — safe to re-run.
 
 ### Demo accounts
 
-Seeded automatically on every boot. Password for all: `password123`.
+Seeded on boot if missing (`backend/src/main.ts`). Password for all: `password123`.
+Founders and mentors sign in at `/login`; Managers at `/manager-login`.
 
-| Email | Role |
-|---|---|
-| `demo@launchup.local` | Startup (founder) |
-| `mentor@launchup.local` | Mentor |
-| `manager@launchup.local` | Manager |
-| `admin@launchup.local` | Admin |
+| Email | Role | Notes |
+|---|---|---|
+| `demo@launchup.local` | Startup (founder) | No startup yet; use it to try the application wizard |
+| `founder.agrolink@launchup.local` | Startup (founder) | Owns AgroLink PH (early stage) |
+| `founder.medisync@launchup.local` | Startup (founder) | Owns MediSync Cebu (mid stage) |
+| `mentor@launchup.local` | Mentor | Assigned to both demo startups |
+| `manager@launchup.local` | Manager | All administrative functions |
+
+There is no Admin role. Any `Admin` account left in an older database is converted to
+Manager on boot.
 
 ---
 
@@ -336,7 +346,7 @@ Seeded automatically on every boot. Password for all: `password123`.
 
 ### As a Manager
 
-1. Sign in as `manager@launchup.local`.
+1. Sign in as `manager@launchup.local` at `/manager-login`.
 2. Review submissions in `/applications`. Each carries an AI-generated readiness summary
    produced under adversarial prompting, showing unmet criteria and critical risks
    before any positive framing.
@@ -345,19 +355,17 @@ Seeded automatically on every boot. Password for all: `password123`.
 4. Qualify, reject, waitlist, or request resubmission — a reason is mandatory.
 5. Assign a mentor from the assignment panel, which shows each mentor's current load.
 6. Use `/analytics` and `/cohorts` for cross-startup views.
+7. Use `/admin` for users, startups, assessment types, tiers, bias audits and OCR
+   documents.
 
 ### As a Mentor
 
 1. Sign in as `mentor@launchup.local`.
-2. Open an assigned startup and review its readiness profile and gap analysis.
+2. Open an assigned startup (AgroLink PH or MediSync Cebu) and review its readiness
+   profile and gap analysis.
 3. Generate RNA and RNS. Generation is grounded against the verified rubric corpus for
    the relevant dimension and level.
 4. Revise and approve before the founder sees anything — the AI drafts, you decide.
-
-### As an Admin
-
-Sign in as `admin@launchup.local` for user management, startup editing, assessment
-configuration, and the activity log.
 
 ### Running the AI comparison arms
 
@@ -373,6 +381,56 @@ AI_SCORE_NORMALIZATION_ENABLED=false
 
 Each generation records the resolved configuration in `ai_generation_runs`, so runs
 stay attributable to the arm that produced them.
+
+---
+
+## Deployment
+
+The live system runs on three free-tier services. Set each value in the provider's
+dashboard; never commit them.
+
+### Database (Neon)
+
+1. Create a Neon project and copy its host, database, user and password.
+2. Nothing else: the backend creates the schema and seeds demo data on first boot.
+
+### Backend (Render, Web Service)
+
+| Setting | Value |
+|---|---|
+| Root directory | `backend` |
+| Build command | `pnpm install --prod=false && pnpm build && node seed-rag-corpus.js` |
+| Start command | `node dist/src/main` |
+
+`--prod=false` is required because Render sets `NODE_ENV=production`, which would skip
+the Nest CLI. The corpus seed runs in the build because Render's free tier has no shell;
+it is idempotent. The start command overrides `pnpm start`, which points at the wrong
+path.
+
+Environment variables:
+
+- Required: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `JWT_SECRET`,
+  `GEMINI_API_KEY`, `FRONTEND_ORIGINS` (the Vercel URL)
+- File uploads: `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, `S3_BUCKET`,
+  `S3_REGION` (uploads return 503 without them)
+- Optional: `GEMINI_MODEL`, `AI_DAILY_REQUEST_LIMIT`, and the `AI_*` pipeline flags in
+  `backend/.env.example`
+
+### Frontend (Vercel)
+
+| Setting | Value |
+|---|---|
+| Root directory | `frontend` |
+| Framework preset | SvelteKit (uses `@sveltejs/adapter-vercel`) |
+
+Environment variables: `JWT_SECRET` (identical to the backend's) and `PUBLIC_API_URL`
+(the Render URL). Client calls go through the same-origin `/api` proxy, so the
+browser never calls Render directly.
+
+### Live URLs
+
+- Frontend: <https://launchup-enhanced.vercel.app>
+- Backend: <https://launchup-4w6d.onrender.com>
 
 ---
 
@@ -445,8 +503,8 @@ Honest status per objective, current as of this README:
 
 ```
 backend/          NestJS API — feature modules, entities/ (central), measurement/
-frontend/         SvelteKit app — (app)/ (auth)/ (auth-admin)/ route groups
-docs/             ARCHITECTURE.md — full architecture and schema reference
+frontend/         SvelteKit app — (app)/ (auth)/ (auth-manager)/ route groups
+docs/             ARCHITECTURE.md, FEATURE_MATRIX.md, REFACTORING_EVIDENCE.md
 CLAUDE.md         Working conventions for AI coding assistants
 TODO_CHECKLIST.md Prioritized backlog and per-objective status
 SESSION_NOTES.md  Development session log
